@@ -37,7 +37,7 @@ export function LoopStrip({
   const [selectedChunk, setSelectedChunk] = useState("");
   const [chunkEditing, setChunkEditing] = useState<number | null>(null);
   const longPressRef = useRef(false);
-  const timerRef = useRef<number>();
+  const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setSelectedChunk("");
