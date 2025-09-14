@@ -3,6 +3,7 @@ import * as Tone from "tone";
 
 import { startStarterLoop } from "./loop";
 import { LoopStrip } from "./LoopStrip";
+import { Tracks } from "./Tracks";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -53,7 +54,7 @@ export default function App() {
     hat.resonance = 4000;
     hat.octaves = 1.5;
     hatRef.current = hat
-    chordRef.current = new Tone.PolySynth(Tone.Synth, {
+  chordRef.current = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: "triangle" },
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 }
     }).toDestination();
@@ -161,7 +162,16 @@ export default function App() {
         </div>
       ) : (
         <>
-          <LoopStrip started={started} isPlaying={isPlaying} />
+         <LoopStrip started={started} isPlaying={isPlaying} />
+          <Tracks
+            started={started}
+            triggers={{
+              kick: (time) =>
+                kickRef.current?.triggerAttackRelease("C2", "8n", time),
+              snare: (time) =>
+                snareRef.current?.triggerAttackRelease("16n", time)
+            }}
+          />
           <div style={{ padding: 16 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
               <label>BPM</label>
