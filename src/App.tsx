@@ -4,26 +4,6 @@ import * as Tone from "tone";
 import { startStarterLoop } from "./loop";
 import { LoopStrip } from "./LoopStrip";
 
-// Simple icon components for transport controls
-const PlayIcon = ({ size = 20 }: { size?: number }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-    <polygon points="8,5 19,12 8,19" />
-  </svg>
-);
-
-const PauseIcon = ({ size = 20 }: { size?: number }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-    <rect x="6" y="5" width="4" height="14" />
-    <rect x="14" y="5" width="4" height="14" />
-  </svg>
-);
-
-const StopIcon = ({ size = 20 }: { size?: number }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
-    <rect x="5" y="5" width="14" height="14" />
-  </svg>
-);
-
 type Subdivision = "16n" | "8n" | "4n";
 
 function nextGridTime(subdivision: Subdivision): number {
@@ -226,10 +206,13 @@ export default function App() {
                   color: "#1F2532",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center"
+                  justifyContent: "center",
+                  fontSize: 20
                 }}
               >
-                {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+                <span className="material-symbols-outlined">
+                  {isPlaying ? "pause" : "play_arrow"}
+                </span>
               </button>
               <button
                 aria-label="Stop"
@@ -247,10 +230,17 @@ export default function App() {
                   color: "#e6f2ff",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center"
+                  justifyContent: "center",
+                  fontSize: 40,
+                  padding: 0
                 }}
               >
-                <StopIcon size={20} />
+                <span
+                  className="material-symbols-outlined"
+                  style={{ lineHeight: 1, width: "100%", height: "100%" }}
+                >
+                  stop
+                </span>
               </button>
             </div>
 
