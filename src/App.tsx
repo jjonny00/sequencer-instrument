@@ -22,6 +22,7 @@ export default function App() {
   const [started, setStarted] = useState(false);
   const [bpm, setBpm] = useState(120);
   const [subdiv, setSubdiv] = useState<Subdivision>("16n");
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // Instruments (kept across renders)
   const kickRef = useRef<Tone.MembraneSynth | null>(null);
@@ -59,6 +60,7 @@ export default function App() {
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.start(); // start clock; we’ll schedule to it
     setStarted(true);
+    setIsPlaying(true);
   };
 
   const disposeRef = useRef<null | (() => void)>(null);
@@ -102,23 +104,30 @@ export default function App() {
     }, ms);
   };
 
-  const Pad = (props: { label: string; onTap: () => void }) => (
-    <button
-      onPointerDown={props.onTap}
-      style={{
-        width: "100%",
-        aspectRatio: "1 / 1",
-        borderRadius: 16,
-        fontSize: "1.1rem",
-        border: "1px solid #333",
-        background: "#1f2532",
-        color: "#e6f2ff",
-        touchAction: "manipulation"
-      }}
-    >
-      {props.label}
-    </button>
-  );
+  const Pad = (props: { label: string; onTap: () => void }) => {
+    const [pressed, setPressed] = useState(false);
+    return (
+      <button
+        onPointerDown={() => {
+          setPressed(true);
+          props.onTap();
+        }}
+        onPointerUp={() => setPressed(false)}
+        onPointerCancel={() => setPressed(false)}
+        style={{
+          width: "100%",
+          aspectRatio: "1 / 1",
+          borderRadius: 16,
+          fontSize: "1.1rem",
+          border: "1px solid #333",
+          background: pressed ? "#30394f" : "#1f2532",
+          color: "#e6f2ff"
+        }}
+      >
+        {props.label}
+      </button>
+    );
+  };
 
   return (
     <div
@@ -134,7 +143,8 @@ export default function App() {
       {!started ? (
         <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
           <button
-            onClick={initAudioGraph}
+            onPointerDown={initAudioGraph}
+            onPointerUp={(e) => e.currentTarget.blur()}
             style={{
               padding: "16px 24px",
               fontSize: "1.25rem",
@@ -172,6 +182,42 @@ export default function App() {
               <option value="8n">1/8</option>
               <option value="4n">1/4</option>
             </select>
+            <button
+              onPointerDown={() => {
+                if (isPlaying) {
+                  Tone.Transport.pause();
+                } else {
+                  Tone.Transport.start();
+                }
+                setIsPlaying(!isPlaying);
+              }}
+              onPointerUp={(e) => e.currentTarget.blur()}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #333",
+                background: "#27E0B0",
+                color: "#1F2532"
+              }}
+            >
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+            <button
+              onPointerDown={() => {
+                Tone.Transport.stop();
+                setIsPlaying(false);
+              }}
+              onPointerUp={(e) => e.currentTarget.blur()}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #333",
+                background: "#E02749",
+                color: "#e6f2ff"
+              }}
+            >
+              Stop
+            </button>
           </div>
 
           <div
