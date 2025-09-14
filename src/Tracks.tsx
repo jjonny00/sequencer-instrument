@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import * as Tone from "tone";
 
 // Map of trigger functions for each instrument.
-type TriggerMap = Record<string, (time: number) => void>;
+export type TriggerMap = Record<string, (time: number) => void>;
 
-interface Pattern {
+export interface Pattern {
   steps: number[];
 }
 
-interface Track {
+export interface Track {
   id: number;
   name: string;
   instrument: keyof TriggerMap;
@@ -17,15 +18,15 @@ interface Track {
 
 export function Tracks({
   started,
-  triggers
+  triggers,
+  tracks,
+  setTracks
 }: {
   started: boolean;
   triggers: TriggerMap;
+  tracks: Track[];
+  setTracks: Dispatch<SetStateAction<Track[]>>;
 }) {
-  const [tracks, setTracks] = useState<Track[]>([
-    { id: 1, name: "Kick", instrument: "kick", pattern: null },
-    { id: 2, name: "Snare", instrument: "snare", pattern: null }
-  ]);
   const [editing, setEditing] = useState<number | null>(null);
 
   const presets: Record<string, Pattern> = {

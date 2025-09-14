@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as Tone from "tone";
+import type { Track } from "./Tracks";
 
 /**
  * Top strip visualizing a 16-step loop.
@@ -7,7 +8,15 @@ import * as Tone from "tone";
  * - Displays 16 horizontal steps.
  * - Highlights the current step in sync with Tone.Transport.
  */
-export function LoopStrip({ started, isPlaying }: { started: boolean; isPlaying: boolean }) {
+export function LoopStrip({
+  started,
+  isPlaying,
+  tracks
+}: {
+  started: boolean;
+  isPlaying: boolean;
+  tracks: Track[];
+}) {
   const [step, setStep] = useState(0);
 
   // Schedule a step advance on each 16th note when audio has started.
@@ -35,31 +44,39 @@ export function LoopStrip({ started, isPlaying }: { started: boolean; isPlaying:
         width: "100%",
         background: "#2a2f3a",
         display: "flex",
-        alignItems: "center",
-        padding: "0 8px",
-        boxSizing: "border-box"
+        flexDirection: "column",
+        padding: "8px",
+        boxSizing: "border-box",
+        gap: 4
       }}
     >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(16, 1fr)",
-          gap: 4,
-          width: "100%",
-          height: "60%"
-        }}
-      >
-        {Array.from({ length: 16 }).map((_, i) => (
-          <div
-            key={i}
-            style={{
-              border: "1px solid #555",
-              background: i === step ? "#27E0B0" : "#1f2532",
-              transition: "background 60ms linear"
-            }}
-          />
-        ))}
-      </div>
+      {tracks.map((t) => (
+        <div
+          key={t.id}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(16, 1fr)",
+            gap: 2,
+            flex: 1
+          }}
+        >
+          {Array.from({ length: 16 }).map((_, i) => {
+            const active = t.pattern?.steps[i] ?? 0;
+            const isCurrent = i === step;
+            return (
+              <div
+                key={i}
+                style={{
+                  border: "1px solid #555",
+                  background: active ? "#27E0B0" : "#1f2532",
+                  opacity: isCurrent ? 1 : 0.5,
+                  transition: "opacity 60ms linear"
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

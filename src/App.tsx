@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 
-import { startStarterLoop } from "./loop";
 import { LoopStrip } from "./LoopStrip";
 import { Tracks } from "./Tracks";
+import type { Track } from "./Tracks";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -31,6 +31,11 @@ export default function App() {
   const snareRef = useRef<Tone.NoiseSynth | null>(null);
   const hatRef = useRef<Tone.MetalSynth | null>(null);
   const chordRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
+
+  const [tracks, setTracks] = useState<Track[]>([
+    { id: 1, name: "Kick", instrument: "kick", pattern: null },
+    { id: 2, name: "Snare", instrument: "snare", pattern: null }
+  ]);
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -64,13 +69,6 @@ export default function App() {
     setStarted(true);
     setIsPlaying(true);
   };
-
-  const disposeRef = useRef<null | (() => void)>(null);
-  // in initAudioGraph(), after instruments and before setStarted(true):
-  disposeRef.current?.(); // cleanup any previous loop
-  disposeRef.current = startStarterLoop(
-    kickRef.current!, snareRef.current!, hatRef.current!
-  )
 
   const scheduleKick = () => {
     const t = nextGridTime(subdiv);
@@ -162,7 +160,7 @@ export default function App() {
         </div>
       ) : (
         <>
-         <LoopStrip started={started} isPlaying={isPlaying} />
+         <LoopStrip started={started} isPlaying={isPlaying} tracks={tracks} />
           <Tracks
             started={started}
             triggers={{
@@ -171,6 +169,8 @@ export default function App() {
               snare: (time) =>
                 snareRef.current?.triggerAttackRelease("16n", time)
             }}
+            tracks={tracks}
+            setTracks={setTracks}
           />
           <div style={{ padding: 16 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
