@@ -42,6 +42,7 @@ export default function App() {
       kickRef.current?.triggerAttackRelease("C2", "8n", time),
     snare: (time) =>
       snareRef.current?.triggerAttackRelease("16n", time),
+    hat: (time) => hatRef.current?.triggerAttackRelease("32n", time),
   };
 
   useEffect(() => {
