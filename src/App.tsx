@@ -4,6 +4,7 @@ import * as Tone from "tone";
 import { LoopStrip } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import { getNote, type NoteName } from "./notes";
+import { packs } from "./packs";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -25,49 +26,54 @@ export default function App() {
   const [bpm, setBpm] = useState(120);
   const [subdiv, setSubdiv] = useState<Subdivision>("16n");
   const [isPlaying, setIsPlaying] = useState(false);
+  const [packIndex, setPackIndex] = useState(0);
 
   // Instruments (kept across renders)
-  const kickRef = useRef<Tone.MembraneSynth | null>(null);
-  const snareRef = useRef<Tone.NoiseSynth | null>(null);
-  const hatRef = useRef<Tone.MetalSynth | null>(null);
+  const instrumentRefs = useRef<Record<string, Tone.Instrument>>({});
   const noteRef = useRef<Tone.Synth | null>(null);
 
-  const [tracks, setTracks] = useState<Track[]>([
-    { id: 1, name: "Kick", instrument: "kick", pattern: null },
-    { id: 2, name: "Snare", instrument: "snare", pattern: null },
-  ]);
+  const [tracks, setTracks] = useState<Track[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
-
-  const triggers: TriggerMap = {
-    kick: (time) =>
-      kickRef.current?.triggerAttackRelease("C2", "8n", time),
-    snare: (time) =>
-      snareRef.current?.triggerAttackRelease("16n", time),
-    hat: (time) => hatRef.current?.triggerAttackRelease("32n", time),
-  };
+  const [triggers, setTriggers] = useState<TriggerMap>({});
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
   }, [bpm, started]);
 
+  useEffect(() => {
+    const pack = packs[packIndex];
+    setTracks(
+      Object.keys(pack.instruments).map((name, i) => ({
+        id: i + 1,
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        instrument: name as keyof TriggerMap,
+        pattern: null,
+      }))
+    );
+    setEditing(null);
+    if (!started) return;
+    Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
+    instrumentRefs.current = {};
+    const newTriggers: TriggerMap = {};
+    Object.entries(pack.instruments).forEach(([name, spec]) => {
+      const Ctor = (Tone as Record<string, new () => Tone.Instrument>)[
+        spec.type
+      ];
+      const inst: Tone.Instrument = new Ctor().toDestination();
+      instrumentRefs.current[name] = inst;
+      newTriggers[name] = (time: number) => {
+        if (inst instanceof Tone.NoiseSynth) {
+          inst.triggerAttackRelease(spec.note ?? "8n", time);
+        } else {
+          inst.triggerAttackRelease(spec.note ?? "C2", "8n", time);
+        }
+      };
+    });
+    setTriggers(newTriggers);
+  }, [packIndex, started]);
+
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
-    // Create instruments
-    kickRef.current = new Tone.MembraneSynth({ pitchDecay: 0.02 }).toDestination();
-    snareRef.current = new Tone.NoiseSynth({
-      noise: { type: "white" },
-      envelope: { attack: 0.001, decay: 0.2, sustain: 0 }
-    }).toDestination();
-    const hat = new Tone.MetalSynth().toDestination();
-    hat.frequency.value = 350;                 // Signal
-    hat.envelope.attack = 0.001;
-    hat.envelope.decay = 0.1;
-    hat.envelope.release = 0.01;
-    hat.harmonicity = 5.1;
-    hat.modulationIndex = 32;
-    hat.resonance = 4000;
-    hat.octaves = 1.5;
-    hatRef.current = hat;
     noteRef.current = new Tone.Synth({
       oscillator: { type: "triangle" },
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 }
@@ -163,6 +169,8 @@ export default function App() {
             editing={editing}
             setEditing={setEditing}
             setTracks={setTracks}
+            packIndex={packIndex}
+            setPackIndex={setPackIndex}
           />
           <div style={{ padding: 16, paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
