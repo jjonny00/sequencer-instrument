@@ -101,7 +101,27 @@ export function LoopStrip({
               fontSize: 12,
             }}
           >
-            {t.name}
+            {editing === t.id ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(null);
+                }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  background: "#27E0B0",
+                  border: "none",
+                  color: "#1F2532",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                Done
+              </button>
+            ) : (
+              t.name
+            )}
           </div>
           <div style={{ flex: 1 }}>
             {t.pattern ? (

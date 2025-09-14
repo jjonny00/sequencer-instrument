@@ -169,24 +169,6 @@ export default function App() {
         </div>
       ) : (
         <>
-          {editing !== null && (
-            <button
-              onClick={() => setEditing(null)}
-              style={{
-                position: "fixed",
-                top: "calc(16px + env(safe-area-inset-top))",
-                right: 16,
-                padding: 8,
-                background: "#27E0B0",
-                border: "1px solid #333",
-                borderRadius: 8,
-                color: "#1F2532",
-                zIndex: 10,
-              }}
-            >
-              Done
-            </button>
-          )}
           <LoopStrip
             started={started}
             isPlaying={isPlaying}
