@@ -134,8 +134,10 @@ export default function App() {
   return (
     <div
       style={{
-        height: "100svh",
-        minHeight: "100svh",
+        height: "100dvh",
+        minHeight: "100dvh",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        boxSizing: "border-box",
         background: flash ? "#202a40" : "#0f1420",
         transition: "background 80ms linear",
         color: "#e6f2ff",
@@ -192,7 +194,7 @@ export default function App() {
             editing={editing}
             setEditing={setEditing}
           />
-          <div style={{ padding: 16 }}>
+          <div style={{ padding: 16, paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
               <label>BPM</label>
               <select

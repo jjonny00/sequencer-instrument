@@ -45,7 +45,15 @@ export function Tracks({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 16 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        padding: 16,
+        paddingBottom: "calc(16px + env(safe-area-inset-bottom))"
+      }}
+    >
       {tracks.map((t) => (
         <div
           key={t.id}
@@ -92,10 +100,7 @@ export function Tracks({
                     trigger={triggers[t.instrument]}
                     started={started}
                   />
-                  <PatternPreview
-                    steps={t.pattern.steps}
-                    onLongPress={() => setEditing(t.id)}
-                  />
+                  <TouchArea onLongPress={() => setEditing(t.id)} />
                 </>
               )
             ) : (
@@ -145,13 +150,7 @@ function PatternPlayer({
   return null;
 }
 
-function PatternPreview({
-  steps,
-  onLongPress
-}: {
-  steps: number[];
-  onLongPress: () => void;
-}) {
+function TouchArea({ onLongPress }: { onLongPress: () => void }) {
   const timer = useRef<number | null>(null);
   return (
     <div
@@ -164,18 +163,8 @@ function PatternPreview({
       onPointerLeave={() => {
         if (timer.current !== null) window.clearTimeout(timer.current);
       }}
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "grid",
-        gridTemplateColumns: "repeat(16, 1fr)",
-        gap: 2
-      }}
-    >
-      {steps.map((v, i) => (
-        <div key={i} style={{ background: v ? "#27E0B0" : "#2a2f3a" }} />
-      ))}
-    </div>
+      style={{ width: "100%", height: "100%", background: "#2a2f3a" }}
+    />
   );
 }
 
@@ -196,12 +185,25 @@ function PatternEditor({
 
   return (
     <div style={{ padding: 4 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <button
+          onClick={onClose}
+          style={{
+            padding: 8,
+            background: "#27E0B0",
+            border: "1px solid #333",
+            borderRadius: 8,
+            color: "#1F2532"
+          }}
+        >
+          Done
+        </button>
+      </div>
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(16, 1fr)",
-          gap: 4,
-          marginBottom: 8
+          gap: 4
         }}
       >
         {steps.map((v, i) => (
@@ -217,18 +219,6 @@ function PatternEditor({
           />
         ))}
       </div>
-      <button
-        onClick={onClose}
-        style={{
-          padding: 8,
-          background: "#27E0B0",
-          border: "1px solid #333",
-          borderRadius: 8,
-          color: "#1F2532"
-        }}
-      >
-        Back
-      </button>
     </div>
   );
 }
