@@ -12,12 +12,9 @@ export interface Pack {
   chunks: Chunk[];
 }
 
-import phonk from "./packs/phonk.json" assert { type: "json" };
-import edm from "./packs/early-2000s-edm.json" assert { type: "json" };
-import kraftwerk from "./packs/kraftwerk.json" assert { type: "json" };
+const packModules = import.meta.glob("./packs/*.json", {
+  eager: true,
+  import: "default",
+}) as Record<string, Pack>;
 
-export const packs: Pack[] = [
-  phonk as Pack,
-  edm as Pack,
-  kraftwerk as Pack,
-];
+export const packs: Pack[] = Object.values(packModules);

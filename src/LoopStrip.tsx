@@ -19,6 +19,8 @@ export function LoopStrip({
   editing,
   setEditing,
   setTracks,
+  packIndex,
+  setPackIndex,
 }: {
   started: boolean;
   isPlaying: boolean;
@@ -27,10 +29,15 @@ export function LoopStrip({
   editing: number | null;
   setEditing: Dispatch<SetStateAction<number | null>>;
   setTracks: Dispatch<SetStateAction<Track[]>>;
+  packIndex: number;
+  setPackIndex: Dispatch<SetStateAction<number>>;
 }) {
   const [step, setStep] = useState(0);
-  const [packIndex, setPackIndex] = useState(0);
   const [selectedChunk, setSelectedChunk] = useState("");
+
+  useEffect(() => {
+    setSelectedChunk("");
+  }, [packIndex]);
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
