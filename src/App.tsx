@@ -4,6 +4,26 @@ import * as Tone from "tone";
 import { startStarterLoop } from "./loop";
 import { LoopStrip } from "./LoopStrip";
 
+// Simple icon components for transport controls
+const PlayIcon = ({ size = 20 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
+    <polygon points="8,5 19,12 8,19" />
+  </svg>
+);
+
+const PauseIcon = ({ size = 20 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
+    <rect x="6" y="5" width="4" height="14" />
+    <rect x="14" y="5" width="4" height="14" />
+  </svg>
+);
+
+const StopIcon = ({ size = 20 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
+    <rect x="5" y="5" width="14" height="14" />
+  </svg>
+);
+
 type Subdivision = "16n" | "8n" | "4n";
 
 function nextGridTime(subdivision: Subdivision): number {
@@ -187,6 +207,7 @@ export default function App() {
                 <option value="4n">1/4</option>
               </select>
               <button
+                aria-label={isPlaying ? "Pause" : "Play"}
                 onPointerDown={() => {
                   if (isPlaying) {
                     Tone.Transport.pause();
@@ -197,30 +218,39 @@ export default function App() {
                 }}
                 onPointerUp={(e) => e.currentTarget.blur()}
                 style={{
-                  padding: "8px 12px",
+                  width: 40,
+                  height: 40,
                   borderRadius: 8,
                   border: "1px solid #333",
                   background: "#27E0B0",
-                  color: "#1F2532"
+                  color: "#1F2532",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
               >
-                {isPlaying ? "Pause" : "Play"}
+                {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
               </button>
               <button
+                aria-label="Stop"
                 onPointerDown={() => {
                   Tone.Transport.stop();
                   setIsPlaying(false);
                 }}
                 onPointerUp={(e) => e.currentTarget.blur()}
                 style={{
-                  padding: "8px 12px",
+                  width: 40,
+                  height: 40,
                   borderRadius: 8,
                   border: "1px solid #333",
                   background: "#E02749",
-                  color: "#e6f2ff"
+                  color: "#e6f2ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
               >
-                Stop
+                <StopIcon size={20} />
               </button>
             </div>
 
