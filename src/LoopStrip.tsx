@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
-import { presets, type Pattern } from "./patterns";
+import { presets, type Chunk } from "./chunks";
 
 /**
  * Top strip visualizing a 16-step loop.
@@ -58,7 +58,11 @@ export function LoopStrip({
 
   const updatePattern = (trackId: number, steps: number[]) => {
     setTracks((ts) =>
-      ts.map((t) => (t.id === trackId ? { ...t, pattern: { steps } } : t))
+      ts.map((t) =>
+        t.id === trackId && t.pattern
+          ? { ...t, pattern: { ...t.pattern, steps } }
+          : t
+      )
     );
   };
 
@@ -190,7 +194,7 @@ function PatternPlayer({
   trigger,
   started,
 }: {
-  pattern: Pattern;
+  pattern: Chunk;
   trigger: (time: number) => void;
   started: boolean;
 }) {
