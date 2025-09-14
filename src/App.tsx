@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import { startStarterLoop } from "./loop";
+import { LoopStrip } from "./LoopStrip";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -133,15 +134,16 @@ export default function App() {
     <div
       style={{
         minHeight: "100svh",
-        padding: 16,
         background: flash ? "#202a40" : "#0f1420",
         transition: "background 80ms linear",
         color: "#e6f2ff",
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+        display: "flex",
+        flexDirection: "column"
       }}
     >
       {!started ? (
-        <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
+        <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
           <button
             onPointerDown={initAudioGraph}
             onPointerUp={(e) => e.currentTarget.blur()}
@@ -159,80 +161,83 @@ export default function App() {
         </div>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-            <label>BPM</label>
-            <select
-              value={bpm}
-              onChange={(e) => setBpm(parseInt(e.target.value, 10))}
-              style={{ padding: 8, borderRadius: 8, background: "#121827", color: "white" }}
-            >
-              {[90, 100, 110, 120, 130].map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-            <label style={{ marginLeft: 12 }}>Quantize</label>
-            <select
-              value={subdiv}
-              onChange={(e) => setSubdiv(e.target.value as Subdivision)}
-              style={{ padding: 8, borderRadius: 8, background: "#121827", color: "white" }}
-            >
-              <option value="16n">1/16</option>
-              <option value="8n">1/8</option>
-              <option value="4n">1/4</option>
-            </select>
-            <button
-              onPointerDown={() => {
-                if (isPlaying) {
-                  Tone.Transport.pause();
-                } else {
-                  Tone.Transport.start();
-                }
-                setIsPlaying(!isPlaying);
-              }}
-              onPointerUp={(e) => e.currentTarget.blur()}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: "1px solid #333",
-                background: "#27E0B0",
-                color: "#1F2532"
-              }}
-            >
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-            <button
-              onPointerDown={() => {
-                Tone.Transport.stop();
-                setIsPlaying(false);
-              }}
-              onPointerUp={(e) => e.currentTarget.blur()}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: "1px solid #333",
-                background: "#E02749",
-                color: "#e6f2ff"
-              }}
-            >
-              Stop
-            </button>
-          </div>
+          <LoopStrip started={started} isPlaying={isPlaying} />
+          <div style={{ padding: 16 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+              <label>BPM</label>
+              <select
+                value={bpm}
+                onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+                style={{ padding: 8, borderRadius: 8, background: "#121827", color: "white" }}
+              >
+                {[90, 100, 110, 120, 130].map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+              <label style={{ marginLeft: 12 }}>Quantize</label>
+              <select
+                value={subdiv}
+                onChange={(e) => setSubdiv(e.target.value as Subdivision)}
+                style={{ padding: 8, borderRadius: 8, background: "#121827", color: "white" }}
+              >
+                <option value="16n">1/16</option>
+                <option value="8n">1/8</option>
+                <option value="4n">1/4</option>
+              </select>
+              <button
+                onPointerDown={() => {
+                  if (isPlaying) {
+                    Tone.Transport.pause();
+                  } else {
+                    Tone.Transport.start();
+                  }
+                  setIsPlaying(!isPlaying);
+                }}
+                onPointerUp={(e) => e.currentTarget.blur()}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: "#27E0B0",
+                  color: "#1F2532"
+                }}
+              >
+                {isPlaying ? "Pause" : "Play"}
+              </button>
+              <button
+                onPointerDown={() => {
+                  Tone.Transport.stop();
+                  setIsPlaying(false);
+                }}
+                onPointerUp={(e) => e.currentTarget.blur()}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: "#E02749",
+                  color: "#e6f2ff"
+                }}
+              >
+                Stop
+              </button>
+            </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-              maxWidth: 600,
-              margin: "0 auto"
-            }}
-          >
-            <Pad label="Kick" onTap={scheduleKick} />
-            <Pad label="Snare" onTap={scheduleSnare} />
-            <Pad label="Hat" onTap={scheduleHat} />
-            <Pad label="Chord" onTap={scheduleChord} />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+                maxWidth: 600,
+                margin: "0 auto"
+              }}
+            >
+              <Pad label="Kick" onTap={scheduleKick} />
+              <Pad label="Snare" onTap={scheduleSnare} />
+              <Pad label="Hat" onTap={scheduleHat} />
+              <Pad label="Chord" onTap={scheduleChord} />
+            </div>
           </div>
         </>
       )}
