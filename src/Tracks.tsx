@@ -1,13 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as Tone from "tone";
+import { presets, type Pattern } from "./patterns";
 
 // Map of trigger functions for each instrument.
 export type TriggerMap = Record<string, (time: number) => void>;
-
-export interface Pattern {
-  steps: number[];
-}
 
 export interface Track {
   id: number;
@@ -20,19 +17,17 @@ export function Tracks({
   started,
   triggers,
   tracks,
-  setTracks
+  setTracks,
+  editing,
+  setEditing,
 }: {
   started: boolean;
   triggers: TriggerMap;
   tracks: Track[];
   setTracks: Dispatch<SetStateAction<Track[]>>;
+  editing: number | null;
+  setEditing: Dispatch<SetStateAction<number | null>>;
 }) {
-  const [editing, setEditing] = useState<number | null>(null);
-
-  const presets: Record<string, Pattern> = {
-    kick: { steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
-    snare: { steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] }
-  };
 
   const addPattern = (trackId: number) => {
     setTracks((ts) =>

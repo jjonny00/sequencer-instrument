@@ -11,11 +11,15 @@ import type { Track } from "./Tracks";
 export function LoopStrip({
   started,
   isPlaying,
-  tracks
+  tracks,
+  editing,
+  onSelectTrack,
 }: {
   started: boolean;
   isPlaying: boolean;
   tracks: Track[];
+  editing: number | null;
+  onSelectTrack: (id: number) => void;
 }) {
   const [step, setStep] = useState(0);
 
@@ -53,28 +57,52 @@ export function LoopStrip({
       {tracks.map((t) => (
         <div
           key={t.id}
+          onClick={() => onSelectTrack(t.id)}
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(16, 1fr)",
-            gap: 2,
-            flex: 1
+            display: "flex",
+            flex: 1,
+            cursor: "pointer",
+            opacity: editing !== null && editing !== t.id ? 0.3 : 1,
+            border: editing === t.id ? "2px solid #27E0B0" : "1px solid #555"
           }}
         >
-          {Array.from({ length: 16 }).map((_, i) => {
-            const active = t.pattern?.steps[i] ?? 0;
-            const isCurrent = i === step;
-            return (
-              <div
-                key={i}
-                style={{
-                  border: "1px solid #555",
-                  background: active ? "#27E0B0" : "#1f2532",
-                  opacity: isCurrent ? 1 : 0.5,
-                  transition: "opacity 60ms linear"
-                }}
-              />
-            );
-          })}
+          <div
+            style={{
+              width: 60,
+              borderRight: "1px solid #555",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontSize: 12
+            }}
+          >
+            {t.name}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(16, 1fr)",
+              gap: 2,
+              flex: 1
+            }}
+          >
+            {Array.from({ length: 16 }).map((_, i) => {
+              const active = t.pattern?.steps[i] ?? 0;
+              const isCurrent = i === step;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    border: "1px solid #555",
+                    background: active ? "#27E0B0" : "#1f2532",
+                    opacity: isCurrent ? 1 : 0.5,
+                    transition: "opacity 60ms linear"
+                  }}
+                />
+              );
+            })}
+          </div>
         </div>
       ))}
     </div>

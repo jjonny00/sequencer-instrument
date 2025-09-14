@@ -4,6 +4,7 @@ import * as Tone from "tone";
 import { LoopStrip } from "./LoopStrip";
 import { Tracks } from "./Tracks";
 import type { Track } from "./Tracks";
+import { presets } from "./patterns";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -36,6 +37,7 @@ export default function App() {
     { id: 1, name: "Kick", instrument: "kick", pattern: null },
     { id: 2, name: "Snare", instrument: "snare", pattern: null }
   ]);
+  const [editing, setEditing] = useState<number | null>(null);
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -132,6 +134,7 @@ export default function App() {
   return (
     <div
       style={{
+        height: "100svh",
         minHeight: "100svh",
         background: flash ? "#202a40" : "#0f1420",
         transition: "background 80ms linear",
@@ -160,7 +163,22 @@ export default function App() {
         </div>
       ) : (
         <>
-         <LoopStrip started={started} isPlaying={isPlaying} tracks={tracks} />
+          <LoopStrip
+            started={started}
+            isPlaying={isPlaying}
+            tracks={tracks}
+            editing={editing}
+            onSelectTrack={(id) => {
+              setTracks((ts) =>
+                ts.map((t) =>
+                  t.id === id && !t.pattern
+                    ? { ...t, pattern: { ...presets[t.instrument] } }
+                    : t
+                )
+              );
+              setEditing(id);
+            }}
+          />
           <Tracks
             started={started}
             triggers={{
@@ -171,6 +189,8 @@ export default function App() {
             }}
             tracks={tracks}
             setTracks={setTracks}
+            editing={editing}
+            setEditing={setEditing}
           />
           <div style={{ padding: 16 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
