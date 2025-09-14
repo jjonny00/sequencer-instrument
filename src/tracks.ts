@@ -1,4 +1,4 @@
-import type { Pattern } from "./patterns";
+import type { Chunk } from "./chunks";
 
 export type TriggerMap = Record<string, (time: number) => void>;
 
@@ -6,5 +6,5 @@ export interface Track {
   id: number;
   name: string;
   instrument: keyof TriggerMap;
-  pattern: Pattern | null;
+  pattern: Chunk | null;
 }
