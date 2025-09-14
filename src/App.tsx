@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import { LoopStrip } from "./LoopStrip";
-import { Tracks } from "./Tracks";
-import type { Track } from "./Tracks";
-import { presets } from "./patterns";
+import type { Track, TriggerMap } from "./tracks";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -35,9 +33,16 @@ export default function App() {
 
   const [tracks, setTracks] = useState<Track[]>([
     { id: 1, name: "Kick", instrument: "kick", pattern: null },
-    { id: 2, name: "Snare", instrument: "snare", pattern: null }
+    { id: 2, name: "Snare", instrument: "snare", pattern: null },
   ]);
   const [editing, setEditing] = useState<number | null>(null);
+
+  const triggers: TriggerMap = {
+    kick: (time) =>
+      kickRef.current?.triggerAttackRelease("C2", "8n", time),
+    snare: (time) =>
+      snareRef.current?.triggerAttackRelease("16n", time),
+  };
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -149,8 +154,7 @@ export default function App() {
       {!started ? (
         <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
           <button
-            onPointerDown={initAudioGraph}
-            onPointerUp={(e) => e.currentTarget.blur()}
+            onClick={initAudioGraph}
             style={{
               padding: "16px 24px",
               fontSize: "1.25rem",
@@ -165,34 +169,32 @@ export default function App() {
         </div>
       ) : (
         <>
+          {editing !== null && (
+            <button
+              onClick={() => setEditing(null)}
+              style={{
+                position: "fixed",
+                top: "calc(16px + env(safe-area-inset-top))",
+                right: 16,
+                padding: 8,
+                background: "#27E0B0",
+                border: "1px solid #333",
+                borderRadius: 8,
+                color: "#1F2532",
+                zIndex: 10,
+              }}
+            >
+              Done
+            </button>
+          )}
           <LoopStrip
             started={started}
             isPlaying={isPlaying}
             tracks={tracks}
-            editing={editing}
-            onSelectTrack={(id) => {
-              setTracks((ts) =>
-                ts.map((t) =>
-                  t.id === id && !t.pattern
-                    ? { ...t, pattern: { ...presets[t.instrument] } }
-                    : t
-                )
-              );
-              setEditing(id);
-            }}
-          />
-          <Tracks
-            started={started}
-            triggers={{
-              kick: (time) =>
-                kickRef.current?.triggerAttackRelease("C2", "8n", time),
-              snare: (time) =>
-                snareRef.current?.triggerAttackRelease("16n", time)
-            }}
-            tracks={tracks}
-            setTracks={setTracks}
+            triggers={triggers}
             editing={editing}
             setEditing={setEditing}
+            setTracks={setTracks}
           />
           <div style={{ padding: 16, paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
