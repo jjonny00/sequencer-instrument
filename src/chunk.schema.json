@@ -3,7 +3,7 @@
   "title": "Chunk",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "instrument", "steps", "note", "velocity"],
+  "required": ["id", "name", "instrument", "steps"],
   "properties": {
     "id": {
       "type": "string",
