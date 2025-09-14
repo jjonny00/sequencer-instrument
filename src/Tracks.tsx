@@ -135,7 +135,7 @@ function PatternPlayer({
   started: boolean;
 }) {
   useEffect(() => {
-    if (!started) return;
+    if (!started) return undefined;
     const seq = new Tone.Sequence(
       (time, step) => {
         if (step) trigger(time);
