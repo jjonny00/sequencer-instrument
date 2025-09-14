@@ -135,7 +135,9 @@ function ChunkView({
       chunk.pattern,
       "16n"
     ).start(0);
-    return () => seq.dispose();
+    return () => {
+      seq.dispose();
+    };
   }, [chunk.pattern, trigger, started]);
 
   return (
