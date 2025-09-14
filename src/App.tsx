@@ -29,7 +29,12 @@ export default function App() {
   const [packIndex, setPackIndex] = useState(0);
 
   // Instruments (kept across renders)
-  const instrumentRefs = useRef<Record<string, Tone.Instrument>>({});
+  type ToneInstrument = {
+    triggerAttackRelease: (...args: unknown[]) => void;
+    dispose?: () => void;
+    toDestination: () => ToneInstrument;
+  };
+  const instrumentRefs = useRef<Record<string, ToneInstrument>>({});
   const noteRef = useRef<Tone.Synth | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -56,10 +61,10 @@ export default function App() {
     instrumentRefs.current = {};
     const newTriggers: TriggerMap = {};
     Object.entries(pack.instruments).forEach(([name, spec]) => {
-      const Ctor = (Tone as Record<string, new () => Tone.Instrument>)[
+      const Ctor = (Tone as unknown as Record<string, new () => ToneInstrument>)[
         spec.type
       ];
-      const inst: Tone.Instrument = new Ctor().toDestination();
+      const inst = new Ctor().toDestination();
       instrumentRefs.current[name] = inst;
       newTriggers[name] = (time: number) => {
         if (inst instanceof Tone.NoiseSynth) {
