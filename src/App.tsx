@@ -3,6 +3,7 @@ import * as Tone from "tone";
 
 import { LoopStrip } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
+import { getNote, type NoteName } from "./notes";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -29,7 +30,7 @@ export default function App() {
   const kickRef = useRef<Tone.MembraneSynth | null>(null);
   const snareRef = useRef<Tone.NoiseSynth | null>(null);
   const hatRef = useRef<Tone.MetalSynth | null>(null);
-  const chordRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
+  const noteRef = useRef<Tone.Synth | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([
     { id: 1, name: "Kick", instrument: "kick", pattern: null },
@@ -66,8 +67,8 @@ export default function App() {
     hat.modulationIndex = 32;
     hat.resonance = 4000;
     hat.octaves = 1.5;
-    hatRef.current = hat
-  chordRef.current = new Tone.PolySynth(Tone.Synth, {
+    hatRef.current = hat;
+    noteRef.current = new Tone.Synth({
       oscillator: { type: "triangle" },
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 }
     }).toDestination();
@@ -78,26 +79,10 @@ export default function App() {
     setIsPlaying(true);
   };
 
-  const scheduleKick = () => {
+  const scheduleNote = (name: NoteName) => {
     const t = nextGridTime(subdiv);
-    kickRef.current?.triggerAttackRelease("C2", "8n", t);
-    flashAt(t);
-  };
-  const scheduleSnare = () => {
-    const t = nextGridTime(subdiv);
-    // short envelope for a snappy “snare”
-    snareRef.current?.triggerAttackRelease("16n", t);
-    flashAt(t);
-  };
-  const scheduleHat = () => {
-    const t = nextGridTime(subdiv);
-    hatRef.current?.triggerAttackRelease("32n", t);
-    flashAt(t);
-  };
-  const scheduleChord = () => {
-    const t = nextGridTime(subdiv);
-    // Cmaj7 (C E G B) – simple, pleasant
-    chordRef.current?.triggerAttackRelease(["C4", "E4", "G4", "B4"], "4n", t, 0.6);
+    const note = getNote(name);
+    noteRef.current?.triggerAttackRelease(note, "8n", t);
     flashAt(t);
   };
 
@@ -264,16 +249,15 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: "1fr 1fr 1fr",
                 gap: 12,
                 maxWidth: 600,
                 margin: "0 auto"
               }}
             >
-              <Pad label="Kick" onTap={scheduleKick} />
-              <Pad label="Snare" onTap={scheduleSnare} />
-              <Pad label="Hat" onTap={scheduleHat} />
-              <Pad label="Chord" onTap={scheduleChord} />
+              <Pad label="Low" onTap={() => scheduleNote("low")} />
+              <Pad label="Mid" onTap={() => scheduleNote("mid")} />
+              <Pad label="High" onTap={() => scheduleNote("high")} />
             </div>
           </div>
         </>
