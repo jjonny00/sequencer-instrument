@@ -1,18 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import * as Tone from "tone";
 
 // Map of trigger functions for each instrument.
 type TriggerMap = Record<string, (time: number) => void>;
 
-interface Chunk {
-  pattern: number[];
+interface Pattern {
+  steps: number[];
 }
 
 interface Track {
   id: number;
   name: string;
   instrument: keyof TriggerMap;
-  chunk: Chunk | null;
+  pattern: Pattern | null;
 }
 
 export function Tracks({
@@ -23,42 +23,30 @@ export function Tracks({
   triggers: TriggerMap;
 }) {
   const [tracks, setTracks] = useState<Track[]>([
-    { id: 1, name: "Kick", instrument: "kick", chunk: null },
-    { id: 2, name: "Snare", instrument: "snare", chunk: null }
+    { id: 1, name: "Kick", instrument: "kick", pattern: null },
+    { id: 2, name: "Snare", instrument: "snare", pattern: null }
   ]);
   const [editing, setEditing] = useState<number | null>(null);
 
-  const presets: Record<string, Chunk> = {
-    kick: { pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
-    snare: { pattern: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] }
+  const presets: Record<string, Pattern> = {
+    kick: { steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+    snare: { steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] }
   };
 
-  const dropChunk = (trackId: number) => {
+  const addPattern = (trackId: number) => {
     setTracks((ts) =>
       ts.map((t) =>
-        t.id === trackId ? { ...t, chunk: { ...presets[t.instrument] } } : t
+        t.id === trackId ? { ...t, pattern: { ...presets[t.instrument] } } : t
       )
     );
+    setEditing(trackId);
   };
 
-  const updatePattern = (trackId: number, pattern: number[]) => {
+  const updatePattern = (trackId: number, steps: number[]) => {
     setTracks((ts) =>
-      ts.map((t) =>
-        t.id === trackId ? { ...t, chunk: { ...t.chunk!, pattern } } : t
-      )
+      ts.map((t) => (t.id === trackId ? { ...t, pattern: { steps } } : t))
     );
   };
-
-  if (editing !== null) {
-    const track = tracks.find((t) => t.id === editing)!;
-    return (
-      <ChunkEditor
-        pattern={track.chunk!.pattern}
-        onChange={(p) => updatePattern(track.id, p)}
-        onClose={() => setEditing(null)}
-      />
-    );
-  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 16 }}>
@@ -67,9 +55,10 @@ export function Tracks({
           key={t.id}
           style={{
             display: "flex",
-            height: 40,
-            border: "1px solid #555",
-            background: "#1f2532"
+            border: t.id === editing ? "2px solid #27E0B0" : "1px solid #555",
+            background: "#1f2532",
+            opacity: editing !== null && t.id !== editing ? 0.3 : 1,
+            pointerEvents: editing !== null && t.id !== editing ? "none" : "auto"
           }}
         >
           <div
@@ -85,17 +74,37 @@ export function Tracks({
           >
             {t.name}
           </div>
-          <div style={{ flex: 1 }}>
-            {t.chunk ? (
-              <ChunkView
-                chunk={t.chunk}
-                trigger={triggers[t.instrument]}
-                started={started}
-                onEdit={() => setEditing(t.id)}
-              />
+          <div style={{ flex: 1, padding: 4 }}>
+            {t.pattern ? (
+              t.id === editing ? (
+                <>
+                  <PatternPlayer
+                    pattern={t.pattern}
+                    trigger={triggers[t.instrument]}
+                    started={started}
+                  />
+                  <PatternEditor
+                    steps={t.pattern.steps}
+                    onChange={(p) => updatePattern(t.id, p)}
+                    onClose={() => setEditing(null)}
+                  />
+                </>
+              ) : (
+                <>
+                  <PatternPlayer
+                    pattern={t.pattern}
+                    trigger={triggers[t.instrument]}
+                    started={started}
+                  />
+                  <PatternPreview
+                    steps={t.pattern.steps}
+                    onLongPress={() => setEditing(t.id)}
+                  />
+                </>
+              )
             ) : (
               <button
-                onClick={() => dropChunk(t.id)}
+                onClick={() => addPattern(t.id)}
                 style={{
                   width: "100%",
                   height: "100%",
@@ -105,7 +114,7 @@ export function Tracks({
                   cursor: "pointer"
                 }}
               >
-                Add Chunk
+                Add Pattern
               </button>
             )}
           </div>
@@ -115,16 +124,14 @@ export function Tracks({
   );
 }
 
-function ChunkView({
-  chunk,
+function PatternPlayer({
+  pattern,
   trigger,
-  started,
-  onEdit
+  started
 }: {
-  chunk: Chunk;
+  pattern: Pattern;
   trigger: (time: number) => void;
   started: boolean;
-  onEdit: () => void;
 }) {
   useEffect(() => {
     if (!started) return;
@@ -132,53 +139,76 @@ function ChunkView({
       (time, step) => {
         if (step) trigger(time);
       },
-      chunk.pattern,
+      pattern.steps,
       "16n"
     ).start(0);
     return () => {
       seq.dispose();
     };
-  }, [chunk.pattern, trigger, started]);
+  }, [pattern.steps, trigger, started]);
+  return null;
+}
 
+function PatternPreview({
+  steps,
+  onLongPress
+}: {
+  steps: number[];
+  onLongPress: () => void;
+}) {
+  const timer = useRef<number | null>(null);
   return (
     <div
-      onClick={onEdit}
+      onPointerDown={() => {
+        timer.current = window.setTimeout(onLongPress, 500);
+      }}
+      onPointerUp={() => {
+        if (timer.current !== null) window.clearTimeout(timer.current);
+      }}
+      onPointerLeave={() => {
+        if (timer.current !== null) window.clearTimeout(timer.current);
+      }}
       style={{
         width: "100%",
         height: "100%",
-        background: "#27E0B0",
-        cursor: "pointer"
+        display: "grid",
+        gridTemplateColumns: "repeat(16, 1fr)",
+        gap: 2
       }}
-    />
+    >
+      {steps.map((v, i) => (
+        <div key={i} style={{ background: v ? "#27E0B0" : "#2a2f3a" }} />
+      ))}
+    </div>
   );
 }
 
-function ChunkEditor({
-  pattern,
+function PatternEditor({
+  steps,
   onChange,
   onClose
 }: {
-  pattern: number[];
+  steps: number[];
   onChange: (p: number[]) => void;
   onClose: () => void;
 }) {
   const toggle = (index: number) => {
-    const next = pattern.slice();
+    const next = steps.slice();
     next[index] = next[index] ? 0 : 1;
     onChange(next);
   };
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: 4 }}>
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(16, 1fr)",
           gap: 4,
-          marginBottom: 12
+          marginBottom: 8
         }}
       >
-        {pattern.map((v, i) => (
+        {steps.map((v, i) => (
           <div
             key={i}
             onClick={() => toggle(i)}
