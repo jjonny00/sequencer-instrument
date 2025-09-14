@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs } from "./packs";
+import { ChunkModal } from "./ChunkModal";
 
 /**
  * Top strip visualizing a 16-step loop.
@@ -34,6 +35,9 @@ export function LoopStrip({
 }) {
   const [step, setStep] = useState(0);
   const [selectedChunk, setSelectedChunk] = useState("");
+  const [chunkEditing, setChunkEditing] = useState<number | null>(null);
+  const longPressRef = useRef(false);
+  const timerRef = useRef<number>();
 
   useEffect(() => {
     setSelectedChunk("");
@@ -76,6 +80,16 @@ export function LoopStrip({
       ts.map((t) =>
         t.id === trackId && t.pattern
           ? { ...t, pattern: { ...t.pattern, steps } }
+          : t
+      )
+    );
+  };
+
+  const updateChunk = (trackId: number, props: Partial<Chunk>) => {
+    setTracks((ts) =>
+      ts.map((t) =>
+        t.id === trackId && t.pattern
+          ? { ...t, pattern: { ...t.pattern, ...props } }
           : t
       )
     );
@@ -168,7 +182,24 @@ export function LoopStrip({
         <div
           key={t.id}
           onClick={() => {
+            if (longPressRef.current) {
+              longPressRef.current = false;
+              return;
+            }
             if (t.pattern && editing === null) setEditing(t.id);
+          }}
+          onPointerDown={() => {
+            if (!t.pattern) return;
+            timerRef.current = window.setTimeout(() => {
+              longPressRef.current = true;
+              setChunkEditing(t.id);
+            }, 500);
+          }}
+          onPointerUp={() => {
+            if (timerRef.current) window.clearTimeout(timerRef.current);
+          }}
+          onPointerLeave={() => {
+            if (timerRef.current) window.clearTimeout(timerRef.current);
           }}
           style={{
             display: "flex",
@@ -270,6 +301,17 @@ export function LoopStrip({
           </div>
         </div>
       ))}
+      {chunkEditing !== null && (() => {
+        const track = tracks.find((tr) => tr.id === chunkEditing);
+        if (!track || !track.pattern) return null;
+        return (
+          <ChunkModal
+            chunk={track.pattern}
+            onChange={(p) => updateChunk(track.id, p)}
+            onClose={() => setChunkEditing(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
