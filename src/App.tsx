@@ -102,23 +102,31 @@ export default function App() {
     }, ms);
   };
 
-  const Pad = (props: { label: string; onTap: () => void }) => (
-    <button
-      onPointerDown={props.onTap}
-      style={{
-        width: "100%",
-        aspectRatio: "1 / 1",
-        borderRadius: 16,
-        fontSize: "1.1rem",
-        border: "1px solid #333",
-        background: "#1f2532",
-        color: "#e6f2ff",
-        touchAction: "manipulation"
-      }}
-    >
-      {props.label}
-    </button>
-  );
+  const Pad = (props: { label: string; onTap: () => void }) => {
+    const [pressed, setPressed] = useState(false);
+    return (
+      <button
+        onPointerDown={() => {
+          setPressed(true);
+          props.onTap();
+        }}
+        onPointerUp={() => setPressed(false)}
+        onPointerCancel={() => setPressed(false)}
+        style={{
+          width: "100%",
+          aspectRatio: "1 / 1",
+          borderRadius: 16,
+          fontSize: "1.1rem",
+          border: "1px solid #333",
+          background: pressed ? "#30394f" : "#1f2532",
+          color: "#e6f2ff",
+          touchAction: "manipulation"
+        }}
+      >
+        {props.label}
+      </button>
+    );
+  };
 
   return (
     <div
@@ -134,7 +142,8 @@ export default function App() {
       {!started ? (
         <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
           <button
-            onClick={initAudioGraph}
+            onPointerDown={initAudioGraph}
+            onPointerUp={(e) => e.currentTarget.blur()}
             style={{
               padding: "16px 24px",
               fontSize: "1.25rem",
