@@ -28,6 +28,7 @@ export function LoopStrip({
   setTracks: Dispatch<SetStateAction<Track[]>>;
 }) {
   const [step, setStep] = useState(0);
+  const [selectedPreset, setSelectedPreset] = useState("");
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
@@ -66,6 +67,34 @@ export function LoopStrip({
     );
   };
 
+  const loadPreset = (key: string) => {
+    const preset = presets[key];
+    if (!preset) return;
+    setTracks((ts) => {
+      const existing = ts.find((t) => t.instrument === preset.instrument);
+      if (existing) {
+        const updated = ts.map((t) =>
+          t.instrument === preset.instrument
+            ? { ...t, name: preset.name, pattern: { ...preset } }
+            : t
+        );
+        setEditing(existing.id);
+        return updated;
+      }
+      const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+      setEditing(nextId);
+      return [
+        ...ts,
+        {
+          id: nextId,
+          name: preset.name,
+          instrument: preset.instrument as keyof TriggerMap,
+          pattern: { ...preset },
+        },
+      ];
+    });
+  };
+
   return (
     <div
       style={{
@@ -79,6 +108,30 @@ export function LoopStrip({
         gap: 4,
       }}
     >
+      <div style={{ marginBottom: 4 }}>
+        <select
+          value={selectedPreset}
+          onChange={(e) => {
+            const key = e.target.value;
+            setSelectedPreset("");
+            if (key) loadPreset(key);
+          }}
+          style={{
+            padding: 4,
+            borderRadius: 4,
+            background: "#121827",
+            color: "white",
+            width: "100%",
+          }}
+        >
+          <option value="">Load preset…</option>
+          {Object.entries(presets).map(([k, p]) => (
+            <option key={k} value={k}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
       {tracks.map((t) => (
         <div
           key={t.id}
