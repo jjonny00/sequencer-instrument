@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
-import { presets, type Chunk } from "./chunks";
+import type { Chunk } from "./chunks";
+import { packs } from "./packs";
 
 /**
  * Top strip visualizing a 16-step loop.
@@ -28,7 +29,8 @@ export function LoopStrip({
   setTracks: Dispatch<SetStateAction<Track[]>>;
 }) {
   const [step, setStep] = useState(0);
-  const [selectedPreset, setSelectedPreset] = useState("");
+  const [packIndex, setPackIndex] = useState(0);
+  const [selectedChunk, setSelectedChunk] = useState("");
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
@@ -49,9 +51,14 @@ export function LoopStrip({
   }, [isPlaying]);
 
   const addPattern = (trackId: number) => {
+    const pack = packs[packIndex];
+    const track = tracks.find((t) => t.id === trackId);
+    if (!pack || !track) return;
+    const chunk = pack.chunks.find((c) => c.instrument === track.instrument);
+    if (!chunk) return;
     setTracks((ts) =>
       ts.map((t) =>
-        t.id === trackId ? { ...t, pattern: { ...presets[t.instrument] } } : t
+        t.id === trackId ? { ...t, pattern: { ...chunk } } : t
       )
     );
     setEditing(trackId);
@@ -67,15 +74,13 @@ export function LoopStrip({
     );
   };
 
-  const loadPreset = (key: string) => {
-    const preset = presets[key];
-    if (!preset) return;
+  const loadChunk = (chunk: Chunk) => {
     setTracks((ts) => {
-      const existing = ts.find((t) => t.instrument === preset.instrument);
+      const existing = ts.find((t) => t.instrument === chunk.instrument);
       if (existing) {
         const updated = ts.map((t) =>
-          t.instrument === preset.instrument
-            ? { ...t, name: preset.name, pattern: { ...preset } }
+          t.instrument === chunk.instrument
+            ? { ...t, name: chunk.name, pattern: { ...chunk } }
             : t
         );
         setEditing(existing.id);
@@ -87,9 +92,9 @@ export function LoopStrip({
         ...ts,
         {
           id: nextId,
-          name: preset.name,
-          instrument: preset.instrument as keyof TriggerMap,
-          pattern: { ...preset },
+          name: chunk.name,
+          instrument: chunk.instrument as keyof TriggerMap,
+          pattern: { ...chunk },
         },
       ];
     });
@@ -108,13 +113,33 @@ export function LoopStrip({
         gap: 4,
       }}
     >
+      <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+        {packs.map((p, i) => (
+          <button
+            key={p.id}
+            onClick={() => setPackIndex(i)}
+            style={{
+              flex: 1,
+              padding: 4,
+              borderRadius: 4,
+              background: i === packIndex ? "#27E0B0" : "#121827",
+              color: i === packIndex ? "#1F2532" : "white",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            {p.name}
+          </button>
+        ))}
+      </div>
       <div style={{ marginBottom: 4 }}>
         <select
-          value={selectedPreset}
+          value={selectedChunk}
           onChange={(e) => {
-            const key = e.target.value;
-            setSelectedPreset("");
-            if (key) loadPreset(key);
+            const id = e.target.value;
+            setSelectedChunk("");
+            const chunk = packs[packIndex].chunks.find((c) => c.id === id);
+            if (chunk) loadChunk(chunk);
           }}
           style={{
             padding: 4,
@@ -125,9 +150,9 @@ export function LoopStrip({
           }}
         >
           <option value="">Load preset…</option>
-          {Object.entries(presets).map(([k, p]) => (
-            <option key={k} value={k}>
-              {p.name}
+          {packs[packIndex].chunks.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
             </option>
           ))}
         </select>
