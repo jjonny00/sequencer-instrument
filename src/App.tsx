@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 
-import { startStarterLoop } from "./loop";
 import { LoopStrip } from "./LoopStrip";
+import type { Track, TriggerMap } from "./tracks";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -31,6 +31,19 @@ export default function App() {
   const hatRef = useRef<Tone.MetalSynth | null>(null);
   const chordRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
 
+  const [tracks, setTracks] = useState<Track[]>([
+    { id: 1, name: "Kick", instrument: "kick", pattern: null },
+    { id: 2, name: "Snare", instrument: "snare", pattern: null },
+  ]);
+  const [editing, setEditing] = useState<number | null>(null);
+
+  const triggers: TriggerMap = {
+    kick: (time) =>
+      kickRef.current?.triggerAttackRelease("C2", "8n", time),
+    snare: (time) =>
+      snareRef.current?.triggerAttackRelease("16n", time),
+  };
+
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
   }, [bpm, started]);
@@ -53,7 +66,7 @@ export default function App() {
     hat.resonance = 4000;
     hat.octaves = 1.5;
     hatRef.current = hat
-    chordRef.current = new Tone.PolySynth(Tone.Synth, {
+  chordRef.current = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: "triangle" },
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 }
     }).toDestination();
@@ -63,13 +76,6 @@ export default function App() {
     setStarted(true);
     setIsPlaying(true);
   };
-
-  const disposeRef = useRef<null | (() => void)>(null);
-  // in initAudioGraph(), after instruments and before setStarted(true):
-  disposeRef.current?.(); // cleanup any previous loop
-  disposeRef.current = startStarterLoop(
-    kickRef.current!, snareRef.current!, hatRef.current!
-  )
 
   const scheduleKick = () => {
     const t = nextGridTime(subdiv);
@@ -133,7 +139,10 @@ export default function App() {
   return (
     <div
       style={{
-        minHeight: "100svh",
+        height: "100dvh",
+        minHeight: "100dvh",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        boxSizing: "border-box",
         background: flash ? "#202a40" : "#0f1420",
         transition: "background 80ms linear",
         color: "#e6f2ff",
@@ -145,8 +154,7 @@ export default function App() {
       {!started ? (
         <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
           <button
-            onPointerDown={initAudioGraph}
-            onPointerUp={(e) => e.currentTarget.blur()}
+            onClick={initAudioGraph}
             style={{
               padding: "16px 24px",
               fontSize: "1.25rem",
@@ -161,8 +169,16 @@ export default function App() {
         </div>
       ) : (
         <>
-          <LoopStrip started={started} isPlaying={isPlaying} />
-          <div style={{ padding: 16 }}>
+          <LoopStrip
+            started={started}
+            isPlaying={isPlaying}
+            tracks={tracks}
+            triggers={triggers}
+            editing={editing}
+            setEditing={setEditing}
+            setTracks={setTracks}
+          />
+          <div style={{ padding: 16, paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
               <label>BPM</label>
               <select
