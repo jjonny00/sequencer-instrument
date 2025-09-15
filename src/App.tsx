@@ -340,7 +340,15 @@ export default function App() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 16, flex: 1, overflowY: "auto" }}>
+              <div
+                style={{
+                  marginTop: 16,
+                  flex: 1,
+                  overflowY: "auto",
+                  minHeight: 0,
+                  WebkitOverflowScrolling: "touch",
+                }}
+              >
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <button
                     onClick={() => setTab("mushy")}
