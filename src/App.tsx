@@ -3,25 +3,11 @@ import * as Tone from "tone";
 
 import { LoopStrip } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
-import { getNote } from "./notes";
 import { packs } from "./packs";
 import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
 
 type Subdivision = "16n" | "8n" | "4n";
-
-function nextGridTime(subdivision: Subdivision): number {
-  // Current musical time → next grid boundary in seconds
-  const now = Tone.now();
-  const pos = Tone.Transport.seconds; // current transport time in seconds
-  const dur = Tone.Time(subdivision).toSeconds();
-  const next = Math.ceil(pos / dur) * dur;
-  // If we're extremely close to the boundary, hop one more grid to avoid double-firing
-  const epsilon = 0.001;
-  const target = next - pos < epsilon ? next + dur : next;
-  // Return *absolute* time (audio clock), not transport time
-  return now + (target - pos);
-}
 
 export default function App() {
   const [started, setStarted] = useState(false);
@@ -37,6 +23,16 @@ export default function App() {
   };
   const instrumentRefs = useRef<Record<string, ToneInstrument>>({});
   const noteRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
+  const keyboardFxRef = useRef<{
+    reverb: Tone.Reverb;
+    delay: Tone.FeedbackDelay;
+    distortion: Tone.Distortion;
+    bitCrusher: Tone.BitCrusher;
+    panner: Tone.Panner;
+    chorus: Tone.Chorus;
+    tremolo: Tone.Tremolo;
+    filter: Tone.Filter;
+  } | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
@@ -130,57 +126,29 @@ export default function App() {
 
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
-    noteRef.current = new Tone.PolySynth(Tone.Synth, {
+    const synth = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: "triangle" },
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
-    }).toDestination();
+    });
+    const reverb = new Tone.Reverb({ decay: 3, wet: 0 });
+    const delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.3, wet: 0 });
+    const distortion = new Tone.Distortion({ distortion: 0 });
+    const bitCrusher = new Tone.BitCrusher(4);
+    bitCrusher.wet.value = 0;
+    const chorus = new Tone.Chorus(4, 2.5, 0.5).start();
+    chorus.wet.value = 0;
+    const tremolo = new Tone.Tremolo(9, 0.75).start();
+    tremolo.wet.value = 0;
+    const filter = new Tone.Filter({ type: "lowpass", frequency: 20000 });
+    const panner = new Tone.Panner(0);
+    synth.chain(distortion, bitCrusher, chorus, tremolo, filter, reverb, delay, panner, Tone.Destination);
+    noteRef.current = synth;
+    keyboardFxRef.current = { reverb, delay, distortion, bitCrusher, panner, chorus, tremolo, filter };
 
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.start(); // start clock; we’ll schedule to it
     setStarted(true);
     setIsPlaying(true);
-  };
-
-  const scheduleNote = (note: string) => {
-    const t = nextGridTime(subdiv);
-    noteRef.current?.triggerAttackRelease(note, "8n", t);
-    flashAt(t);
-  };
-
-  // Simple visual feedback: briefly highlight the page when a scheduled note fires
-  const [flash, setFlash] = useState(false);
-  const flashAt = (absTime: number) => {
-    const now = Tone.now();
-    const ms = Math.max(0, (absTime - now) * 1000);
-    window.setTimeout(() => {
-      setFlash(true);
-      window.setTimeout(() => setFlash(false), 60);
-    }, ms);
-  };
-
-  const Pad = (props: { label: string; onTap: () => void }) => {
-    const [pressed, setPressed] = useState(false);
-    return (
-      <button
-        onPointerDown={() => {
-          setPressed(true);
-          props.onTap();
-        }}
-        onPointerUp={() => setPressed(false)}
-        onPointerCancel={() => setPressed(false)}
-        style={{
-          width: "100%",
-          aspectRatio: "1 / 1",
-          borderRadius: 16,
-          fontSize: "1.1rem",
-          border: "1px solid #333",
-          background: pressed ? "#30394f" : "#1f2532",
-          color: "#e6f2ff"
-        }}
-      >
-        {props.label}
-      </button>
-    );
   };
 
   return (
@@ -190,8 +158,7 @@ export default function App() {
         minHeight: "100dvh",
         paddingBottom: "env(safe-area-inset-bottom)",
         boxSizing: "border-box",
-        background: flash ? "#202a40" : "#0f1420",
-        transition: "background 80ms linear",
+        background: "#0f1420",
         color: "#e6f2ff",
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
         display: "flex",
@@ -227,7 +194,17 @@ export default function App() {
             packIndex={packIndex}
             setPackIndex={setPackIndex}
           />
-          <div style={{ padding: 16, paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
+            <div
+              style={{
+                padding: 16,
+                paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
+            >
             <div
               style={{
                 display: "flex",
@@ -366,18 +343,13 @@ export default function App() {
 
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  gap: 12,
-                  maxWidth: 600,
-                  margin: "0 auto",
+                  marginTop: 16,
+                  flex: 1,
+                  overflowY: "auto",
+                  minHeight: 0,
+                  WebkitOverflowScrolling: "touch",
                 }}
               >
-                <Pad label="Low" onTap={() => scheduleNote(getNote("low"))} />
-                <Pad label="Mid" onTap={() => scheduleNote(getNote("mid"))} />
-                <Pad label="High" onTap={() => scheduleNote(getNote("high"))} />
-              </div>
-              <div style={{ marginTop: 16 }}>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <button
                     onClick={() => setTab("mushy")}
@@ -416,6 +388,7 @@ export default function App() {
                   <Keyboard
                     subdiv={subdiv}
                     noteRef={noteRef}
+                    fxRef={keyboardFxRef}
                     setTracks={setTracks}
                   />
                 )}
