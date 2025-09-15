@@ -5,6 +5,7 @@ import { LoopStrip } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import { getNote, type NoteName } from "./notes";
 import { packs } from "./packs";
+import { Arpeggiator } from "./Arpeggiator";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -317,22 +318,24 @@ export default function App() {
                     stop
                   </span>
                 </button>
+                </div>
               </div>
-            </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: 12,
-                maxWidth: 600,
-                margin: "0 auto"
-              }}
-            >
-              <Pad label="Low" onTap={() => scheduleNote("low")} />
-              <Pad label="Mid" onTap={() => scheduleNote("mid")} />
-              <Pad label="High" onTap={() => scheduleNote("high")} />
-            </div>
+              <Arpeggiator started={started} subdiv={subdiv} />
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gap: 12,
+                  maxWidth: 600,
+                  margin: "0 auto",
+                }}
+              >
+                <Pad label="Low" onTap={() => scheduleNote("low")} />
+                <Pad label="Mid" onTap={() => scheduleNote("mid")} />
+                <Pad label="High" onTap={() => scheduleNote("high")} />
+              </div>
           </div>
         </>
       )}
