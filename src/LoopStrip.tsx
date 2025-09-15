@@ -221,7 +221,7 @@ export function LoopStrip({
   return (
     <div
       style={{
-        height: "25vh",
+        height: "32vh",
         width: "100%",
         background: "#2a2f3a",
         display: "flex",
@@ -229,6 +229,7 @@ export function LoopStrip({
         padding: "8px",
         boxSizing: "border-box",
         gap: 4,
+        overflow: "hidden",
       }}
     >
       <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
@@ -283,6 +284,7 @@ export function LoopStrip({
           display: "flex",
           flexDirection: "column",
           gap: 4,
+          overflowY: "auto",
         }}
       >
         {tracks.map((t) => {

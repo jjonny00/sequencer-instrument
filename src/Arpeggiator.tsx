@@ -43,8 +43,8 @@ export function Arpeggiator({
   const loopRef = useRef<Tone.Loop | null>(null);
   const indexRef = useRef(0);
   const directionRef = useRef(1);
-  const recordIndexRef = useRef(0);
   const trackIdRef = useRef<number | null>(null);
+  const loopStartRef = useRef<number | null>(null);
 
   const keyNotes = useMemo(
     () =>
@@ -53,8 +53,6 @@ export function Arpeggiator({
       ),
     [root]
   );
-
-  const stepSize = subdiv === "16n" ? 1 : subdiv === "8n" ? 2 : 4;
 
   useEffect(() => {
     if (!started) return;
@@ -78,7 +76,9 @@ export function Arpeggiator({
     );
     indexRef.current = style === "down" ? notes.length - 1 : 0;
     directionRef.current = 1;
-    recordIndexRef.current = 0;
+    const start = loopStartRef.current ?? nextGridTime(subdiv);
+    loopStartRef.current = null;
+    const ticksPerStep = Tone.Transport.PPQ / 4;
     loopRef.current = new Tone.Loop((time) => {
       let note: string;
       if (style === "random") {
@@ -99,7 +99,8 @@ export function Arpeggiator({
       if (record) {
         const pitch =
           Tone.Frequency(note).toMidi() - Tone.Frequency(root).toMidi();
-        const stepIndex = recordIndexRef.current;
+        const ticks = Tone.Transport.getTicksAtTime(time);
+        const stepIndex = Math.floor(ticks / ticksPerStep) % 16;
         Tone.Draw.schedule(() => {
           setTracks((ts) => {
             let tid = trackIdRef.current;
@@ -161,17 +162,15 @@ export function Arpeggiator({
             });
           });
         }, time);
-        recordIndexRef.current = (stepIndex + stepSize) % 16;
       }
-    }, subdiv).start(nextGridTime(subdiv));
+    }, subdiv).start(start);
     return () => {
       loopRef.current?.dispose();
     };
-  }, [started, style, subdiv, record, setTracks, root, chord, sustain, stepSize]);
+  }, [started, style, subdiv, record, setTracks, root, chord, sustain]);
 
   useEffect(() => {
     if (!record) {
-      recordIndexRef.current = 0;
       trackIdRef.current = null;
     }
   }, [record]);
@@ -180,6 +179,9 @@ export function Arpeggiator({
     setHeld((h) => {
       if (h.includes(note)) return h;
       const next = [...h, note];
+      if (h.length === 0) {
+        loopStartRef.current = nextGridTime(subdiv);
+      }
       if (mode === "manual") {
         setChord(next);
       } else {
