@@ -2,7 +2,13 @@ import type { Chunk } from "./chunks";
 
 export type TriggerMap = Record<
   string,
-  (time: number, velocity?: number, pitch?: number) => void
+  (
+    time: number,
+    velocity?: number,
+    pitch?: number,
+    note?: string,
+    sustain?: number
+  ) => void
 >;
 
 export interface Track {
