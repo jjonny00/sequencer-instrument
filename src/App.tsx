@@ -321,7 +321,12 @@ export default function App() {
                 </div>
               </div>
 
-              <Arpeggiator started={started} subdiv={subdiv} />
+              <Arpeggiator
+                started={started}
+                subdiv={subdiv}
+                setTracks={setTracks}
+                editing={editing}
+              />
 
               <div
                 style={{
