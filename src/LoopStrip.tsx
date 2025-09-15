@@ -156,7 +156,7 @@ export function LoopStrip({
       const velocity = t.pattern.velocities?.[index];
       const pitch = t.pattern.pitches?.[index];
       const trigger = triggers[t.instrument];
-      trigger?.(time, velocity, pitch);
+      trigger?.(time, velocity, pitch, t.pattern.note, t.pattern.sustain);
     });
   };
 
@@ -469,7 +469,13 @@ function PatternPlayer({
   started,
 }: {
   pattern: Chunk;
-  trigger: (time: number, velocity?: number, pitch?: number) => void;
+  trigger: (
+    time: number,
+    velocity?: number,
+    pitch?: number,
+    note?: string,
+    sustain?: number
+  ) => void;
   started: boolean;
 }) {
   useEffect(() => {
@@ -480,7 +486,7 @@ function PatternPlayer({
         if (active) {
           const velocity = pattern.velocities?.[index];
           const pitch = pattern.pitches?.[index];
-          trigger(time, velocity, pitch);
+          trigger(time, velocity, pitch, pattern.note, pattern.sustain);
         }
       },
       Array.from({ length: 16 }, (_, i) => i),
@@ -489,7 +495,15 @@ function PatternPlayer({
     return () => {
       seq.dispose();
     };
-  }, [pattern.steps, pattern.velocities, pattern.pitches, trigger, started]);
+  }, [
+    pattern.steps,
+    pattern.velocities,
+    pattern.pitches,
+    pattern.note,
+    pattern.sustain,
+    trigger,
+    started,
+  ]);
   return null;
 }
 

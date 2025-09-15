@@ -31,7 +31,7 @@ export default function App() {
 
   // Instruments (kept across renders)
   type ToneInstrument = {
-    triggerAttackRelease: (...args: unknown[]) => void;
+    triggerAttackRelease: (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
     dispose?: () => void;
     toDestination: () => ToneInstrument;
   };
@@ -70,7 +70,7 @@ export default function App() {
       newTriggers[name] = (
         time: number,
         velocity = 1,
-        pitch = 0
+        pitch = 0,
       ) => {
         if (inst instanceof Tone.NoiseSynth) {
           inst.triggerAttackRelease(spec.note ?? "8n", time, velocity);
@@ -81,6 +81,21 @@ export default function App() {
         }
       };
     });
+    const chord = new Tone.Synth({
+      oscillator: { type: "triangle" },
+      envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
+    }).toDestination();
+    instrumentRefs.current["chord"] = chord;
+    newTriggers["chord"] = (
+      time: number,
+      velocity = 1,
+      pitch = 0,
+      note = "C4",
+      sustain = 0.1
+    ) => {
+      const n = Tone.Frequency(note).transpose(pitch).toNote();
+      chord.triggerAttackRelease(n, sustain, time, velocity);
+    };
     setTriggers(newTriggers);
   }, [packIndex, started]);
 
@@ -321,13 +336,6 @@ export default function App() {
                 </div>
               </div>
 
-              <Arpeggiator
-                started={started}
-                subdiv={subdiv}
-                setTracks={setTracks}
-                editing={editing}
-              />
-
               <div
                 style={{
                   display: "grid",
@@ -341,6 +349,7 @@ export default function App() {
                 <Pad label="Mid" onTap={() => scheduleNote("mid")} />
                 <Pad label="High" onTap={() => scheduleNote("high")} />
               </div>
+              <Arpeggiator started={started} subdiv={subdiv} setTracks={setTracks} />
           </div>
         </>
       )}

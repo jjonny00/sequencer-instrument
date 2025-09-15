@@ -6,5 +6,6 @@ export interface Chunk {
   velocities?: number[];
   pitches?: number[];
   note?: string;
+  sustain?: number;
 }
 

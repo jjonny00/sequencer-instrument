@@ -27,22 +27,24 @@ export function Arpeggiator({
   started,
   subdiv,
   setTracks,
-  editing,
 }: {
   started: boolean;
   subdiv: Subdivision;
   setTracks: Dispatch<SetStateAction<Track[]>>;
-  editing: number | null;
 }) {
   const [root, setRoot] = useState("C4");
   const [style, setStyle] = useState<ArpStyle>("up");
+  const [mode, setMode] = useState<"manual" | "continuous">("manual");
   const [record, setRecord] = useState(false);
-  const [active, setActive] = useState<string[]>([]);
+  const [sustain, setSustain] = useState(0.1);
+  const [held, setHeld] = useState<string[]>([]);
+  const [chord, setChord] = useState<string[]>([]);
   const synthRef = useRef<Tone.Synth | null>(null);
   const loopRef = useRef<Tone.Loop | null>(null);
   const indexRef = useRef(0);
   const directionRef = useRef(1);
   const recordIndexRef = useRef(0);
+  const trackIdRef = useRef<number | null>(null);
 
   const keyNotes = useMemo(
     () =>
@@ -67,8 +69,8 @@ export function Arpeggiator({
   useEffect(() => {
     loopRef.current?.dispose();
     if (!started) return;
-    if (!active.length) return;
-    const notes = [...active];
+    if (!chord.length) return;
+    const notes = [...chord];
     // Sort notes ascending for deterministic styles
     notes.sort(
       (a, b) =>
@@ -93,24 +95,54 @@ export function Arpeggiator({
           indexRef.current += directionRef.current;
         }
       }
-      synthRef.current?.triggerAttackRelease(note, "8n", time);
-      if (record && editing !== null) {
+      synthRef.current?.triggerAttackRelease(note, sustain, time);
+      if (record) {
         const pitch =
           Tone.Frequency(note).toMidi() - Tone.Frequency(root).toMidi();
         const stepIndex = recordIndexRef.current;
         Tone.Draw.schedule(() => {
-          setTracks((ts) =>
-            ts.map((t) => {
-              if (t.id !== editing) return t;
+          setTracks((ts) => {
+            let tid = trackIdRef.current;
+            if (tid === null) {
+              tid = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+              trackIdRef.current = tid;
+              const steps = Array(16).fill(0);
+              const velocities = Array(16).fill(1);
+              const pitches = Array(16).fill(0);
+              steps[stepIndex] = 1;
+              velocities[stepIndex] = 1;
+              pitches[stepIndex] = pitch;
+              return [
+                ...ts,
+                {
+                  id: tid,
+                  name: "Arp",
+                  instrument: "chord",
+                  pattern: {
+                    id: `arp-${Date.now()}`,
+                    name: "Arp",
+                    instrument: "chord",
+                    steps,
+                    velocities,
+                    pitches,
+                    note: root,
+                    sustain,
+                  },
+                },
+              ];
+            }
+            return ts.map((t) => {
+              if (t.id !== tid) return t;
               const pattern =
                 t.pattern ?? {
                   id: `arp-${Date.now()}`,
                   name: "Arp",
-                  instrument: t.instrument,
+                  instrument: "chord",
                   steps: Array(16).fill(0),
                   velocities: Array(16).fill(1),
                   pitches: Array(16).fill(0),
                   note: root,
+                  sustain,
                 };
               const steps = pattern.steps.slice();
               const velocities = pattern.velocities
@@ -124,10 +156,10 @@ export function Arpeggiator({
               pitches[stepIndex] = pitch;
               return {
                 ...t,
-                pattern: { ...pattern, steps, velocities, pitches },
+                pattern: { ...pattern, steps, velocities, pitches, sustain },
               };
-            })
-          );
+            });
+          });
         }, time);
         recordIndexRef.current = (stepIndex + stepSize) % 16;
       }
@@ -135,24 +167,46 @@ export function Arpeggiator({
     return () => {
       loopRef.current?.dispose();
     };
-  }, [started, style, subdiv, record, editing, setTracks, root, active, stepSize]);
+  }, [started, style, subdiv, record, setTracks, root, chord, sustain, stepSize]);
+
+  useEffect(() => {
+    if (!record) {
+      recordIndexRef.current = 0;
+      trackIdRef.current = null;
+    }
+  }, [record]);
 
   const pressNote = (note: string) => {
-    setActive((a) => (a.includes(note) ? a : [...a, note]));
+    setHeld((h) => {
+      if (h.includes(note)) return h;
+      const next = [...h, note];
+      if (mode === "manual") {
+        setChord(next);
+      } else {
+        setChord((c) => (c.includes(note) ? c : [...c, note]));
+      }
+      return next;
+    });
   };
 
   const releaseNote = (note: string) => {
-    setActive((a) => a.filter((n) => n !== note));
-    if (active.length <= 1) {
-      loopRef.current?.dispose();
-    }
+    setHeld((h) => {
+      const next = h.filter((n) => n !== note);
+      if (mode === "manual") setChord(next);
+      return next;
+    });
   };
 
+  useEffect(() => {
+    if (mode === "manual") setChord(held);
+  }, [mode, held]);
+
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div style={{ marginTop: 12 }}>
       <div
         style={{
           display: "flex",
+          flexWrap: "wrap",
           gap: 12,
           marginBottom: 12,
           alignItems: "center",
@@ -191,6 +245,30 @@ export function Arpeggiator({
           <option value="up-down">Up-Down</option>
           <option value="random">Random</option>
         </select>
+        <label>Playback</label>
+        <select
+          value={mode}
+          onChange={(e) => setMode(e.target.value as "manual" | "continuous")}
+          style={{
+            padding: 8,
+            borderRadius: 8,
+            background: "#121827",
+            color: "white",
+          }}
+        >
+          <option value="manual">Manual</option>
+          <option value="continuous">Continuous</option>
+        </select>
+        <label>Sustain</label>
+        <input
+          type="range"
+          min={0.05}
+          max={1}
+          step={0.05}
+          value={sustain}
+          onChange={(e) => setSustain(parseFloat(e.target.value))}
+          style={{ flex: 1 }}
+        />
         <button
           onClick={() => setRecord((r) => !r)}
           style={{
@@ -200,9 +278,10 @@ export function Arpeggiator({
             background: record ? "#E02749" : "#27E0B0",
             color: record ? "#e6f2ff" : "#1F2532",
             cursor: "pointer",
+            whiteSpace: "nowrap",
           }}
         >
-          {record ? "Recording" : "Record to Pattern"}
+          {record ? "Recording" : "Record"}
         </button>
       </div>
       <div style={{ display: "flex", gap: 4 }}>
@@ -221,7 +300,7 @@ export function Arpeggiator({
             style={{
               flex: 1,
               height: 60,
-              background: active.includes(n) ? "#30394f" : "#1f2532",
+              background: held.includes(n) ? "#30394f" : "#1f2532",
               border: "1px solid #333",
               borderRadius: 4,
               display: "flex",
