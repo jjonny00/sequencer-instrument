@@ -56,6 +56,7 @@ export function Keyboard({
           display: "grid",
           gridTemplateColumns: `repeat(${notes.length}, 1fr)`,
           touchAction: "none",
+          minWidth: 0,
         }}
       >
         {notes.map((note) => (
@@ -106,15 +107,21 @@ export function Keyboard({
           onChange={(e) => {
             const val = parseInt(e.target.value, 10);
             setBend(val);
-            (noteRef.current as any)?.detune.rampTo(val, 0.05);
+            (
+              noteRef.current as unknown as { detune: Tone.Signal }
+            )?.detune.rampTo(val, 0.05);
           }}
           onPointerUp={() => {
             setBend(0);
-            (noteRef.current as any)?.detune.rampTo(0, 0.2);
+            (
+              noteRef.current as unknown as { detune: Tone.Signal }
+            )?.detune.rampTo(0, 0.2);
           }}
           onPointerCancel={() => {
             setBend(0);
-            (noteRef.current as any)?.detune.rampTo(0, 0.2);
+            (
+              noteRef.current as unknown as { detune: Tone.Signal }
+            )?.detune.rampTo(0, 0.2);
           }}
           style={{
             width: 32,
