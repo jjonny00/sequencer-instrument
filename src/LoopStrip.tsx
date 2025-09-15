@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { Dispatch, SetStateAction, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  Dispatch,
+  SetStateAction,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
@@ -12,6 +16,8 @@ const instrumentColors: Record<string, string> = {
   hat: "#f1c40f",
   chord: "#2ecc71",
 };
+
+const LABEL_WIDTH = 60;
 
 /**
  * Top strip visualizing a 16-step loop.
@@ -163,8 +169,10 @@ export function LoopStrip({
   const updateFromClientX = (clientX: number) => {
     if (!trackAreaRef.current) return;
     const rect = trackAreaRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-    const index = Math.min(15, Math.floor((x / rect.width) * 16));
+    const usable = rect.width - LABEL_WIDTH;
+    if (usable <= 0) return;
+    const x = Math.max(0, Math.min(usable, clientX - rect.left - LABEL_WIDTH));
+    const index = Math.min(15, Math.floor((x / usable) * 16));
     setStep(index);
     previewStep(index);
   };
@@ -327,7 +335,7 @@ export function LoopStrip({
                 onPointerUp={clearLabelTimer}
                 onPointerLeave={clearLabelTimer}
                 style={{
-                  width: 60,
+                  width: LABEL_WIDTH,
                   borderRight: "1px solid #555",
                   display: "flex",
                   alignItems: "center",
@@ -405,34 +413,34 @@ export function LoopStrip({
             </div>
           );
         })}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: `${(step / 16) * 100}%`,
-            width: 2,
-            background: "rgba(255,255,255,0.5)",
-            pointerEvents: "none",
-            transition:
-              step === 0
-                ? "none"
-                : `left ${Tone.Time("16n").toSeconds()}s linear`,
-          }}
-        />
-        {!isPlaying && (
           <div
-            onPointerDown={onPlayheadPointerDown}
             style={{
               position: "absolute",
               top: 0,
               bottom: 0,
-              left: `calc(${(step / 16) * 100}% - 10px)`,
-              width: 20,
-              cursor: "ew-resize",
+              left: `calc(${LABEL_WIDTH}px + (100% - ${LABEL_WIDTH}px) * ${(step / 16)})`,
+              width: 2,
+              background: "rgba(255,255,255,0.5)",
+              pointerEvents: "none",
+              transition:
+                step === 0
+                  ? "none"
+                  : `left ${Tone.Time("16n").toSeconds()}s linear`,
             }}
           />
-        )}
+          {!isPlaying && (
+            <div
+              onPointerDown={onPlayheadPointerDown}
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: `calc(${LABEL_WIDTH}px + (100% - ${LABEL_WIDTH}px) * ${(step / 16)} - 10px)`,
+                width: 20,
+                cursor: "ew-resize",
+              }}
+            />
+          )}
       </div>
       {stepEditing && (() => {
         const track = tracks.find((tr) => tr.id === stepEditing.trackId);
