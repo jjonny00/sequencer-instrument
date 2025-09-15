@@ -31,10 +31,9 @@ export default function App() {
   const [packIndex, setPackIndex] = useState(0);
 
   // Instruments (kept across renders)
-  type ToneInstrument = {
-    triggerAttackRelease: (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    dispose?: () => void;
-    toDestination: () => ToneInstrument;
+  type ToneInstrument = Tone.ToneAudioNode & {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    triggerAttackRelease: (...args: any[]) => any;
   };
   const instrumentRefs = useRef<Record<string, ToneInstrument>>({});
   const noteRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
