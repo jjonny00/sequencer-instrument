@@ -41,7 +41,7 @@ export default function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
-  const [tab, setTab] = useState<"arp" | "keyboard">("arp");
+  const [tab, setTab] = useState<"mushy" | "keyboard">("mushy");
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -105,12 +105,13 @@ export default function App() {
         }
       };
     });
+    let chordInst = instrumentRefs.current["chord"];
     if (!pack.instruments["chord"]) {
-      const chord = new Tone.Synth({
+      chordInst = new Tone.Synth({
         oscillator: { type: "triangle" },
         envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
       }).toDestination();
-      instrumentRefs.current["chord"] = chord;
+      instrumentRefs.current["chord"] = chordInst;
       newTriggers["chord"] = (
         time: number,
         velocity = 1,
@@ -119,9 +120,11 @@ export default function App() {
         sustain = 0.1
       ) => {
         const n = Tone.Frequency(note).transpose(pitch).toNote();
-        chord.triggerAttackRelease(n, sustain, time, velocity);
+        chordInst!.triggerAttackRelease(n, sustain, time, velocity);
       };
     }
+    instrumentRefs.current["arpeggiator"] = chordInst!;
+    newTriggers["arpeggiator"] = newTriggers["chord"];
     setTriggers(newTriggers);
   }, [packIndex, started]);
 
@@ -377,17 +380,17 @@ export default function App() {
               <div style={{ marginTop: 16 }}>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <button
-                    onClick={() => setTab("arp")}
+                    onClick={() => setTab("mushy")}
                     style={{
                       flex: 1,
                       padding: "8px 0",
                       borderRadius: 8,
                       border: "1px solid #333",
-                      background: tab === "arp" ? "#27E0B0" : "#1f2532",
-                      color: tab === "arp" ? "#1F2532" : "#e6f2ff",
+                      background: tab === "mushy" ? "#27E0B0" : "#1f2532",
+                      color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
                     }}
                   >
-                    Arp
+                    Mushy
                   </button>
                   <button
                     onClick={() => setTab("keyboard")}
@@ -403,7 +406,7 @@ export default function App() {
                     Keyboard
                   </button>
                 </div>
-                {tab === "arp" ? (
+                {tab === "mushy" ? (
                   <Arpeggiator
                     started={started}
                     subdiv={subdiv}

@@ -7,5 +7,8 @@ export interface Chunk {
   pitches?: number[];
   note?: string;
   sustain?: number;
+  notes?: string[];
+  style?: string;
+  mode?: string;
 }
 

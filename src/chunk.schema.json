@@ -52,6 +52,26 @@
     "note": {
       "type": "string",
       "description": "Pitch or root note"
+    },
+    "sustain": {
+      "type": "number",
+      "description": "Default note length in seconds",
+      "minimum": 0
+    },
+    "notes": {
+      "type": "array",
+      "description": "Chord notes for arpeggiator",
+      "items": { "type": "string" }
+    },
+    "style": {
+      "type": "string",
+      "description": "Arpeggiator style",
+      "enum": ["up", "down", "up-down", "random"]
+    },
+    "mode": {
+      "type": "string",
+      "description": "Arpeggiator playback mode",
+      "enum": ["continuous", "manual"]
     }
   }
 }

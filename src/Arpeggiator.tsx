@@ -57,17 +57,20 @@ export function Arpeggiator({
         ...ts,
         {
           id: nextId,
-          name: "Arp",
-          instrument: "chord",
+          name: "Mushy",
+          instrument: "arpeggiator",
           pattern: {
             id: `arp-${Date.now()}`,
-            name: "Arp",
-            instrument: "chord",
+            name: "Mushy Pattern",
+            instrument: "arpeggiator",
             steps,
             velocities,
             pitches,
             note: root,
             sustain,
+            notes: chord.length ? chord.slice() : [root],
+            style,
+            mode,
           },
         },
       ];
@@ -145,17 +148,20 @@ export function Arpeggiator({
                 ...ts,
                 {
                   id: tid,
-                  name: "Arp",
-                  instrument: "chord",
+                  name: "Mushy",
+                  instrument: "arpeggiator",
                   pattern: {
                     id: `arp-${Date.now()}`,
-                    name: "Arp",
-                    instrument: "chord",
+                    name: "Mushy Pattern",
+                    instrument: "arpeggiator",
                     steps,
                     velocities,
                     pitches,
                     note: root,
                     sustain,
+                    notes: [note],
+                    style,
+                    mode,
                   },
                 },
               ];
@@ -165,13 +171,16 @@ export function Arpeggiator({
               const pattern =
                 t.pattern ?? {
                   id: `arp-${Date.now()}`,
-                  name: "Arp",
-                  instrument: "chord",
+                  name: "Mushy Pattern",
+                  instrument: "arpeggiator",
                   steps: Array(16).fill(0),
                   velocities: Array(16).fill(1),
                   pitches: Array(16).fill(0),
                   note: root,
                   sustain,
+                  notes: [],
+                  style,
+                  mode,
                 };
               const steps = pattern.steps.slice();
               const velocities = pattern.velocities
@@ -180,12 +189,23 @@ export function Arpeggiator({
               const pitches = pattern.pitches
                 ? pattern.pitches.slice()
                 : Array(16).fill(0);
+              const notesArr = pattern.notes ? pattern.notes.slice() : [];
+              if (!notesArr.includes(note)) notesArr.push(note);
               steps[stepIndex] = 1;
               velocities[stepIndex] = 1;
               pitches[stepIndex] = pitch;
               return {
                 ...t,
-                pattern: { ...pattern, steps, velocities, pitches, sustain },
+                pattern: {
+                  ...pattern,
+                  steps,
+                  velocities,
+                  pitches,
+                  sustain,
+                  notes: notesArr,
+                  style,
+                  mode,
+                },
               };
             });
           });
@@ -195,7 +215,7 @@ export function Arpeggiator({
     return () => {
       loopRef.current?.dispose();
     };
-  }, [started, style, subdiv, record, setTracks, root, chord, sustain]);
+  }, [started, style, subdiv, record, setTracks, root, chord, sustain, mode]);
 
   useEffect(() => {
     if (!record) {
