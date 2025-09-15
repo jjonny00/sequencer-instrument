@@ -299,34 +299,36 @@ export function Arpeggiator({
           onChange={(e) => setSustain(parseFloat(e.target.value))}
           style={{ flex: 1 }}
         />
-        <button
-          onClick={addTrack}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: "1px solid #333",
-            background: "#121827",
-            color: "#e6f2ff",
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          New
-        </button>
-        <button
-          onClick={() => setRecord((r) => !r)}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: "1px solid #333",
-            background: record ? "#E02749" : "#27E0B0",
-            color: record ? "#e6f2ff" : "#1F2532",
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {record ? "Recording" : "Record"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={addTrack}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #333",
+              background: "#121827",
+              color: "#e6f2ff",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            New
+          </button>
+          <button
+            onClick={() => setRecord((r) => !r)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #333",
+              background: record ? "#E02749" : "#27E0B0",
+              color: record ? "#e6f2ff" : "#1F2532",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {record ? "Recording" : "Record"}
+          </button>
+        </div>
       </div>
       <div style={{ display: "flex", gap: 4 }}>
         {keyNotes.map((n) => (
