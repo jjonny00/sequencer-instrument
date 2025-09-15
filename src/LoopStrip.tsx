@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type {
-  Dispatch,
-  SetStateAction,
-  PointerEvent as ReactPointerEvent,
-} from "react";
+import type { Dispatch, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
@@ -47,14 +43,13 @@ export function LoopStrip({
   packIndex: number;
   setPackIndex: Dispatch<SetStateAction<number>>;
 }) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(-1);
   const [selectedChunk, setSelectedChunk] = useState("");
   const [stepEditing, setStepEditing] = useState<
     { trackId: number; index: number | null } | null
   >(null);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
 
   useEffect(() => {
     setSelectedChunk("");
@@ -63,9 +58,11 @@ export function LoopStrip({
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
     if (!started) return;
+    let current = 0;
     const id = Tone.Transport.scheduleRepeat((time) => {
       Tone.Draw.schedule(() => {
-        setStep((s) => (s + 1) % 16);
+        setStep(current);
+        current = (current + 1) % 16;
       }, time);
     }, "16n");
     return () => {
@@ -75,7 +72,7 @@ export function LoopStrip({
 
   // Reset playhead when transport stops or is paused.
   useEffect(() => {
-    if (!isPlaying) setStep(0);
+    if (!isPlaying) setStep(-1);
   }, [isPlaying]);
 
   const addPattern = (trackId: number) => {
@@ -154,52 +151,6 @@ export function LoopStrip({
     );
   };
 
-  const previewStep = (index: number) => {
-    const time = Tone.now() + 0.01;
-    tracks.forEach((t) => {
-      if (!t.pattern) return;
-      const active = t.pattern.steps[index];
-      if (!active) return;
-      const velocity = t.pattern.velocities?.[index];
-      const pitch = t.pattern.pitches?.[index];
-      const trigger = triggers[t.instrument];
-      trigger?.(time, velocity, pitch, t.pattern.note, t.pattern.sustain);
-    });
-  };
-
-  const updateFromClientX = (clientX: number) => {
-    if (!trackAreaRef.current) return;
-    const rect = trackAreaRef.current.getBoundingClientRect();
-    const usable = rect.width - LABEL_WIDTH;
-    if (usable <= 0) return;
-    const x = Math.max(0, Math.min(usable, clientX - rect.left - LABEL_WIDTH));
-    const index = Math.min(15, Math.floor((x / usable) * 16));
-    setStep(index);
-    previewStep(index);
-  };
-
-  useEffect(() => {
-    const move = (e: PointerEvent) => {
-      if (!draggingRef.current) return;
-      updateFromClientX(e.clientX);
-    };
-    const up = () => {
-      draggingRef.current = false;
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const onPlayheadPointerDown = (e: ReactPointerEvent) => {
-    if (isPlaying) return;
-    draggingRef.current = true;
-    updateFromClientX(e.clientX);
-  };
 
   const loadChunk = (chunk: Chunk) => {
     setTracks((ts) => {
@@ -294,6 +245,7 @@ export function LoopStrip({
           flexDirection: "column",
           gap: 4,
           overflowY: "auto",
+          minHeight: 0,
         }}
       >
         {tracks.map((t) => {
@@ -325,6 +277,9 @@ export function LoopStrip({
               style={{
                 display: "flex",
                 height: ROW_HEIGHT,
+                minHeight: ROW_HEIGHT,
+                flex: "none",
+                boxSizing: "border-box",
                 cursor: t.pattern ? "pointer" : "default",
                 opacity: editing !== null && editing !== t.id ? 0.3 : 1,
                 border: editing === t.id ? "2px solid #27E0B0" : "1px solid #555",
@@ -361,6 +316,7 @@ export function LoopStrip({
                         setStepEditing({ trackId: t.id, index: i })
                       }
                       color={instrumentColors[t.instrument]}
+                      currentStep={step}
                     />
                   ) : (
                     <div
@@ -373,6 +329,7 @@ export function LoopStrip({
                     >
                       {Array.from({ length: 16 }).map((_, i) => {
                         const active = t.pattern?.steps[i] ?? 0;
+                        const playing = step === i && active;
                         return (
                           <div
                             key={i}
@@ -382,6 +339,9 @@ export function LoopStrip({
                                 ? instrumentColors[t.instrument]
                                 : "#1f2532",
                               opacity: active ? 1 : 0.2,
+                              boxShadow: playing
+                                ? `0 0 6px ${instrumentColors[t.instrument]}`
+                                : "none",
                             }}
                           />
                         );
@@ -414,34 +374,6 @@ export function LoopStrip({
             </div>
           );
         })}
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: `calc(${LABEL_WIDTH}px + (100% - ${LABEL_WIDTH}px) * ${(step / 16)})`,
-              width: 2,
-              background: "rgba(255,255,255,0.5)",
-              pointerEvents: "none",
-              transition:
-                step === 0
-                  ? "none"
-                  : `left ${Tone.Time("16n").toSeconds()}s linear`,
-            }}
-          />
-          {!isPlaying && (
-            <div
-              onPointerDown={onPlayheadPointerDown}
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: `calc(${LABEL_WIDTH}px + (100% - ${LABEL_WIDTH}px) * ${(step / 16)} - 10px)`,
-                width: 20,
-                cursor: "ew-resize",
-              }}
-            />
-          )}
       </div>
       {stepEditing && (() => {
         const track = tracks.find((tr) => tr.id === stepEditing.trackId);
@@ -523,11 +455,13 @@ function PatternEditor({
   onToggle,
   onStepLongPress,
   color,
+  currentStep,
 }: {
   steps: number[];
   onToggle: (index: number) => void;
   onStepLongPress: (index: number) => void;
   color: string;
+  currentStep: number;
 }) {
   const longPressRef = useRef(false);
   const timerRef = useRef<number | null>(null);
@@ -541,33 +475,37 @@ function PatternEditor({
         height: "100%",
       }}
     >
-      {steps.map((v, i) => (
-        <div
-          key={i}
-          onPointerDown={() => {
-            timerRef.current = window.setTimeout(() => {
-              longPressRef.current = true;
-              onStepLongPress(i);
-            }, 500);
-          }}
-          onPointerUp={() => {
-            if (timerRef.current) window.clearTimeout(timerRef.current);
-            if (longPressRef.current) {
-              longPressRef.current = false;
-              return;
-            }
-            onToggle(i);
-          }}
-          onPointerLeave={() => {
-            if (timerRef.current) window.clearTimeout(timerRef.current);
-          }}
-          style={{
-            border: "1px solid #555",
-            background: v ? color : "#1f2532",
-            cursor: "pointer",
-          }}
-        />
-      ))}
+      {steps.map((v, i) => {
+        const playing = currentStep === i && v;
+        return (
+          <div
+            key={i}
+            onPointerDown={() => {
+              timerRef.current = window.setTimeout(() => {
+                longPressRef.current = true;
+                onStepLongPress(i);
+              }, 500);
+            }}
+            onPointerUp={() => {
+              if (timerRef.current) window.clearTimeout(timerRef.current);
+              if (longPressRef.current) {
+                longPressRef.current = false;
+                return;
+              }
+              onToggle(i);
+            }}
+            onPointerLeave={() => {
+              if (timerRef.current) window.clearTimeout(timerRef.current);
+            }}
+            style={{
+              border: "1px solid #555",
+              background: v ? color : "#1f2532",
+              cursor: "pointer",
+              boxShadow: playing ? `0 0 6px ${color}` : "none",
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
