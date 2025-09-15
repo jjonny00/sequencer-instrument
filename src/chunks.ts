@@ -3,8 +3,8 @@ export interface Chunk {
   name: string;
   instrument: string;
   steps: number[];
+  velocities?: number[];
+  pitches?: number[];
   note?: string;
-  velocity?: number;
-  pitch?: number;
 }
 

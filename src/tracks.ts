@@ -1,6 +1,9 @@
 import type { Chunk } from "./chunks";
 
-export type TriggerMap = Record<string, (time: number) => void>;
+export type TriggerMap = Record<
+  string,
+  (time: number, velocity?: number, pitch?: number) => void
+>;
 
 export interface Track {
   id: number;
