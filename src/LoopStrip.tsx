@@ -4,7 +4,7 @@ import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs } from "./packs";
-import { ChunkModal } from "./ChunkModal";
+import { StepModal } from "./StepModal";
 
 const instrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -42,9 +42,10 @@ export function LoopStrip({
 }) {
   const [step, setStep] = useState(0);
   const [selectedChunk, setSelectedChunk] = useState("");
-  const [chunkEditing, setChunkEditing] = useState<number | null>(null);
-  const longPressRef = useRef(false);
-  const timerRef = useRef<number | null>(null);
+  const [stepEditing, setStepEditing] = useState<
+    { trackId: number; index: number } | null
+  >(null);
+  const swipeRef = useRef(0);
 
   useEffect(() => {
     setSelectedChunk("");
@@ -92,13 +93,29 @@ export function LoopStrip({
     );
   };
 
-  const updateChunk = (trackId: number, props: Partial<Chunk>) => {
+  const updateStep = (
+    trackId: number,
+    index: number,
+    props: { velocity?: number; pitch?: number }
+  ) => {
     setTracks((ts) =>
-      ts.map((t) =>
-        t.id === trackId && t.pattern
-          ? { ...t, pattern: { ...t.pattern, ...props } }
-          : t
-      )
+      ts.map((t) => {
+        if (t.id === trackId && t.pattern) {
+          const velocities = t.pattern.velocities
+            ? t.pattern.velocities.slice()
+            : Array(16).fill(1);
+          const pitches = t.pattern.pitches
+            ? t.pattern.pitches.slice()
+            : Array(16).fill(0);
+          if (props.velocity !== undefined) velocities[index] = props.velocity;
+          if (props.pitch !== undefined) pitches[index] = props.pitch;
+          return {
+            ...t,
+            pattern: { ...t.pattern, velocities, pitches },
+          };
+        }
+        return t;
+      })
     );
   };
 
@@ -188,25 +205,18 @@ export function LoopStrip({
       {tracks.map((t) => (
         <div
           key={t.id}
-          onClick={() => {
-            if (longPressRef.current) {
-              longPressRef.current = false;
-              return;
+          onPointerDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            swipeRef.current = e.clientX;
+          }}
+          onPointerUp={(e) => {
+            if (e.target !== e.currentTarget) return;
+            const dx = e.clientX - swipeRef.current;
+            if (editing === t.id && dx > 50) {
+              setEditing(null);
+            } else if (editing === null && t.pattern && Math.abs(dx) < 10) {
+              setEditing(t.id);
             }
-            if (t.pattern && editing === null) setEditing(t.id);
-          }}
-          onPointerDown={() => {
-            if (!t.pattern) return;
-            timerRef.current = window.setTimeout(() => {
-              longPressRef.current = true;
-              setChunkEditing(t.id);
-            }, 500);
-          }}
-          onPointerUp={() => {
-            if (timerRef.current) window.clearTimeout(timerRef.current);
-          }}
-          onPointerLeave={() => {
-            if (timerRef.current) window.clearTimeout(timerRef.current);
           }}
           style={{
             display: "flex",
@@ -228,34 +238,21 @@ export function LoopStrip({
               fontSize: 12,
             }}
           >
-            {editing === t.id ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditing(null);
-                }}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  background: "#27E0B0",
-                  border: "none",
-                  color: "#1F2532",
-                  cursor: "pointer",
-                  fontSize: 12,
-                }}
-              >
-                Done
-              </button>
-            ) : (
-              t.name
-            )}
+            {t.name}
           </div>
           <div style={{ flex: 1 }}>
             {t.pattern ? (
               editing === t.id ? (
                 <PatternEditor
                   steps={t.pattern.steps}
-                  onChange={(p) => updatePattern(t.id, p)}
+                  onToggle={(i) => {
+                    const next = t.pattern!.steps.slice();
+                    next[i] = next[i] ? 0 : 1;
+                    updatePattern(t.id, next);
+                  }}
+                  onStepLongPress={(i) =>
+                    setStepEditing({ trackId: t.id, index: i })
+                  }
                   color={instrumentColors[t.instrument]}
                 />
               ) : (
@@ -326,14 +323,19 @@ export function LoopStrip({
           </div>
         </div>
       ))}
-      {chunkEditing !== null && (() => {
-        const track = tracks.find((tr) => tr.id === chunkEditing);
+      {stepEditing && (() => {
+        const track = tracks.find((tr) => tr.id === stepEditing.trackId);
         if (!track || !track.pattern) return null;
+        const velocity =
+          track.pattern.velocities?.[stepEditing.index] ?? 1;
+        const pitch =
+          track.pattern.pitches?.[stepEditing.index] ?? 0;
         return (
-          <ChunkModal
-            chunk={track.pattern}
-            onChange={(p) => updateChunk(track.id, p)}
-            onClose={() => setChunkEditing(null)}
+          <StepModal
+            velocity={velocity}
+            pitch={pitch}
+            onChange={(p) => updateStep(track.id, stepEditing.index, p)}
+            onClose={() => setStepEditing(null)}
           />
         );
       })()}
@@ -347,39 +349,43 @@ function PatternPlayer({
   started,
 }: {
   pattern: Chunk;
-  trigger: (time: number) => void;
+  trigger: (time: number, velocity?: number, pitch?: number) => void;
   started: boolean;
 }) {
   useEffect(() => {
     if (!started) return;
     const seq = new Tone.Sequence(
-      (time, step) => {
-        if (step) trigger(time);
+      (time, index: number) => {
+        const active = pattern.steps[index] ?? 0;
+        if (active) {
+          const velocity = pattern.velocities?.[index];
+          const pitch = pattern.pitches?.[index];
+          trigger(time, velocity, pitch);
+        }
       },
-      pattern.steps,
+      Array.from({ length: 16 }, (_, i) => i),
       "16n"
     ).start(0);
     return () => {
       seq.dispose();
     };
-  }, [pattern.steps, trigger, started]);
+  }, [pattern.steps, pattern.velocities, pattern.pitches, trigger, started]);
   return null;
 }
 
 function PatternEditor({
   steps,
-  onChange,
+  onToggle,
+  onStepLongPress,
   color,
 }: {
   steps: number[];
-  onChange: (p: number[]) => void;
+  onToggle: (index: number) => void;
+  onStepLongPress: (index: number) => void;
   color: string;
 }) {
-  const toggle = (index: number) => {
-    const next = steps.slice();
-    next[index] = next[index] ? 0 : 1;
-    onChange(next);
-  };
+  const longPressRef = useRef(false);
+  const timerRef = useRef<number | null>(null);
 
   return (
     <div
@@ -393,7 +399,25 @@ function PatternEditor({
       {steps.map((v, i) => (
         <div
           key={i}
-          onClick={() => toggle(i)}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            timerRef.current = window.setTimeout(() => {
+              longPressRef.current = true;
+              onStepLongPress(i);
+            }, 500);
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+            if (timerRef.current) window.clearTimeout(timerRef.current);
+            if (longPressRef.current) {
+              longPressRef.current = false;
+              return;
+            }
+            onToggle(i);
+          }}
+          onPointerLeave={() => {
+            if (timerRef.current) window.clearTimeout(timerRef.current);
+          }}
           style={{
             border: "1px solid #555",
             background: v ? color : "#1f2532",

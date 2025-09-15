@@ -1,16 +1,11 @@
-import type { Chunk } from "./chunks";
+import type { FC } from "react";
 
-export function ChunkModal({
-  chunk,
-  onChange,
-  onClose,
-}: {
-  chunk: Chunk;
-  onChange: (p: Partial<Chunk>) => void;
+export const StepModal: FC<{
+  velocity: number;
+  pitch: number;
+  onChange: (p: { velocity?: number; pitch?: number }) => void;
   onClose: () => void;
-}) {
-  const velocity = chunk.velocity ?? 1;
-  const pitch = chunk.pitch ?? 0;
+}> = ({ velocity, pitch, onChange, onClose }) => {
   return (
     <div
       style={{
@@ -76,4 +71,4 @@ export function ChunkModal({
       </div>
     </div>
   );
-}
+};

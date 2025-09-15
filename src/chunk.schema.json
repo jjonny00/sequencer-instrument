@@ -27,21 +27,31 @@
       "minItems": 16,
       "maxItems": 16
     },
+    "velocities": {
+      "type": "array",
+      "description": "Per-step hit intensity",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minItems": 16,
+      "maxItems": 16
+    },
+    "pitches": {
+      "type": "array",
+      "description": "Per-step pitch shift in semitones",
+      "items": {
+        "type": "number",
+        "minimum": -12,
+        "maximum": 12
+      },
+      "minItems": 16,
+      "maxItems": 16
+    },
     "note": {
       "type": "string",
       "description": "Pitch or root note"
-    },
-    "velocity": {
-      "type": "number",
-      "description": "Hit intensity",
-      "minimum": 0,
-      "maximum": 1
-    },
-    "pitch": {
-      "type": "number",
-      "description": "Pitch shift in semitones",
-      "minimum": -12,
-      "maximum": 12
     }
   }
 }

@@ -66,11 +66,17 @@ export default function App() {
       ];
       const inst = new Ctor().toDestination();
       instrumentRefs.current[name] = inst;
-      newTriggers[name] = (time: number) => {
+      newTriggers[name] = (
+        time: number,
+        velocity = 1,
+        pitch = 0
+      ) => {
         if (inst instanceof Tone.NoiseSynth) {
-          inst.triggerAttackRelease(spec.note ?? "8n", time);
+          inst.triggerAttackRelease(spec.note ?? "8n", time, velocity);
         } else {
-          inst.triggerAttackRelease(spec.note ?? "C2", "8n", time);
+          const base = spec.note ?? "C2";
+          const note = Tone.Frequency(base).transpose(pitch).toNote();
+          inst.triggerAttackRelease(note, "8n", time, velocity);
         }
       };
     });
