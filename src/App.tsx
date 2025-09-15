@@ -345,7 +345,9 @@ export default function App() {
                 style={{
                   marginTop: 16,
                   flex: 1,
-                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  overflowY: tab === "keyboard" ? "hidden" : "auto",
                   minHeight: 0,
                   WebkitOverflowScrolling: "touch",
                 }}

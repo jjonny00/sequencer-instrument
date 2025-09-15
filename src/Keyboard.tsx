@@ -292,7 +292,7 @@ export function Keyboard({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button
           onClick={addTrack}
@@ -456,6 +456,10 @@ export function Keyboard({
           flexWrap: "wrap",
           gap: 12,
           marginTop: 12,
+          flex: 1,
+          overflowY: "auto",
+          minHeight: 0,
+          WebkitOverflowScrolling: "touch",
         }}
       >
         <div style={{ flex: "1 0 45%" }}>
