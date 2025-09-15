@@ -1,13 +1,16 @@
-import { useMemo } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, Dispatch, SetStateAction } from "react";
 
+import type { PatternGroup } from "./song";
 import type { Track } from "./tracks";
 
 interface SongViewProps {
   tracks: Track[];
-  songSequence: number[];
-  setSongSequence: Dispatch<SetStateAction<number[]>>;
-  currentSequenceIndex: number;
+  patternGroups: PatternGroup[];
+  setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
+  songRows: (string | null)[][];
+  setSongRows: Dispatch<SetStateAction<(string | null)[][]>>;
+  currentSectionIndex: number;
   isPlaying: boolean;
   bpm: number;
   setBpm: Dispatch<SetStateAction<number>>;
@@ -15,34 +18,192 @@ interface SongViewProps {
   onStop: () => void;
 }
 
+const SLOT_WIDTH = 150;
+const SLOT_GAP = 8;
+const ROW_LABEL_WIDTH = 80;
+
+const createPatternGroupId = () =>
+  `pg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const createEmptyRow = (length: number) =>
+  Array.from({ length }, () => null as string | null);
+
+const formatTrackCount = (count: number) =>
+  `${count} track${count === 1 ? "" : "s"}`;
+
 export function SongView({
   tracks,
-  songSequence,
-  setSongSequence,
-  currentSequenceIndex,
+  patternGroups,
+  setPatternGroups,
+  songRows,
+  setSongRows,
+  currentSectionIndex,
   isPlaying,
   bpm,
   setBpm,
   onPlayPause,
   onStop,
 }: SongViewProps) {
+  const [editingSlot, setEditingSlot] = useState<
+    { rowIndex: number; columnIndex: number } | null
+  >(null);
+
   const trackMap = useMemo(
     () => new Map(tracks.map((track) => [track.id, track])),
     [tracks]
   );
 
-  const addTrackToSequence = (trackId: number) => {
-    setSongSequence((prev) => [...prev, trackId]);
+  const patternGroupMap = useMemo(
+    () => new Map(patternGroups.map((group) => [group.id, group])),
+    [patternGroups]
+  );
+
+  const sectionCount = useMemo(
+    () => songRows.reduce((max, row) => Math.max(max, row.length), 0),
+    [songRows]
+  );
+
+  const playableTracks = useMemo(
+    () => tracks.filter((track) => track.pattern),
+    [tracks]
+  );
+
+  useEffect(() => {
+    if (!editingSlot) return;
+    if (patternGroups.length === 0) {
+      setEditingSlot(null);
+      return;
+    }
+    const { rowIndex, columnIndex } = editingSlot;
+    if (rowIndex >= songRows.length) {
+      setEditingSlot(null);
+      return;
+    }
+    if (columnIndex >= songRows[rowIndex].length) {
+      setEditingSlot(null);
+    }
+  }, [editingSlot, songRows, patternGroups.length]);
+
+  const handleAddSection = () => {
+    setSongRows((rows) => {
+      if (rows.length === 0) {
+        return [[null]];
+      }
+      return rows.map((row) => [...row, null]);
+    });
   };
 
-  const removeStepAt = (index: number) => {
-    setSongSequence((prev) => prev.filter((_, i) => i !== index));
+  const handleAddRow = () => {
+    setSongRows((rows) => {
+      const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+      const newRow = createEmptyRow(maxColumns);
+      if (rows.length === 0) {
+        return [newRow.length ? newRow : [null]];
+      }
+      return [...rows, newRow];
+    });
   };
 
-  const clearSequence = () => setSongSequence([]);
+  const handleAssignSlot = (
+    rowIndex: number,
+    columnIndex: number,
+    groupId: string | null
+  ) => {
+    setSongRows((rows) =>
+      rows.map((row, idx) => {
+        if (idx !== rowIndex) return row;
+        const nextRow = row.slice();
+        while (nextRow.length <= columnIndex) {
+          nextRow.push(null);
+        }
+        nextRow[columnIndex] = groupId;
+        return nextRow;
+      })
+    );
+  };
 
-  const hasSequence = songSequence.length > 0;
-  const playableTracks = tracks.filter((track) => track.pattern);
+  const handleCreatePatternGroup = () => {
+    if (playableTracks.length === 0) return;
+    const snapshot = playableTracks.map((track) => track.id);
+    setPatternGroups((prev) => {
+      const existingNames = new Set(prev.map((group) => group.name));
+      let index = prev.length + 1;
+      let candidate = `Group ${index}`;
+      while (existingNames.has(candidate)) {
+        index += 1;
+        candidate = `Group ${index}`;
+      }
+      const newGroup: PatternGroup = {
+        id: createPatternGroupId(),
+        name: candidate,
+        trackIds: snapshot,
+      };
+      return [...prev, newGroup];
+    });
+  };
+
+  const handleDuplicatePatternGroup = (groupId: string) => {
+    setPatternGroups((prev) => {
+      const source = prev.find((group) => group.id === groupId);
+      if (!source) return prev;
+      const existingNames = new Set(prev.map((group) => group.name));
+      const baseName = `${source.name} Copy`;
+      let candidate = baseName;
+      let counter = 2;
+      while (existingNames.has(candidate)) {
+        candidate = `${baseName} ${counter}`;
+        counter += 1;
+      }
+      const copy: PatternGroup = {
+        id: createPatternGroupId(),
+        name: candidate,
+        trackIds: [...source.trackIds],
+      };
+      return [...prev, copy];
+    });
+  };
+
+  const timelineHeader = (
+    <div
+      style={{
+        display: "flex",
+        gap: SLOT_GAP,
+        paddingLeft: ROW_LABEL_WIDTH,
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
+          gap: SLOT_GAP,
+        }}
+      >
+        {Array.from({ length: sectionCount }, (_, index) => {
+          const highlight = isPlaying && index === currentSectionIndex;
+          return (
+            <div
+              key={`header-${index}`}
+              style={{
+                height: 28,
+                borderRadius: 6,
+                border: `1px solid ${highlight ? "#27E0B0" : "#333"}`,
+                background: highlight ? "#1f2532" : "#121827",
+                color: highlight ? "#27E0B0" : "#94a3b8",
+                display: "grid",
+                placeItems: "center",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {index + 1}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const showEmptyTimeline = sectionCount === 0;
 
   return (
     <div
@@ -62,7 +223,8 @@ export function SongView({
           padding: 16,
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 16,
+          minHeight: 0,
         }}
       >
         <div
@@ -80,102 +242,207 @@ export function SongView({
               color: "#e6f2ff",
             }}
           >
-            Song Sequence
+            Song Timeline
           </h2>
-          {hasSequence && (
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
             <button
-              onClick={clearSequence}
+              onClick={handleAddRow}
               style={{
-                marginLeft: "auto",
-                padding: "4px 10px",
-                borderRadius: 999,
+                padding: "6px 12px",
+                borderRadius: 20,
                 border: "1px solid #333",
                 background: "#273041",
                 color: "#e6f2ff",
                 fontSize: 12,
-                cursor: "pointer",
               }}
             >
-              Clear
+              + Row
             </button>
-          )}
+            <button
+              onClick={handleAddSection}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 20,
+                border: "1px solid #333",
+                background: "#273041",
+                color: "#e6f2ff",
+                fontSize: 12,
+              }}
+            >
+              + Section
+            </button>
+          </div>
         </div>
         <div
+          className="scrollable"
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            minHeight: 64,
+            overflowX: "auto",
+            paddingBottom: 4,
+            minHeight: 120,
           }}
         >
-          {!hasSequence ? (
-            <div
-              style={{
-                padding: "12px 16px",
-                borderRadius: 8,
-                border: "1px dashed #475569",
-                color: "#94a3b8",
-                fontSize: 13,
-              }}
-            >
-              Add tracks below to build your arrangement.
-            </div>
-          ) : (
-            songSequence.map((trackId, index) => {
-              const track = trackMap.get(trackId);
-              const highlight = isPlaying && index === currentSequenceIndex;
-              return (
-                <button
-                  key={`${trackId}-${index}`}
-                  onClick={() => removeStepAt(index)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: `1px solid ${highlight ? "#27E0B0" : "#333"}`,
-                    background: highlight ? "#273041" : "#1f2532",
-                    color: highlight ? "#27E0B0" : "#e6f2ff",
-                    fontSize: 13,
-                    cursor: "pointer",
-                    minWidth: 160,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 6,
-                      background: highlight ? "#27E0B0" : "#273041",
-                      color: highlight ? "#1F2532" : "#94a3b8",
-                      display: "grid",
-                      placeItems: "center",
-                      fontWeight: 600,
-                      fontSize: 12,
-                    }}
-                  >
-                    {index + 1}
-                  </span>
-                  <span style={{ fontWeight: 500 }}>
-                    {track?.name ?? `Track ${trackId}`}
-                  </span>
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 16, marginLeft: 4 }}
-                  >
-                    close
-                  </span>
-                </button>
-              );
-            })
-          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {showEmptyTimeline ? (
+              <div
+                style={{
+                  padding: 24,
+                  borderRadius: 8,
+                  border: "1px dashed #475569",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                Add a section to start placing Pattern Groups into the song timeline.
+              </div>
+            ) : (
+              <>
+                {timelineHeader}
+                {songRows.map((row, rowIndex) => {
+                  const maxColumns = Math.max(sectionCount, row.length);
+                  return (
+                    <div
+                      key={`row-${rowIndex}`}
+                      style={{
+                        display: "flex",
+                        gap: SLOT_GAP,
+                        alignItems: "stretch",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: ROW_LABEL_WIDTH,
+                          borderRadius: 8,
+                          border: "1px solid #333",
+                          background: "#121827",
+                          color: "#94a3b8",
+                          fontSize: 12,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Row {rowIndex + 1}
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: `repeat(${maxColumns}, ${SLOT_WIDTH}px)` ,
+                          gap: SLOT_GAP,
+                        }}
+                      >
+                        {Array.from({ length: maxColumns }, (_, columnIndex) => {
+                          const groupId =
+                            columnIndex < row.length ? row[columnIndex] : null;
+                          const group = groupId
+                            ? patternGroupMap.get(groupId)
+                            : undefined;
+                          const highlight =
+                            isPlaying && columnIndex === currentSectionIndex;
+                          const isEditing =
+                            editingSlot?.rowIndex === rowIndex &&
+                            editingSlot.columnIndex === columnIndex;
+                          const assigned = Boolean(group);
+
+                          const buttonStyles: CSSProperties = {
+                            width: "100%",
+                            height: 60,
+                            borderRadius: 8,
+                            border: `1px solid ${
+                              highlight ? "#27E0B0" : assigned ? "#374151" : "#333"
+                            }`,
+                            background: assigned
+                              ? highlight
+                                ? "#1f2937"
+                                : "#273041"
+                              : "#111826",
+                            color: assigned ? "#e6f2ff" : "#64748b",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-start",
+                            justifyContent: "center",
+                            gap: 4,
+                            padding: "8px 12px",
+                            fontSize: 13,
+                            cursor:
+                              patternGroups.length > 0 ? "pointer" : "not-allowed",
+                            textAlign: "left",
+                          };
+
+                          return (
+                            <div key={`slot-${rowIndex}-${columnIndex}`}>
+                              {isEditing ? (
+                                <select
+                                  value={groupId ?? ""}
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    handleAssignSlot(
+                                      rowIndex,
+                                      columnIndex,
+                                      value ? value : null
+                                    );
+                                    setEditingSlot(null);
+                                  }}
+                                  onBlur={() => setEditingSlot(null)}
+                                  style={{
+                                    width: "100%",
+                                    height: 60,
+                                    borderRadius: 8,
+                                    border: `1px solid ${
+                                      highlight ? "#27E0B0" : "#475569"
+                                    }`,
+                                    background: "#121827",
+                                    color: "#e6f2ff",
+                                    padding: "0 12px",
+                                  }}
+                                  autoFocus
+                                >
+                                  <option value="">Empty Slot</option>
+                                  {patternGroups.map((groupOption) => (
+                                    <option key={groupOption.id} value={groupOption.id}>
+                                      {groupOption.name} (
+                                      {formatTrackCount(groupOption.trackIds.length)})
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (patternGroups.length === 0) return;
+                                    setEditingSlot({ rowIndex, columnIndex });
+                                  }}
+                                  style={buttonStyles}
+                                  disabled={patternGroups.length === 0}
+                                >
+                                  <span style={{ fontWeight: 600 }}>
+                                    {group?.name ?? "Empty"}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: assigned ? "#94a3b8" : "#475569",
+                                    }}
+                                  >
+                                    {assigned
+                                      ? formatTrackCount(group?.trackIds.length ?? 0)
+                                      : patternGroups.length > 0
+                                      ? "Tap to assign"
+                                      : "Create a Pattern Group"}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
         </div>
-        {hasSequence && (
-          <span style={{ color: "#94a3b8", fontSize: 12 }}>
-            Tap a section to remove it from the sequence.
-          </span>
-        )}
       </div>
 
       <div
@@ -273,77 +540,43 @@ export function SongView({
           gap: 12,
         }}
       >
-        <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
           <h3
             style={{
-              margin: "0 0 8px",
+              margin: 0,
               fontSize: 14,
               fontWeight: 600,
               color: "#e6f2ff",
             }}
           >
-            Tracks
+            Pattern Groups
           </h3>
-          {tracks.length === 0 ? (
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 8,
-                border: "1px dashed #475569",
-                color: "#94a3b8",
-                fontSize: 13,
-              }}
-            >
-              No tracks available. Create patterns in Track view to add them here.
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
-              {tracks.map((track) => {
-                const hasPattern = Boolean(track.pattern);
-                return (
-                  <button
-                    key={track.id}
-                    onClick={() => hasPattern && addTrackToSequence(track.id)}
-                    disabled={!hasPattern}
-                    style={{
-                      flex: "1 1 140px",
-                      minWidth: 120,
-                      padding: "10px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #333",
-                      background: hasPattern ? "#27E0B0" : "#1f2532",
-                      color: hasPattern ? "#1F2532" : "#64748b",
-                      opacity: hasPattern ? 1 : 0.5,
-                      cursor: hasPattern ? "pointer" : "default",
-                      textAlign: "left",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {track.name}
-                    {!hasPattern && (
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: 11,
-                          marginTop: 4,
-                        }}
-                      >
-                        Needs a pattern
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <button
+            onClick={handleCreatePatternGroup}
+            disabled={playableTracks.length === 0}
+            style={{
+              marginLeft: "auto",
+              padding: "6px 12px",
+              borderRadius: 999,
+              border: "1px solid #333",
+              background:
+                playableTracks.length === 0 ? "#1f2532" : "#27E0B0",
+              color: playableTracks.length === 0 ? "#64748b" : "#1F2532",
+              cursor: playableTracks.length === 0 ? "default" : "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Capture Pattern Group
+          </button>
         </div>
-        {tracks.length > 0 && playableTracks.length === 0 && (
+        {playableTracks.length === 0 && (
           <div
             style={{
               padding: 12,
@@ -353,7 +586,110 @@ export function SongView({
               fontSize: 12,
             }}
           >
-            Add steps to a track in Track view to enable it here.
+            Create patterns in Track view to capture them into reusable groups.
+          </div>
+        )}
+        {patternGroups.length === 0 ? (
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 8,
+              border: "1px dashed #475569",
+              color: "#94a3b8",
+              fontSize: 13,
+            }}
+          >
+            No Pattern Groups yet. Capture the current track patterns to start
+            building song sections.
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            {patternGroups.map((group) => {
+              const trackLabels = group.trackIds
+                .map((trackId) => trackMap.get(trackId)?.name)
+                .filter((name): name is string => Boolean(name));
+              return (
+                <div
+                  key={group.id}
+                  style={{
+                    borderRadius: 10,
+                    border: "1px solid #333",
+                    background: "#121827",
+                    padding: 12,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{group.name}</span>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "#94a3b8",
+                      }}
+                    >
+                      {formatTrackCount(group.trackIds.length)}
+                    </span>
+                    <button
+                      onClick={() => handleDuplicatePatternGroup(group.id)}
+                      style={{
+                        marginLeft: "auto",
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        border: "1px solid #333",
+                        background: "#273041",
+                        color: "#e6f2ff",
+                        fontSize: 12,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Duplicate
+                    </button>
+                  </div>
+                  {trackLabels.length === 0 ? (
+                    <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                      This group has no playable tracks.
+                    </span>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 6,
+                      }}
+                    >
+                      {trackLabels.map((name) => (
+                        <span
+                          key={`${group.id}-${name}`}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            background: "#1f2532",
+                            border: "1px solid #333",
+                            fontSize: 12,
+                          }}
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

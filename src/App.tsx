@@ -9,6 +9,7 @@ import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
+import type { PatternGroup } from "./song";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -42,8 +43,9 @@ export default function App() {
   const [triggers, setTriggers] = useState<TriggerMap>({});
   const [tab, setTab] = useState<"mushy" | "keyboard">("mushy");
   const [viewMode, setViewMode] = useState<"track" | "song">("track");
-  const [songSequence, setSongSequence] = useState<number[]>([]);
-  const [currentSequenceIndex, setCurrentSequenceIndex] = useState(0);
+  const [patternGroups, setPatternGroups] = useState<PatternGroup[]>([]);
+  const [songRows, setSongRows] = useState<(string | null)[][]>([[]]);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -63,8 +65,9 @@ export default function App() {
       return filtered.length === prev.length ? prev : filtered;
     });
     setEditing(null);
-    setSongSequence([]);
-    setCurrentSequenceIndex(0);
+    setPatternGroups([]);
+    setSongRows([[]]);
+    setCurrentSectionIndex(0);
     if (!started) return;
     Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
     instrumentRefs.current = {};
@@ -161,13 +164,37 @@ export default function App() {
   }, [packIndex, started]);
 
   useEffect(() => {
-    setSongSequence((prev) => {
-      if (prev.length === 0) return prev;
+    setPatternGroups((prev) => {
       const existingIds = new Set(tracks.map((track) => track.id));
-      const filtered = prev.filter((id) => existingIds.has(id));
-      return filtered.length === prev.length ? prev : filtered;
+      let changed = false;
+      const next = prev.map((group) => {
+        const filtered = group.trackIds.filter((id) => existingIds.has(id));
+        if (filtered.length !== group.trackIds.length) {
+          changed = true;
+          return { ...group, trackIds: filtered };
+        }
+        return group;
+      });
+      return changed ? next : prev;
     });
   }, [tracks]);
+
+  useEffect(() => {
+    setSongRows((rows) => {
+      const groupIds = new Set(patternGroups.map((group) => group.id));
+      let changed = false;
+      const next = rows.map((row) => {
+        const updated = row.map((groupId) =>
+          groupId && groupIds.has(groupId) ? groupId : null
+        );
+        if (!changed) {
+          changed = updated.some((value, index) => value !== row[index]);
+        }
+        return updated;
+      });
+      return changed ? next : rows;
+    });
+  }, [patternGroups]);
 
   useEffect(() => {
     setEditing((prev) => {
@@ -177,30 +204,39 @@ export default function App() {
   }, [tracks]);
 
   useEffect(() => {
-    setCurrentSequenceIndex((prev) => {
-      if (songSequence.length === 0) return 0;
-      return prev >= songSequence.length ? songSequence.length - 1 : prev;
+    setCurrentSectionIndex((prev) => {
+      const maxColumns = songRows.reduce(
+        (max, row) => Math.max(max, row.length),
+        0
+      );
+      if (maxColumns === 0) return 0;
+      return prev >= maxColumns ? maxColumns - 1 : prev;
     });
-  }, [songSequence.length]);
+  }, [songRows]);
 
   useEffect(() => {
-    if (!started || viewMode !== "song" || songSequence.length === 0) return;
+    if (!started || viewMode !== "song") return;
+    const maxColumns = songRows.reduce(
+      (max, row) => Math.max(max, row.length),
+      0
+    );
+    if (maxColumns === 0) return;
     const id = Tone.Transport.scheduleRepeat((time) => {
       Tone.Draw.schedule(() => {
-        setCurrentSequenceIndex((prev) => {
-          if (songSequence.length === 0) return 0;
-          return (prev + 1) % songSequence.length;
+        setCurrentSectionIndex((prev) => {
+          if (maxColumns === 0) return 0;
+          return (prev + 1) % maxColumns;
         });
       }, time);
     }, "1m", "1m");
     return () => {
       Tone.Transport.clear(id);
     };
-  }, [started, viewMode, songSequence.length]);
+  }, [started, viewMode, songRows]);
 
   useEffect(() => {
     if (viewMode === "song") {
-      setCurrentSequenceIndex(0);
+      setCurrentSectionIndex(0);
     }
   }, [viewMode]);
 
@@ -229,7 +265,7 @@ export default function App() {
     Tone.Transport.start(); // start clock; we’ll schedule to it
     setStarted(true);
     setIsPlaying(true);
-    setCurrentSequenceIndex(0);
+    setCurrentSectionIndex(0);
   };
 
   const handlePlayPause = () => {
@@ -239,7 +275,7 @@ export default function App() {
       return;
     }
     if (Tone.Transport.state === "stopped") {
-      setCurrentSequenceIndex(0);
+      setCurrentSectionIndex(0);
     }
     Tone.Transport.start();
     setIsPlaying(true);
@@ -248,7 +284,7 @@ export default function App() {
   const handleStop = () => {
     Tone.Transport.stop();
     setIsPlaying(false);
-    setCurrentSequenceIndex(0);
+    setCurrentSectionIndex(0);
   };
 
   return (
@@ -536,9 +572,11 @@ export default function App() {
             ) : (
               <SongView
                 tracks={tracks}
-                songSequence={songSequence}
-                setSongSequence={setSongSequence}
-                currentSequenceIndex={currentSequenceIndex}
+                patternGroups={patternGroups}
+                setPatternGroups={setPatternGroups}
+                songRows={songRows}
+                setSongRows={setSongRows}
+                currentSectionIndex={currentSectionIndex}
                 isPlaying={isPlaying}
                 bpm={bpm}
                 setBpm={setBpm}
@@ -552,8 +590,9 @@ export default function App() {
             triggers={triggers}
             started={started}
             viewMode={viewMode}
-            songSequence={songSequence}
-            currentSequenceIndex={currentSequenceIndex}
+            patternGroups={patternGroups}
+            songRows={songRows}
+            currentSectionIndex={currentSectionIndex}
           />
         </>
       )}

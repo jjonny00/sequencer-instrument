@@ -3,14 +3,16 @@ import * as Tone from "tone";
 
 import type { Chunk } from "./chunks";
 import type { Track, TriggerMap } from "./tracks";
+import type { PatternGroup } from "./song";
 
 interface PatternPlaybackManagerProps {
   tracks: Track[];
   triggers: TriggerMap;
   started: boolean;
   viewMode: "track" | "song";
-  songSequence: number[];
-  currentSequenceIndex: number;
+  patternGroups: PatternGroup[];
+  songRows: (string | null)[][];
+  currentSectionIndex: number;
 }
 
 export function PatternPlaybackManager({
@@ -18,11 +20,31 @@ export function PatternPlaybackManager({
   triggers,
   started,
   viewMode,
-  songSequence,
-  currentSequenceIndex,
+  patternGroups,
+  songRows,
+  currentSectionIndex,
 }: PatternPlaybackManagerProps) {
-  const shouldGate = viewMode === "song" && songSequence.length > 0;
-  const activeTrackId = shouldGate ? songSequence[currentSequenceIndex] : null;
+  const shouldGate = viewMode === "song";
+  const activeTrackIds = new Set<number>();
+
+  if (shouldGate) {
+    const activeGroupIds = new Set<string>();
+    songRows.forEach((row) => {
+      if (currentSectionIndex >= row.length) return;
+      const groupId = row[currentSectionIndex];
+      if (groupId) {
+        activeGroupIds.add(groupId);
+      }
+    });
+
+    if (activeGroupIds.size > 0) {
+      patternGroups.forEach((group) => {
+        if (activeGroupIds.has(group.id)) {
+          group.trackIds.forEach((trackId) => activeTrackIds.add(trackId));
+        }
+      });
+    }
+  }
 
   return (
     <>
@@ -31,7 +53,7 @@ export function PatternPlaybackManager({
         const trigger = triggers[track.instrument];
         if (!trigger) return null;
         const isTrackActive = () =>
-          !shouldGate || (activeTrackId !== null && activeTrackId === track.id);
+          !shouldGate || activeTrackIds.has(track.id);
         return (
           <PatternPlayer
             key={track.id}
