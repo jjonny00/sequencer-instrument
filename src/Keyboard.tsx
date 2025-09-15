@@ -21,14 +21,21 @@ export function Keyboard({
   subdiv: Subdivision;
   noteRef: MutableRefObject<Tone.PolySynth<Tone.Synth> | null>;
 }) {
-  // Trim keys so the pitch slider has dedicated space beside the keyboard
+  // Two octave range starting at middle C
   const notes = useMemo(
     () =>
-      Array.from({ length: 14 }, (_, i) =>
+      Array.from({ length: 24 }, (_, i) =>
         Tone.Frequency("C4").transpose(i).toNote()
       ),
     []
   );
+  const isSharp = (n: string) => n.includes("#");
+  const whiteNotes = useMemo(
+    () => notes.filter((n) => !isSharp(n)),
+    [notes]
+  );
+  const whiteWidth = 100 / whiteNotes.length;
+  const blackWidth = whiteWidth * 0.6;
   const [pressed, setPressed] = useState<Record<string, boolean>>({});
   const [bend, setBend] = useState(0);
   const [sustain, setSustain] = useState(0.4); // seconds
@@ -46,8 +53,6 @@ export function Keyboard({
     const t = nextGridTime(subdiv);
     noteRef.current?.triggerRelease(note, t);
   };
-
-  const isSharp = (n: string) => n.includes("#");
 
   return (
     <div>
@@ -78,41 +83,71 @@ export function Keyboard({
         <div
           style={{
             flex: 1,
-            display: "grid",
-            gridTemplateColumns: `repeat(${notes.length}, 1fr)`,
+            position: "relative",
+            height: 160,
             touchAction: "none",
+            userSelect: "none",
             minWidth: 0,
           }}
         >
-          {notes.map((note) => (
-            <div
-              key={note}
-              onPointerDown={handleDown(note)}
-              onPointerUp={handleUp(note)}
-              onPointerCancel={handleUp(note)}
-              style={{
-                height: isSharp(note) ? 100 : 160,
-                border: "1px solid #333",
-                background: isSharp(note)
-                  ? pressed[note]
-                    ? "#555"
-                    : "#333"
-                  : pressed[note]
-                  ? "#ddd"
-                  : "#fff",
-                color: isSharp(note) ? "#fff" : "#000",
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "center",
-                fontSize: "0.75rem",
-                userSelect: "none",
-                touchAction: "none",
-                alignSelf: isSharp(note) ? "start" : "stretch",
-              }}
-            >
-              {note}
-            </div>
-          ))}
+          <div style={{ display: "flex", height: "100%" }}>
+            {whiteNotes.map((note, i) => (
+              <div
+                key={note}
+                onPointerDown={handleDown(note)}
+                onPointerUp={handleUp(note)}
+                onPointerCancel={handleUp(note)}
+                style={{
+                  flex: 1,
+                  borderRight: "1px solid #333",
+                  borderLeft: i === 0 ? "1px solid #333" : "none",
+                  borderBottom: "1px solid #333",
+                  background: pressed[note] ? "#ddd" : "#fff",
+                  color: "#000",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "center",
+                  fontSize: "0.75rem",
+                  touchAction: "none",
+                }}
+              >
+                {note}
+              </div>
+            ))}
+          </div>
+          {notes.map((note, i) => {
+            if (!isSharp(note)) return null;
+            const whiteCount = notes
+              .slice(0, i)
+              .filter((n) => !isSharp(n)).length;
+            const left = whiteCount * whiteWidth - blackWidth / 2;
+            return (
+              <div
+                key={note}
+                onPointerDown={handleDown(note)}
+                onPointerUp={handleUp(note)}
+                onPointerCancel={handleUp(note)}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: `${left}%`,
+                  width: `${blackWidth}%`,
+                  height: "60%",
+                  background: pressed[note] ? "#555" : "#333",
+                  color: "#fff",
+                  border: "1px solid #222",
+                  zIndex: 1,
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "center",
+                  fontSize: "0.75rem",
+                  touchAction: "none",
+                }}
+              >
+                {note}
+              </div>
+            );
+          })}
         </div>
         <div
           style={{
@@ -132,21 +167,24 @@ export function Keyboard({
             onChange={(e) => {
               const val = parseInt(e.target.value, 10);
               setBend(val);
-              (
-                noteRef.current as unknown as { detune: Tone.Signal }
-              )?.detune.rampTo(val, 0.05);
+              const synth = noteRef.current as unknown as {
+                detune: Tone.Signal;
+              };
+              synth?.detune.rampTo(val, 0.05);
             }}
             onPointerUp={() => {
               setBend(0);
-              (
-                noteRef.current as unknown as { detune: Tone.Signal }
-              )?.detune.rampTo(0, 0.2);
+              const synth = noteRef.current as unknown as {
+                detune: Tone.Signal;
+              };
+              synth?.detune.rampTo(0, 0.2);
             }}
             onPointerCancel={() => {
               setBend(0);
-              (
-                noteRef.current as unknown as { detune: Tone.Signal }
-              )?.detune.rampTo(0, 0.2);
+              const synth = noteRef.current as unknown as {
+                detune: Tone.Signal;
+              };
+              synth?.detune.rampTo(0, 0.2);
             }}
             style={{
               width: 32,
