@@ -23,6 +23,30 @@ function nextGridTime(subdivision: Subdivision): number {
   return now + (target - pos);
 }
 
+function buildVoicing(notes: string[], root: string): {
+  notes: string[];
+  degrees: number[];
+} {
+  if (!notes.length) return { notes: [], degrees: [] };
+  const midis = notes
+    .map((n) => Tone.Frequency(n).toMidi())
+    .sort((a, b) => a - b);
+  const rootMidi = midis[0];
+  const intervals = midis.map((m) => m - rootMidi);
+  let third = intervals.find((i) => i === 3 || i === 4);
+  if (third === undefined) third = 4;
+  let fifth = intervals.find((i) => i === 7);
+  if (fifth === undefined) fifth = 7;
+  const voicing = [rootMidi, rootMidi + third, rootMidi + fifth];
+  const chordNotes = voicing.map((m) =>
+    Tone.Frequency(m, "midi").toNote()
+  );
+  const degrees = voicing.map(
+    (m) => m - Tone.Frequency(root).toMidi()
+  );
+  return { notes: chordNotes, degrees };
+}
+
 export function Arpeggiator({
   started,
   subdiv,
@@ -37,8 +61,10 @@ export function Arpeggiator({
   const [mode, setMode] = useState<"manual" | "continuous">("manual");
   const [record, setRecord] = useState(false);
   const [sustain, setSustain] = useState(0.1);
+  const [bend, setBend] = useState(0);
   const [held, setHeld] = useState<string[]>([]);
   const [chord, setChord] = useState<string[]>([]);
+  const [degrees, setDegrees] = useState<number[]>([]);
   const synthRef = useRef<Tone.Synth | null>(null);
   const loopRef = useRef<Tone.Loop | null>(null);
   const indexRef = useRef(0);
@@ -57,17 +83,22 @@ export function Arpeggiator({
         ...ts,
         {
           id: nextId,
-          name: "Arp",
-          instrument: "chord",
+          name: "Mushy",
+          instrument: "arpeggiator",
           pattern: {
             id: `arp-${Date.now()}`,
-            name: "Arp",
-            instrument: "chord",
+            name: "Mushy Pattern",
+            instrument: "arpeggiator",
             steps,
             velocities,
             pitches,
             note: root,
             sustain,
+            notes: chord.length ? chord.slice() : [root],
+            degrees: degrees.length ? degrees.slice() : [0],
+            pitchBend: bend,
+            style,
+            mode,
           },
         },
       ];
@@ -123,7 +154,8 @@ export function Arpeggiator({
           indexRef.current += directionRef.current;
         }
       }
-      synthRef.current?.triggerAttackRelease(note, sustain, time);
+      const bent = Tone.Frequency(note).transpose(bend).toNote();
+      synthRef.current?.triggerAttackRelease(bent, sustain, time);
       if (record) {
         const pitch =
           Tone.Frequency(note).toMidi() - Tone.Frequency(root).toMidi();
@@ -145,17 +177,22 @@ export function Arpeggiator({
                 ...ts,
                 {
                   id: tid,
-                  name: "Arp",
-                  instrument: "chord",
+                  name: "Mushy",
+                  instrument: "arpeggiator",
                   pattern: {
                     id: `arp-${Date.now()}`,
-                    name: "Arp",
-                    instrument: "chord",
+                    name: "Mushy Pattern",
+                    instrument: "arpeggiator",
                     steps,
                     velocities,
                     pitches,
                     note: root,
                     sustain,
+                    notes: [note],
+                    degrees: degrees.length ? degrees.slice() : [0],
+                    pitchBend: bend,
+                    style,
+                    mode,
                   },
                 },
               ];
@@ -165,13 +202,18 @@ export function Arpeggiator({
               const pattern =
                 t.pattern ?? {
                   id: `arp-${Date.now()}`,
-                  name: "Arp",
-                  instrument: "chord",
+                  name: "Mushy Pattern",
+                  instrument: "arpeggiator",
                   steps: Array(16).fill(0),
                   velocities: Array(16).fill(1),
                   pitches: Array(16).fill(0),
                   note: root,
                   sustain,
+                  notes: [],
+                  degrees: [],
+                  pitchBend: bend,
+                  style,
+                  mode,
                 };
               const steps = pattern.steps.slice();
               const velocities = pattern.velocities
@@ -180,12 +222,29 @@ export function Arpeggiator({
               const pitches = pattern.pitches
                 ? pattern.pitches.slice()
                 : Array(16).fill(0);
+              const notesArr = pattern.notes ? pattern.notes.slice() : [];
+              const degs =
+                pattern.degrees && pattern.degrees.length
+                  ? pattern.degrees.slice()
+                  : degrees.slice();
+              if (!notesArr.includes(note)) notesArr.push(note);
               steps[stepIndex] = 1;
               velocities[stepIndex] = 1;
               pitches[stepIndex] = pitch;
               return {
                 ...t,
-                pattern: { ...pattern, steps, velocities, pitches, sustain },
+                pattern: {
+                  ...pattern,
+                  steps,
+                  velocities,
+                  pitches,
+                  sustain,
+                  notes: notesArr,
+                  degrees: degs,
+                  pitchBend: bend,
+                  style,
+                  mode,
+                },
               };
             });
           });
@@ -195,7 +254,7 @@ export function Arpeggiator({
     return () => {
       loopRef.current?.dispose();
     };
-  }, [started, style, subdiv, record, setTracks, root, chord, sustain]);
+  }, [started, style, subdiv, record, setTracks, root, chord, sustain, mode, bend, degrees]);
 
   useEffect(() => {
     if (!record) {
@@ -210,11 +269,9 @@ export function Arpeggiator({
       if (h.length === 0) {
         loopStartRef.current = nextGridTime(subdiv);
       }
-      if (mode === "manual") {
-        setChord(next);
-      } else {
-        setChord((c) => (c.includes(note) ? c : [...c, note]));
-      }
+      const v = buildVoicing(next, root);
+      setChord(v.notes);
+      setDegrees(v.degrees);
       return next;
     });
   };
@@ -222,14 +279,30 @@ export function Arpeggiator({
   const releaseNote = (note: string) => {
     setHeld((h) => {
       const next = h.filter((n) => n !== note);
-      if (mode === "manual") setChord(next);
+      if (mode === "manual") {
+        const v = buildVoicing(next, root);
+        setChord(v.notes);
+        setDegrees(v.degrees);
+      }
       return next;
     });
   };
 
   useEffect(() => {
-    if (mode === "manual") setChord(held);
-  }, [mode, held]);
+    if (mode === "manual") {
+      const v = buildVoicing(held, root);
+      setChord(v.notes);
+      setDegrees(v.degrees);
+    }
+  }, [mode, held, root]);
+
+  useEffect(() => {
+    setDegrees(
+      chord.map(
+        (n) => Tone.Frequency(n).toMidi() - Tone.Frequency(root).toMidi()
+      )
+    );
+  }, [root, chord]);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -298,6 +371,16 @@ export function Arpeggiator({
           value={sustain}
           onChange={(e) => setSustain(parseFloat(e.target.value))}
           style={{ flex: 1 }}
+        />
+        <label>Pitch Bend</label>
+        <input
+          type="range"
+          min={-5}
+          max={5}
+          step={0.1}
+          value={bend}
+          onChange={(e) => setBend(parseFloat(e.target.value))}
+          style={{ width: 80 }}
         />
         <div style={{ display: "flex", gap: 8 }}>
           <button

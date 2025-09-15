@@ -11,6 +11,7 @@ const instrumentColors: Record<string, string> = {
   snare: "#3498db",
   hat: "#f1c40f",
   chord: "#2ecc71",
+  arpeggiator: "#9b59b6",
 };
 
 const LABEL_WIDTH = 60;
