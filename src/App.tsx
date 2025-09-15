@@ -347,7 +347,7 @@ export default function App() {
                   flex: 1,
                   display: "flex",
                   flexDirection: "column",
-                  overflowY: tab === "keyboard" ? "hidden" : "auto",
+                  overflowY: "auto",
                   minHeight: 0,
                   WebkitOverflowScrolling: "touch",
                 }}
