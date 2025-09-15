@@ -21,10 +21,10 @@ export function Keyboard({
   subdiv: Subdivision;
   noteRef: MutableRefObject<Tone.PolySynth<Tone.Synth> | null>;
 }) {
-  // Trim a couple keys so the pitch slider has room beside the keyboard
+  // Trim keys so the pitch slider has dedicated space beside the keyboard
   const notes = useMemo(
     () =>
-      Array.from({ length: 22 }, (_, i) =>
+      Array.from({ length: 14 }, (_, i) =>
         Tone.Frequency("C4").transpose(i).toNote()
       ),
     []
@@ -91,7 +91,7 @@ export function Keyboard({
               onPointerUp={handleUp(note)}
               onPointerCancel={handleUp(note)}
               style={{
-                height: 160,
+                height: isSharp(note) ? 100 : 160,
                 border: "1px solid #333",
                 background: isSharp(note)
                   ? pressed[note]
@@ -107,6 +107,7 @@ export function Keyboard({
                 fontSize: "0.75rem",
                 userSelect: "none",
                 touchAction: "none",
+                alignSelf: isSharp(note) ? "start" : "stretch",
               }}
             >
               {note}
