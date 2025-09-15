@@ -63,6 +63,19 @@
       "description": "Chord notes for arpeggiator",
       "items": { "type": "string" }
     },
+    "degrees": {
+      "type": "array",
+      "description": "Chord semitone offsets from root",
+      "items": {
+        "type": "number"
+      }
+    },
+    "pitchBend": {
+      "type": "number",
+      "description": "Pitch bend in semitones",
+      "minimum": -5,
+      "maximum": 5
+    },
     "style": {
       "type": "string",
       "description": "Arpeggiator style",

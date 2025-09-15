@@ -8,6 +8,8 @@ export interface Chunk {
   note?: string;
   sustain?: number;
   notes?: string[];
+  degrees?: number[];
+  pitchBend?: number;
   style?: string;
   mode?: string;
 }
