@@ -36,6 +36,12 @@
       "description": "Hit intensity",
       "minimum": 0,
       "maximum": 1
+    },
+    "pitch": {
+      "type": "number",
+      "description": "Pitch shift in semitones",
+      "minimum": -12,
+      "maximum": 12
     }
   }
 }

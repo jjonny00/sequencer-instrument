@@ -5,5 +5,6 @@ export interface Chunk {
   steps: number[];
   note?: string;
   velocity?: number;
+  pitch?: number;
 }
 
