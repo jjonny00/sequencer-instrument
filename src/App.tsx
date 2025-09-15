@@ -37,7 +37,7 @@ export default function App() {
     toDestination: () => ToneInstrument;
   };
   const instrumentRefs = useRef<Record<string, ToneInstrument>>({});
-  const noteRef = useRef<Tone.Synth | null>(null);
+  const noteRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
@@ -103,9 +103,9 @@ export default function App() {
 
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
-    noteRef.current = new Tone.Synth({
+    noteRef.current = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: "triangle" },
-      envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 }
+      envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
     }).toDestination();
 
     Tone.Transport.bpm.value = bpm;

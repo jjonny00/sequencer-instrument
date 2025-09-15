@@ -19,7 +19,7 @@ export function Keyboard({
   noteRef,
 }: {
   subdiv: Subdivision;
-  noteRef: MutableRefObject<Tone.Synth | null>;
+  noteRef: MutableRefObject<Tone.PolySynth<Tone.Synth> | null>;
 }) {
   const notes = useMemo(
     () =>
@@ -30,17 +30,20 @@ export function Keyboard({
   );
   const [pressed, setPressed] = useState<Record<string, boolean>>({});
   const [bend, setBend] = useState(0);
+  const [sustain, setSustain] = useState(400); // ms
 
   const handleDown = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     setPressed((p) => ({ ...p, [note]: true }));
     const t = nextGridTime(subdiv);
-    noteRef.current?.triggerAttackRelease(note, "8n", t);
+    noteRef.current?.triggerAttack(note, t);
   };
 
   const handleUp = (note: string) => () => {
     setPressed((p) => ({ ...p, [note]: false }));
+    const t = nextGridTime(subdiv);
+    noteRef.current?.triggerRelease(note, t);
   };
 
   const isSharp = (n: string) => n.includes("#");
@@ -86,11 +89,12 @@ export function Keyboard({
       </div>
       <div
         style={{
-          width: 40,
+          width: 80,
           display: "flex",
-          justifyContent: "center",
+          justifyContent: "space-around",
           alignItems: "center",
           padding: 4,
+          gap: 8,
         }}
       >
         <input
@@ -102,19 +106,41 @@ export function Keyboard({
           onChange={(e) => {
             const val = parseInt(e.target.value, 10);
             setBend(val);
-            noteRef.current?.detune.rampTo(val, 0.05);
+            (noteRef.current as any)?.detune.rampTo(val, 0.05);
           }}
           onPointerUp={() => {
             setBend(0);
-            noteRef.current?.detune.rampTo(0, 0.2);
+            (noteRef.current as any)?.detune.rampTo(0, 0.2);
           }}
           onPointerCancel={() => {
             setBend(0);
-            noteRef.current?.detune.rampTo(0, 0.2);
+            (noteRef.current as any)?.detune.rampTo(0, 0.2);
           }}
           style={{
-            transform: "rotate(-90deg)",
-            width: "100%",
+            width: 32,
+            height: 80,
+            writingMode: "vertical-rl",
+            WebkitAppearance: "slider-vertical",
+            touchAction: "none",
+          }}
+        />
+        <input
+          type="range"
+          min={50}
+          max={2000}
+          step={50}
+          value={sustain}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10);
+            setSustain(val);
+            noteRef.current?.set({ envelope: { release: val / 1000 } });
+          }}
+          style={{
+            width: 32,
+            height: 80,
+            writingMode: "vertical-rl",
+            WebkitAppearance: "slider-vertical",
+            touchAction: "none",
           }}
         />
       </div>
