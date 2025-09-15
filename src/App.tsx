@@ -342,12 +342,14 @@ export default function App() {
               </div>
 
               <div
+                className="scrollable"
                 style={{
                   marginTop: 16,
                   flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
                   overflowY: "auto",
                   minHeight: 0,
-                  WebkitOverflowScrolling: "touch",
                 }}
               >
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
