@@ -1,10 +1,10 @@
 import {
-  Dispatch,
-  SetStateAction,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import * as Tone from "tone";
 import type { Track } from "./tracks";
