@@ -201,7 +201,6 @@ export function Keyboard({
   }, [record]);
 
   const handleDown = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     setPressed((p) => ({ ...p, [note]: true }));
     const t = nextGridTime(subdiv);
@@ -278,7 +277,6 @@ export function Keyboard({
   };
 
   const handleUp = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
     e.currentTarget.releasePointerCapture(e.pointerId);
     setPressed((p) => ({ ...p, [note]: false }));
     const t = nextGridTime(subdiv);
@@ -294,7 +292,7 @@ export function Keyboard({
   };
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button
           onClick={addTrack}
@@ -325,139 +323,147 @@ export function Keyboard({
           {record ? "Recording" : "Record"}
         </button>
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div
-          style={{
-            flex: 1,
-            position: "relative",
-            height: 160,
-            touchAction: "none",
-            userSelect: "none",
-            minWidth: 0,
-          }}
-        >
-          <div style={{ display: "flex", height: "100%" }}>
-            {whiteNotes.map((note, i) => (
-              <div
-                key={note}
-                onPointerDown={handleDown(note)}
-                onPointerUp={handleUp(note)}
-                onPointerCancel={handleUp(note)}
-                style={{
-                  flex: 1,
-                  borderRight: "1px solid #333",
-                  borderLeft: i === 0 ? "1px solid #333" : "none",
-                  borderBottom: "1px solid #333",
-                  background: pressed[note] ? "#ddd" : "#fff",
-                  color: "#000",
-                  display: "flex",
-                  alignItems: "flex-end",
-                  justifyContent: "center",
-                  fontSize: "0.75rem",
-                  touchAction: "none",
-                }}
-              >
-                {note}
-              </div>
-            ))}
-          </div>
-          {notes.map((note, i) => {
-            if (!isSharp(note)) return null;
-            const whiteCount = notes
-              .slice(0, i)
-              .filter((n) => !isSharp(n)).length;
-            const left = whiteCount * whiteWidth - blackWidth / 2;
-            return (
-              <div
-                key={note}
-                onPointerDown={handleDown(note)}
-                onPointerUp={handleUp(note)}
-                onPointerCancel={handleUp(note)}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: `${left}%`,
-                  width: `${blackWidth}%`,
-                  height: "60%",
-                  background: pressed[note] ? "#555" : "#333",
-                  color: "#fff",
-                  border: "1px solid #222",
-                  zIndex: 1,
-                  display: "flex",
-                  alignItems: "flex-end",
-                  justifyContent: "center",
-                  fontSize: "0.75rem",
-                  touchAction: "none",
-                }}
-              >
-                {note}
-              </div>
-            );
-          })}
-        </div>
-        <div
-          style={{
-            width: 40,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 4,
-          }}
-        >
-          <input
-            type="range"
-            min={-1200}
-            max={1200}
-            step={1}
-            value={bend}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10);
-              setBend(val);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(val, 0.05);
-            }}
-            onInput={(e) => {
-              const val = parseInt((e.target as HTMLInputElement).value, 10);
-              setBend(val);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(val, 0.05);
-            }}
-            onPointerUp={() => {
-              setBend(0);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(0, 0.2);
-            }}
-            onPointerCancel={() => {
-              setBend(0);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(0, 0.2);
-            }}
-            style={{
-              width: 32,
-              height: 160,
-              writingMode: "vertical-rl",
-              WebkitAppearance: "slider-vertical",
-              touchAction: "none",
-            }}
-          />
-        </div>
-      </div>
       <div
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12,
-          marginTop: 12,
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
         }}
       >
+        <div style={{ display: "flex", gap: 8 }}>
+          <div
+            style={{
+              flex: 1,
+              position: "relative",
+              height: 160,
+              touchAction: "pan-y",
+              userSelect: "none",
+              minWidth: 0,
+            }}
+          >
+            <div style={{ display: "flex", height: "100%" }}>
+              {whiteNotes.map((note, i) => (
+                <div
+                  key={note}
+                  onPointerDown={handleDown(note)}
+                  onPointerUp={handleUp(note)}
+                  onPointerCancel={handleUp(note)}
+                  style={{
+                    flex: 1,
+                    borderRight: "1px solid #333",
+                    borderLeft: i === 0 ? "1px solid #333" : "none",
+                    borderBottom: "1px solid #333",
+                    background: pressed[note] ? "#ddd" : "#fff",
+                    color: "#000",
+                    display: "flex",
+                    alignItems: "flex-end",
+                    justifyContent: "center",
+                    fontSize: "0.75rem",
+                    touchAction: "pan-y",
+                  }}
+                >
+                  {note}
+                </div>
+              ))}
+            </div>
+            {notes.map((note, i) => {
+              if (!isSharp(note)) return null;
+              const whiteCount = notes
+                .slice(0, i)
+                .filter((n) => !isSharp(n)).length;
+              const left = whiteCount * whiteWidth - blackWidth / 2;
+              return (
+                <div
+                  key={note}
+                  onPointerDown={handleDown(note)}
+                  onPointerUp={handleUp(note)}
+                  onPointerCancel={handleUp(note)}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: `${left}%`,
+                    width: `${blackWidth}%`,
+                    height: "60%",
+                    background: pressed[note] ? "#555" : "#333",
+                    color: "#fff",
+                    border: "1px solid #222",
+                    zIndex: 1,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    justifyContent: "center",
+                    fontSize: "0.75rem",
+                    touchAction: "pan-y",
+                  }}
+                >
+                  {note}
+                </div>
+              );
+            })}
+          </div>
+          <div
+            style={{
+              width: 40,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 4,
+            }}
+          >
+            <input
+              type="range"
+              min={-1200}
+              max={1200}
+              step={1}
+              value={bend}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                setBend(val);
+                const synth = noteRef.current as unknown as {
+                  detune: Tone.Signal;
+                };
+                synth?.detune.rampTo(val, 0.05);
+              }}
+              onInput={(e) => {
+                const val = parseInt((e.target as HTMLInputElement).value, 10);
+                setBend(val);
+                const synth = noteRef.current as unknown as {
+                  detune: Tone.Signal;
+                };
+                synth?.detune.rampTo(val, 0.05);
+              }}
+              onPointerUp={() => {
+                setBend(0);
+                const synth = noteRef.current as unknown as {
+                  detune: Tone.Signal;
+                };
+                synth?.detune.rampTo(0, 0.2);
+              }}
+              onPointerCancel={() => {
+                setBend(0);
+                const synth = noteRef.current as unknown as {
+                  detune: Tone.Signal;
+                };
+                synth?.detune.rampTo(0, 0.2);
+              }}
+              style={{
+                width: 32,
+                height: 160,
+                writingMode: "vertical-rl",
+                WebkitAppearance: "slider-vertical",
+                touchAction: "pan-y",
+              }}
+            />
+          </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 12,
+            marginTop: 12,
+          }}
+        >
         <div style={{ flex: "1 0 45%" }}>
           <label>Fade In</label>
           <input
@@ -668,6 +674,7 @@ export function Keyboard({
               </option>
             ))}
           </select>
+        </div>
         </div>
       </div>
     </div>
