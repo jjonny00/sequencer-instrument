@@ -2,13 +2,68 @@
   "id": "phonk",
   "name": "Phonk Starter Pack",
   "instruments": {
-    "kick": { "type": "MembraneSynth", "note": "C2" },
-    "snare": { "type": "NoiseSynth", "note": "16n" },
-    "hat": { "type": "MetalSynth" }
+    "kick": {
+      "type": "MembraneSynth",
+      "note": "C1",
+      "options": {
+        "pitchDecay": 0.05,
+        "octaves": 4,
+        "envelope": {
+          "attack": 0.001,
+          "decay": 1.0,
+          "sustain": 0.01,
+          "release": 1.4
+        }
+      }
+    },
+    "snare": {
+      "type": "NoiseSynth",
+      "note": "16n",
+      "options": {
+        "noise": { "type": "white" },
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.2,
+          "sustain": 0
+        }
+      },
+      "effects": [
+        { "type": "Distortion", "options": { "distortion": 0.4 } }
+      ]
+    },
+    "hat": {
+      "type": "MetalSynth",
+      "options": {
+        "frequency": 400,
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.1,
+          "sustain": 0.01
+        },
+        "harmonicity": 5
+      },
+      "effects": [
+        { "type": "Reverb", "options": { "decay": 1.2, "wet": 0.3 } }
+      ]
+    },
+    "cowbell": {
+      "type": "MetalSynth",
+      "options": {
+        "frequency": 600,
+        "harmonicity": 3,
+        "resonance": 7000,
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.25,
+          "sustain": 0
+        }
+      }
+    }
   },
   "chunks": [
     { "id": "phonk-kick", "name": "Heavy Kick", "instrument": "kick", "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
     { "id": "phonk-snare", "name": "Sharp Snare", "instrument": "snare", "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
-    { "id": "phonk-hat", "name": "Fast Hat", "instrument": "hat", "steps": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] }
+    { "id": "phonk-hat", "name": "Fast Hat", "instrument": "hat", "steps": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] },
+    { "id": "phonk-cowbell", "name": "Cowbell", "instrument": "cowbell", "steps": [0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0] }
   ]
 }

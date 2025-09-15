@@ -2,13 +2,88 @@
   "id": "kraftwerk",
   "name": "Kraftwerk Style",
   "instruments": {
-    "kick": { "type": "MembraneSynth", "note": "C2" },
-    "snare": { "type": "NoiseSynth", "note": "8n" },
-    "hat": { "type": "MetalSynth" }
+    "kick": {
+      "type": "MembraneSynth",
+      "note": "C2",
+      "options": {
+        "pitchDecay": 0.01,
+        "octaves": 2,
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.4,
+          "sustain": 0,
+          "release": 0.4
+        }
+      }
+    },
+    "snare": {
+      "type": "NoiseSynth",
+      "note": "8n",
+      "options": {
+        "noise": { "type": "white" },
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.1,
+          "sustain": 0
+        }
+      }
+    },
+    "hat": {
+      "type": "MetalSynth",
+      "options": {
+        "frequency": 180,
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.05,
+          "sustain": 0
+        },
+        "harmonicity": 4
+      }
+    },
+    "bass": {
+      "type": "MonoSynth",
+      "note": "C2",
+      "options": {
+        "oscillator": { "type": "square" },
+        "filter": { "type": "lowpass", "rolloff": -24 },
+        "envelope": {
+          "attack": 0.01,
+          "decay": 0.2,
+          "sustain": 0.3,
+          "release": 0.2
+        },
+        "filterEnvelope": {
+          "attack": 0.01,
+          "decay": 0.2,
+          "sustain": 0.2,
+          "release": 0.2,
+          "baseFrequency": 120,
+          "octaves": 2
+        }
+      }
+    },
+    "chord": {
+      "type": "Synth",
+      "note": "C4",
+      "options": {
+        "oscillator": { "type": "sine" },
+        "envelope": {
+          "attack": 0.02,
+          "decay": 0.3,
+          "sustain": 0.9,
+          "release": 0.8
+        }
+      },
+      "effects": [
+        { "type": "Reverb", "options": { "decay": 1.5, "wet": 0.3 } }
+      ]
+    }
   },
   "chunks": [
     { "id": "kw-kick", "name": "Motor Kick", "instrument": "kick", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
     { "id": "kw-snare", "name": "Machine Snare", "instrument": "snare", "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
-    { "id": "kw-hat", "name": "Robot Hat", "instrument": "hat", "steps": [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1] }
+    { "id": "kw-hat", "name": "Robot Hat", "instrument": "hat", "steps": [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1] },
+    { "id": "kw-bass", "name": "Square Bass", "instrument": "bass", "steps": [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1] },
+    { "id": "kw-chord", "name": "Organ Chord", "instrument": "chord", "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] }
   ]
 }

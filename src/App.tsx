@@ -64,40 +64,65 @@ export default function App() {
     instrumentRefs.current = {};
     const newTriggers: TriggerMap = {};
     Object.entries(pack.instruments).forEach(([name, spec]) => {
-      const Ctor = (Tone as unknown as Record<string, new () => ToneInstrument>)[
-        spec.type
-      ];
-      const inst = new Ctor().toDestination();
+      const Ctor = (
+        Tone as unknown as Record<
+          string,
+          new (opts?: Record<string, unknown>) => ToneInstrument
+        >
+      )[spec.type];
+      const inst = new Ctor(spec.options ?? {});
+      let node: Tone.ToneAudioNode = inst;
+      (spec.effects ?? []).forEach((e) => {
+        const EffectCtor = (
+          Tone as unknown as Record<
+            string,
+            new (opts?: Record<string, unknown>) => Tone.ToneAudioNode
+          >
+        )[e.type];
+        const eff = new EffectCtor(e.options ?? {});
+        node.connect(eff);
+        node = eff;
+      });
+      node.toDestination();
       instrumentRefs.current[name] = inst;
       newTriggers[name] = (
         time: number,
         velocity = 1,
         pitch = 0,
+        noteArg?: string,
+        sustainArg?: number
       ) => {
-        if (inst instanceof Tone.NoiseSynth) {
+        if (name === "chord") {
+          const base = noteArg ?? spec.note ?? "C4";
+          const n = Tone.Frequency(base).transpose(pitch).toNote();
+          const dur = sustainArg ?? 0.1;
+          inst.triggerAttackRelease(n, dur, time, velocity);
+        } else if (inst instanceof Tone.NoiseSynth) {
           inst.triggerAttackRelease(spec.note ?? "8n", time, velocity);
         } else {
           const base = spec.note ?? "C2";
-          const note = Tone.Frequency(base).transpose(pitch).toNote();
-          inst.triggerAttackRelease(note, "8n", time, velocity);
+          const n = Tone.Frequency(base).transpose(pitch).toNote();
+          inst.triggerAttackRelease(n, "8n", time, velocity);
         }
       };
     });
-    const chord = new Tone.Synth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
-    }).toDestination();
-    instrumentRefs.current["chord"] = chord;
-    newTriggers["chord"] = (
-      time: number,
-      velocity = 1,
-      pitch = 0,
-      note = "C4",
-      sustain = 0.1
-    ) => {
-      const n = Tone.Frequency(note).transpose(pitch).toNote();
-      chord.triggerAttackRelease(n, sustain, time, velocity);
-    };
+    if (!pack.instruments["chord"]) {
+      const chord = new Tone.Synth({
+        oscillator: { type: "triangle" },
+        envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
+      }).toDestination();
+      instrumentRefs.current["chord"] = chord;
+      newTriggers["chord"] = (
+        time: number,
+        velocity = 1,
+        pitch = 0,
+        note = "C4",
+        sustain = 0.1
+      ) => {
+        const n = Tone.Frequency(note).transpose(pitch).toNote();
+        chord.triggerAttackRelease(n, sustain, time, velocity);
+      };
+    }
     setTriggers(newTriggers);
   }, [packIndex, started]);
 
