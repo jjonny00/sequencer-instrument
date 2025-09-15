@@ -7,7 +7,8 @@ export type TriggerMap = Record<
     velocity?: number,
     pitch?: number,
     note?: string,
-    sustain?: number
+    sustain?: number,
+    chunk?: Chunk
   ) => void
 >;
 

@@ -3,6 +3,7 @@ import * as Tone from "tone";
 
 import { LoopStrip } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
+import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
@@ -59,6 +60,7 @@ export default function App() {
     instrumentRefs.current = {};
     const newTriggers: TriggerMap = {};
     Object.entries(pack.instruments).forEach(([name, spec]) => {
+      if (name === "chord") return;
       const Ctor = (
         Tone as unknown as Record<
           string,
@@ -84,15 +86,14 @@ export default function App() {
         time: number,
         velocity = 1,
         pitch = 0,
-        noteArg?: string,
-        sustainArg?: number
+        _noteArg?: string,
+        _sustainArg?: number,
+        _chunk?: Chunk
       ) => {
-        if (name === "chord") {
-          const base = noteArg ?? spec.note ?? "C4";
-          const n = Tone.Frequency(base).transpose(pitch).toNote();
-          const dur = sustainArg ?? 0.1;
-          inst.triggerAttackRelease(n, dur, time, velocity);
-        } else if (inst instanceof Tone.NoiseSynth) {
+        void _noteArg;
+        void _sustainArg;
+        void _chunk;
+        if (inst instanceof Tone.NoiseSynth) {
           inst.triggerAttackRelease(spec.note ?? "8n", time, velocity);
         } else {
           const base = spec.note ?? "C2";
@@ -101,25 +102,50 @@ export default function App() {
         }
       };
     });
-    let chordInst = instrumentRefs.current["chord"];
-    if (!pack.instruments["chord"]) {
-      chordInst = new Tone.Synth({
-        oscillator: { type: "triangle" },
-        envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
-      }).toDestination();
-      instrumentRefs.current["chord"] = chordInst;
-      newTriggers["chord"] = (
-        time: number,
-        velocity = 1,
-        pitch = 0,
-        note = "C4",
-        sustain = 0.1
-      ) => {
-        const n = Tone.Frequency(note).transpose(pitch).toNote();
-        chordInst!.triggerAttackRelease(n, sustain, time, velocity);
-      };
-    }
-    instrumentRefs.current["arpeggiator"] = chordInst!;
+    newTriggers["chord"] = (
+      time: number,
+      velocity = 1,
+      pitch = 0,
+      note = "C4",
+      sustain = 0.1,
+      chunk?: Chunk
+    ) => {
+      if (chunk) {
+        if (chunk.attack !== undefined) {
+          noteRef.current?.set({ envelope: { attack: chunk.attack } });
+        }
+        if (chunk.sustain !== undefined) {
+          noteRef.current?.set({ envelope: { release: chunk.sustain } });
+        }
+        if (chunk.glide !== undefined) {
+          noteRef.current?.set({ portamento: chunk.glide });
+        }
+
+        const fx = keyboardFxRef.current;
+        if (fx) {
+          if (chunk.pan !== undefined) {
+            fx.panner.pan.rampTo(chunk.pan, 0.1);
+          }
+          if (chunk.reverb !== undefined) {
+            fx.reverb.wet.value = chunk.reverb;
+            fx.delay.wet.value = chunk.delay ?? chunk.reverb;
+          }
+          if (chunk.delay !== undefined) {
+            fx.delay.wet.value = chunk.delay;
+          }
+          if (chunk.distortion !== undefined) {
+            fx.distortion.distortion = chunk.distortion;
+          }
+          if (chunk.bitcrusher !== undefined) {
+            fx.bitCrusher.wet.value = chunk.bitcrusher;
+          }
+        }
+      }
+      const n = Tone.Frequency(note).transpose(pitch).toNote();
+      noteRef.current?.triggerAttackRelease(n, sustain, time, velocity);
+    };
+    instrumentRefs.current["chord"] = noteRef.current! as ToneInstrument;
+    instrumentRefs.current["arpeggiator"] = noteRef.current! as ToneInstrument;
     newTriggers["arpeggiator"] = newTriggers["chord"];
     setTriggers(newTriggers);
   }, [packIndex, started]);
