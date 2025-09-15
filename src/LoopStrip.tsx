@@ -148,13 +148,15 @@ export function LoopStrip({
   };
 
   const previewStep = (index: number) => {
+    const time = Tone.now() + 0.01;
     tracks.forEach((t) => {
       if (!t.pattern) return;
       const active = t.pattern.steps[index];
       if (!active) return;
       const velocity = t.pattern.velocities?.[index];
       const pitch = t.pattern.pitches?.[index];
-      triggers[t.instrument](Tone.now(), velocity, pitch);
+      const trigger = triggers[t.instrument];
+      trigger?.(time, velocity, pitch);
     });
   };
 

@@ -172,31 +172,6 @@ export default function App() {
         </div>
       ) : (
         <>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              padding: 8,
-              background: "#121827",
-              gap: 8,
-            }}
-          >
-            {editing !== null && (
-              <button
-                onClick={() => setEditing(null)}
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: 4,
-                  border: "1px solid #333",
-                  background: "#27E0B0",
-                  color: "#1F2532",
-                  cursor: "pointer",
-                }}
-              >
-                Done
-              </button>
-            )}
-          </div>
           <LoopStrip
             started={started}
             isPlaying={isPlaying}
@@ -209,85 +184,140 @@ export default function App() {
             setPackIndex={setPackIndex}
           />
           <div style={{ padding: 16, paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-              <label>BPM</label>
-              <select
-                value={bpm}
-                onChange={(e) => setBpm(parseInt(e.target.value, 10))}
-                style={{ padding: 8, borderRadius: 8, background: "#121827", color: "white" }}
-              >
-                {[90, 100, 110, 120, 130].map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-              <label style={{ marginLeft: 12 }}>Quantize</label>
-              <select
-                value={subdiv}
-                onChange={(e) => setSubdiv(e.target.value as Subdivision)}
-                style={{ padding: 8, borderRadius: 8, background: "#121827", color: "white" }}
-              >
-                <option value="16n">1/16</option>
-                <option value="8n">1/8</option>
-                <option value="4n">1/4</option>
-              </select>
-              <button
-                aria-label={isPlaying ? "Pause" : "Play"}
-                onPointerDown={() => {
-                  if (isPlaying) {
-                    Tone.Transport.pause();
-                  } else {
-                    Tone.Transport.start();
-                  }
-                  setIsPlaying(!isPlaying);
-                }}
-                onPointerUp={(e) => e.currentTarget.blur()}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <div
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#27E0B0",
-                  color: "#1F2532",
                   display: "flex",
+                  gap: 12,
                   alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 20
+                  flex: 1,
                 }}
               >
-                <span className="material-symbols-outlined">
-                  {isPlaying ? "pause" : "play_arrow"}
-                </span>
-              </button>
-              <button
-                aria-label="Stop"
-                onPointerDown={() => {
-                  Tone.Transport.stop();
-                  setIsPlaying(false);
-                }}
-                onPointerUp={(e) => e.currentTarget.blur()}
+                {editing !== null ? (
+                  <button
+                    onClick={() => setEditing(null)}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: 4,
+                      border: "1px solid #333",
+                      background: "#27E0B0",
+                      color: "#1F2532",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Done
+                  </button>
+                ) : (
+                  <>
+                    <label>BPM</label>
+                    <select
+                      value={bpm}
+                      onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+                      style={{
+                        padding: 8,
+                        borderRadius: 8,
+                        background: "#121827",
+                        color: "white",
+                      }}
+                    >
+                      {[90, 100, 110, 120, 130].map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                    <label style={{ marginLeft: 12 }}>Quantize</label>
+                    <select
+                      value={subdiv}
+                      onChange={(e) =>
+                        setSubdiv(e.target.value as Subdivision)
+                      }
+                      style={{
+                        padding: 8,
+                        borderRadius: 8,
+                        background: "#121827",
+                        color: "white",
+                      }}
+                    >
+                      <option value="16n">1/16</option>
+                      <option value="8n">1/8</option>
+                      <option value="4n">1/4</option>
+                    </select>
+                  </>
+                )}
+              </div>
+              <div
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#E02749",
-                  color: "#e6f2ff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 40,
-                  padding: 0
+                  width: 1,
+                  height: 24,
+                  background: "#333",
+                  margin: "0 12px",
                 }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ lineHeight: 1, width: "100%", height: "100%" }}
+              />
+              <div style={{ display: "flex", gap: 12 }}>
+                <button
+                  aria-label={isPlaying ? "Pause" : "Play"}
+                  onPointerDown={() => {
+                    if (isPlaying) {
+                      Tone.Transport.pause();
+                    } else {
+                      Tone.Transport.start();
+                    }
+                    setIsPlaying(!isPlaying);
+                  }}
+                  onPointerUp={(e) => e.currentTarget.blur()}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    border: "1px solid #333",
+                    background: "#27E0B0",
+                    color: "#1F2532",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 20,
+                  }}
                 >
-                  stop
-                </span>
-              </button>
+                  <span className="material-symbols-outlined">
+                    {isPlaying ? "pause" : "play_arrow"}
+                  </span>
+                </button>
+                <button
+                  aria-label="Stop"
+                  onPointerDown={() => {
+                    Tone.Transport.stop();
+                    setIsPlaying(false);
+                  }}
+                  onPointerUp={(e) => e.currentTarget.blur()}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    border: "1px solid #333",
+                    background: "#E02749",
+                    color: "#e6f2ff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 40,
+                    padding: 0,
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ lineHeight: 1, width: "100%", height: "100%" }}
+                  >
+                    stop
+                  </span>
+                </button>
+              </div>
             </div>
 
             <div
