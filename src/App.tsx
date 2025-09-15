@@ -3,9 +3,10 @@ import * as Tone from "tone";
 
 import { LoopStrip } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
-import { getNote, type NoteName } from "./notes";
+import { getNote } from "./notes";
 import { packs } from "./packs";
 import { Arpeggiator } from "./Arpeggiator";
+import { Keyboard } from "./Keyboard";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -41,6 +42,7 @@ export default function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
+  const [tab, setTab] = useState<"arp" | "keyboard">("arp");
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -112,9 +114,8 @@ export default function App() {
     setIsPlaying(true);
   };
 
-  const scheduleNote = (name: NoteName) => {
+  const scheduleNote = (note: string) => {
     const t = nextGridTime(subdiv);
-    const note = getNote(name);
     noteRef.current?.triggerAttackRelease(note, "8n", t);
     flashAt(t);
   };
@@ -345,11 +346,49 @@ export default function App() {
                   margin: "0 auto",
                 }}
               >
-                <Pad label="Low" onTap={() => scheduleNote("low")} />
-                <Pad label="Mid" onTap={() => scheduleNote("mid")} />
-                <Pad label="High" onTap={() => scheduleNote("high")} />
+                <Pad label="Low" onTap={() => scheduleNote(getNote("low"))} />
+                <Pad label="Mid" onTap={() => scheduleNote(getNote("mid"))} />
+                <Pad label="High" onTap={() => scheduleNote(getNote("high"))} />
               </div>
-              <Arpeggiator started={started} subdiv={subdiv} setTracks={setTracks} />
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button
+                    onClick={() => setTab("arp")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 0",
+                      borderRadius: 8,
+                      border: "1px solid #333",
+                      background: tab === "arp" ? "#27E0B0" : "#1f2532",
+                      color: tab === "arp" ? "#1F2532" : "#e6f2ff",
+                    }}
+                  >
+                    Arp
+                  </button>
+                  <button
+                    onClick={() => setTab("keyboard")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 0",
+                      borderRadius: 8,
+                      border: "1px solid #333",
+                      background: tab === "keyboard" ? "#27E0B0" : "#1f2532",
+                      color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
+                    }}
+                  >
+                    Keyboard
+                  </button>
+                </div>
+                {tab === "arp" ? (
+                  <Arpeggiator
+                    started={started}
+                    subdiv={subdiv}
+                    setTracks={setTracks}
+                  />
+                ) : (
+                  <Keyboard subdiv={subdiv} noteRef={noteRef} />
+                )}
+              </div>
           </div>
         </>
       )}
