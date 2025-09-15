@@ -21,16 +21,17 @@ export function Keyboard({
   subdiv: Subdivision;
   noteRef: MutableRefObject<Tone.PolySynth<Tone.Synth> | null>;
 }) {
+  // Trim a couple keys so the pitch slider has room beside the keyboard
   const notes = useMemo(
     () =>
-      Array.from({ length: 24 }, (_, i) =>
+      Array.from({ length: 22 }, (_, i) =>
         Tone.Frequency("C4").transpose(i).toNote()
       ),
     []
   );
   const [pressed, setPressed] = useState<Record<string, boolean>>({});
   const [bend, setBend] = useState(0);
-  const [sustain, setSustain] = useState(400); // ms
+  const [sustain, setSustain] = useState(0.4); // seconds
 
   const handleDown = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -49,107 +50,112 @@ export function Keyboard({
   const isSharp = (n: string) => n.includes("#");
 
   return (
-    <div style={{ display: "flex", gap: 8 }}>
+    <div>
       <div
         style={{
-          flex: 1,
-          display: "grid",
-          gridTemplateColumns: `repeat(${notes.length}, 1fr)`,
-          touchAction: "none",
-          minWidth: 0,
-        }}
-      >
-        {notes.map((note) => (
-          <div
-            key={note}
-            onPointerDown={handleDown(note)}
-            onPointerUp={handleUp(note)}
-            onPointerCancel={handleUp(note)}
-            style={{
-              height: 80,
-              border: "1px solid #333",
-              background: isSharp(note)
-                ? pressed[note]
-                  ? "#555"
-                  : "#333"
-                : pressed[note]
-                ? "#ddd"
-                : "#fff",
-              color: isSharp(note) ? "#fff" : "#000",
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "center",
-              fontSize: "0.75rem",
-              userSelect: "none",
-              touchAction: "none",
-            }}
-          >
-            {note}
-          </div>
-        ))}
-      </div>
-      <div
-        style={{
-          width: 80,
           display: "flex",
-          justifyContent: "space-around",
+          gap: 12,
+          marginBottom: 12,
           alignItems: "center",
-          padding: 4,
-          gap: 8,
         }}
       >
+        <label>Sustain</label>
         <input
           type="range"
-          min={-1200}
-          max={1200}
-          step={1}
-          value={bend}
-          onChange={(e) => {
-            const val = parseInt(e.target.value, 10);
-            setBend(val);
-            (
-              noteRef.current as unknown as { detune: Tone.Signal }
-            )?.detune.rampTo(val, 0.05);
-          }}
-          onPointerUp={() => {
-            setBend(0);
-            (
-              noteRef.current as unknown as { detune: Tone.Signal }
-            )?.detune.rampTo(0, 0.2);
-          }}
-          onPointerCancel={() => {
-            setBend(0);
-            (
-              noteRef.current as unknown as { detune: Tone.Signal }
-            )?.detune.rampTo(0, 0.2);
-          }}
-          style={{
-            width: 32,
-            height: 80,
-            writingMode: "vertical-rl",
-            WebkitAppearance: "slider-vertical",
-            touchAction: "none",
-          }}
-        />
-        <input
-          type="range"
-          min={50}
-          max={2000}
-          step={50}
+          min={0.05}
+          max={1}
+          step={0.05}
           value={sustain}
           onChange={(e) => {
-            const val = parseInt(e.target.value, 10);
+            const val = parseFloat(e.target.value);
             setSustain(val);
-            noteRef.current?.set({ envelope: { release: val / 1000 } });
+            noteRef.current?.set({ envelope: { release: val } });
           }}
-          style={{
-            width: 32,
-            height: 80,
-            writingMode: "vertical-rl",
-            WebkitAppearance: "slider-vertical",
-            touchAction: "none",
-          }}
+          style={{ flex: 1 }}
         />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div
+          style={{
+            flex: 1,
+            display: "grid",
+            gridTemplateColumns: `repeat(${notes.length}, 1fr)`,
+            touchAction: "none",
+            minWidth: 0,
+          }}
+        >
+          {notes.map((note) => (
+            <div
+              key={note}
+              onPointerDown={handleDown(note)}
+              onPointerUp={handleUp(note)}
+              onPointerCancel={handleUp(note)}
+              style={{
+                height: 160,
+                border: "1px solid #333",
+                background: isSharp(note)
+                  ? pressed[note]
+                    ? "#555"
+                    : "#333"
+                  : pressed[note]
+                  ? "#ddd"
+                  : "#fff",
+                color: isSharp(note) ? "#fff" : "#000",
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                fontSize: "0.75rem",
+                userSelect: "none",
+                touchAction: "none",
+              }}
+            >
+              {note}
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            width: 40,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 4,
+          }}
+        >
+          <input
+            type="range"
+            min={-1200}
+            max={1200}
+            step={1}
+            value={bend}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              setBend(val);
+              (
+                noteRef.current as unknown as { detune: Tone.Signal }
+              )?.detune.rampTo(val, 0.05);
+            }}
+            onPointerUp={() => {
+              setBend(0);
+              (
+                noteRef.current as unknown as { detune: Tone.Signal }
+              )?.detune.rampTo(0, 0.2);
+            }}
+            onPointerCancel={() => {
+              setBend(0);
+              (
+                noteRef.current as unknown as { detune: Tone.Signal }
+              )?.detune.rampTo(0, 0.2);
+            }}
+            style={{
+              width: 32,
+              height: 160,
+              writingMode: "vertical-rl",
+              WebkitAppearance: "slider-vertical",
+              touchAction: "none",
+            }}
+          />
+        </div>
       </div>
     </div>
   );
