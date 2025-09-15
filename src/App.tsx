@@ -386,7 +386,11 @@ export default function App() {
                     setTracks={setTracks}
                   />
                 ) : (
-                  <Keyboard subdiv={subdiv} noteRef={noteRef} />
+                  <Keyboard
+                    subdiv={subdiv}
+                    noteRef={noteRef}
+                    setTracks={setTracks}
+                  />
                 )}
               </div>
           </div>

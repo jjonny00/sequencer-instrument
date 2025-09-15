@@ -1,5 +1,14 @@
-import { useMemo, useState, type MutableRefObject } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from "react";
 import * as Tone from "tone";
+import type { Track } from "./tracks";
 
 // Subdivision type mirrors App.tsx
 export type Subdivision = "16n" | "8n" | "4n";
@@ -17,9 +26,11 @@ function nextGridTime(subdivision: Subdivision): number {
 export function Keyboard({
   subdiv,
   noteRef,
+  setTracks,
 }: {
   subdiv: Subdivision;
   noteRef: MutableRefObject<Tone.PolySynth<Tone.Synth> | null>;
+  setTracks: Dispatch<SetStateAction<Track[]>>;
 }) {
   // Two octave range starting at middle C
   const notes = useMemo(
@@ -39,6 +50,42 @@ export function Keyboard({
   const [pressed, setPressed] = useState<Record<string, boolean>>({});
   const [bend, setBend] = useState(0);
   const [sustain, setSustain] = useState(0.4); // seconds
+  const [record, setRecord] = useState(false);
+  const trackIdRef = useRef<number | null>(null);
+
+  const addTrack = () => {
+    setTracks((ts) => {
+      const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+      const steps = Array(16).fill(0);
+      const velocities = Array(16).fill(1);
+      const pitches = Array(16).fill(0);
+      trackIdRef.current = nextId;
+      return [
+        ...ts,
+        {
+          id: nextId,
+          name: "Keyboard",
+          instrument: "chord",
+          pattern: {
+            id: `kb-${Date.now()}`,
+            name: "Keyboard",
+            instrument: "chord",
+            steps,
+            velocities,
+            pitches,
+            note: "C4",
+            sustain,
+          },
+        },
+      ];
+    });
+  };
+
+  useEffect(() => {
+    if (!record) {
+      trackIdRef.current = null;
+    }
+  }, [record]);
 
   const handleDown = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -46,6 +93,73 @@ export function Keyboard({
     setPressed((p) => ({ ...p, [note]: true }));
     const t = nextGridTime(subdiv);
     noteRef.current?.triggerAttack(note, t);
+
+    if (record) {
+      const pitch =
+        Tone.Frequency(note).toMidi() - Tone.Frequency("C4").toMidi();
+      const ticks = Tone.Transport.getTicksAtTime(t);
+      const stepIndex =
+        Math.floor(ticks / (Tone.Transport.PPQ / 4)) % 16;
+      setTracks((ts) => {
+        let tid = trackIdRef.current;
+        if (tid === null) {
+          tid = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+          trackIdRef.current = tid;
+          const steps = Array(16).fill(0);
+          const velocities = Array(16).fill(1);
+          const pitches = Array(16).fill(0);
+          steps[stepIndex] = 1;
+          velocities[stepIndex] = 1;
+          pitches[stepIndex] = pitch;
+          return [
+            ...ts,
+            {
+              id: tid,
+              name: "Keyboard",
+              instrument: "chord",
+              pattern: {
+                id: `kb-${Date.now()}`,
+                name: "Keyboard",
+                instrument: "chord",
+                steps,
+                velocities,
+                pitches,
+                note: "C4",
+                sustain,
+              },
+            },
+          ];
+        }
+        return ts.map((t) => {
+          if (t.id !== tid) return t;
+          const pattern =
+            t.pattern ?? {
+              id: `kb-${Date.now()}`,
+              name: "Keyboard",
+              instrument: "chord",
+              steps: Array(16).fill(0),
+              velocities: Array(16).fill(1),
+              pitches: Array(16).fill(0),
+              note: "C4",
+              sustain,
+            };
+          const steps = pattern.steps.slice();
+          const velocities = (pattern.velocities
+            ? pattern.velocities.slice()
+            : Array(16).fill(1));
+          const pitches = (pattern.pitches
+            ? pattern.pitches.slice()
+            : Array(16).fill(0));
+          steps[stepIndex] = 1;
+          velocities[stepIndex] = 1;
+          pitches[stepIndex] = pitch;
+          return {
+            ...t,
+            pattern: { ...pattern, steps, velocities, pitches, sustain },
+          };
+        });
+      });
+    }
   };
 
   const handleUp = (note: string) => () => {
@@ -78,6 +192,36 @@ export function Keyboard({
           }}
           style={{ flex: 1 }}
         />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={addTrack}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #333",
+              background: "#121827",
+              color: "#e6f2ff",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            New
+          </button>
+          <button
+            onClick={() => setRecord((r) => !r)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #333",
+              background: record ? "#E02749" : "#27E0B0",
+              color: record ? "#e6f2ff" : "#1F2532",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {record ? "Recording" : "Record"}
+          </button>
+        </div>
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <div
@@ -166,6 +310,14 @@ export function Keyboard({
             value={bend}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10);
+              setBend(val);
+              const synth = noteRef.current as unknown as {
+                detune: Tone.Signal;
+              };
+              synth?.detune.rampTo(val, 0.05);
+            }}
+            onInput={(e) => {
+              const val = parseInt((e.target as HTMLInputElement).value, 10);
               setBend(val);
               const synth = noteRef.current as unknown as {
                 detune: Tone.Signal;
