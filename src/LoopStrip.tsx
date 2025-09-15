@@ -18,6 +18,7 @@ const instrumentColors: Record<string, string> = {
 };
 
 const LABEL_WIDTH = 60;
+const ROW_HEIGHT = 40;
 
 /**
  * Top strip visualizing a 16-step loop.
@@ -323,7 +324,7 @@ export function LoopStrip({
               }}
               style={{
                 display: "flex",
-                flex: 1,
+                height: ROW_HEIGHT,
                 cursor: t.pattern ? "pointer" : "default",
                 opacity: editing !== null && editing !== t.id ? 0.3 : 1,
                 border: editing === t.id ? "2px solid #27E0B0" : "1px solid #555",

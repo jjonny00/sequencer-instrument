@@ -46,6 +46,34 @@ export function Arpeggiator({
   const trackIdRef = useRef<number | null>(null);
   const loopStartRef = useRef<number | null>(null);
 
+  const addTrack = () => {
+    setTracks((ts) => {
+      const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+      const steps = Array(16).fill(0);
+      const velocities = Array(16).fill(1);
+      const pitches = Array(16).fill(0);
+      trackIdRef.current = nextId;
+      return [
+        ...ts,
+        {
+          id: nextId,
+          name: "Arp",
+          instrument: "chord",
+          pattern: {
+            id: `arp-${Date.now()}`,
+            name: "Arp",
+            instrument: "chord",
+            steps,
+            velocities,
+            pitches,
+            note: root,
+            sustain,
+          },
+        },
+      ];
+    });
+  };
+
   const keyNotes = useMemo(
     () =>
       Array.from({ length: 8 }, (_, i) =>
@@ -271,6 +299,20 @@ export function Arpeggiator({
           onChange={(e) => setSustain(parseFloat(e.target.value))}
           style={{ flex: 1 }}
         />
+        <button
+          onClick={addTrack}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #333",
+            background: "#121827",
+            color: "#e6f2ff",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          New
+        </button>
         <button
           onClick={() => setRecord((r) => !r)}
           style={{
