@@ -201,7 +201,7 @@ export function Keyboard({
   }, [record]);
 
   const handleDown = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    void e;
     setPressed((p) => ({ ...p, [note]: true }));
     const t = nextGridTime(subdiv);
     const playNote = lockToScale(note);
@@ -349,6 +349,7 @@ export function Keyboard({
                   onPointerDown={handleDown(note)}
                   onPointerUp={handleUp(note)}
                   onPointerCancel={handleUp(note)}
+                  onPointerLeave={handleUp(note)}
                   style={{
                     flex: 1,
                     borderRight: "1px solid #333",
@@ -379,6 +380,7 @@ export function Keyboard({
                   onPointerDown={handleDown(note)}
                   onPointerUp={handleUp(note)}
                   onPointerCancel={handleUp(note)}
+                  onPointerLeave={handleUp(note)}
                   style={{
                     position: "absolute",
                     top: 0,
