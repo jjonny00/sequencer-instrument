@@ -2,13 +2,80 @@
   "id": "edm2000s",
   "name": "Early 2000s EDM",
   "instruments": {
-    "kick": { "type": "MembraneSynth", "note": "C1" },
-    "snare": { "type": "NoiseSynth", "note": "8n" },
-    "hat": { "type": "MetalSynth" }
+    "kick": {
+      "type": "MembraneSynth",
+      "note": "C2",
+      "options": {
+        "pitchDecay": 0.02,
+        "octaves": 3,
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.5,
+          "sustain": 0,
+          "release": 0.5
+        }
+      }
+    },
+    "snare": {
+      "type": "NoiseSynth",
+      "note": "8n",
+      "options": {
+        "noise": { "type": "white" },
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.3,
+          "sustain": 0.01
+        }
+      },
+      "effects": [
+        { "type": "Reverb", "options": { "decay": 2, "wet": 0.2 } }
+      ]
+    },
+    "hat": {
+      "type": "MetalSynth",
+      "options": {
+        "frequency": 250,
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.3,
+          "sustain": 0
+        },
+        "harmonicity": 5
+      }
+    },
+    "bass": {
+      "type": "MonoSynth",
+      "note": "C2",
+      "options": {
+        "oscillator": { "type": "sawtooth" },
+        "filter": { "type": "lowpass", "rolloff": -24 },
+        "envelope": {
+          "attack": 0.01,
+          "decay": 0.3,
+          "sustain": 0.2,
+          "release": 0.1
+        },
+        "filterEnvelope": {
+          "attack": 0.01,
+          "decay": 0.2,
+          "sustain": 0.2,
+          "release": 0.1,
+          "baseFrequency": 100,
+          "octaves": 2.5
+        }
+      },
+      "effects": [
+        {
+          "type": "Chorus",
+          "options": { "frequency": 4, "delayTime": 2.5, "depth": 0.5, "wet": 0.3 }
+        }
+      ]
+    }
   },
   "chunks": [
     { "id": "edm-kick", "name": "Four on the Floor", "instrument": "kick", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
     { "id": "edm-snare", "name": "Offbeat Snare", "instrument": "snare", "steps": [0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1] },
-    { "id": "edm-hat", "name": "Trance Hat", "instrument": "hat", "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] }
+    { "id": "edm-hat", "name": "Trance Hat", "instrument": "hat", "steps": [0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1] },
+    { "id": "edm-bass", "name": "Saw Bass", "instrument": "bass", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }
   ]
 }

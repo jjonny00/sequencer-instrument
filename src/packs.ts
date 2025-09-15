@@ -3,6 +3,13 @@ import type { Chunk } from "./chunks";
 export interface InstrumentSpec {
   type: string;
   note?: string;
+  options?: Record<string, unknown>;
+  effects?: EffectSpec[];
+}
+
+export interface EffectSpec {
+  type: string;
+  options?: Record<string, unknown>;
 }
 
 export interface Pack {
