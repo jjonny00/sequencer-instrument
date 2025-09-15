@@ -120,21 +120,25 @@ export default function App() {
         if (chunk.glide !== undefined) {
           noteRef.current?.set({ portamento: chunk.glide });
         }
-        if (chunk.pan !== undefined) {
-          keyboardFxRef.current?.panner.pan.rampTo(chunk.pan, 0.1);
-        }
-        if (chunk.reverb !== undefined) {
-          keyboardFxRef.current?.reverb.wet.value = chunk.reverb;
-          keyboardFxRef.current?.delay.wet.value = chunk.delay ?? chunk.reverb;
-        }
-        if (chunk.delay !== undefined) {
-          keyboardFxRef.current?.delay.wet.value = chunk.delay;
-        }
-        if (chunk.distortion !== undefined) {
-          keyboardFxRef.current?.distortion.distortion = chunk.distortion;
-        }
-        if (chunk.bitcrusher !== undefined) {
-          keyboardFxRef.current?.bitCrusher.wet.value = chunk.bitcrusher;
+
+        const fx = keyboardFxRef.current;
+        if (fx) {
+          if (chunk.pan !== undefined) {
+            fx.panner.pan.rampTo(chunk.pan, 0.1);
+          }
+          if (chunk.reverb !== undefined) {
+            fx.reverb.wet.value = chunk.reverb;
+            fx.delay.wet.value = chunk.delay ?? chunk.reverb;
+          }
+          if (chunk.delay !== undefined) {
+            fx.delay.wet.value = chunk.delay;
+          }
+          if (chunk.distortion !== undefined) {
+            fx.distortion.distortion = chunk.distortion;
+          }
+          if (chunk.bitcrusher !== undefined) {
+            fx.bitCrusher.wet.value = chunk.bitcrusher;
+          }
         }
       }
       const n = Tone.Frequency(note).transpose(pitch).toNote();
