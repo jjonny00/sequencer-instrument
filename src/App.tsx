@@ -37,6 +37,16 @@ export default function App() {
   };
   const instrumentRefs = useRef<Record<string, ToneInstrument>>({});
   const noteRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
+  const keyboardFxRef = useRef<{
+    reverb: Tone.Reverb;
+    delay: Tone.FeedbackDelay;
+    distortion: Tone.Distortion;
+    bitCrusher: Tone.BitCrusher;
+    panner: Tone.Panner;
+    chorus: Tone.Chorus;
+    tremolo: Tone.Tremolo;
+    filter: Tone.Filter;
+  } | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
@@ -130,10 +140,24 @@ export default function App() {
 
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
-    noteRef.current = new Tone.PolySynth(Tone.Synth, {
+    const synth = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: "triangle" },
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
-    }).toDestination();
+    });
+    const reverb = new Tone.Reverb({ decay: 3, wet: 0 });
+    const delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.3, wet: 0 });
+    const distortion = new Tone.Distortion({ distortion: 0 });
+    const bitCrusher = new Tone.BitCrusher(4);
+    bitCrusher.wet.value = 0;
+    const chorus = new Tone.Chorus(4, 2.5, 0.5).start();
+    chorus.wet.value = 0;
+    const tremolo = new Tone.Tremolo(9, 0.75).start();
+    tremolo.wet.value = 0;
+    const filter = new Tone.Filter({ type: "lowpass", frequency: 20000 });
+    const panner = new Tone.Panner(0);
+    synth.chain(distortion, bitCrusher, chorus, tremolo, filter, reverb, delay, panner, Tone.Destination);
+    noteRef.current = synth;
+    keyboardFxRef.current = { reverb, delay, distortion, bitCrusher, panner, chorus, tremolo, filter };
 
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.start(); // start clock; we’ll schedule to it
@@ -416,6 +440,7 @@ export default function App() {
                   <Keyboard
                     subdiv={subdiv}
                     noteRef={noteRef}
+                    fxRef={keyboardFxRef}
                     setTracks={setTracks}
                   />
                 )}

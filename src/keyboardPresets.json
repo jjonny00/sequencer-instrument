@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Organ",
+    "attack": 0,
+    "release": 0.5,
+    "reverb": 0.2,
+    "delay": 0,
+    "distortion": 0,
+    "bitcrusher": 0,
+    "chorus": 1,
+    "tremolo": 0,
+    "filterCutoff": 20000
+  },
+  {
+    "name": "Ethereal",
+    "attack": 1.5,
+    "release": 3,
+    "reverb": 0.8,
+    "delay": 0.5,
+    "distortion": 0,
+    "bitcrusher": 0,
+    "chorus": 1,
+    "tremolo": 0,
+    "filterCutoff": 20000
+  },
+  {
+    "name": "Phonk Keys",
+    "attack": 0,
+    "release": 0.3,
+    "reverb": 0,
+    "delay": 0,
+    "distortion": 0.4,
+    "bitcrusher": 0.3,
+    "chorus": 0,
+    "tremolo": 0,
+    "filterCutoff": 800
+  },
+  {
+    "name": "Electric Piano",
+    "attack": 0.2,
+    "release": 1.2,
+    "reverb": 0,
+    "delay": 0,
+    "distortion": 0,
+    "bitcrusher": 0,
+    "chorus": 0.5,
+    "tremolo": 0.2,
+    "filterCutoff": 20000
+  },
+  {
+    "name": "Lo-fi Tape Keys",
+    "attack": 0.1,
+    "release": 0.8,
+    "reverb": 0.3,
+    "delay": 0,
+    "distortion": 0,
+    "bitcrusher": 0.6,
+    "chorus": 0,
+    "tremolo": 0,
+    "filterCutoff": 600
+  }
+]

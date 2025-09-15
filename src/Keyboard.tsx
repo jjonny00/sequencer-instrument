@@ -8,7 +8,81 @@ import {
   type SetStateAction,
 } from "react";
 import * as Tone from "tone";
+import presets from "./keyboardPresets.json";
 import type { Track } from "./tracks";
+
+type FxChain = {
+  reverb: Tone.Reverb;
+  delay: Tone.FeedbackDelay;
+  distortion: Tone.Distortion;
+  bitCrusher: Tone.BitCrusher;
+  panner: Tone.Panner;
+  chorus: Tone.Chorus;
+  tremolo: Tone.Tremolo;
+  filter: Tone.Filter;
+};
+
+type Scale = "Chromatic" | "Major" | "Minor" | "Pentatonic";
+
+function Knob({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (val: number) => void;
+}) {
+  const angle = ((value - min) / (max - min)) * 270 - 135;
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: 56,
+        height: 56,
+        borderRadius: "50%",
+        border: "1px solid #333",
+        background: "#1f2532",
+        touchAction: "none",
+        boxShadow: value > min ? "0 0 8px #27E0B0" : "none",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: 4,
+          height: 20,
+          background: "#27E0B0",
+          transform: `translate(-50%, -100%) rotate(${angle}deg)`,
+          transformOrigin: "bottom center",
+          borderRadius: 2,
+        }}
+      />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          opacity: 0,
+        }}
+      />
+    </div>
+  );
+}
 
 // Subdivision type mirrors App.tsx
 export type Subdivision = "16n" | "8n" | "4n";
@@ -26,10 +100,12 @@ function nextGridTime(subdivision: Subdivision): number {
 export function Keyboard({
   subdiv,
   noteRef,
+  fxRef,
   setTracks,
 }: {
   subdiv: Subdivision;
   noteRef: MutableRefObject<Tone.PolySynth<Tone.Synth> | null>;
+  fxRef: MutableRefObject<FxChain | null>;
   setTracks: Dispatch<SetStateAction<Track[]>>;
 }) {
   // Two octave range starting at middle C
@@ -49,9 +125,46 @@ export function Keyboard({
   const blackWidth = whiteWidth * 0.6;
   const [pressed, setPressed] = useState<Record<string, boolean>>({});
   const [bend, setBend] = useState(0);
-  const [sustain, setSustain] = useState(0.4); // seconds
+  const [attack, setAttack] = useState(0.005);
+  const [release, setRelease] = useState(0.4);
+  const [glide, setGlide] = useState(0);
+  const [space, setSpace] = useState(0);
+  const [grit, setGrit] = useState(0);
+  const [lofi, setLofi] = useState(0);
+  const [pan, setPan] = useState(0);
+  const [sustainPedal, setSustainPedal] = useState(false);
+  const [scale, setScale] = useState<Scale>("Chromatic");
+  const [preset, setPreset] = useState("Custom");
   const [record, setRecord] = useState(false);
   const trackIdRef = useRef<number | null>(null);
+  const activeNotes = useRef<Record<string, string>>({});
+  const sustained = useRef<Set<string>>(new Set());
+
+  const scales: Record<string, number[]> = {
+    Chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    Major: [0, 2, 4, 5, 7, 9, 11],
+    Minor: [0, 2, 3, 5, 7, 8, 10],
+    Pentatonic: [0, 2, 4, 7, 9],
+  };
+
+  const lockToScale = (note: string): string => {
+    if (scale === "Chromatic") return note;
+    const midi = Tone.Frequency(note).toMidi();
+    let n = midi;
+    const allowed = scales[scale];
+    while (!allowed.includes(n % 12)) n++;
+    return Tone.Frequency(n, "midi").toNote();
+  };
+
+  const toggleSustain = () => {
+    setSustainPedal((s) => {
+      if (s) {
+        sustained.current.forEach((n) => noteRef.current?.triggerRelease(n));
+        sustained.current.clear();
+      }
+      return !s;
+    });
+  };
 
   const addTrack = () => {
     setTracks((ts) => {
@@ -74,7 +187,7 @@ export function Keyboard({
             velocities,
             pitches,
             note: "C4",
-            sustain,
+            sustain: release,
           },
         },
       ];
@@ -92,11 +205,13 @@ export function Keyboard({
     e.currentTarget.setPointerCapture(e.pointerId);
     setPressed((p) => ({ ...p, [note]: true }));
     const t = nextGridTime(subdiv);
-    noteRef.current?.triggerAttack(note, t);
+    const playNote = lockToScale(note);
+    activeNotes.current[note] = playNote;
+    noteRef.current?.triggerAttack(playNote, t);
 
     if (record) {
       const pitch =
-        Tone.Frequency(note).toMidi() - Tone.Frequency("C4").toMidi();
+        Tone.Frequency(playNote).toMidi() - Tone.Frequency("C4").toMidi();
       const ticks = Tone.Transport.getTicksAtTime(t);
       const stepIndex =
         Math.floor(ticks / (Tone.Transport.PPQ / 4)) % 16;
@@ -125,7 +240,7 @@ export function Keyboard({
                 velocities,
                 pitches,
                 note: "C4",
-                sustain,
+                sustain: release,
               },
             },
           ];
@@ -141,7 +256,7 @@ export function Keyboard({
               velocities: Array(16).fill(1),
               pitches: Array(16).fill(0),
               note: "C4",
-              sustain,
+              sustain: release,
             };
           const steps = pattern.steps.slice();
           const velocities = (pattern.velocities
@@ -155,73 +270,60 @@ export function Keyboard({
           pitches[stepIndex] = pitch;
           return {
             ...t,
-            pattern: { ...pattern, steps, velocities, pitches, sustain },
+            pattern: { ...pattern, steps, velocities, pitches, sustain: release },
           };
         });
       });
     }
   };
 
-  const handleUp = (note: string) => () => {
+  const handleUp = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.releasePointerCapture(e.pointerId);
     setPressed((p) => ({ ...p, [note]: false }));
     const t = nextGridTime(subdiv);
-    noteRef.current?.triggerRelease(note, t);
+    const playNote = activeNotes.current[note];
+    if (playNote) {
+      if (sustainPedal) {
+        sustained.current.add(playNote);
+      } else {
+        noteRef.current?.triggerRelease(playNote, t);
+      }
+      delete activeNotes.current[note];
+    }
   };
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginBottom: 12,
-          alignItems: "center",
-        }}
-      >
-        <label>Sustain</label>
-        <input
-          type="range"
-          min={0.05}
-          max={1}
-          step={0.05}
-          value={sustain}
-          onChange={(e) => {
-            const val = parseFloat(e.target.value);
-            setSustain(val);
-            noteRef.current?.set({ envelope: { release: val } });
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <button
+          onClick={addTrack}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #333",
+            background: "#121827",
+            color: "#e6f2ff",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
           }}
-          style={{ flex: 1 }}
-        />
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={addTrack}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #333",
-              background: "#121827",
-              color: "#e6f2ff",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            New
-          </button>
-          <button
-            onClick={() => setRecord((r) => !r)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #333",
-              background: record ? "#E02749" : "#27E0B0",
-              color: record ? "#e6f2ff" : "#1F2532",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {record ? "Recording" : "Record"}
-          </button>
-        </div>
+        >
+          New
+        </button>
+        <button
+          onClick={() => setRecord((r) => !r)}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #333",
+            background: record ? "#E02749" : "#27E0B0",
+            color: record ? "#e6f2ff" : "#1F2532",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {record ? "Recording" : "Record"}
+        </button>
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <div
@@ -346,6 +448,226 @@ export function Keyboard({
               touchAction: "none",
             }}
           />
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12,
+          marginTop: 12,
+        }}
+      >
+        <div style={{ flex: "1 0 45%" }}>
+          <label>Fade In</label>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.01}
+            value={attack}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setAttack(val);
+              noteRef.current?.set({ envelope: { attack: val } });
+            }}
+            style={{ width: "100%" }}
+          />
+        </div>
+        <div style={{ flex: "1 0 45%" }}>
+          <label>Fade Out</label>
+          <input
+            type="range"
+            min={0}
+            max={5}
+            step={0.05}
+            value={release}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setRelease(val);
+              noteRef.current?.set({ envelope: { release: val } });
+            }}
+            style={{ width: "100%" }}
+          />
+        </div>
+        <div style={{ flex: "1 0 45%" }}>
+          <label>Glide</label>
+          <input
+            type="range"
+            min={0}
+            max={0.5}
+            step={0.01}
+            value={glide}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setGlide(val);
+              noteRef.current?.set({ portamento: val });
+            }}
+            style={{ width: "100%" }}
+          />
+        </div>
+        <div style={{ flex: "1 0 45%" }}>
+          <label>Pan</label>
+          <input
+            type="range"
+            min={-1}
+            max={1}
+            step={0.01}
+            value={pan}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setPan(val);
+              fxRef.current?.panner.pan.rampTo(val, 0.1);
+            }}
+            style={{ width: "100%" }}
+          />
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 24,
+            flex: "1 0 100%",
+            justifyContent: "space-around",
+            marginTop: 12,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <label>Space</label>
+            <Knob
+              min={0}
+              max={1}
+              step={0.01}
+              value={space}
+              onChange={(val) => {
+                setSpace(val);
+                if (fxRef.current) {
+                  fxRef.current.reverb.wet.value = val;
+                  fxRef.current.delay.wet.value = val;
+                }
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <label>Grit</label>
+            <Knob
+              min={0}
+              max={1}
+              step={0.01}
+              value={grit}
+              onChange={(val) => {
+                setGrit(val);
+                if (fxRef.current) fxRef.current.distortion.distortion = val;
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <label>Lo-fi</label>
+            <Knob
+              min={0}
+              max={1}
+              step={0.01}
+              value={lofi}
+              onChange={(val) => {
+                setLofi(val);
+                if (fxRef.current) fxRef.current.bitCrusher.wet.value = val;
+              }}
+            />
+          </div>
+        </div>
+        <div style={{ flex: "1 0 45%" }}>
+          <button
+            onClick={toggleSustain}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #333",
+              background: sustainPedal ? "#27E0B0" : "#1f2532",
+              color: sustainPedal ? "#1F2532" : "#e6f2ff",
+            }}
+          >
+            Sustain
+          </button>
+        </div>
+        <div style={{ flex: "1 0 45%" }}>
+          <label>Scale</label>
+          <select
+            value={scale}
+            onChange={(e) => setScale(e.target.value as Scale)}
+            style={{
+              width: "100%",
+              padding: 8,
+              borderRadius: 8,
+              background: "#121827",
+              color: "white",
+            }}
+          >
+            <option value="Major">Major</option>
+            <option value="Minor">Minor</option>
+            <option value="Pentatonic">Pentatonic</option>
+            <option value="Chromatic">Chromatic</option>
+          </select>
+        </div>
+        <div style={{ flex: "1 0 45%" }}>
+          <label>Preset</label>
+          <select
+            value={preset}
+            onChange={(e) => {
+              const name = e.target.value;
+              setPreset(name);
+              const p = presets.find((pr) => pr.name === name);
+              if (p) {
+                if (p.attack !== undefined) {
+                  setAttack(p.attack);
+                  noteRef.current?.set({ envelope: { attack: p.attack } });
+                }
+                if (p.release !== undefined) {
+                  setRelease(p.release);
+                  noteRef.current?.set({ envelope: { release: p.release } });
+                }
+                if (p.reverb !== undefined) {
+                  setSpace(p.reverb);
+                  if (fxRef.current) fxRef.current.reverb.wet.value = p.reverb;
+                }
+                if (p.delay !== undefined) {
+                  if (fxRef.current) fxRef.current.delay.wet.value = p.delay;
+                } else if (p.reverb !== undefined) {
+                  if (fxRef.current) fxRef.current.delay.wet.value = p.reverb;
+                }
+                if (p.distortion !== undefined) {
+                  setGrit(p.distortion);
+                  if (fxRef.current) fxRef.current.distortion.distortion = p.distortion;
+                }
+                if (p.bitcrusher !== undefined) {
+                  setLofi(p.bitcrusher);
+                  if (fxRef.current) fxRef.current.bitCrusher.wet.value = p.bitcrusher;
+                }
+                if (p.chorus !== undefined) {
+                  if (fxRef.current) fxRef.current.chorus.wet.value = p.chorus;
+                }
+                if (p.tremolo !== undefined) {
+                  if (fxRef.current) fxRef.current.tremolo.wet.value = p.tremolo;
+                }
+                if (p.filterCutoff !== undefined) {
+                  if (fxRef.current) fxRef.current.filter.frequency.value = p.filterCutoff;
+                }
+              }
+            }}
+            style={{
+              width: "100%",
+              padding: 8,
+              borderRadius: 8,
+              background: "#121827",
+              color: "white",
+            }}
+          >
+            <option value="Custom">Custom</option>
+            {presets.map((pr) => (
+              <option key={pr.name} value={pr.name}>
+                {pr.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     </div>
