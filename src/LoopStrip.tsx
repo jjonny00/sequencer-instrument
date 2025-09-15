@@ -238,6 +238,7 @@ export function LoopStrip({
       </div>
       <div
         ref={trackAreaRef}
+        className="scrollable"
         style={{
           flex: 1,
           position: "relative",

@@ -43,6 +43,11 @@
   touch-action: none;
 }
 
+.scrollable,
+.scrollable * {
+  touch-action: pan-y;
+}
+
 html,
 body {
   touch-action: none;
