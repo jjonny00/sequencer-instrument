@@ -6,12 +6,31 @@ import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { StepModal } from "./StepModal";
 
-const instrumentColors: Record<string, string> = {
+const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
   snare: "#3498db",
   hat: "#f1c40f",
+  bass: "#1abc9c",
+  cowbell: "#ff9f1c",
   chord: "#2ecc71",
   arpeggiator: "#9b59b6",
+};
+
+const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";
+
+const getInstrumentColor = (instrument: string) =>
+  baseInstrumentColors[instrument] ?? FALLBACK_INSTRUMENT_COLOR;
+
+const formatInstrumentLabel = (value: string) =>
+  value
+    .split(/[-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const computeDefaultTrackName = (instrument: string, tracks: Track[]) => {
+  const base = formatInstrumentLabel(instrument);
+  const count = tracks.filter((track) => track.instrument === instrument).length;
+  return count ? `${base} ${count + 1}` : base;
 };
 
 const LABEL_WIDTH = 60;
@@ -44,15 +63,23 @@ export function LoopStrip({
 }) {
   const [step, setStep] = useState(-1);
   const [selectedChunk, setSelectedChunk] = useState("");
+  const [newTrackInstrument, setNewTrackInstrument] = useState("");
+  const [newTrackName, setNewTrackName] = useState("");
   const [stepEditing, setStepEditing] = useState<
     { trackId: number; index: number | null } | null
   >(null);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
+  const pack = packs[packIndex];
+  const instrumentOptions = Object.keys(pack.instruments);
 
   useEffect(() => {
     setSelectedChunk("");
-  }, [packIndex]);
+    setNewTrackInstrument((prev) => {
+      if (!prev) return prev;
+      return pack.instruments[prev] ? prev : "";
+    });
+  }, [pack]);
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
@@ -75,17 +102,48 @@ export function LoopStrip({
   }, [isPlaying]);
 
   const addPattern = (trackId: number) => {
-    const pack = packs[packIndex];
-    const track = tracks.find((t) => t.id === trackId);
-    if (!pack || !track) return;
-    const chunk = pack.chunks.find((c) => c.instrument === track.instrument);
-    if (!chunk) return;
     setTracks((ts) =>
-      ts.map((t) =>
-        t.id === trackId ? { ...t, pattern: { ...chunk } } : t
-      )
+      ts.map((t) => {
+        if (t.id !== trackId) return t;
+        return {
+          ...t,
+          pattern: {
+            id: `track-${trackId}-${Date.now()}`,
+            name: `${t.name} Pattern`,
+            instrument: t.instrument,
+            steps: Array(16).fill(0),
+            velocities: Array(16).fill(1),
+            pitches: Array(16).fill(0),
+          },
+        };
+      })
     );
     setEditing(trackId);
+  };
+
+  const handleAddTrack = () => {
+    if (!newTrackInstrument) return;
+    let createdId: number | null = null;
+    setTracks((ts) => {
+      const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+      const trimmedName = newTrackName.trim();
+      const name =
+        trimmedName || computeDefaultTrackName(newTrackInstrument, ts);
+      createdId = nextId;
+      return [
+        ...ts,
+        {
+          id: nextId,
+          name,
+          instrument: newTrackInstrument as keyof TriggerMap,
+          pattern: null,
+        },
+      ];
+    });
+    if (createdId !== null) {
+      setEditing(createdId);
+    }
+    setNewTrackName("");
   };
 
   const updatePattern = (trackId: number, steps: number[]) => {
@@ -152,19 +210,42 @@ export function LoopStrip({
 
 
   const loadChunk = (chunk: Chunk) => {
+    let targetId: number | null = null;
     setTracks((ts) => {
-      const existing = ts.find((t) => t.instrument === chunk.instrument);
-      if (existing) {
-        const updated = ts.map((t) =>
-          t.instrument === chunk.instrument
-            ? { ...t, name: chunk.name, pattern: { ...chunk } }
+      if (editing !== null) {
+        const trackExists = ts.some((t) => t.id === editing);
+        if (!trackExists) {
+          targetId = null;
+          return ts;
+        }
+        targetId = editing;
+        return ts.map((t) =>
+          t.id === editing
+            ? {
+                ...t,
+                name: chunk.name,
+                instrument: chunk.instrument as keyof TriggerMap,
+                pattern: { ...chunk },
+              }
             : t
         );
-        setEditing(existing.id);
-        return updated;
+      }
+      const existing = ts.find((t) => t.instrument === chunk.instrument);
+      if (existing) {
+        targetId = existing.id;
+        return ts.map((t) =>
+          t.id === existing.id
+            ? {
+                ...t,
+                name: chunk.name,
+                instrument: chunk.instrument as keyof TriggerMap,
+                pattern: { ...chunk },
+              }
+            : t
+        );
       }
       const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
-      setEditing(nextId);
+      targetId = nextId;
       return [
         ...ts,
         {
@@ -175,6 +256,9 @@ export function LoopStrip({
         },
       ];
     });
+    if (targetId !== null) {
+      setEditing(targetId);
+    }
   };
 
   return (
@@ -216,7 +300,7 @@ export function LoopStrip({
           onChange={(e) => {
             const id = e.target.value;
             setSelectedChunk("");
-            const chunk = packs[packIndex].chunks.find((c) => c.id === id);
+            const chunk = pack.chunks.find((c) => c.id === id);
             if (chunk) loadChunk(chunk);
           }}
           style={{
@@ -228,13 +312,76 @@ export function LoopStrip({
           }}
         >
           <option value="">Load preset…</option>
-          {packs[packIndex].chunks.map((c) => (
+          {pack.chunks.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
         </select>
       </div>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleAddTrack();
+        }}
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <select
+          value={newTrackInstrument}
+          onChange={(event) => setNewTrackInstrument(event.target.value)}
+          style={{
+            flex: "1 1 150px",
+            minWidth: 140,
+            padding: 4,
+            borderRadius: 4,
+            background: "#121827",
+            color: "white",
+            border: "1px solid #333",
+          }}
+        >
+          <option value="">Choose instrument…</option>
+          {instrumentOptions.map((instrument) => (
+            <option key={instrument} value={instrument}>
+              {formatInstrumentLabel(instrument)}
+            </option>
+          ))}
+        </select>
+        <input
+          value={newTrackName}
+          onChange={(event) => setNewTrackName(event.target.value)}
+          placeholder="Optional name"
+          style={{
+            flex: "2 1 160px",
+            minWidth: 160,
+            padding: 4,
+            borderRadius: 4,
+            border: "1px solid #333",
+            background: "#121827",
+            color: "white",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!newTrackInstrument}
+          style={{
+            flex: "0 0 auto",
+            padding: "4px 12px",
+            borderRadius: 4,
+            border: "1px solid #333",
+            background: newTrackInstrument ? "#27E0B0" : "#1f2532",
+            color: newTrackInstrument ? "#1F2532" : "#64748b",
+            cursor: newTrackInstrument ? "pointer" : "default",
+            fontWeight: 600,
+          }}
+        >
+          Add Track
+        </button>
+      </form>
       <div
         ref={trackAreaRef}
         className="scrollable"
@@ -260,6 +407,7 @@ export function LoopStrip({
             if (labelTimer) window.clearTimeout(labelTimer);
             labelTimer = null;
           };
+          const color = getInstrumentColor(t.instrument);
           return (
             <div
               key={t.id}
@@ -315,7 +463,7 @@ export function LoopStrip({
                       onStepLongPress={(i) =>
                         setStepEditing({ trackId: t.id, index: i })
                       }
-                      color={instrumentColors[t.instrument]}
+                      color={color}
                       currentStep={step}
                     />
                   ) : (
@@ -335,12 +483,10 @@ export function LoopStrip({
                             key={i}
                             style={{
                               border: "1px solid #555",
-                              background: active
-                                ? instrumentColors[t.instrument]
-                                : "#1f2532",
+                              background: active ? color : "#1f2532",
                               opacity: active ? 1 : 0.2,
                               boxShadow: playing
-                                ? `0 0 6px ${instrumentColors[t.instrument]}`
+                                ? `0 0 6px ${color}`
                                 : "none",
                             }}
                           />
@@ -360,7 +506,7 @@ export function LoopStrip({
                       cursor: "pointer",
                     }}
                   >
-                    Add Pattern
+                    New Pattern
                   </button>
                 )}
               </div>

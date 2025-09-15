@@ -51,14 +51,17 @@ export default function App() {
 
   useEffect(() => {
     const pack = packs[packIndex];
-    setTracks(
-      Object.keys(pack.instruments).map((name, i) => ({
-        id: i + 1,
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        instrument: name as keyof TriggerMap,
-        pattern: null,
-      }))
-    );
+    setTracks((prev) => {
+      const allowed = new Set([
+        ...Object.keys(pack.instruments),
+        "chord",
+        "arpeggiator",
+      ]);
+      const filtered = prev.filter((track) =>
+        allowed.has(track.instrument as string)
+      );
+      return filtered.length === prev.length ? prev : filtered;
+    });
     setEditing(null);
     setSongSequence([]);
     setCurrentSequenceIndex(0);
@@ -163,6 +166,13 @@ export default function App() {
       const existingIds = new Set(tracks.map((track) => track.id));
       const filtered = prev.filter((id) => existingIds.has(id));
       return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [tracks]);
+
+  useEffect(() => {
+    setEditing((prev) => {
+      if (prev === null) return prev;
+      return tracks.some((track) => track.id === prev) ? prev : null;
     });
   }, [tracks]);
 
