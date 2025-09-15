@@ -419,7 +419,8 @@ function PatternPlayer({
     velocity?: number,
     pitch?: number,
     note?: string,
-    sustain?: number
+    sustain?: number,
+    chunk?: Chunk
   ) => void;
   started: boolean;
 }) {
@@ -431,7 +432,7 @@ function PatternPlayer({
         if (active) {
           const velocity = pattern.velocities?.[index];
           const pitch = pattern.pitches?.[index];
-          trigger(time, velocity, pitch, pattern.note, pattern.sustain);
+          trigger(time, velocity, pitch, pattern.note, pattern.sustain, pattern);
         }
       },
       Array.from({ length: 16 }, (_, i) => i),
@@ -446,8 +447,16 @@ function PatternPlayer({
     pattern.pitches,
     pattern.note,
     pattern.sustain,
+    pattern.attack,
+    pattern.glide,
+    pattern.pan,
+    pattern.reverb,
+    pattern.delay,
+    pattern.distortion,
+    pattern.bitcrusher,
     trigger,
     started,
+    pattern,
   ]);
   return null;
 }

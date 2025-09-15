@@ -7,6 +7,13 @@ export interface Chunk {
   pitches?: number[];
   note?: string;
   sustain?: number;
+  attack?: number;
+  glide?: number;
+  pan?: number;
+  reverb?: number;
+  delay?: number;
+  distortion?: number;
+  bitcrusher?: number;
   notes?: string[];
   degrees?: number[];
   pitchBend?: number;

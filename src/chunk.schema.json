@@ -58,6 +58,46 @@
       "description": "Default note length in seconds",
       "minimum": 0
     },
+    "attack": {
+      "type": "number",
+      "description": "Envelope attack time in seconds",
+      "minimum": 0
+    },
+    "glide": {
+      "type": "number",
+      "description": "Portamento time in seconds",
+      "minimum": 0
+    },
+    "pan": {
+      "type": "number",
+      "description": "Stereo pan position",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "reverb": {
+      "type": "number",
+      "description": "Reverb wet mix",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "delay": {
+      "type": "number",
+      "description": "Delay wet mix",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "distortion": {
+      "type": "number",
+      "description": "Distortion amount",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "bitcrusher": {
+      "type": "number",
+      "description": "Bitcrusher wet mix",
+      "minimum": 0,
+      "maximum": 1
+    },
     "notes": {
       "type": "array",
       "description": "Chord notes for arpeggiator",

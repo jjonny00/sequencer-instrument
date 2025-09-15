@@ -188,6 +188,13 @@ export function Keyboard({
             pitches,
             note: "C4",
             sustain: release,
+            attack,
+            glide,
+            pan,
+            reverb: space,
+            delay: space,
+            distortion: grit,
+            bitcrusher: lofi,
           },
         },
       ];
@@ -203,10 +210,10 @@ export function Keyboard({
   const handleDown = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     void e;
     setPressed((p) => ({ ...p, [note]: true }));
-    const t = nextGridTime(subdiv);
     const playNote = lockToScale(note);
     activeNotes.current[note] = playNote;
-    noteRef.current?.triggerAttack(playNote, t);
+    noteRef.current?.triggerAttack(playNote);
+    const t = nextGridTime(subdiv);
 
     if (record) {
       const pitch =
@@ -240,6 +247,13 @@ export function Keyboard({
                 pitches,
                 note: "C4",
                 sustain: release,
+                attack,
+                glide,
+                pan,
+                reverb: space,
+                delay: space,
+                distortion: grit,
+                bitcrusher: lofi,
               },
             },
           ];
@@ -256,6 +270,13 @@ export function Keyboard({
               pitches: Array(16).fill(0),
               note: "C4",
               sustain: release,
+              attack,
+              glide,
+              pan,
+              reverb: space,
+              delay: space,
+              distortion: grit,
+              bitcrusher: lofi,
             };
           const steps = pattern.steps.slice();
           const velocities = (pattern.velocities
@@ -269,7 +290,20 @@ export function Keyboard({
           pitches[stepIndex] = pitch;
           return {
             ...t,
-            pattern: { ...pattern, steps, velocities, pitches, sustain: release },
+            pattern: {
+              ...pattern,
+              steps,
+              velocities,
+              pitches,
+              sustain: release,
+              attack,
+              glide,
+              pan,
+              reverb: space,
+              delay: space,
+              distortion: grit,
+              bitcrusher: lofi,
+            },
           };
         });
       });
@@ -279,13 +313,12 @@ export function Keyboard({
   const handleUp = (note: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.releasePointerCapture(e.pointerId);
     setPressed((p) => ({ ...p, [note]: false }));
-    const t = nextGridTime(subdiv);
     const playNote = activeNotes.current[note];
     if (playNote) {
       if (sustainPedal) {
         sustained.current.add(playNote);
       } else {
-        noteRef.current?.triggerRelease(playNote, t);
+        noteRef.current?.triggerRelease(playNote);
       }
       delete activeNotes.current[note];
     }
