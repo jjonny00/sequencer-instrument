@@ -8,6 +8,7 @@ import { packs } from "./packs";
 import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
 import { SongView } from "./SongView";
+import { PatternPlaybackManager } from "./PatternPlaybackManager";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -41,8 +42,8 @@ export default function App() {
   const [triggers, setTriggers] = useState<TriggerMap>({});
   const [tab, setTab] = useState<"mushy" | "keyboard">("mushy");
   const [viewMode, setViewMode] = useState<"track" | "song">("track");
-  const [songSections, setSongSections] = useState<boolean[][]>([]);
-  const [currentSection, setCurrentSection] = useState(0);
+  const [songSequence, setSongSequence] = useState<number[]>([]);
+  const [currentSequenceIndex, setCurrentSequenceIndex] = useState(0);
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -59,8 +60,8 @@ export default function App() {
       }))
     );
     setEditing(null);
-    setSongSections([]);
-    setCurrentSection(0);
+    setSongSequence([]);
+    setCurrentSequenceIndex(0);
     if (!started) return;
     Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
     instrumentRefs.current = {};
@@ -157,51 +158,41 @@ export default function App() {
   }, [packIndex, started]);
 
   useEffect(() => {
-    setSongSections((prev) => {
-      const trackCount = tracks.length;
-      if (trackCount === 0) {
-        return prev.length === 0 ? prev : [];
-      }
-      if (prev.length === 0) {
-        return [Array(trackCount).fill(true)];
-      }
-      let changed = false;
-      const updated = prev.map((section) => {
-        if (section.length === trackCount) return section;
-        changed = true;
-        if (section.length < trackCount) {
-          return [
-            ...section,
-            ...Array(trackCount - section.length).fill(true),
-          ];
-        }
-        return section.slice(0, trackCount);
-      });
-      return changed ? updated : prev;
+    setSongSequence((prev) => {
+      if (prev.length === 0) return prev;
+      const existingIds = new Set(tracks.map((track) => track.id));
+      const filtered = prev.filter((id) => existingIds.has(id));
+      return filtered.length === prev.length ? prev : filtered;
     });
   }, [tracks]);
 
   useEffect(() => {
-    setCurrentSection((prev) => {
-      if (songSections.length === 0) return 0;
-      return prev >= songSections.length ? songSections.length - 1 : prev;
+    setCurrentSequenceIndex((prev) => {
+      if (songSequence.length === 0) return 0;
+      return prev >= songSequence.length ? songSequence.length - 1 : prev;
     });
-  }, [songSections.length]);
+  }, [songSequence.length]);
 
   useEffect(() => {
-    if (!started || songSections.length === 0) return;
+    if (!started || viewMode !== "song" || songSequence.length === 0) return;
     const id = Tone.Transport.scheduleRepeat((time) => {
       Tone.Draw.schedule(() => {
-        setCurrentSection((prev) => {
-          if (songSections.length === 0) return 0;
-          return (prev + 1) % songSections.length;
+        setCurrentSequenceIndex((prev) => {
+          if (songSequence.length === 0) return 0;
+          return (prev + 1) % songSequence.length;
         });
       }, time);
     }, "1m", "1m");
     return () => {
       Tone.Transport.clear(id);
     };
-  }, [started, songSections.length]);
+  }, [started, viewMode, songSequence.length]);
+
+  useEffect(() => {
+    if (viewMode === "song") {
+      setCurrentSequenceIndex(0);
+    }
+  }, [viewMode]);
 
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
@@ -228,7 +219,26 @@ export default function App() {
     Tone.Transport.start(); // start clock; we’ll schedule to it
     setStarted(true);
     setIsPlaying(true);
-    setCurrentSection(0);
+    setCurrentSequenceIndex(0);
+  };
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      Tone.Transport.pause();
+      setIsPlaying(false);
+      return;
+    }
+    if (Tone.Transport.state === "stopped") {
+      setCurrentSequenceIndex(0);
+    }
+    Tone.Transport.start();
+    setIsPlaying(true);
+  };
+
+  const handleStop = () => {
+    Tone.Transport.stop();
+    setIsPlaying(false);
+    setCurrentSequenceIndex(0);
   };
 
   return (
@@ -263,267 +273,278 @@ export default function App() {
         </div>
       ) : (
         <>
-          <LoopStrip
-            started={started}
-            isPlaying={isPlaying}
+          <div
+            style={{
+              padding: "16px 16px 0",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+              }}
+            >
+              <button
+                onClick={() => setViewMode("track")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: viewMode === "track" ? "#27E0B0" : "#1f2532",
+                  color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
+                }}
+              >
+                Tracks
+              </button>
+              <button
+                onClick={() => {
+                  setEditing(null);
+                  setViewMode("song");
+                }}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: viewMode === "song" ? "#27E0B0" : "#1f2532",
+                  color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
+                }}
+              >
+                Song
+              </button>
+            </div>
+          </div>
+          {viewMode === "track" && (
+            <LoopStrip
+              started={started}
+              isPlaying={isPlaying}
+              tracks={tracks}
+              editing={editing}
+              setEditing={setEditing}
+              setTracks={setTracks}
+              packIndex={packIndex}
+              setPackIndex={setPackIndex}
+            />
+          )}
+          <div
+            style={{
+              padding: 16,
+              paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {viewMode === "track" ? (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "center",
+                      flex: 1,
+                    }}
+                  >
+                    {editing !== null ? (
+                      <button
+                        onClick={() => setEditing(null)}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: 4,
+                          border: "1px solid #333",
+                          background: "#27E0B0",
+                          color: "#1F2532",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Done
+                      </button>
+                    ) : (
+                      <>
+                        <label>BPM</label>
+                        <select
+                          value={bpm}
+                          onChange={(e) =>
+                            setBpm(parseInt(e.target.value, 10))
+                          }
+                          style={{
+                            padding: 8,
+                            borderRadius: 8,
+                            background: "#121827",
+                            color: "white",
+                          }}
+                        >
+                          {[90, 100, 110, 120, 130].map((v) => (
+                            <option key={v} value={v}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                        <label style={{ marginLeft: 12 }}>Quantize</label>
+                        <select
+                          value={subdiv}
+                          onChange={(e) =>
+                            setSubdiv(e.target.value as Subdivision)
+                          }
+                          style={{
+                            padding: 8,
+                            borderRadius: 8,
+                            background: "#121827",
+                            color: "white",
+                          }}
+                        >
+                          <option value="16n">1/16</option>
+                          <option value="8n">1/8</option>
+                          <option value="4n">1/4</option>
+                        </select>
+                      </>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      width: 1,
+                      height: 24,
+                      background: "#333",
+                      margin: "0 12px",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <button
+                      aria-label={isPlaying ? "Pause" : "Play"}
+                      onPointerDown={handlePlayPause}
+                      onPointerUp={(e) => e.currentTarget.blur()}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: "#27E0B0",
+                        color: "#1F2532",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 20,
+                      }}
+                    >
+                      <span className="material-symbols-outlined">
+                        {isPlaying ? "pause" : "play_arrow"}
+                      </span>
+                    </button>
+                    <button
+                      aria-label="Stop"
+                      onPointerDown={handleStop}
+                      onPointerUp={(e) => e.currentTarget.blur()}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: "#E02749",
+                        color: "#e6f2ff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 40,
+                        padding: 0,
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ lineHeight: 1, width: "100%", height: "100%" }}
+                      >
+                        stop
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className="scrollable"
+                  style={{
+                    marginTop: 16,
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflowY: "auto",
+                    minHeight: 0,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <button
+                      onClick={() => setTab("mushy")}
+                      style={{
+                        flex: 1,
+                        padding: "8px 0",
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: tab === "mushy" ? "#27E0B0" : "#1f2532",
+                        color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
+                      }}
+                    >
+                      Mushy
+                    </button>
+                    <button
+                      onClick={() => setTab("keyboard")}
+                      style={{
+                        flex: 1,
+                        padding: "8px 0",
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: tab === "keyboard" ? "#27E0B0" : "#1f2532",
+                        color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
+                      }}
+                    >
+                      Keyboard
+                    </button>
+                  </div>
+                  {tab === "mushy" ? (
+                    <Arpeggiator
+                      started={started}
+                      subdiv={subdiv}
+                      setTracks={setTracks}
+                    />
+                  ) : (
+                    <Keyboard
+                      subdiv={subdiv}
+                      noteRef={noteRef}
+                      fxRef={keyboardFxRef}
+                      setTracks={setTracks}
+                    />
+                  )}
+                </div>
+              </>
+            ) : (
+              <SongView
+                tracks={tracks}
+                songSequence={songSequence}
+                setSongSequence={setSongSequence}
+                currentSequenceIndex={currentSequenceIndex}
+                isPlaying={isPlaying}
+                bpm={bpm}
+                setBpm={setBpm}
+                onPlayPause={handlePlayPause}
+                onStop={handleStop}
+              />
+            )}
+          </div>
+          <PatternPlaybackManager
             tracks={tracks}
             triggers={triggers}
-            editing={editing}
-            setEditing={setEditing}
-            setTracks={setTracks}
-            packIndex={packIndex}
-            setPackIndex={setPackIndex}
-            songSections={songSections}
-            currentSection={currentSection}
+            started={started}
+            viewMode={viewMode}
+            songSequence={songSequence}
+            currentSequenceIndex={currentSequenceIndex}
           />
-            <div
-              style={{
-                padding: 16,
-                paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
-                flex: 1,
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-              }}
-            >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  gap: 12,
-                  alignItems: "center",
-                  flex: 1,
-                }}
-              >
-                {editing !== null ? (
-                  <button
-                    onClick={() => setEditing(null)}
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: 4,
-                      border: "1px solid #333",
-                      background: "#27E0B0",
-                      color: "#1F2532",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Done
-                  </button>
-                ) : (
-                  <>
-                    <label>BPM</label>
-                    <select
-                      value={bpm}
-                      onChange={(e) => setBpm(parseInt(e.target.value, 10))}
-                      style={{
-                        padding: 8,
-                        borderRadius: 8,
-                        background: "#121827",
-                        color: "white",
-                      }}
-                    >
-                      {[90, 100, 110, 120, 130].map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                    <label style={{ marginLeft: 12 }}>Quantize</label>
-                    <select
-                      value={subdiv}
-                      onChange={(e) =>
-                        setSubdiv(e.target.value as Subdivision)
-                      }
-                      style={{
-                        padding: 8,
-                        borderRadius: 8,
-                        background: "#121827",
-                        color: "white",
-                      }}
-                    >
-                      <option value="16n">1/16</option>
-                      <option value="8n">1/8</option>
-                      <option value="4n">1/4</option>
-                    </select>
-                  </>
-                )}
-              </div>
-              <div
-                style={{
-                  width: 1,
-                  height: 24,
-                  background: "#333",
-                  margin: "0 12px",
-                }}
-              />
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  aria-label={isPlaying ? "Pause" : "Play"}
-                  onPointerDown={() => {
-                    if (isPlaying) {
-                      Tone.Transport.pause();
-                    } else {
-                      if (Tone.Transport.state === "stopped") {
-                        setCurrentSection(0);
-                      }
-                      Tone.Transport.start();
-                    }
-                    setIsPlaying(!isPlaying);
-                  }}
-                  onPointerUp={(e) => e.currentTarget.blur()}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: "#27E0B0",
-                    color: "#1F2532",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 20,
-                  }}
-                >
-                  <span className="material-symbols-outlined">
-                    {isPlaying ? "pause" : "play_arrow"}
-                  </span>
-                </button>
-                <button
-                  aria-label="Stop"
-                  onPointerDown={() => {
-                    Tone.Transport.stop();
-                    setIsPlaying(false);
-                    setCurrentSection(0);
-                  }}
-                  onPointerUp={(e) => e.currentTarget.blur()}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: "#E02749",
-                    color: "#e6f2ff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 40,
-                    padding: 0,
-                  }}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ lineHeight: 1, width: "100%", height: "100%" }}
-                  >
-                    stop
-                  </span>
-                </button>
-                </div>
-              </div>
-
-              <div
-                className="scrollable"
-                style={{
-                  marginTop: 16,
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  overflowY: "auto",
-                  minHeight: 0,
-                }}
-              >
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <button
-                    onClick={() => setViewMode("track")}
-                    style={{
-                      flex: 1,
-                      padding: "8px 0",
-                      borderRadius: 8,
-                      border: "1px solid #333",
-                      background: viewMode === "track" ? "#27E0B0" : "#1f2532",
-                      color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
-                    }}
-                  >
-                    Tracks
-                  </button>
-                  <button
-                    onClick={() => setViewMode("song")}
-                    style={{
-                      flex: 1,
-                      padding: "8px 0",
-                      borderRadius: 8,
-                      border: "1px solid #333",
-                      background: viewMode === "song" ? "#27E0B0" : "#1f2532",
-                      color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
-                    }}
-                  >
-                    Song
-                  </button>
-                </div>
-                {viewMode === "track" ? (
-                  <>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                      <button
-                        onClick={() => setTab("mushy")}
-                        style={{
-                          flex: 1,
-                          padding: "8px 0",
-                          borderRadius: 8,
-                          border: "1px solid #333",
-                          background:
-                            tab === "mushy" ? "#27E0B0" : "#1f2532",
-                          color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
-                        }}
-                      >
-                        Mushy
-                      </button>
-                      <button
-                        onClick={() => setTab("keyboard")}
-                        style={{
-                          flex: 1,
-                          padding: "8px 0",
-                          borderRadius: 8,
-                          border: "1px solid #333",
-                          background:
-                            tab === "keyboard" ? "#27E0B0" : "#1f2532",
-                          color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
-                        }}
-                      >
-                        Keyboard
-                      </button>
-                    </div>
-                    {tab === "mushy" ? (
-                      <Arpeggiator
-                        started={started}
-                        subdiv={subdiv}
-                        setTracks={setTracks}
-                      />
-                    ) : (
-                      <Keyboard
-                        subdiv={subdiv}
-                        noteRef={noteRef}
-                        fxRef={keyboardFxRef}
-                        setTracks={setTracks}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <SongView
-                    tracks={tracks}
-                    songSections={songSections}
-                    setSongSections={setSongSections}
-                    currentSection={currentSection}
-                    isPlaying={isPlaying}
-                  />
-                )}
-              </div>
-          </div>
         </>
       )}
     </div>

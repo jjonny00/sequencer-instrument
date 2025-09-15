@@ -27,26 +27,20 @@ export function LoopStrip({
   started,
   isPlaying,
   tracks,
-  triggers,
   editing,
   setEditing,
   setTracks,
   packIndex,
   setPackIndex,
-  songSections,
-  currentSection,
 }: {
   started: boolean;
   isPlaying: boolean;
   tracks: Track[];
-  triggers: TriggerMap;
   editing: number | null;
   setEditing: Dispatch<SetStateAction<number | null>>;
   setTracks: Dispatch<SetStateAction<Track[]>>;
   packIndex: number;
   setPackIndex: Dispatch<SetStateAction<number>>;
-  songSections: boolean[][];
-  currentSection: number;
 }) {
   const [step, setStep] = useState(-1);
   const [selectedChunk, setSelectedChunk] = useState("");
@@ -254,7 +248,7 @@ export function LoopStrip({
           minHeight: 0,
         }}
       >
-        {tracks.map((t, trackIndex) => {
+        {tracks.map((t) => {
           let labelTimer: number | null = null;
           const handleLabelPointerDown = () => {
             if (editing !== t.id) return;
@@ -369,16 +363,6 @@ export function LoopStrip({
                     Add Pattern
                   </button>
                 )}
-                {t.pattern && (
-                  <PatternPlayer
-                    pattern={t.pattern}
-                    trigger={triggers[t.instrument]}
-                    started={started}
-                    isTrackActive={() =>
-                      songSections[currentSection]?.[trackIndex] ?? true
-                    }
-                  />
-                )}
               </div>
             </div>
           );
@@ -413,67 +397,6 @@ export function LoopStrip({
       })()}
     </div>
   );
-}
-
-function PatternPlayer({
-  pattern,
-  trigger,
-  started,
-  isTrackActive,
-}: {
-  pattern: Chunk;
-  trigger: (
-    time: number,
-    velocity?: number,
-    pitch?: number,
-    note?: string,
-    sustain?: number,
-    chunk?: Chunk
-  ) => void;
-  started: boolean;
-  isTrackActive: () => boolean;
-}) {
-  const isTrackActiveRef = useRef(isTrackActive);
-
-  useEffect(() => {
-    isTrackActiveRef.current = isTrackActive;
-  }, [isTrackActive]);
-
-  useEffect(() => {
-    if (!started) return;
-    const seq = new Tone.Sequence(
-      (time, index: number) => {
-        const active = pattern.steps[index] ?? 0;
-        if (active && isTrackActiveRef.current()) {
-          const velocity = pattern.velocities?.[index];
-          const pitch = pattern.pitches?.[index];
-          trigger(time, velocity, pitch, pattern.note, pattern.sustain, pattern);
-        }
-      },
-      Array.from({ length: 16 }, (_, i) => i),
-      "16n"
-    ).start(0);
-    return () => {
-      seq.dispose();
-    };
-  }, [
-    pattern.steps,
-    pattern.velocities,
-    pattern.pitches,
-    pattern.note,
-    pattern.sustain,
-    pattern.attack,
-    pattern.glide,
-    pattern.pan,
-    pattern.reverb,
-    pattern.delay,
-    pattern.distortion,
-    pattern.bitcrusher,
-    trigger,
-    started,
-    pattern,
-  ]);
-  return null;
 }
 
 function PatternEditor({
