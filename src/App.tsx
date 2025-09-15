@@ -7,6 +7,7 @@ import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
+import { SongView } from "./SongView";
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -39,6 +40,9 @@ export default function App() {
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
   const [tab, setTab] = useState<"mushy" | "keyboard">("mushy");
+  const [viewMode, setViewMode] = useState<"track" | "song">("track");
+  const [songSections, setSongSections] = useState<boolean[][]>([]);
+  const [currentSection, setCurrentSection] = useState(0);
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -55,6 +59,8 @@ export default function App() {
       }))
     );
     setEditing(null);
+    setSongSections([]);
+    setCurrentSection(0);
     if (!started) return;
     Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
     instrumentRefs.current = {};
@@ -150,6 +156,53 @@ export default function App() {
     setTriggers(newTriggers);
   }, [packIndex, started]);
 
+  useEffect(() => {
+    setSongSections((prev) => {
+      const trackCount = tracks.length;
+      if (trackCount === 0) {
+        return prev.length === 0 ? prev : [];
+      }
+      if (prev.length === 0) {
+        return [Array(trackCount).fill(true)];
+      }
+      let changed = false;
+      const updated = prev.map((section) => {
+        if (section.length === trackCount) return section;
+        changed = true;
+        if (section.length < trackCount) {
+          return [
+            ...section,
+            ...Array(trackCount - section.length).fill(true),
+          ];
+        }
+        return section.slice(0, trackCount);
+      });
+      return changed ? updated : prev;
+    });
+  }, [tracks]);
+
+  useEffect(() => {
+    setCurrentSection((prev) => {
+      if (songSections.length === 0) return 0;
+      return prev >= songSections.length ? songSections.length - 1 : prev;
+    });
+  }, [songSections.length]);
+
+  useEffect(() => {
+    if (!started || songSections.length === 0) return;
+    const id = Tone.Transport.scheduleRepeat((time) => {
+      Tone.Draw.schedule(() => {
+        setCurrentSection((prev) => {
+          if (songSections.length === 0) return 0;
+          return (prev + 1) % songSections.length;
+        });
+      }, time);
+    }, "1m", "1m");
+    return () => {
+      Tone.Transport.clear(id);
+    };
+  }, [started, songSections.length]);
+
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
     const synth = new Tone.PolySynth(Tone.Synth, {
@@ -175,6 +228,7 @@ export default function App() {
     Tone.Transport.start(); // start clock; we’ll schedule to it
     setStarted(true);
     setIsPlaying(true);
+    setCurrentSection(0);
   };
 
   return (
@@ -219,6 +273,8 @@ export default function App() {
             setTracks={setTracks}
             packIndex={packIndex}
             setPackIndex={setPackIndex}
+            songSections={songSections}
+            currentSection={currentSection}
           />
             <div
               style={{
@@ -314,6 +370,9 @@ export default function App() {
                     if (isPlaying) {
                       Tone.Transport.pause();
                     } else {
+                      if (Tone.Transport.state === "stopped") {
+                        setCurrentSection(0);
+                      }
                       Tone.Transport.start();
                     }
                     setIsPlaying(!isPlaying);
@@ -341,6 +400,7 @@ export default function App() {
                   onPointerDown={() => {
                     Tone.Transport.stop();
                     setIsPlaying(false);
+                    setCurrentSection(0);
                   }}
                   onPointerUp={(e) => e.currentTarget.blur()}
                   style={{
@@ -378,46 +438,88 @@ export default function App() {
                   minHeight: 0,
                 }}
               >
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                   <button
-                    onClick={() => setTab("mushy")}
+                    onClick={() => setViewMode("track")}
                     style={{
                       flex: 1,
                       padding: "8px 0",
                       borderRadius: 8,
                       border: "1px solid #333",
-                      background: tab === "mushy" ? "#27E0B0" : "#1f2532",
-                      color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
+                      background: viewMode === "track" ? "#27E0B0" : "#1f2532",
+                      color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
                     }}
                   >
-                    Mushy
+                    Tracks
                   </button>
                   <button
-                    onClick={() => setTab("keyboard")}
+                    onClick={() => setViewMode("song")}
                     style={{
                       flex: 1,
                       padding: "8px 0",
                       borderRadius: 8,
                       border: "1px solid #333",
-                      background: tab === "keyboard" ? "#27E0B0" : "#1f2532",
-                      color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
+                      background: viewMode === "song" ? "#27E0B0" : "#1f2532",
+                      color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
                     }}
                   >
-                    Keyboard
+                    Song
                   </button>
                 </div>
-                {tab === "mushy" ? (
-                  <Arpeggiator
-                    started={started}
-                    subdiv={subdiv}
-                    setTracks={setTracks}
-                  />
+                {viewMode === "track" ? (
+                  <>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <button
+                        onClick={() => setTab("mushy")}
+                        style={{
+                          flex: 1,
+                          padding: "8px 0",
+                          borderRadius: 8,
+                          border: "1px solid #333",
+                          background:
+                            tab === "mushy" ? "#27E0B0" : "#1f2532",
+                          color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
+                        }}
+                      >
+                        Mushy
+                      </button>
+                      <button
+                        onClick={() => setTab("keyboard")}
+                        style={{
+                          flex: 1,
+                          padding: "8px 0",
+                          borderRadius: 8,
+                          border: "1px solid #333",
+                          background:
+                            tab === "keyboard" ? "#27E0B0" : "#1f2532",
+                          color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
+                        }}
+                      >
+                        Keyboard
+                      </button>
+                    </div>
+                    {tab === "mushy" ? (
+                      <Arpeggiator
+                        started={started}
+                        subdiv={subdiv}
+                        setTracks={setTracks}
+                      />
+                    ) : (
+                      <Keyboard
+                        subdiv={subdiv}
+                        noteRef={noteRef}
+                        fxRef={keyboardFxRef}
+                        setTracks={setTracks}
+                      />
+                    )}
+                  </>
                 ) : (
-                  <Keyboard
-                    subdiv={subdiv}
-                    noteRef={noteRef}
-                    fxRef={keyboardFxRef}
-                    setTracks={setTracks}
+                  <SongView
+                    tracks={tracks}
+                    songSections={songSections}
+                    setSongSections={setSongSections}
+                    currentSection={currentSection}
+                    isPlaying={isPlaying}
                   />
                 )}
               </div>

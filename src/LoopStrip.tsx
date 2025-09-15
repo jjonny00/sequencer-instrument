@@ -33,6 +33,8 @@ export function LoopStrip({
   setTracks,
   packIndex,
   setPackIndex,
+  songSections,
+  currentSection,
 }: {
   started: boolean;
   isPlaying: boolean;
@@ -43,6 +45,8 @@ export function LoopStrip({
   setTracks: Dispatch<SetStateAction<Track[]>>;
   packIndex: number;
   setPackIndex: Dispatch<SetStateAction<number>>;
+  songSections: boolean[][];
+  currentSection: number;
 }) {
   const [step, setStep] = useState(-1);
   const [selectedChunk, setSelectedChunk] = useState("");
@@ -250,7 +254,7 @@ export function LoopStrip({
           minHeight: 0,
         }}
       >
-        {tracks.map((t) => {
+        {tracks.map((t, trackIndex) => {
           let labelTimer: number | null = null;
           const handleLabelPointerDown = () => {
             if (editing !== t.id) return;
@@ -370,6 +374,9 @@ export function LoopStrip({
                     pattern={t.pattern}
                     trigger={triggers[t.instrument]}
                     started={started}
+                    isTrackActive={() =>
+                      songSections[currentSection]?.[trackIndex] ?? true
+                    }
                   />
                 )}
               </div>
@@ -412,6 +419,7 @@ function PatternPlayer({
   pattern,
   trigger,
   started,
+  isTrackActive,
 }: {
   pattern: Chunk;
   trigger: (
@@ -423,13 +431,20 @@ function PatternPlayer({
     chunk?: Chunk
   ) => void;
   started: boolean;
+  isTrackActive: () => boolean;
 }) {
+  const isTrackActiveRef = useRef(isTrackActive);
+
+  useEffect(() => {
+    isTrackActiveRef.current = isTrackActive;
+  }, [isTrackActive]);
+
   useEffect(() => {
     if (!started) return;
     const seq = new Tone.Sequence(
       (time, index: number) => {
         const active = pattern.steps[index] ?? 0;
-        if (active) {
+        if (active && isTrackActiveRef.current()) {
           const velocity = pattern.velocities?.[index];
           const pitch = pattern.pitches?.[index];
           trigger(time, velocity, pitch, pattern.note, pattern.sustain, pattern);
