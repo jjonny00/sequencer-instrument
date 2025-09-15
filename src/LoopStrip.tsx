@@ -6,6 +6,13 @@ import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { ChunkModal } from "./ChunkModal";
 
+const instrumentColors: Record<string, string> = {
+  kick: "#e74c3c",
+  snare: "#3498db",
+  hat: "#f1c40f",
+  chord: "#2ecc71",
+};
+
 /**
  * Top strip visualizing a 16-step loop.
  * - Displays each track's 16-step pattern.
@@ -249,31 +256,49 @@ export function LoopStrip({
                 <PatternEditor
                   steps={t.pattern.steps}
                   onChange={(p) => updatePattern(t.id, p)}
+                  color={instrumentColors[t.instrument]}
                 />
               ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(16, 1fr)",
-                    gap: 2,
-                    height: "100%",
-                  }}
-                >
-                  {Array.from({ length: 16 }).map((_, i) => {
-                    const active = t.pattern?.steps[i] ?? 0;
-                    const isCurrent = i === step;
-                    return (
-                      <div
-                        key={i}
-                        style={{
-                          border: "1px solid #555",
-                          background: active ? "#27E0B0" : "#1f2532",
-                          opacity: isCurrent ? 1 : 0.5,
-                          transition: "opacity 60ms linear",
-                        }}
-                      />
-                    );
-                  })}
+                <div style={{ position: "relative", height: "100%" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(16, 1fr)",
+                      gap: 2,
+                      height: "100%",
+                    }}
+                  >
+                    {Array.from({ length: 16 }).map((_, i) => {
+                      const active = t.pattern?.steps[i] ?? 0;
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            border: "1px solid #555",
+                            background: active
+                              ? instrumentColors[t.instrument]
+                              : "#1f2532",
+                            opacity: active ? 1 : 0.2,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      bottom: 0,
+                      width: 2,
+                      background: "rgba(255,255,255,0.5)",
+                      left: `${(step / 16) * 100}%`,
+                      transition:
+                        step === 0
+                          ? "none"
+                          : `left ${Tone.Time("16n").toSeconds()}s linear`,
+                      pointerEvents: "none",
+                    }}
+                  />
                 </div>
               )
             ) : (
@@ -344,9 +369,11 @@ function PatternPlayer({
 function PatternEditor({
   steps,
   onChange,
+  color,
 }: {
   steps: number[];
   onChange: (p: number[]) => void;
+  color: string;
 }) {
   const toggle = (index: number) => {
     const next = steps.slice();
@@ -369,7 +396,7 @@ function PatternEditor({
           onClick={() => toggle(i)}
           style={{
             border: "1px solid #555",
-            background: v ? "#27E0B0" : "#1f2532",
+            background: v ? color : "#1f2532",
             cursor: "pointer",
           }}
         />
