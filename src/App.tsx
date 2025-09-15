@@ -371,6 +371,8 @@ export default function App() {
               setTracks={setTracks}
               packIndex={packIndex}
               setPackIndex={setPackIndex}
+              patternGroups={patternGroups}
+              setPatternGroups={setPatternGroups}
             />
           )}
           <div
@@ -573,7 +575,6 @@ export default function App() {
               <SongView
                 tracks={tracks}
                 patternGroups={patternGroups}
-                setPatternGroups={setPatternGroups}
                 songRows={songRows}
                 setSongRows={setSongRows}
                 currentSectionIndex={currentSectionIndex}

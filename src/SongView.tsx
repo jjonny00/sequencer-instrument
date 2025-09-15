@@ -7,7 +7,6 @@ import type { Track } from "./tracks";
 interface SongViewProps {
   tracks: Track[];
   patternGroups: PatternGroup[];
-  setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
   songRows: (string | null)[][];
   setSongRows: Dispatch<SetStateAction<(string | null)[][]>>;
   currentSectionIndex: number;
@@ -22,9 +21,6 @@ const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
 const ROW_LABEL_WIDTH = 80;
 
-const createPatternGroupId = () =>
-  `pg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
 const createEmptyRow = (length: number) =>
   Array.from({ length }, () => null as string | null);
 
@@ -34,7 +30,6 @@ const formatTrackCount = (count: number) =>
 export function SongView({
   tracks,
   patternGroups,
-  setPatternGroups,
   songRows,
   setSongRows,
   currentSectionIndex,
@@ -61,11 +56,6 @@ export function SongView({
   const sectionCount = useMemo(
     () => songRows.reduce((max, row) => Math.max(max, row.length), 0),
     [songRows]
-  );
-
-  const playableTracks = useMemo(
-    () => tracks.filter((track) => track.pattern),
-    [tracks]
   );
 
   useEffect(() => {
@@ -120,47 +110,6 @@ export function SongView({
         return nextRow;
       })
     );
-  };
-
-  const handleCreatePatternGroup = () => {
-    if (playableTracks.length === 0) return;
-    const snapshot = playableTracks.map((track) => track.id);
-    setPatternGroups((prev) => {
-      const existingNames = new Set(prev.map((group) => group.name));
-      let index = prev.length + 1;
-      let candidate = `Group ${index}`;
-      while (existingNames.has(candidate)) {
-        index += 1;
-        candidate = `Group ${index}`;
-      }
-      const newGroup: PatternGroup = {
-        id: createPatternGroupId(),
-        name: candidate,
-        trackIds: snapshot,
-      };
-      return [...prev, newGroup];
-    });
-  };
-
-  const handleDuplicatePatternGroup = (groupId: string) => {
-    setPatternGroups((prev) => {
-      const source = prev.find((group) => group.id === groupId);
-      if (!source) return prev;
-      const existingNames = new Set(prev.map((group) => group.name));
-      const baseName = `${source.name} Copy`;
-      let candidate = baseName;
-      let counter = 2;
-      while (existingNames.has(candidate)) {
-        candidate = `${baseName} ${counter}`;
-        counter += 1;
-      }
-      const copy: PatternGroup = {
-        id: createPatternGroupId(),
-        name: candidate,
-        trackIds: [...source.trackIds],
-      };
-      return [...prev, copy];
-    });
   };
 
   const timelineHeader = (
@@ -543,8 +492,8 @@ export function SongView({
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 12,
+            flexDirection: "column",
+            gap: 4,
           }}
         >
           <h3
@@ -557,38 +506,16 @@ export function SongView({
           >
             Pattern Groups
           </h3>
-          <button
-            onClick={handleCreatePatternGroup}
-            disabled={playableTracks.length === 0}
+          <span
             style={{
-              marginLeft: "auto",
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: "1px solid #333",
-              background:
-                playableTracks.length === 0 ? "#1f2532" : "#27E0B0",
-              color: playableTracks.length === 0 ? "#64748b" : "#1F2532",
-              cursor: playableTracks.length === 0 ? "default" : "pointer",
               fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            Capture Pattern Group
-          </button>
-        </div>
-        {playableTracks.length === 0 && (
-          <div
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              border: "1px dashed #475569",
               color: "#94a3b8",
-              fontSize: 12,
             }}
           >
-            Create patterns in Track view to capture them into reusable groups.
-          </div>
-        )}
+            Create and edit groups from Track view, then place them onto the
+            song timeline.
+          </span>
+        </div>
         {patternGroups.length === 0 ? (
           <div
             style={{
@@ -599,8 +526,8 @@ export function SongView({
               fontSize: 13,
             }}
           >
-            No Pattern Groups yet. Capture the current track patterns to start
-            building song sections.
+            No Pattern Groups yet. Build groups in Track view to start arranging
+            the song.
           </div>
         ) : (
           <div
@@ -643,21 +570,7 @@ export function SongView({
                     >
                       {formatTrackCount(group.trackIds.length)}
                     </span>
-                    <button
-                      onClick={() => handleDuplicatePatternGroup(group.id)}
-                      style={{
-                        marginLeft: "auto",
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        border: "1px solid #333",
-                        background: "#273041",
-                        color: "#e6f2ff",
-                        fontSize: 12,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Duplicate
-                    </button>
+                    <div style={{ marginLeft: "auto" }} />
                   </div>
                   {trackLabels.length === 0 ? (
                     <span style={{ fontSize: 12, color: "#94a3b8" }}>

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { StepModal } from "./StepModal";
+import type { PatternGroup } from "./song";
+import { createPatternGroupId } from "./song";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -51,6 +53,8 @@ export function LoopStrip({
   setTracks,
   packIndex,
   setPackIndex,
+  patternGroups,
+  setPatternGroups,
 }: {
   started: boolean;
   isPlaying: boolean;
@@ -60,11 +64,16 @@ export function LoopStrip({
   setTracks: Dispatch<SetStateAction<Track[]>>;
   packIndex: number;
   setPackIndex: Dispatch<SetStateAction<number>>;
+  patternGroups: PatternGroup[];
+  setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
 }) {
   const [step, setStep] = useState(-1);
   const [selectedChunk, setSelectedChunk] = useState("");
   const [newTrackInstrument, setNewTrackInstrument] = useState("");
   const [newTrackName, setNewTrackName] = useState("");
+  const [activeGroupId, setActiveGroupId] = useState<"new" | string>("new");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupTrackIds, setNewGroupTrackIds] = useState<number[]>([]);
   const [stepEditing, setStepEditing] = useState<
     { trackId: number; index: number | null } | null
   >(null);
@@ -72,6 +81,23 @@ export function LoopStrip({
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const pack = packs[packIndex];
   const instrumentOptions = Object.keys(pack.instruments);
+  const selectedGroup = useMemo(
+    () =>
+      activeGroupId === "new"
+        ? null
+        : patternGroups.find((group) => group.id === activeGroupId) ?? null,
+    [activeGroupId, patternGroups]
+  );
+  const defaultGroupName = useMemo(() => {
+    const existingNames = new Set(patternGroups.map((group) => group.name));
+    let index = patternGroups.length + 1;
+    let candidate = `Group ${index}`;
+    while (existingNames.has(candidate)) {
+      index += 1;
+      candidate = `Group ${index}`;
+    }
+    return candidate;
+  }, [patternGroups]);
 
   useEffect(() => {
     setSelectedChunk("");
@@ -80,6 +106,19 @@ export function LoopStrip({
       return pack.instruments[prev] ? prev : "";
     });
   }, [pack]);
+
+  useEffect(() => {
+    if (activeGroupId === "new") return;
+    if (!patternGroups.some((group) => group.id === activeGroupId)) {
+      setActiveGroupId("new");
+    }
+  }, [patternGroups, activeGroupId]);
+
+  useEffect(() => {
+    setNewGroupTrackIds((ids) =>
+      ids.filter((id) => tracks.some((track) => track.id === id))
+    );
+  }, [tracks]);
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
@@ -144,6 +183,122 @@ export function LoopStrip({
       setEditing(createdId);
     }
     setNewTrackName("");
+  };
+
+  const handleToggleNewGroupTrack = (trackId: number) => {
+    setNewGroupTrackIds((ids) => {
+      if (ids.includes(trackId)) {
+        return ids.filter((id) => id !== trackId);
+      }
+      const next = new Set([...ids, trackId]);
+      return tracks
+        .filter((track) => next.has(track.id))
+        .map((track) => track.id);
+    });
+  };
+
+  const handleCreateGroup = () => {
+    const name = newGroupName.trim() || defaultGroupName;
+    if (tracks.length === 0 || newGroupTrackIds.length === 0) return;
+    const groupTrackIds = tracks
+      .filter((track) => newGroupTrackIds.includes(track.id))
+      .map((track) => track.id);
+    if (groupTrackIds.length === 0) return;
+    const newId = createPatternGroupId();
+    const newGroup: PatternGroup = {
+      id: newId,
+      name,
+      trackIds: groupTrackIds,
+    };
+    setPatternGroups((prev) => [...prev, newGroup]);
+    setActiveGroupId(newId);
+    setNewGroupName("");
+    setNewGroupTrackIds([]);
+  };
+
+  const handleRenameGroup = (value: string) => {
+    if (!selectedGroup) return;
+    setPatternGroups((groups) =>
+      groups.map((group) =>
+        group.id === selectedGroup.id ? { ...group, name: value } : group
+      )
+    );
+  };
+
+  const handleToggleExistingGroupTrack = (trackId: number) => {
+    if (!selectedGroup) return;
+    setPatternGroups((groups) =>
+      groups.map((group) => {
+        if (group.id !== selectedGroup.id) return group;
+        const next = new Set(group.trackIds);
+        if (next.has(trackId)) {
+          next.delete(trackId);
+        } else {
+          next.add(trackId);
+        }
+        const ordered = tracks
+          .filter((track) => next.has(track.id))
+          .map((track) => track.id);
+        return { ...group, trackIds: ordered };
+      })
+    );
+  };
+
+  const renderTrackChooser = (
+    selectedIds: number[],
+    onToggle: (trackId: number) => void
+  ) => {
+    if (tracks.length === 0) {
+      return (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 12,
+            color: "#94a3b8",
+          }}
+        >
+          Add a track to start building groups.
+        </div>
+      );
+    }
+
+    return (
+      <div
+        style={{
+          marginTop: 8,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+        }}
+      >
+        {tracks.map((track) => {
+          const checked = selectedIds.includes(track.id);
+          return (
+            <label
+              key={track.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 8px",
+                borderRadius: 6,
+                border: `1px solid ${checked ? "#27E0B0" : "#333"}`,
+                background: checked ? "rgba(39, 224, 176, 0.08)" : "#1f2532",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(track.id)}
+              />
+              <span>{track.name}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
   };
 
   const updatePattern = (trackId: number, steps: number[]) => {
@@ -513,6 +668,157 @@ export function LoopStrip({
             </div>
           );
         })}
+      </div>
+      <div
+        style={{
+          marginTop: 8,
+          borderRadius: 8,
+          border: "1px solid #333",
+          padding: 12,
+          background: "#121827",
+          color: "#e6f2ff",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontWeight: 600, fontSize: 12 }}>Groups</span>
+          <select
+            value={activeGroupId}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value === "new") {
+                setActiveGroupId("new");
+                setNewGroupName("");
+                setNewGroupTrackIds([]);
+              } else {
+                setActiveGroupId(value);
+              }
+            }}
+            style={{
+              flex: "1 1 160px",
+              minWidth: 160,
+              padding: 4,
+              borderRadius: 4,
+              background: "#1f2532",
+              color: "#e6f2ff",
+              border: "1px solid #333",
+            }}
+          >
+            <option value="new">Create new group…</option>
+            {patternGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedGroup ? (
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <input
+              value={selectedGroup.name}
+              onChange={(event) => handleRenameGroup(event.target.value)}
+              style={{
+                padding: 6,
+                borderRadius: 6,
+                border: "1px solid #333",
+                background: "#1f2532",
+                color: "#e6f2ff",
+              }}
+            />
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              Toggle tracks to include in this group.
+            </span>
+            {renderTrackChooser(
+              selectedGroup.trackIds,
+              handleToggleExistingGroupTrack
+            )}
+            {selectedGroup.trackIds.length === 0 && tracks.length > 0 && (
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                No tracks selected. This group will be silent until tracks are
+                added.
+              </span>
+            )}
+          </div>
+        ) : (
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <input
+              value={newGroupName}
+              onChange={(event) => setNewGroupName(event.target.value)}
+              placeholder={defaultGroupName}
+              style={{
+                padding: 6,
+                borderRadius: 6,
+                border: "1px solid #333",
+                background: "#1f2532",
+                color: "#e6f2ff",
+              }}
+            />
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              Select tracks to include in this new group.
+            </span>
+            {renderTrackChooser(newGroupTrackIds, handleToggleNewGroupTrack)}
+            <button
+              type="button"
+              onClick={handleCreateGroup}
+              disabled={tracks.length === 0 || newGroupTrackIds.length === 0}
+              style={{
+                alignSelf: "flex-start",
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #333",
+                background:
+                  tracks.length === 0 || newGroupTrackIds.length === 0
+                    ? "#1f2532"
+                    : "#27E0B0",
+                color:
+                  tracks.length === 0 || newGroupTrackIds.length === 0
+                    ? "#64748b"
+                    : "#1F2532",
+                cursor:
+                  tracks.length === 0 || newGroupTrackIds.length === 0
+                    ? "default"
+                    : "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Add Group
+            </button>
+          </div>
+        )}
+        {patternGroups.length === 0 &&
+          selectedGroup === null &&
+          tracks.length > 0 && (
+            <span
+              style={{
+                fontSize: 12,
+                color: "#94a3b8",
+                marginTop: 8,
+                display: "block",
+              }}
+            >
+              Groups let you reuse sets of tracks when arranging the song.
+            </span>
+          )}
       </div>
       {stepEditing && (() => {
         const track = tracks.find((tr) => tr.id === stepEditing.trackId);
