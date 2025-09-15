@@ -199,6 +199,7 @@ export default function App() {
                 padding: 16,
                 paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
                 flex: 1,
+                minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
