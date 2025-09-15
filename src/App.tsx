@@ -172,6 +172,31 @@ export default function App() {
         </div>
       ) : (
         <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              padding: 8,
+              background: "#121827",
+              gap: 8,
+            }}
+          >
+            {editing !== null && (
+              <button
+                onClick={() => setEditing(null)}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 4,
+                  border: "1px solid #333",
+                  background: "#27E0B0",
+                  color: "#1F2532",
+                  cursor: "pointer",
+                }}
+              >
+                Done
+              </button>
+            )}
+          </div>
           <LoopStrip
             started={started}
             isPlaying={isPlaying}
