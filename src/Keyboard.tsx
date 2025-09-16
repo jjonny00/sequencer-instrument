@@ -172,16 +172,18 @@ export function Keyboard({
       const steps = Array(16).fill(0);
       const velocities = Array(16).fill(1);
       const pitches = Array(16).fill(0);
+      const label = (ts.length + 1).toString().padStart(2, "0");
       trackIdRef.current = nextId;
       return [
         ...ts,
         {
           id: nextId,
-          name: "Keyboard",
+          name: label,
           instrument: "chord",
+          muted: false,
           pattern: {
             id: `kb-${Date.now()}`,
-            name: "Keyboard",
+            name: `Track ${label} Pattern`,
             instrument: "chord",
             steps,
             velocities,
@@ -229,6 +231,7 @@ export function Keyboard({
           const steps = Array(16).fill(0);
           const velocities = Array(16).fill(1);
           const pitches = Array(16).fill(0);
+          const label = (ts.length + 1).toString().padStart(2, "0");
           steps[stepIndex] = 1;
           velocities[stepIndex] = 1;
           pitches[stepIndex] = pitch;
@@ -236,11 +239,12 @@ export function Keyboard({
             ...ts,
             {
               id: tid,
-              name: "Keyboard",
+              name: label,
               instrument: "chord",
+              muted: false,
               pattern: {
                 id: `kb-${Date.now()}`,
-                name: "Keyboard",
+                name: `Track ${label} Pattern`,
                 instrument: "chord",
                 steps,
                 velocities,
@@ -260,10 +264,17 @@ export function Keyboard({
         }
         return ts.map((t) => {
           if (t.id !== tid) return t;
+          const label = /^\d+$/.test(t.name)
+            ? t.name
+            : (() => {
+                const index = ts.findIndex((candidate) => candidate.id === t.id);
+                const number = index >= 0 ? index + 1 : t.id;
+                return number.toString().padStart(2, "0");
+              })();
           const pattern =
             t.pattern ?? {
               id: `kb-${Date.now()}`,
-              name: "Keyboard",
+              name: `Track ${label} Pattern`,
               instrument: "chord",
               steps: Array(16).fill(0),
               velocities: Array(16).fill(1),

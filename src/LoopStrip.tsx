@@ -1,21 +1,70 @@
-import { useEffect, useRef, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { StepModal } from "./StepModal";
+import type { PatternGroup } from "./song";
+import { createPatternGroupId } from "./song";
 
-const instrumentColors: Record<string, string> = {
+const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
   snare: "#3498db",
   hat: "#f1c40f",
+  bass: "#1abc9c",
+  cowbell: "#ff9f1c",
   chord: "#2ecc71",
   arpeggiator: "#9b59b6",
 };
 
+const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";
+
+const getInstrumentColor = (instrument: string) =>
+  baseInstrumentColors[instrument] ?? FALLBACK_INSTRUMENT_COLOR;
+
+const formatInstrumentLabel = (value: string) =>
+  value
+    .split(/[-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
+  const index = tracks.findIndex((track) => track.id === trackId);
+  const number = index >= 0 ? index + 1 : trackId;
+  return number.toString().padStart(2, "0");
+};
+
+const formatPitchDisplay = (value: number) =>
+  value > 0 ? `+${value}` : value.toString();
+
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
+
+const cloneChunk = (chunk: Chunk): Chunk => ({
+  ...chunk,
+  steps: chunk.steps.slice(),
+  velocities: chunk.velocities ? chunk.velocities.slice() : undefined,
+  pitches: chunk.pitches ? chunk.pitches.slice() : undefined,
+  notes: chunk.notes ? chunk.notes.slice() : undefined,
+  degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
+});
+
+const cloneTrack = (track: Track): Track => ({
+  ...track,
+  pattern: track.pattern ? cloneChunk(track.pattern) : null,
+});
+
+type GroupEditorState =
+  | {
+      mode: "create";
+      name: string;
+    }
+  | {
+      mode: "edit";
+      groupId: string;
+      name: string;
+    };
 
 /**
  * Top strip visualizing a 16-step loop.
@@ -27,34 +76,123 @@ export function LoopStrip({
   started,
   isPlaying,
   tracks,
-  triggers,
   editing,
   setEditing,
   setTracks,
   packIndex,
   setPackIndex,
+  patternGroups,
+  setPatternGroups,
 }: {
   started: boolean;
   isPlaying: boolean;
   tracks: Track[];
-  triggers: TriggerMap;
   editing: number | null;
   setEditing: Dispatch<SetStateAction<number | null>>;
   setTracks: Dispatch<SetStateAction<Track[]>>;
   packIndex: number;
   setPackIndex: Dispatch<SetStateAction<number>>;
+  patternGroups: PatternGroup[];
+  setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
 }) {
   const [step, setStep] = useState(-1);
-  const [selectedChunk, setSelectedChunk] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [groupEditor, setGroupEditor] = useState<GroupEditorState | null>(null);
   const [stepEditing, setStepEditing] = useState<
-    { trackId: number; index: number | null } | null
+    { trackId: number; index: number } | null
   >(null);
+  const [detailTrackId, setDetailTrackId] = useState<number | null>(null);
+  const [pendingTrackIds, setPendingTrackIds] = useState<number[]>([]);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
+  const pack = packs[packIndex];
+  const instrumentOptions = Object.keys(pack.instruments);
+  const canAddTrack = instrumentOptions.length > 0;
+  const addTrackEnabled = canAddTrack && detailTrackId === null;
+  const selectedGroup = useMemo(() => {
+    if (!selectedGroupId) return null;
+    return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
+  }, [patternGroups, selectedGroupId]);
+
+  const getNextGroupName = (groups: PatternGroup[] = patternGroups) => {
+    const existingNames = new Set(
+      groups.map((group) => group.name.toLowerCase())
+    );
+    let index = 1;
+    while (true) {
+      const candidate = `sequence${String(index).padStart(2, "0")}`;
+      if (!existingNames.has(candidate.toLowerCase())) {
+        return candidate;
+      }
+      index += 1;
+    }
+  };
+
+  const captureCurrentTracks = () => tracks.map((track) => cloneTrack(track));
+
+  const applyGroupTracks = useCallback(
+    (group: PatternGroup | null) => {
+      const cloned = group ? group.tracks.map((track) => cloneTrack(track)) : [];
+      setTracks(cloned);
+      setPendingTrackIds([]);
+      setEditing(null);
+      setDetailTrackId(null);
+      setStepEditing(null);
+    },
+    [setTracks, setPendingTrackIds, setEditing, setDetailTrackId, setStepEditing]
+  );
+
+  const isCreatingGroup = groupEditor?.mode === "create";
+  const isEditingCurrentGroup =
+    groupEditor?.mode === "edit" && groupEditor.groupId === selectedGroupId;
 
   useEffect(() => {
-    setSelectedChunk("");
+    if (patternGroups.length === 0) {
+      setSelectedGroupId(null);
+      setGroupEditor(null);
+      applyGroupTracks(null);
+      return;
+    }
+    setSelectedGroupId((prev) => {
+      if (prev && patternGroups.some((group) => group.id === prev)) {
+        return prev;
+      }
+      const fallbackGroup = patternGroups[0] ?? null;
+      applyGroupTracks(fallbackGroup ?? null);
+      return fallbackGroup?.id ?? null;
+    });
+  }, [patternGroups, applyGroupTracks]);
+
+  useEffect(() => {
+    setGroupEditor(null);
   }, [packIndex]);
+
+  useEffect(() => {
+    if (!groupEditor) return;
+    if (groupEditor.mode === "edit") {
+      const exists = patternGroups.some(
+        (group) => group.id === groupEditor.groupId
+      );
+      if (!exists) {
+        setGroupEditor(null);
+      }
+    }
+  }, [groupEditor, patternGroups]);
+
+  useEffect(() => {
+    if (detailTrackId === null) return;
+    if (!tracks.some((track) => track.id === detailTrackId)) {
+      setDetailTrackId(null);
+    }
+  }, [detailTrackId, tracks]);
+
+  useEffect(() => {
+    setPendingTrackIds((ids) => {
+      const activeIds = new Set(tracks.map((track) => track.id));
+      const filtered = ids.filter((id) => activeIds.has(id));
+      return filtered.length === ids.length ? ids : filtered;
+    });
+  }, [tracks]);
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
@@ -77,17 +215,271 @@ export function LoopStrip({
   }, [isPlaying]);
 
   const addPattern = (trackId: number) => {
-    const pack = packs[packIndex];
-    const track = tracks.find((t) => t.id === trackId);
-    if (!pack || !track) return;
-    const chunk = pack.chunks.find((c) => c.instrument === track.instrument);
-    if (!chunk) return;
+    let created = false;
+    setTracks((ts) =>
+      ts.map((t) => {
+        if (t.id !== trackId) return t;
+        if (!t.instrument) return t;
+        const label = getTrackNumberLabel(ts, trackId);
+        created = true;
+        return {
+          ...t,
+          pattern: {
+            id: `track-${trackId}-${Date.now()}`,
+            name: `Track ${label} Pattern`,
+            instrument: t.instrument,
+            steps: Array(16).fill(0),
+            velocities: Array(16).fill(1),
+            pitches: Array(16).fill(0),
+          },
+        };
+      })
+    );
+    if (created) {
+      setEditing(trackId);
+    }
+  };
+
+  const handleAddTrack = () => {
+    if (!addTrackEnabled) return;
+    let createdId: number | null = null;
+    setTracks((ts) => {
+      const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+      const label = (ts.length + 1).toString().padStart(2, "0");
+      createdId = nextId;
+      return [
+        ...ts,
+        {
+          id: nextId,
+          name: label,
+          instrument: "",
+          pattern: null,
+          muted: false,
+        },
+      ];
+    });
+    if (createdId !== null) {
+      const newId = createdId;
+      setPendingTrackIds((ids) => [...ids, newId]);
+      setEditing(newId);
+      setDetailTrackId(newId);
+    }
+  };
+
+  const handleToggleMute = (trackId: number) => {
     setTracks((ts) =>
       ts.map((t) =>
-        t.id === trackId ? { ...t, pattern: { ...chunk } } : t
+        t.id === trackId
+          ? {
+              ...t,
+              muted: !t.muted,
+            }
+          : t
       )
     );
+  };
+
+  const showTrackDetails = (trackId: number) => {
+    setDetailTrackId(trackId);
     setEditing(trackId);
+  };
+
+  const handleInstrumentChange = (trackId: number, value: string) => {
+    setTracks((ts) =>
+      ts.map((t) => {
+        if (t.id !== trackId) return t;
+        if (!value) {
+          return {
+            ...t,
+            instrument: "",
+          };
+        }
+        const instrument = value as keyof TriggerMap;
+        const pattern = t.pattern
+          ? { ...t.pattern, instrument }
+          : t.pattern;
+        return {
+          ...t,
+          instrument,
+          pattern,
+        };
+      })
+    );
+  };
+
+  const handlePresetLoad = (trackId: number, chunkId: string) => {
+    if (!chunkId) return;
+    const chunk = pack.chunks.find((c) => c.id === chunkId);
+    if (!chunk) return;
+    loadChunk(chunk, trackId);
+  };
+
+  const hideTrackDetails = () => setDetailTrackId(null);
+
+  const removeTrack = (trackId: number) => {
+    setTracks((ts) => ts.filter((t) => t.id !== trackId));
+    setPendingTrackIds((ids) => {
+      if (!ids.includes(trackId)) return ids;
+      return ids.filter((id) => id !== trackId);
+    });
+    setEditing((current) => (current === trackId ? null : current));
+    setDetailTrackId((current) => (current === trackId ? null : current));
+    setStepEditing((current) =>
+      current && current.trackId === trackId ? null : current
+    );
+  };
+
+  const handleCancelNewTrack = (trackId: number) => {
+    removeTrack(trackId);
+  };
+
+  const handleDeleteTrack = (trackId: number) => {
+    removeTrack(trackId);
+  };
+
+  const handleCompleteTrack = (trackId: number) => {
+    setPendingTrackIds((ids) => {
+      if (!ids.includes(trackId)) return ids;
+      return ids.filter((id) => id !== trackId);
+    });
+    hideTrackDetails();
+  };
+
+  const openCreateGroup = () => {
+    setGroupEditor({
+      mode: "create",
+      name: getNextGroupName(),
+    });
+  };
+
+  const openEditGroup = () => {
+    if (!selectedGroup) return;
+    setGroupEditor({
+      mode: "edit",
+      groupId: selectedGroup.id,
+      name: selectedGroup.name,
+    });
+  };
+
+  const handleEditorNameChange = (value: string) => {
+    setGroupEditor((state) => (state ? { ...state, name: value } : state));
+  };
+
+  const handleSaveGroup = () => {
+    if (!groupEditor) return;
+    if (groupEditor.mode === "edit") {
+      setPatternGroups((groups) =>
+        groups.map((group) => {
+          if (group.id !== groupEditor.groupId) return group;
+          const trimmed = groupEditor.name.trim();
+          return {
+            ...group,
+            name: trimmed || group.name,
+          };
+        })
+      );
+      setGroupEditor(null);
+      return;
+    }
+    const newId = createPatternGroupId();
+    const trimmed = groupEditor.name.trim();
+    let created: PatternGroup | null = null;
+    setPatternGroups((groups) => {
+      const name = trimmed || getNextGroupName(groups);
+      created = {
+        id: newId,
+        name,
+        tracks: [],
+      };
+      return [...groups, created];
+    });
+    if (created) {
+      setSelectedGroupId(newId);
+      applyGroupTracks(created);
+    } else {
+      setSelectedGroupId(newId);
+      applyGroupTracks(null);
+    }
+    setGroupEditor(null);
+  };
+
+  const handleDuplicateGroup = () => {
+    if (!selectedGroupId) return;
+    let created: PatternGroup | null = null;
+    const newId = createPatternGroupId();
+    setPatternGroups((groups) => {
+      const source = groups.find((group) => group.id === selectedGroupId);
+      if (!source) return groups;
+      const existingNames = new Set(
+        groups.map((group) => group.name.toLowerCase())
+      );
+      let candidate = `${source.name} copy`;
+      let suffix = 2;
+      while (existingNames.has(candidate.toLowerCase())) {
+        candidate = `${source.name} copy ${suffix}`;
+        suffix += 1;
+      }
+      const duplicatedTracks =
+        source.id === selectedGroupId
+          ? captureCurrentTracks()
+          : source.tracks.map((track) => cloneTrack(track));
+      created = {
+        id: newId,
+        name: candidate,
+        tracks: duplicatedTracks,
+      };
+      return [...groups, created];
+    });
+    if (created) {
+      setSelectedGroupId(newId);
+      applyGroupTracks(created);
+    }
+    setGroupEditor(null);
+  };
+
+  const handleSnapshotSelectedGroup = () => {
+    if (!selectedGroupId) return;
+    setPatternGroups((groups) =>
+      groups.map((group) => {
+        if (group.id !== selectedGroupId) return group;
+        return {
+          ...group,
+          tracks: captureCurrentTracks(),
+        };
+      })
+    );
+  };
+
+  const handleDeleteGroup = () => {
+    if (!selectedGroupId) return;
+    if (patternGroups.length <= 1) return;
+    setPatternGroups((groups) => {
+      const filtered = groups.filter((group) => group.id !== selectedGroupId);
+      if (filtered.length === 0) {
+        const fallbackGroup: PatternGroup = {
+          id: createPatternGroupId(),
+          name: getNextGroupName([]),
+          tracks: [],
+        };
+        setSelectedGroupId(fallbackGroup.id);
+        applyGroupTracks(fallbackGroup);
+        return [fallbackGroup];
+      }
+      const nextGroup = filtered[0] ?? null;
+      if (nextGroup) {
+        setSelectedGroupId(nextGroup.id);
+        applyGroupTracks(nextGroup);
+      } else {
+        setSelectedGroupId(null);
+        applyGroupTracks(null);
+      }
+      return filtered;
+    });
+    setGroupEditor(null);
+  };
+
+  const handleCancelGroupEdit = () => {
+    setGroupEditor(null);
   };
 
   const updatePattern = (trackId: number, steps: number[]) => {
@@ -153,30 +545,23 @@ export function LoopStrip({
   };
 
 
-  const loadChunk = (chunk: Chunk) => {
+  const loadChunk = (chunk: Chunk, targetTrackId: number) => {
     setTracks((ts) => {
-      const existing = ts.find((t) => t.instrument === chunk.instrument);
-      if (existing) {
-        const updated = ts.map((t) =>
-          t.instrument === chunk.instrument
-            ? { ...t, name: chunk.name, pattern: { ...chunk } }
-            : t
-        );
-        setEditing(existing.id);
-        return updated;
-      }
-      const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
-      setEditing(nextId);
-      return [
-        ...ts,
-        {
-          id: nextId,
-          name: chunk.name,
-          instrument: chunk.instrument as keyof TriggerMap,
-          pattern: { ...chunk },
-        },
-      ];
+      const exists = ts.some((t) => t.id === targetTrackId);
+      if (!exists) return ts;
+      return ts.map((t) =>
+        t.id === targetTrackId
+          ? {
+              ...t,
+              name: chunk.name,
+              instrument: chunk.instrument as keyof TriggerMap,
+              pattern: { ...chunk },
+            }
+          : t
+      );
     });
+    setEditing(targetTrackId);
+    setDetailTrackId(targetTrackId);
   };
 
   return (
@@ -193,49 +578,214 @@ export function LoopStrip({
         overflow: "hidden",
       }}
     >
-      <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-        {packs.map((p, i) => (
-          <button
-            key={p.id}
-            onClick={() => setPackIndex(i)}
-            style={{
-              flex: 1,
-              padding: 4,
-              borderRadius: 4,
-              background: i === packIndex ? "#27E0B0" : "#121827",
-              color: i === packIndex ? "#1F2532" : "white",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            {p.name}
-          </button>
-        ))}
-      </div>
       <div style={{ marginBottom: 4 }}>
         <select
-          value={selectedChunk}
-          onChange={(e) => {
-            const id = e.target.value;
-            setSelectedChunk("");
-            const chunk = packs[packIndex].chunks.find((c) => c.id === id);
-            if (chunk) loadChunk(chunk);
-          }}
+          value={packIndex}
+          onChange={(event) => setPackIndex(Number(event.target.value))}
           style={{
+            width: "100%",
             padding: 4,
             borderRadius: 4,
             background: "#121827",
             color: "white",
-            width: "100%",
+            border: "1px solid #333",
           }}
         >
-          <option value="">Load preset…</option>
-          {packs[packIndex].chunks.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+          {packs.map((p, i) => (
+            <option key={p.id} value={i}>
+              {p.name}
             </option>
           ))}
         </select>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+          marginBottom: 12,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: "1 1 auto",
+            minWidth: 0,
+          }}
+        >
+          <button
+            type="button"
+            onClick={openCreateGroup}
+            aria-label="Create new sequence"
+            title="Create new sequence"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: isCreatingGroup ? "#27E0B0" : "#1f2532",
+              color: isCreatingGroup ? "#1F2532" : "#e6f2ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 20 }}
+            >
+              add
+            </span>
+          </button>
+          <select
+            aria-label="Current sequence"
+            value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSelectedGroupId(value || null);
+              setGroupEditor(null);
+              const targetGroup =
+                patternGroups.find((group) => group.id === value) ?? null;
+              applyGroupTracks(targetGroup ?? null);
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: 6,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color: "#e6f2ff",
+            }}
+          >
+            {patternGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleSnapshotSelectedGroup}
+            disabled={!selectedGroup}
+            aria-label="Save sequence"
+            title="Save sequence"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: selectedGroup ? "#27E0B0" : "#1f2532",
+              color: selectedGroup ? "#1F2532" : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: selectedGroup ? "pointer" : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              save
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={openEditGroup}
+            disabled={!selectedGroup}
+            aria-label="Edit sequence"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: isEditingCurrentGroup ? "#27E0B0" : "#1f2532",
+              color: selectedGroup
+                ? isEditingCurrentGroup
+                  ? "#1F2532"
+                  : "#e6f2ff"
+                : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: selectedGroup ? "pointer" : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              edit
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDuplicateGroup}
+            disabled={!selectedGroup}
+            aria-label="Duplicate sequence"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color: selectedGroup ? "#e6f2ff" : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: selectedGroup ? "pointer" : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              content_copy
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteGroup}
+            disabled={!selectedGroup || patternGroups.length <= 1}
+            aria-label="Delete sequence"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color:
+                selectedGroup && patternGroups.length > 1
+                  ? "#e6f2ff"
+                  : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor:
+                selectedGroup && patternGroups.length > 1
+                  ? "pointer"
+                  : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              delete
+            </span>
+          </button>
+        </div>
       </div>
       <div
         ref={trackAreaRef}
@@ -250,215 +800,660 @@ export function LoopStrip({
           minHeight: 0,
         }}
       >
+        {tracks.length === 0 && (
+          <div
+            style={{
+              padding: 16,
+              textAlign: "center",
+              fontSize: 12,
+              color: "#94a3b8",
+            }}
+          >
+            Tap “Add Track” to start building your loop.
+          </div>
+        )}
         {tracks.map((t) => {
           let labelTimer: number | null = null;
-          const handleLabelPointerDown = () => {
-            if (editing !== t.id) return;
+          let longPressTriggered = false;
+          const color = getInstrumentColor(t.instrument);
+          const isMuted = t.muted;
+          const isEditing = editing === t.id;
+          const isPending = pendingTrackIds.includes(t.id);
+          const trackLabel = getTrackNumberLabel(tracks, t.id);
+          const velocityValue = t.pattern?.velocities?.[0] ?? 1;
+          const pitchValue = t.pattern?.pitches?.[0] ?? 0;
+
+          const handleLabelPointerDown = (
+            event: ReactPointerEvent<HTMLDivElement>
+          ) => {
+            event.stopPropagation();
+            longPressTriggered = false;
+            if (labelTimer) window.clearTimeout(labelTimer);
             labelTimer = window.setTimeout(() => {
-              setStepEditing({ trackId: t.id, index: null });
+              longPressTriggered = true;
+              showTrackDetails(t.id);
             }, 500);
           };
-          const clearLabelTimer = () => {
+
+          const handleLabelPointerUp = (
+            event: ReactPointerEvent<HTMLDivElement>
+          ) => {
+            event.stopPropagation();
+            if (labelTimer) window.clearTimeout(labelTimer);
+            labelTimer = null;
+            if (longPressTriggered) return;
+            handleToggleMute(t.id);
+          };
+
+          const handleLabelPointerLeave = () => {
             if (labelTimer) window.clearTimeout(labelTimer);
             labelTimer = null;
           };
+
           return (
             <div
               key={t.id}
-              onPointerDown={(e) => {
-                swipeRef.current = e.clientX;
-              }}
-              onPointerUp={(e) => {
-                const dx = e.clientX - swipeRef.current;
-                if (editing === t.id && dx > 50) {
-                  setEditing(null);
-                } else if (editing === null && t.pattern && Math.abs(dx) < 10) {
-                  setEditing(t.id);
-                }
-              }}
-              style={{
-                display: "flex",
-                height: ROW_HEIGHT,
-                minHeight: ROW_HEIGHT,
-                flex: "none",
-                boxSizing: "border-box",
-                cursor: t.pattern ? "pointer" : "default",
-                opacity: editing !== null && editing !== t.id ? 0.3 : 1,
-                border: editing === t.id ? "2px solid #27E0B0" : "1px solid #555",
-                pointerEvents: editing !== null && editing !== t.id ? "none" : "auto",
-              }}
+              style={{ display: "flex", flexDirection: "column", gap: 8 }}
             >
               <div
-                onPointerDown={handleLabelPointerDown}
-                onPointerUp={clearLabelTimer}
-                onPointerLeave={clearLabelTimer}
+                onPointerDown={(event) => {
+                  swipeRef.current = event.clientX;
+                }}
+                onPointerUp={(event) => {
+                  const dx = event.clientX - swipeRef.current;
+                  if (isEditing && dx > 50) {
+                    setEditing(null);
+                  } else if (!isEditing && Math.abs(dx) < 10) {
+                    setEditing(t.id);
+                  }
+                }}
                 style={{
-                  width: LABEL_WIDTH,
-                  borderRight: "1px solid #555",
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontSize: 12,
+                  height: ROW_HEIGHT,
+                  minHeight: ROW_HEIGHT,
+                  flex: "none",
+                  boxSizing: "border-box",
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  border: isEditing ? "2px solid #27E0B0" : "1px solid #555",
+                  background: "#111827",
+                  opacity: editing !== null && !isEditing ? 0.4 : 1,
+                  pointerEvents:
+                    editing !== null && !isEditing ? "none" : "auto",
+                  transition: "opacity 0.2s ease, border 0.2s ease",
                 }}
               >
-                {t.name}
-              </div>
-              <div style={{ flex: 1 }}>
-                {t.pattern ? (
-                  editing === t.id ? (
-                    <PatternEditor
-                      steps={t.pattern.steps}
-                      onToggle={(i) => {
-                        const next = t.pattern!.steps.slice();
-                        next[i] = next[i] ? 0 : 1;
-                        updatePattern(t.id, next);
-                      }}
-                      onStepLongPress={(i) =>
-                        setStepEditing({ trackId: t.id, index: i })
-                      }
-                      color={instrumentColors[t.instrument]}
-                      currentStep={step}
-                    />
+                <div
+                  onPointerDown={handleLabelPointerDown}
+                  onPointerUp={handleLabelPointerUp}
+                  onPointerLeave={handleLabelPointerLeave}
+                  style={{
+                    width: LABEL_WIDTH,
+                    borderRight: "1px solid #333",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.6,
+                    userSelect: "none",
+                    background: isMuted ? "#1b2332" : color,
+                    color: isMuted ? "#94a3b8" : "#0f1420",
+                    cursor: "pointer",
+                    transition: "background 0.2s ease, color 0.2s ease",
+                  }}
+                  title={isMuted ? "Unmute track" : "Mute track"}
+                >
+                  {trackLabel}
+                </div>
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "0 8px",
+                    background: "#161d2b",
+                    position: "relative",
+                    overflow: "hidden",
+                    opacity: isMuted ? 0.3 : 1,
+                    filter: isMuted ? "grayscale(0.7)" : "none",
+                    transition: "opacity 0.2s ease, filter 0.2s ease",
+                  }}
+                >
+                  {t.pattern ? (
+                    isEditing ? (
+                      <PatternEditor
+                        steps={t.pattern.steps}
+                        onToggle={(i) => {
+                          const next = t.pattern!.steps.slice();
+                          next[i] = next[i] ? 0 : 1;
+                          updatePattern(t.id, next);
+                        }}
+                        onStepLongPress={(i) =>
+                          setStepEditing({ trackId: t.id, index: i })
+                        }
+                        color={color}
+                        currentStep={step}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(16, 1fr)",
+                          gap: 2,
+                          width: "100%",
+                          height: "100%",
+                        }}
+                      >
+                        {Array.from({ length: 16 }).map((_, i) => {
+                          const active = t.pattern?.steps[i] ?? 0;
+                          const playing = step === i && active;
+                          return (
+                            <div
+                              key={i}
+                              style={{
+                                border: "1px solid #555",
+                                background: active ? color : "#1f2532",
+                                opacity: active ? 1 : 0.2,
+                                boxShadow: playing
+                                  ? `0 0 6px ${color}`
+                                  : "none",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    )
                   ) : (
-                    <div
+                    <button
+                      onClick={() => addPattern(t.id)}
+                      disabled={!t.instrument}
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(16, 1fr)",
-                        gap: 2,
+                        width: "100%",
                         height: "100%",
+                        borderRadius: 6,
+                        border: t.instrument
+                          ? "1px dashed #3b4252"
+                          : "1px dashed #242c3c",
+                        background: t.instrument ? "#1d2432" : "#161b27",
+                        color: t.instrument ? "#e6f2ff" : "#475569",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.4,
+                        fontWeight: 600,
+                        cursor: t.instrument ? "pointer" : "not-allowed",
                       }}
                     >
-                      {Array.from({ length: 16 }).map((_, i) => {
-                        const active = t.pattern?.steps[i] ?? 0;
-                        const playing = step === i && active;
-                        return (
-                          <div
-                            key={i}
-                            style={{
-                              border: "1px solid #555",
-                              background: active
-                                ? instrumentColors[t.instrument]
-                                : "#1f2532",
-                              opacity: active ? 1 : 0.2,
-                              boxShadow: playing
-                                ? `0 0 6px ${instrumentColors[t.instrument]}`
-                                : "none",
-                            }}
-                          />
-                        );
-                      })}
+                      New Pattern
+                    </button>
+                  )}
+                  {detailTrackId === t.id && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        zIndex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        padding: "8px 12px",
+                        gap: 12,
+                        background: "rgba(17, 24, 39, 0.95)",
+                        border: "1px solid #2a3344",
+                        borderRadius: 6,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 12,
+                          width: "100%",
+                          flexWrap: "nowrap",
+                          alignItems: "center",
+                        }}
+                      >
+                        <select
+                          value={t.instrument}
+                          onChange={(event) =>
+                            handleInstrumentChange(t.id, event.target.value)
+                          }
+                          aria-label="Select instrument"
+                          style={{
+                            flex: "1 1 0%",
+                            minWidth: 0,
+                            padding: 6,
+                            borderRadius: 6,
+                            border: "1px solid #333",
+                            background: "#1f2532",
+                            color: t.instrument ? "#e6f2ff" : "#64748b",
+                          }}
+                        >
+                          <option value="" disabled>
+                            Select instrument
+                          </option>
+                          {instrumentOptions.map((instrument) => (
+                            <option key={instrument} value={instrument}>
+                              {formatInstrumentLabel(instrument)}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value=""
+                          onChange={(event) =>
+                            handlePresetLoad(t.id, event.target.value)
+                          }
+                          aria-label="Preset (optional)"
+                          disabled={!t.instrument}
+                          style={{
+                            flex: "1 1 0%",
+                            minWidth: 0,
+                            padding: 6,
+                            borderRadius: 6,
+                            border: "1px solid #333",
+                            background: "#1f2532",
+                            color: t.instrument ? "#e6f2ff" : "#475569",
+                            opacity: t.instrument ? 1 : 0.5,
+                          }}
+                        >
+                          <option value="">Preset (optional)</option>
+                          {pack.chunks
+                            .filter((chunk) => chunk.instrument === t.instrument)
+                            .map((chunk) => (
+                              <option key={chunk.id} value={chunk.id}>
+                                {chunk.name}
+                              </option>
+                            ))}
+                        </select>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {isPending ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelNewTrack(t.id)}
+                                aria-label="Cancel new track"
+                                title="Cancel new track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: "#1f2532",
+                                  color: "#e6f2ff",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  close
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCompleteTrack(t.id)}
+                                disabled={!t.instrument}
+                                aria-label="Done editing track"
+                                title="Done editing track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: t.instrument ? "#27E0B0" : "#1f2532",
+                                  color: t.instrument ? "#0f1420" : "#475569",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: t.instrument ? "pointer" : "not-allowed",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  check
+                                </span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleCompleteTrack(t.id)}
+                                aria-label="Done editing track"
+                                title="Done editing track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: "#27E0B0",
+                                  color: "#0f1420",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  check
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTrack(t.id)}
+                                aria-label="Delete track"
+                                title="Delete track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: "#1f2532",
+                                  color: "#f87171",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  delete
+                                </span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )
-                ) : (
-                  <button
-                    onClick={() => addPattern(t.id)}
+                  )}
+                </div>
+              </div>
+              {detailTrackId === t.id && (
+                <div
+                  style={{
+                    marginLeft: LABEL_WIDTH,
+                    marginTop: 6,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  <div
                     style={{
-                      width: "100%",
-                      height: "100%",
-                      background: "#2a2f3a",
-                      color: "white",
-                      border: "none",
-                      cursor: "pointer",
+                      padding: 12,
+                      background: "rgba(15, 21, 34, 0.95)",
+                      borderRadius: 8,
+                      border: "1px solid #333",
+                      boxShadow: "0 8px 18px rgba(8, 12, 20, 0.6)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
                     }}
                   >
-                    Add Pattern
-                  </button>
-                )}
-                {t.pattern && (
-                  <PatternPlayer
-                    pattern={t.pattern}
-                    trigger={triggers[t.instrument]}
-                    started={started}
-                  />
-                )}
-              </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        alignItems: "center",
+                      }}
+                    >
+                      <label
+                        style={{
+                          flex: "1 1 260px",
+                          minWidth: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12,
+                          color: t.pattern ? "#94a3b8" : "#475569",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 18 }}
+                          aria-hidden="true"
+                        >
+                          speed
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={velocityValue}
+                          onChange={(event) =>
+                            updatePatternControls(t.id, {
+                              velocity: Number(event.target.value),
+                            })
+                          }
+                          style={{
+                            flex: 1,
+                            opacity: t.pattern ? 1 : 0.4,
+                            cursor: t.pattern ? "pointer" : "not-allowed",
+                          }}
+                          aria-label="Velocity"
+                          title="Velocity"
+                          disabled={!t.pattern}
+                        />
+                        <span
+                          style={{
+                            width: 48,
+                            textAlign: "right",
+                            color: t.pattern ? "#94a3b8" : "#475569",
+                          }}
+                        >
+                          {velocityValue.toFixed(2)}
+                        </span>
+                      </label>
+                      <label
+                        style={{
+                          flex: "1 1 260px",
+                          minWidth: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12,
+                          color: t.pattern ? "#94a3b8" : "#475569",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 18 }}
+                          aria-hidden="true"
+                        >
+                          music_note
+                        </span>
+                        <input
+                          type="range"
+                          min={-12}
+                          max={12}
+                          step={1}
+                          value={pitchValue}
+                          onChange={(event) =>
+                            updatePatternControls(t.id, {
+                              pitch: Number(event.target.value),
+                            })
+                          }
+                          style={{
+                            flex: 1,
+                            opacity: t.pattern ? 1 : 0.4,
+                            cursor: t.pattern ? "pointer" : "not-allowed",
+                          }}
+                          aria-label="Pitch"
+                          title="Pitch"
+                          disabled={!t.pattern}
+                        />
+                        <span
+                          style={{
+                            width: 48,
+                            textAlign: "right",
+                            color: t.pattern ? "#94a3b8" : "#475569",
+                          }}
+                        >
+                          {formatPitchDisplay(pitchValue)}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
+        <div>
+          <button
+            type="button"
+            onClick={handleAddTrack}
+            disabled={!addTrackEnabled}
+            style={{
+              width: "100%",
+              height: ROW_HEIGHT,
+              borderRadius: 6,
+              border: addTrackEnabled
+                ? "1px dashed #3b4252"
+                : "1px dashed #242c3c",
+              background: addTrackEnabled ? "#141924" : "#161b27",
+              color: addTrackEnabled ? "#e6f2ff" : "#475569",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+              fontWeight: 600,
+              cursor: addTrackEnabled ? "pointer" : "not-allowed",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              add
+            </span>
+            Add Track
+          </button>
+        </div>
       </div>
+      {groupEditor ? (
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <input
+            value={groupEditor.name}
+            onChange={(event) => handleEditorNameChange(event.target.value)}
+            placeholder={getNextGroupName()}
+            style={{
+              padding: 6,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color: "#e6f2ff",
+            }}
+          />
+          <span style={{ fontSize: 12, color: "#94a3b8" }}>
+            {groupEditor.mode === "create"
+              ? "New sequences start blank. Name it to keep things organized."
+              : "Rename this sequence."}
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={handleSaveGroup}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #333",
+                background: "#27E0B0",
+                color: "#1F2532",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {groupEditor.mode === "create"
+                ? "Create New Sequence"
+                : "Save Changes"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelGroupEdit}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #333",
+                background: "#1f2532",
+                color: "#e6f2ff",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : selectedGroup ? (
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            color: "#94a3b8",
+          }}
+        >
+          {selectedGroup.tracks.length === 0
+            ? "No saved tracks yet. Tap Save Sequence to capture the current loop."
+            : `${selectedGroup.tracks.length} saved track${
+                selectedGroup.tracks.length === 1 ? "" : "s"
+              } including mute states.`}
+        </div>
+      ) : (
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            color: "#94a3b8",
+          }}
+        >
+          Create a sequence to capture the current track mix.
+        </div>
+      )}
       {stepEditing && (() => {
         const track = tracks.find((tr) => tr.id === stepEditing.trackId);
         if (!track || !track.pattern) return null;
         const velocity =
-          stepEditing.index === null
-            ? track.pattern.velocities?.[0] ?? 1
-            : track.pattern.velocities?.[stepEditing.index] ?? 1;
-        const pitch =
-          stepEditing.index === null
-            ? track.pattern.pitches?.[0] ?? 0
-            : track.pattern.pitches?.[stepEditing.index] ?? 0;
-        const onChange = (p: { velocity?: number; pitch?: number }) => {
-          if (stepEditing.index === null) {
-            updatePatternControls(track.id, p);
-          } else {
-            updateStep(track.id, stepEditing.index, p);
-          }
-        };
+          track.pattern.velocities?.[stepEditing.index] ?? 1;
+        const pitch = track.pattern.pitches?.[stepEditing.index] ?? 0;
         return (
           <StepModal
             velocity={velocity}
             pitch={pitch}
-            onChange={onChange}
+            onChange={(p) => updateStep(track.id, stepEditing.index, p)}
             onClose={() => setStepEditing(null)}
           />
         );
       })()}
     </div>
   );
-}
-
-function PatternPlayer({
-  pattern,
-  trigger,
-  started,
-}: {
-  pattern: Chunk;
-  trigger: (
-    time: number,
-    velocity?: number,
-    pitch?: number,
-    note?: string,
-    sustain?: number,
-    chunk?: Chunk
-  ) => void;
-  started: boolean;
-}) {
-  useEffect(() => {
-    if (!started) return;
-    const seq = new Tone.Sequence(
-      (time, index: number) => {
-        const active = pattern.steps[index] ?? 0;
-        if (active) {
-          const velocity = pattern.velocities?.[index];
-          const pitch = pattern.pitches?.[index];
-          trigger(time, velocity, pitch, pattern.note, pattern.sustain, pattern);
-        }
-      },
-      Array.from({ length: 16 }, (_, i) => i),
-      "16n"
-    ).start(0);
-    return () => {
-      seq.dispose();
-    };
-  }, [
-    pattern.steps,
-    pattern.velocities,
-    pattern.pitches,
-    pattern.note,
-    pattern.sustain,
-    pattern.attack,
-    pattern.glide,
-    pattern.pan,
-    pattern.reverb,
-    pattern.delay,
-    pattern.distortion,
-    pattern.bitcrusher,
-    trigger,
-    started,
-    pattern,
-  ]);
-  return null;
 }
 
 function PatternEditor({
@@ -480,8 +1475,10 @@ function PatternEditor({
   return (
     <div
       style={{
+        flex: 1,
+        width: "100%",
         display: "grid",
-        gridTemplateColumns: "repeat(16, 1fr)",
+        gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
         gap: 2,
         height: "100%",
       }}

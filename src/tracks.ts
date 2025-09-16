@@ -12,9 +12,12 @@ export type TriggerMap = Record<
   ) => void
 >;
 
+export type TrackInstrument = keyof TriggerMap | "";
+
 export interface Track {
   id: number;
   name: string;
-  instrument: keyof TriggerMap;
+  instrument: TrackInstrument;
   pattern: Chunk | null;
+  muted: boolean;
 }

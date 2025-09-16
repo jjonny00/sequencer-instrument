@@ -7,6 +7,16 @@ import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
+import { SongView } from "./SongView";
+import { PatternPlaybackManager } from "./PatternPlaybackManager";
+import type { PatternGroup, SongRow } from "./song";
+import { createPatternGroupId, createSongRow } from "./song";
+
+const createInitialPatternGroup = (): PatternGroup => ({
+  id: createPatternGroupId(),
+  name: "sequence01",
+  tracks: [],
+});
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -39,6 +49,14 @@ export default function App() {
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
   const [tab, setTab] = useState<"mushy" | "keyboard">("mushy");
+  const [viewMode, setViewMode] = useState<"track" | "song">("track");
+  const [patternGroups, setPatternGroups] = useState<PatternGroup[]>(() => [
+    createInitialPatternGroup(),
+  ]);
+  const [songRows, setSongRows] = useState<SongRow[]>([
+    createSongRow(),
+  ]);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -46,15 +64,23 @@ export default function App() {
 
   useEffect(() => {
     const pack = packs[packIndex];
-    setTracks(
-      Object.keys(pack.instruments).map((name, i) => ({
-        id: i + 1,
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        instrument: name as keyof TriggerMap,
-        pattern: null,
-      }))
-    );
+    setTracks((prev) => {
+      const allowed = new Set([
+        ...Object.keys(pack.instruments),
+        "chord",
+        "arpeggiator",
+      ]);
+      const filtered = prev.filter((track) => {
+        if (!track.instrument) return true;
+        return allowed.has(track.instrument);
+      });
+      return filtered.length === prev.length ? prev : filtered;
+    });
     setEditing(null);
+    const initialGroup = createInitialPatternGroup();
+    setPatternGroups([initialGroup]);
+    setSongRows([createSongRow()]);
+    setCurrentSectionIndex(0);
     if (!started) return;
     Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
     instrumentRefs.current = {};
@@ -150,6 +176,84 @@ export default function App() {
     setTriggers(newTriggers);
   }, [packIndex, started]);
 
+  useEffect(() => {
+    setSongRows((rows) => {
+      const groupIds = new Set(patternGroups.map((group) => group.id));
+      let changed = false;
+      const next = rows.map((row) => {
+        const updatedSlots = row.slots.map((groupId) =>
+          groupId && groupIds.has(groupId) ? groupId : null
+        );
+        const slotsChanged = updatedSlots.some(
+          (value, index) => value !== row.slots[index]
+        );
+        if (slotsChanged) {
+          changed = true;
+          return { ...row, slots: updatedSlots };
+        }
+        return row;
+      });
+      return changed ? next : rows;
+    });
+  }, [patternGroups]);
+
+  useEffect(() => {
+    setEditing((prev) => {
+      if (prev === null) return prev;
+      return tracks.some((track) => track.id === prev) ? prev : null;
+    });
+  }, [tracks]);
+
+  useEffect(() => {
+    setCurrentSectionIndex((prev) => {
+      const maxColumns = songRows.reduce(
+        (max, row) => Math.max(max, row.slots.length),
+        0
+      );
+      if (maxColumns === 0) return 0;
+      return prev >= maxColumns ? maxColumns - 1 : prev;
+    });
+  }, [songRows]);
+
+  useEffect(() => {
+    if (!started || viewMode !== "song") return;
+    const maxColumns = songRows.reduce(
+      (max, row) => Math.max(max, row.slots.length),
+      0
+    );
+    if (maxColumns === 0) return;
+
+    const ticksPerSection = Tone.Time("1m").toTicks();
+    if (ticksPerSection === 0) return;
+
+    const applySectionFromTicks = (ticks: number) => {
+      const nextSection =
+        Math.floor(ticks / ticksPerSection) % Math.max(maxColumns, 1);
+      setCurrentSectionIndex((prev) =>
+        prev === nextSection ? prev : nextSection
+      );
+    };
+
+    applySectionFromTicks(Tone.Transport.ticks);
+
+    const id = Tone.Transport.scheduleRepeat((time) => {
+      const ticks = Tone.Transport.getTicksAtTime(time);
+      Tone.Draw.schedule(() => {
+        applySectionFromTicks(ticks);
+      }, time);
+    }, "1m");
+
+    return () => {
+      Tone.Transport.clear(id);
+    };
+  }, [started, viewMode, songRows]);
+
+  useEffect(() => {
+    if (viewMode === "song") {
+      setCurrentSectionIndex(0);
+    }
+  }, [viewMode]);
+
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
     const synth = new Tone.PolySynth(Tone.Synth, {
@@ -175,6 +279,26 @@ export default function App() {
     Tone.Transport.start(); // start clock; we’ll schedule to it
     setStarted(true);
     setIsPlaying(true);
+    setCurrentSectionIndex(0);
+  };
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      Tone.Transport.pause();
+      setIsPlaying(false);
+      return;
+    }
+    if (Tone.Transport.state === "stopped") {
+      setCurrentSectionIndex(0);
+    }
+    Tone.Transport.start();
+    setIsPlaying(true);
+  };
+
+  const handleStop = () => {
+    Tone.Transport.stop();
+    setIsPlaying(false);
+    setCurrentSectionIndex(0);
   };
 
   return (
@@ -209,219 +333,281 @@ export default function App() {
         </div>
       ) : (
         <>
-          <LoopStrip
-            started={started}
-            isPlaying={isPlaying}
+          <div
+            style={{
+              padding: "16px 16px 0",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+              }}
+            >
+              <button
+                onClick={() => setViewMode("track")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: viewMode === "track" ? "#27E0B0" : "#1f2532",
+                  color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
+                }}
+              >
+                Tracks
+              </button>
+              <button
+                onClick={() => {
+                  setEditing(null);
+                  setViewMode("song");
+                }}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: viewMode === "song" ? "#27E0B0" : "#1f2532",
+                  color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
+                }}
+              >
+                Song
+              </button>
+            </div>
+          </div>
+          {viewMode === "track" && (
+            <LoopStrip
+              started={started}
+              isPlaying={isPlaying}
+              tracks={tracks}
+              editing={editing}
+              setEditing={setEditing}
+              setTracks={setTracks}
+              packIndex={packIndex}
+              setPackIndex={setPackIndex}
+              patternGroups={patternGroups}
+              setPatternGroups={setPatternGroups}
+            />
+          )}
+          <div
+            style={{
+              padding: 16,
+              paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {viewMode === "track" ? (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "center",
+                      flex: 1,
+                    }}
+                  >
+                    {editing !== null ? (
+                      <button
+                        onClick={() => setEditing(null)}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: 4,
+                          border: "1px solid #333",
+                          background: "#27E0B0",
+                          color: "#1F2532",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Done
+                      </button>
+                    ) : (
+                      <>
+                        <label>BPM</label>
+                        <select
+                          value={bpm}
+                          onChange={(e) =>
+                            setBpm(parseInt(e.target.value, 10))
+                          }
+                          style={{
+                            padding: 8,
+                            borderRadius: 8,
+                            background: "#121827",
+                            color: "white",
+                          }}
+                        >
+                          {[90, 100, 110, 120, 130].map((v) => (
+                            <option key={v} value={v}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                        <label style={{ marginLeft: 12 }}>Quantize</label>
+                        <select
+                          value={subdiv}
+                          onChange={(e) =>
+                            setSubdiv(e.target.value as Subdivision)
+                          }
+                          style={{
+                            padding: 8,
+                            borderRadius: 8,
+                            background: "#121827",
+                            color: "white",
+                          }}
+                        >
+                          <option value="16n">1/16</option>
+                          <option value="8n">1/8</option>
+                          <option value="4n">1/4</option>
+                        </select>
+                      </>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      width: 1,
+                      height: 24,
+                      background: "#333",
+                      margin: "0 12px",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <button
+                      aria-label={isPlaying ? "Pause" : "Play"}
+                      onPointerDown={handlePlayPause}
+                      onPointerUp={(e) => e.currentTarget.blur()}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: "#27E0B0",
+                        color: "#1F2532",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 20,
+                      }}
+                    >
+                      <span className="material-symbols-outlined">
+                        {isPlaying ? "pause" : "play_arrow"}
+                      </span>
+                    </button>
+                    <button
+                      aria-label="Stop"
+                      onPointerDown={handleStop}
+                      onPointerUp={(e) => e.currentTarget.blur()}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: "#E02749",
+                        color: "#e6f2ff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 40,
+                        padding: 0,
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ lineHeight: 1, width: "100%", height: "100%" }}
+                      >
+                        stop
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className="scrollable"
+                  style={{
+                    marginTop: 16,
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflowY: "auto",
+                    minHeight: 0,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <button
+                      onClick={() => setTab("mushy")}
+                      style={{
+                        flex: 1,
+                        padding: "8px 0",
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: tab === "mushy" ? "#27E0B0" : "#1f2532",
+                        color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
+                      }}
+                    >
+                      Mushy
+                    </button>
+                    <button
+                      onClick={() => setTab("keyboard")}
+                      style={{
+                        flex: 1,
+                        padding: "8px 0",
+                        borderRadius: 8,
+                        border: "1px solid #333",
+                        background: tab === "keyboard" ? "#27E0B0" : "#1f2532",
+                        color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
+                      }}
+                    >
+                      Keyboard
+                    </button>
+                  </div>
+                  {tab === "mushy" ? (
+                    <Arpeggiator
+                      started={started}
+                      subdiv={subdiv}
+                      setTracks={setTracks}
+                    />
+                  ) : (
+                    <Keyboard
+                      subdiv={subdiv}
+                      noteRef={noteRef}
+                      fxRef={keyboardFxRef}
+                      setTracks={setTracks}
+                    />
+                  )}
+                </div>
+              </>
+            ) : (
+              <SongView
+                patternGroups={patternGroups}
+                songRows={songRows}
+                setSongRows={setSongRows}
+                currentSectionIndex={currentSectionIndex}
+                isPlaying={isPlaying}
+                bpm={bpm}
+                setBpm={setBpm}
+                onPlayPause={handlePlayPause}
+                onStop={handleStop}
+              />
+            )}
+          </div>
+          <PatternPlaybackManager
             tracks={tracks}
             triggers={triggers}
-            editing={editing}
-            setEditing={setEditing}
-            setTracks={setTracks}
-            packIndex={packIndex}
-            setPackIndex={setPackIndex}
+            started={started}
+            viewMode={viewMode}
+            patternGroups={patternGroups}
+            songRows={songRows}
+            currentSectionIndex={currentSectionIndex}
           />
-            <div
-              style={{
-                padding: 16,
-                paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
-                flex: 1,
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-              }}
-            >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  gap: 12,
-                  alignItems: "center",
-                  flex: 1,
-                }}
-              >
-                {editing !== null ? (
-                  <button
-                    onClick={() => setEditing(null)}
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: 4,
-                      border: "1px solid #333",
-                      background: "#27E0B0",
-                      color: "#1F2532",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Done
-                  </button>
-                ) : (
-                  <>
-                    <label>BPM</label>
-                    <select
-                      value={bpm}
-                      onChange={(e) => setBpm(parseInt(e.target.value, 10))}
-                      style={{
-                        padding: 8,
-                        borderRadius: 8,
-                        background: "#121827",
-                        color: "white",
-                      }}
-                    >
-                      {[90, 100, 110, 120, 130].map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                    <label style={{ marginLeft: 12 }}>Quantize</label>
-                    <select
-                      value={subdiv}
-                      onChange={(e) =>
-                        setSubdiv(e.target.value as Subdivision)
-                      }
-                      style={{
-                        padding: 8,
-                        borderRadius: 8,
-                        background: "#121827",
-                        color: "white",
-                      }}
-                    >
-                      <option value="16n">1/16</option>
-                      <option value="8n">1/8</option>
-                      <option value="4n">1/4</option>
-                    </select>
-                  </>
-                )}
-              </div>
-              <div
-                style={{
-                  width: 1,
-                  height: 24,
-                  background: "#333",
-                  margin: "0 12px",
-                }}
-              />
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  aria-label={isPlaying ? "Pause" : "Play"}
-                  onPointerDown={() => {
-                    if (isPlaying) {
-                      Tone.Transport.pause();
-                    } else {
-                      Tone.Transport.start();
-                    }
-                    setIsPlaying(!isPlaying);
-                  }}
-                  onPointerUp={(e) => e.currentTarget.blur()}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: "#27E0B0",
-                    color: "#1F2532",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 20,
-                  }}
-                >
-                  <span className="material-symbols-outlined">
-                    {isPlaying ? "pause" : "play_arrow"}
-                  </span>
-                </button>
-                <button
-                  aria-label="Stop"
-                  onPointerDown={() => {
-                    Tone.Transport.stop();
-                    setIsPlaying(false);
-                  }}
-                  onPointerUp={(e) => e.currentTarget.blur()}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: "#E02749",
-                    color: "#e6f2ff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 40,
-                    padding: 0,
-                  }}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ lineHeight: 1, width: "100%", height: "100%" }}
-                  >
-                    stop
-                  </span>
-                </button>
-                </div>
-              </div>
-
-              <div
-                className="scrollable"
-                style={{
-                  marginTop: 16,
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  overflowY: "auto",
-                  minHeight: 0,
-                }}
-              >
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <button
-                    onClick={() => setTab("mushy")}
-                    style={{
-                      flex: 1,
-                      padding: "8px 0",
-                      borderRadius: 8,
-                      border: "1px solid #333",
-                      background: tab === "mushy" ? "#27E0B0" : "#1f2532",
-                      color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
-                    }}
-                  >
-                    Mushy
-                  </button>
-                  <button
-                    onClick={() => setTab("keyboard")}
-                    style={{
-                      flex: 1,
-                      padding: "8px 0",
-                      borderRadius: 8,
-                      border: "1px solid #333",
-                      background: tab === "keyboard" ? "#27E0B0" : "#1f2532",
-                      color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
-                    }}
-                  >
-                    Keyboard
-                  </button>
-                </div>
-                {tab === "mushy" ? (
-                  <Arpeggiator
-                    started={started}
-                    subdiv={subdiv}
-                    setTracks={setTracks}
-                  />
-                ) : (
-                  <Keyboard
-                    subdiv={subdiv}
-                    noteRef={noteRef}
-                    fxRef={keyboardFxRef}
-                    setTracks={setTracks}
-                  />
-                )}
-              </div>
-          </div>
         </>
       )}
     </div>
