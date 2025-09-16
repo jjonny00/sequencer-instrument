@@ -92,6 +92,7 @@ export function LoopStrip({
   const pack = packs[packIndex];
   const instrumentOptions = Object.keys(pack.instruments);
   const canAddTrack = instrumentOptions.length > 0;
+  const addTrackEnabled = canAddTrack && detailTrackId === null;
   const selectedGroup = useMemo(() => {
     if (!selectedGroupId) return null;
     return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
@@ -209,6 +210,7 @@ export function LoopStrip({
   };
 
   const handleAddTrack = () => {
+    if (!addTrackEnabled) return;
     const defaultInstrument = instrumentOptions[0];
     if (!defaultInstrument) return;
     let createdId: number | null = null;
@@ -734,37 +736,6 @@ export function LoopStrip({
           </button>
         </div>
       </div>
-      <div style={{ marginBottom: 8 }}>
-        <button
-          type="button"
-          onClick={handleAddTrack}
-          disabled={!canAddTrack}
-          style={{
-            width: "100%",
-            height: ROW_HEIGHT,
-            borderRadius: 6,
-            border: canAddTrack ? "1px dashed #3b4252" : "1px dashed #242c3c",
-            background: canAddTrack ? "#141924" : "#161b27",
-            color: canAddTrack ? "#e6f2ff" : "#475569",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            textTransform: "uppercase",
-            letterSpacing: 0.6,
-            fontWeight: 600,
-            cursor: canAddTrack ? "pointer" : "not-allowed",
-          }}
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: 18 }}
-          >
-            add
-          </span>
-          Add Track
-        </button>
-      </div>
       <div
         ref={trackAreaRef}
         className="scrollable"
@@ -888,6 +859,8 @@ export function LoopStrip({
                     alignItems: "center",
                     padding: "0 8px",
                     background: "#161d2b",
+                    position: "relative",
+                    overflow: "hidden",
                     opacity: isMuted ? 0.3 : 1,
                     filter: isMuted ? "grayscale(0.7)" : "none",
                     transition: "opacity 0.2s ease, filter 0.2s ease",
@@ -956,103 +929,121 @@ export function LoopStrip({
                       New Pattern
                     </button>
                   )}
+                  {detailTrackId === t.id && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        zIndex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        padding: "8px 12px",
+                        gap: 12,
+                        background: "rgba(17, 24, 39, 0.95)",
+                        border: "1px solid #2a3344",
+                        borderRadius: 6,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 12,
+                          width: "100%",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <label
+                          style={{
+                            flex: "1 1 200px",
+                            minWidth: 160,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                            fontSize: 12,
+                            color: "#94a3b8",
+                          }}
+                        >
+                          <span>Instrument</span>
+                          <select
+                            value={t.instrument}
+                            onChange={(event) =>
+                              handleInstrumentChange(t.id, event.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: 6,
+                              borderRadius: 6,
+                              border: "1px solid #333",
+                              background: "#1f2532",
+                              color: "#e6f2ff",
+                            }}
+                          >
+                            {instrumentOptions.map((instrument) => (
+                              <option key={instrument} value={instrument}>
+                                {formatInstrumentLabel(instrument)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label
+                          style={{
+                            flex: "1 1 200px",
+                            minWidth: 180,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                            fontSize: 12,
+                            color: "#94a3b8",
+                          }}
+                        >
+                          <span>Preset</span>
+                          <select
+                            value=""
+                            onChange={(event) =>
+                              handlePresetLoad(t.id, event.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: 6,
+                              borderRadius: 6,
+                              border: "1px solid #333",
+                              background: "#1f2532",
+                              color: "#e6f2ff",
+                            }}
+                          >
+                            <option value="">Load preset…</option>
+                            {pack.chunks
+                              .filter((chunk) => chunk.instrument === t.instrument)
+                              .map((chunk) => (
+                                <option key={chunk.id} value={chunk.id}>
+                                  {chunk.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               {detailTrackId === t.id && (
                 <div
                   style={{
                     marginLeft: LABEL_WIDTH,
+                    marginTop: 6,
                     display: "flex",
                     flexDirection: "column",
-                    gap: 12,
-                    background: "#101522",
-                    border: "1px solid #333",
-                    borderRadius: 8,
-                    padding: 16,
-                    boxShadow: "0 8px 18px rgba(8, 12, 20, 0.6)",
+                    gap: 8,
                   }}
                 >
                   <div
                     style={{
-                      display: "flex",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <label
-                      style={{
-                        flex: "1 1 160px",
-                        minWidth: 140,
-                        fontSize: 12,
-                        color: "#94a3b8",
-                      }}
-                    >
-                      <span style={{ display: "block", marginBottom: 4 }}>
-                        Instrument
-                      </span>
-                      <select
-                        value={t.instrument}
-                        onChange={(event) =>
-                          handleInstrumentChange(t.id, event.target.value)
-                        }
-                        style={{
-                          width: "100%",
-                          padding: 6,
-                          borderRadius: 6,
-                          border: "1px solid #333",
-                          background: "#1f2532",
-                          color: "#e6f2ff",
-                        }}
-                      >
-                        {instrumentOptions.map((instrument) => (
-                          <option key={instrument} value={instrument}>
-                            {formatInstrumentLabel(instrument)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label
-                      style={{
-                        flex: "1 1 200px",
-                        minWidth: 180,
-                        fontSize: 12,
-                        color: "#94a3b8",
-                      }}
-                    >
-                      <span style={{ display: "block", marginBottom: 4 }}>
-                        Preset
-                      </span>
-                      <select
-                        value=""
-                        onChange={(event) =>
-                          handlePresetLoad(t.id, event.target.value)
-                        }
-                        style={{
-                          width: "100%",
-                          padding: 6,
-                          borderRadius: 6,
-                          border: "1px solid #333",
-                          background: "#1f2532",
-                          color: "#e6f2ff",
-                        }}
-                      >
-                        <option value="">Load preset…</option>
-                        {pack.chunks
-                          .filter((chunk) => chunk.instrument === t.instrument)
-                          .map((chunk) => (
-                            <option key={chunk.id} value={chunk.id}>
-                              {chunk.name}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                  </div>
-                  <div
-                    style={{
                       padding: 12,
-                      background: "rgba(15, 21, 34, 0.92)",
+                      background: "rgba(15, 21, 34, 0.95)",
                       borderRadius: 8,
                       border: "1px solid #333",
+                      boxShadow: "0 8px 18px rgba(8, 12, 20, 0.6)",
                       display: "flex",
                       flexDirection: "column",
                       gap: 12,
@@ -1138,6 +1129,39 @@ export function LoopStrip({
             </div>
           );
         })}
+        <div>
+          <button
+            type="button"
+            onClick={handleAddTrack}
+            disabled={!addTrackEnabled}
+            style={{
+              width: "100%",
+              height: ROW_HEIGHT,
+              borderRadius: 6,
+              border: addTrackEnabled
+                ? "1px dashed #3b4252"
+                : "1px dashed #242c3c",
+              background: addTrackEnabled ? "#141924" : "#161b27",
+              color: addTrackEnabled ? "#e6f2ff" : "#475569",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+              fontWeight: 600,
+              cursor: addTrackEnabled ? "pointer" : "not-allowed",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              add
+            </span>
+            Add Track
+          </button>
+        </div>
       </div>
       {groupEditor ? (
         <div
@@ -1202,46 +1226,31 @@ export function LoopStrip({
           </div>
         </div>
       ) : selectedGroup ? (
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>
-            Tracks in this scene:
-          </span>
-          {selectedTracks.length ? (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-              }}
-            >
-              {selectedTracks.map((track) => (
-                <span
-                  key={track.id}
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 9999,
-                    background: "rgba(39, 224, 176, 0.1)",
-                    border: "1px solid #27E0B0",
-                    fontSize: 12,
-                  }}
-                >
-                  {track.name}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Use the edit button to assign tracks to this scene.
-            </span>
-          )}
-        </div>
+        selectedTracks.length ? (
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+            }}
+          >
+            {selectedTracks.map((track) => (
+              <span
+                key={track.id}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: 9999,
+                  background: "rgba(39, 224, 176, 0.1)",
+                  border: "1px solid #27E0B0",
+                  fontSize: 12,
+                }}
+              >
+                {track.name}
+              </span>
+            ))}
+          </div>
+        ) : null
       ) : (
         <div
           style={{
