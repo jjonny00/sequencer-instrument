@@ -473,6 +473,26 @@ export function LoopStrip({
     setGroupEditor(null);
   };
 
+  const handleSnapshotSelectedGroup = () => {
+    if (!selectedGroupId) return;
+    const orderedIds = tracks.map((track) => track.id);
+    const availableIds = new Set(orderedIds);
+    setPatternGroups((groups) =>
+      groups.map((group) => {
+        if (group.id !== selectedGroupId) return group;
+        const selectedIds =
+          group.trackIds.length > 0
+            ? group.trackIds.filter((id) => availableIds.has(id))
+            : orderedIds;
+        return {
+          ...group,
+          trackIds: selectedIds,
+          tracks: captureTracks(selectedIds),
+        };
+      })
+    );
+  };
+
   const handleDeleteGroup = () => {
     if (!selectedGroupId) return;
     if (patternGroups.length <= 1) return;
@@ -754,6 +774,32 @@ export function LoopStrip({
             gap: 6,
           }}
         >
+          <button
+            type="button"
+            onClick={handleSnapshotSelectedGroup}
+            disabled={!selectedGroup}
+            aria-label="Save sequence"
+            title="Save sequence"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: selectedGroup ? "#27E0B0" : "#1f2532",
+              color: selectedGroup ? "#1F2532" : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: selectedGroup ? "pointer" : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              save
+            </span>
+          </button>
           <button
             type="button"
             onClick={openEditGroup}

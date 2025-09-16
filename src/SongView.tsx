@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, Dispatch, SetStateAction } from "react";
+import type {
+  CSSProperties,
+  Dispatch,
+  PointerEvent as ReactPointerEvent,
+  SetStateAction,
+} from "react";
 
-import type { PatternGroup } from "./song";
+import type { PatternGroup, SongRow } from "./song";
+import { createSongRow } from "./song";
 interface SongViewProps {
   patternGroups: PatternGroup[];
-  songRows: (string | null)[][];
-  setSongRows: Dispatch<SetStateAction<(string | null)[][]>>;
+  songRows: SongRow[];
+  setSongRows: Dispatch<SetStateAction<SongRow[]>>;
   currentSectionIndex: number;
   isPlaying: boolean;
   bpm: number;
@@ -17,9 +23,6 @@ interface SongViewProps {
 const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
 const ROW_LABEL_WIDTH = 80;
-
-const createEmptyRow = (length: number) =>
-  Array.from({ length }, () => null as string | null);
 
 const formatTrackCount = (count: number) =>
   `${count} track${count === 1 ? "" : "s"}`;
@@ -38,6 +41,9 @@ export function SongView({
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
   >(null);
+  const [activeRowSettings, setActiveRowSettings] = useState<number | null>(
+    null
+  );
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -45,7 +51,7 @@ export function SongView({
   );
 
   const sectionCount = useMemo(
-    () => songRows.reduce((max, row) => Math.max(max, row.length), 0),
+    () => songRows.reduce((max, row) => Math.max(max, row.slots.length), 0),
     [songRows]
   );
 
@@ -60,26 +66,39 @@ export function SongView({
       setEditingSlot(null);
       return;
     }
-    if (columnIndex >= songRows[rowIndex].length) {
+    if (columnIndex >= songRows[rowIndex].slots.length) {
       setEditingSlot(null);
     }
   }, [editingSlot, songRows, patternGroups.length]);
 
+  useEffect(() => {
+    if (activeRowSettings === null) return;
+    if (activeRowSettings >= songRows.length) {
+      setActiveRowSettings(null);
+    }
+  }, [activeRowSettings, songRows.length]);
+
   const handleAddSection = () => {
     setSongRows((rows) => {
       if (rows.length === 0) {
-        return [[null]];
+        return [createSongRow(1)];
       }
-      return rows.map((row) => [...row, null]);
+      return rows.map((row) => ({
+        ...row,
+        slots: [...row.slots, null],
+      }));
     });
   };
 
   const handleAddRow = () => {
     setSongRows((rows) => {
-      const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
-      const newRow = createEmptyRow(maxColumns);
+      const maxColumns = rows.reduce(
+        (max, row) => Math.max(max, row.slots.length),
+        0
+      );
+      const newRow = createSongRow(maxColumns);
       if (rows.length === 0) {
-        return [newRow.length ? newRow : [null]];
+        return [maxColumns > 0 ? newRow : createSongRow(1)];
       }
       return [...rows, newRow];
     });
@@ -93,55 +112,31 @@ export function SongView({
     setSongRows((rows) =>
       rows.map((row, idx) => {
         if (idx !== rowIndex) return row;
-        const nextRow = row.slice();
-        while (nextRow.length <= columnIndex) {
-          nextRow.push(null);
+        const nextSlots = row.slots.slice();
+        while (nextSlots.length <= columnIndex) {
+          nextSlots.push(null);
         }
-        nextRow[columnIndex] = groupId;
-        return nextRow;
+        nextSlots[columnIndex] = groupId;
+        return { ...row, slots: nextSlots };
       })
     );
   };
 
-  const timelineHeader = (
-    <div
-      style={{
-        display: "flex",
-        gap: SLOT_GAP,
-        paddingLeft: ROW_LABEL_WIDTH,
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-          gap: SLOT_GAP,
-        }}
-      >
-        {Array.from({ length: sectionCount }, (_, index) => {
-          const highlight = isPlaying && index === currentSectionIndex;
-          return (
-            <div
-              key={`header-${index}`}
-              style={{
-                height: 28,
-                borderRadius: 6,
-                border: `1px solid ${highlight ? "#27E0B0" : "#333"}`,
-                background: highlight ? "#1f2532" : "#121827",
-                color: highlight ? "#27E0B0" : "#94a3b8",
-                display: "grid",
-                placeItems: "center",
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-            >
-              {index + 1}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  const handleToggleRowMute = (rowIndex: number) => {
+    setSongRows((rows) =>
+      rows.map((row, idx) =>
+        idx === rowIndex ? { ...row, muted: !row.muted } : row
+      )
+    );
+  };
+
+  const handleRowVelocityChange = (rowIndex: number, value: number) => {
+    setSongRows((rows) =>
+      rows.map((row, idx) =>
+        idx === rowIndex ? { ...row, velocity: value } : row
+      )
+    );
+  };
 
   const showEmptyTimeline = sectionCount === 0;
 
@@ -235,45 +230,119 @@ export function SongView({
                 Add a section to start placing sequences into the song timeline.
               </div>
             ) : (
-              <>
-                {timelineHeader}
-                {songRows.map((row, rowIndex) => {
-                  const maxColumns = Math.max(sectionCount, row.length);
-                  return (
+              songRows.map((row, rowIndex) => {
+                const maxColumns = Math.max(sectionCount, row.slots.length);
+                let labelTimer: number | null = null;
+                let longPressTriggered = false;
+
+                const handleLabelPointerDown = (
+                  event: ReactPointerEvent<HTMLDivElement>
+                ) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  longPressTriggered = false;
+                  if (labelTimer) window.clearTimeout(labelTimer);
+                  labelTimer = window.setTimeout(() => {
+                    longPressTriggered = true;
+                    setEditingSlot(null);
+                    setActiveRowSettings(rowIndex);
+                  }, 500);
+                };
+
+                const handleLabelPointerUp = (
+                  event: ReactPointerEvent<HTMLDivElement>
+                ) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (labelTimer) window.clearTimeout(labelTimer);
+                  labelTimer = null;
+                  if (longPressTriggered) {
+                    longPressTriggered = false;
+                    return;
+                  }
+                  handleToggleRowMute(rowIndex);
+                };
+
+                const handleLabelPointerLeave = () => {
+                  if (labelTimer) window.clearTimeout(labelTimer);
+                  labelTimer = null;
+                };
+
+                const rowMuted = row.muted;
+                const rowSelected = activeRowSettings === rowIndex;
+
+                return (
+                  <div
+                    key={`row-${rowIndex}`}
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  >
                     <div
-                      key={`row-${rowIndex}`}
                       style={{
                         display: "flex",
                         gap: SLOT_GAP,
                         alignItems: "stretch",
+                        opacity: rowMuted ? 0.55 : 1,
+                        transition: "opacity 0.2s ease",
                       }}
                     >
                       <div
+                        onPointerDown={handleLabelPointerDown}
+                        onPointerUp={handleLabelPointerUp}
+                        onPointerLeave={handleLabelPointerLeave}
+                        onPointerCancel={handleLabelPointerLeave}
                         style={{
                           width: ROW_LABEL_WIDTH,
                           borderRadius: 8,
-                          border: "1px solid #333",
-                          background: "#121827",
-                          color: "#94a3b8",
+                          border: `1px solid ${
+                            rowSelected ? "#27E0B0" : "#333"
+                          }`,
+                          background: rowMuted ? "#181f2b" : "#121827",
+                          color: rowMuted ? "#475569" : "#e6f2ff",
                           fontSize: 12,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           fontWeight: 600,
+                          cursor: "pointer",
+                          userSelect: "none",
+                          letterSpacing: 0.4,
+                          position: "relative",
                         }}
+                        title={
+                          rowMuted
+                            ? "Tap to unmute. Long press for settings."
+                            : "Tap to mute. Long press for settings."
+                        }
                       >
-                        Row {rowIndex + 1}
+                        {rowIndex + 1}
+                        {rowSelected && (
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              position: "absolute",
+                              top: 4,
+                              right: 4,
+                              fontSize: 14,
+                              color: "#27E0B0",
+                            }}
+                            aria-hidden="true"
+                          >
+                            tune
+                          </span>
+                        )}
                       </div>
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: `repeat(${maxColumns}, ${SLOT_WIDTH}px)` ,
+                          gridTemplateColumns: `repeat(${maxColumns}, ${SLOT_WIDTH}px)`,
                           gap: SLOT_GAP,
                         }}
                       >
                         {Array.from({ length: maxColumns }, (_, columnIndex) => {
                           const groupId =
-                            columnIndex < row.length ? row[columnIndex] : null;
+                            columnIndex < row.slots.length
+                              ? row.slots[columnIndex]
+                              : null;
                           const group = groupId
                             ? patternGroupMap.get(groupId)
                             : undefined;
@@ -307,6 +376,7 @@ export function SongView({
                             cursor:
                               patternGroups.length > 0 ? "pointer" : "not-allowed",
                             textAlign: "left",
+                            opacity: rowMuted ? 0.7 : 1,
                           };
 
                           return (
@@ -350,6 +420,7 @@ export function SongView({
                                   type="button"
                                   onClick={() => {
                                     if (patternGroups.length === 0) return;
+                                    setActiveRowSettings(null);
                                     setEditingSlot({ rowIndex, columnIndex });
                                   }}
                                   style={buttonStyles}
@@ -377,9 +448,83 @@ export function SongView({
                         })}
                       </div>
                     </div>
-                  );
-                })}
-              </>
+                    {activeRowSettings === rowIndex && (
+                      <div
+                        style={{
+                          marginLeft: ROW_LABEL_WIDTH,
+                          padding: "12px 16px",
+                          background: "rgba(17, 24, 39, 0.95)",
+                          borderRadius: 8,
+                          border: "1px solid #333",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 16,
+                          boxShadow: "0 8px 20px rgba(8, 12, 20, 0.45)",
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            flex: "1 1 auto",
+                            fontSize: 12,
+                            color: "#94a3b8",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: 18 }}
+                            aria-hidden="true"
+                          >
+                            speed
+                          </span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={row.velocity}
+                            onChange={(event) =>
+                              handleRowVelocityChange(
+                                rowIndex,
+                                Number(event.target.value)
+                              )
+                            }
+                            style={{ flex: 1 }}
+                          />
+                          <span style={{ width: 48, textAlign: "right" }}>
+                            {row.velocity.toFixed(2)}
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setActiveRowSettings(null)}
+                          aria-label="Close row settings"
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 6,
+                            border: "1px solid #333",
+                            background: "#27E0B0",
+                            color: "#0f1420",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: 20 }}
+                          >
+                            check
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

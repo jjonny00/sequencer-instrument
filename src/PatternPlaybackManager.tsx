@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { JSX } from "react";
 import * as Tone from "tone";
 
 import type { Chunk } from "./chunks";
 import type { Track, TriggerMap } from "./tracks";
-import type { PatternGroup } from "./song";
+import type { PatternGroup, SongRow } from "./song";
 
 interface PatternPlaybackManagerProps {
   tracks: Track[];
@@ -12,7 +12,7 @@ interface PatternPlaybackManagerProps {
   started: boolean;
   viewMode: "track" | "song";
   patternGroups: PatternGroup[];
-  songRows: (string | null)[][];
+  songRows: SongRow[];
   currentSectionIndex: number;
 }
 
@@ -25,38 +25,53 @@ export function PatternPlaybackManager({
   songRows,
   currentSectionIndex,
 }: PatternPlaybackManagerProps) {
-  if (viewMode === "song") {
-    const activeGroupIds = new Set<string>();
-    songRows.forEach((row) => {
-      if (currentSectionIndex >= row.length) return;
-      const groupId = row[currentSectionIndex];
-      if (groupId) {
-        activeGroupIds.add(groupId);
-      }
-    });
+  const patternGroupMap = useMemo(
+    () => new Map(patternGroups.map((group) => [group.id, group])),
+    [patternGroups]
+  );
 
+  if (viewMode === "song") {
     const players: JSX.Element[] = [];
-    patternGroups
-      .filter((group) => activeGroupIds.has(group.id))
-      .forEach((group) => {
-        group.tracks.forEach((track, index) => {
-          if (!track.pattern) return;
-          const instrument = track.instrument;
-          if (!instrument) return;
-          const trigger = triggers[instrument];
-          if (!trigger) return;
-          if (track.muted) return;
-          players.push(
-            <PatternPlayer
-              key={`${group.id}-${track.id}-${index}`}
-              pattern={track.pattern}
-              trigger={trigger}
-              started={started}
-              isTrackActive={() => true}
-            />
+    songRows.forEach((row, rowIndex) => {
+      if (currentSectionIndex >= row.slots.length) return;
+      const groupId = row.slots[currentSectionIndex];
+      if (!groupId) return;
+      const group = patternGroupMap.get(groupId);
+      if (!group) return;
+      const velocityFactor = Math.max(0, Math.min(1, row.velocity ?? 1));
+
+      group.tracks.forEach((track, trackIndex) => {
+        if (!track.pattern) return;
+        const instrument = track.instrument;
+        if (!instrument) return;
+        const trigger = triggers[instrument];
+        if (!trigger) return;
+        const scaledTrigger = (
+          time: number,
+          velocity = 1,
+          pitch?: number,
+          note?: string,
+          sustain?: number,
+          chunk?: Chunk
+        ) => {
+          const combinedVelocity = Math.max(
+            0,
+            Math.min(1, velocity * velocityFactor)
           );
-        });
+          trigger(time, combinedVelocity, pitch, note, sustain, chunk);
+        };
+        const isTrackActive = () => !row.muted && !track.muted;
+        players.push(
+          <PatternPlayer
+            key={`${rowIndex}-${group.id}-${track.id}-${trackIndex}`}
+            pattern={track.pattern}
+            trigger={scaledTrigger}
+            started={started}
+            isTrackActive={isTrackActive}
+          />
+        );
       });
+    });
 
     return <>{players}</>;
   }

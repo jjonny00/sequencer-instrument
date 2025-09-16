@@ -9,8 +9,8 @@ import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
-import type { PatternGroup } from "./song";
-import { createPatternGroupId } from "./song";
+import type { PatternGroup, SongRow } from "./song";
+import { createPatternGroupId, createSongRow } from "./song";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -54,7 +54,9 @@ export default function App() {
   const [patternGroups, setPatternGroups] = useState<PatternGroup[]>(() => [
     createInitialPatternGroup(),
   ]);
-  const [songRows, setSongRows] = useState<(string | null)[][]>([[]]);
+  const [songRows, setSongRows] = useState<SongRow[]>([
+    createSongRow(),
+  ]);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export default function App() {
     setEditing(null);
     const initialGroup = createInitialPatternGroup();
     setPatternGroups([initialGroup]);
-    setSongRows([[]]);
+    setSongRows([createSongRow()]);
     setCurrentSectionIndex(0);
     if (!started) return;
     Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
@@ -204,13 +206,17 @@ export default function App() {
       const groupIds = new Set(patternGroups.map((group) => group.id));
       let changed = false;
       const next = rows.map((row) => {
-        const updated = row.map((groupId) =>
+        const updatedSlots = row.slots.map((groupId) =>
           groupId && groupIds.has(groupId) ? groupId : null
         );
-        if (!changed) {
-          changed = updated.some((value, index) => value !== row[index]);
+        const slotsChanged = updatedSlots.some(
+          (value, index) => value !== row.slots[index]
+        );
+        if (slotsChanged) {
+          changed = true;
+          return { ...row, slots: updatedSlots };
         }
-        return updated;
+        return row;
       });
       return changed ? next : rows;
     });
@@ -226,7 +232,7 @@ export default function App() {
   useEffect(() => {
     setCurrentSectionIndex((prev) => {
       const maxColumns = songRows.reduce(
-        (max, row) => Math.max(max, row.length),
+        (max, row) => Math.max(max, row.slots.length),
         0
       );
       if (maxColumns === 0) return 0;
@@ -237,7 +243,7 @@ export default function App() {
   useEffect(() => {
     if (!started || viewMode !== "song") return;
     const maxColumns = songRows.reduce(
-      (max, row) => Math.max(max, row.length),
+      (max, row) => Math.max(max, row.slots.length),
       0
     );
     if (maxColumns === 0) return;
