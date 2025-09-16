@@ -246,14 +246,27 @@ export default function App() {
       0
     );
     if (maxColumns === 0) return;
+
+    const ticksPerSection = Tone.Time("1m").toTicks();
+    if (ticksPerSection === 0) return;
+
+    const applySectionFromTicks = (ticks: number) => {
+      const nextSection =
+        Math.floor(ticks / ticksPerSection) % Math.max(maxColumns, 1);
+      setCurrentSectionIndex((prev) =>
+        prev === nextSection ? prev : nextSection
+      );
+    };
+
+    applySectionFromTicks(Tone.Transport.ticks);
+
     const id = Tone.Transport.scheduleRepeat((time) => {
+      const ticks = Tone.Transport.getTicksAtTime(time);
       Tone.Draw.schedule(() => {
-        setCurrentSectionIndex((prev) => {
-          if (maxColumns === 0) return 0;
-          return (prev + 1) % maxColumns;
-        });
+        applySectionFromTicks(ticks);
       }, time);
-    }, "1m", "1m");
+    }, "1m");
+
     return () => {
       Tone.Transport.clear(id);
     };

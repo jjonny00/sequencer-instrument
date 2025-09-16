@@ -45,7 +45,7 @@
 
 .scrollable,
 .scrollable * {
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
 }
 
 html,
