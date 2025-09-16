@@ -90,6 +90,7 @@ export function LoopStrip({
     { trackId: number; index: number } | null
   >(null);
   const [detailTrackId, setDetailTrackId] = useState<number | null>(null);
+  const [pendingTrackIds, setPendingTrackIds] = useState<number[]>([]);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const pack = packs[packIndex];
@@ -172,6 +173,14 @@ export function LoopStrip({
     }
   }, [detailTrackId, tracks]);
 
+  useEffect(() => {
+    setPendingTrackIds((ids) => {
+      const activeIds = new Set(tracks.map((track) => track.id));
+      const filtered = ids.filter((id) => activeIds.has(id));
+      return filtered.length === ids.length ? ids : filtered;
+    });
+  }, [tracks]);
+
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
     if (!started) return;
@@ -237,8 +246,10 @@ export function LoopStrip({
       ];
     });
     if (createdId !== null) {
-      setEditing(createdId);
-      setDetailTrackId(createdId);
+      const newId = createdId;
+      setPendingTrackIds((ids) => [...ids, newId]);
+      setEditing(newId);
+      setDetailTrackId(newId);
     }
   };
 
@@ -291,6 +302,47 @@ export function LoopStrip({
   };
 
   const hideTrackDetails = () => setDetailTrackId(null);
+
+  const removeTrack = (trackId: number) => {
+    setTracks((ts) => ts.filter((t) => t.id !== trackId));
+    setPatternGroups((groups) => {
+      let changed = false;
+      const next = groups.map((group) => {
+        if (!group.trackIds.includes(trackId)) return group;
+        changed = true;
+        return {
+          ...group,
+          trackIds: group.trackIds.filter((id) => id !== trackId),
+        };
+      });
+      return changed ? next : groups;
+    });
+    setPendingTrackIds((ids) => {
+      if (!ids.includes(trackId)) return ids;
+      return ids.filter((id) => id !== trackId);
+    });
+    setEditing((current) => (current === trackId ? null : current));
+    setDetailTrackId((current) => (current === trackId ? null : current));
+    setStepEditing((current) =>
+      current && current.trackId === trackId ? null : current
+    );
+  };
+
+  const handleCancelNewTrack = (trackId: number) => {
+    removeTrack(trackId);
+  };
+
+  const handleDeleteTrack = (trackId: number) => {
+    removeTrack(trackId);
+  };
+
+  const handleCompleteTrack = (trackId: number) => {
+    setPendingTrackIds((ids) => {
+      if (!ids.includes(trackId)) return ids;
+      return ids.filter((id) => id !== trackId);
+    });
+    hideTrackDetails();
+  };
 
   const openCreateGroup = () => {
     setGroupEditor({ mode: "create", name: getNextGroupName(), trackIds: [] });
@@ -781,6 +833,7 @@ export function LoopStrip({
           const color = getInstrumentColor(t.instrument);
           const isMuted = t.muted;
           const isEditing = editing === t.id;
+          const isPending = pendingTrackIds.includes(t.id);
           const trackLabel = getTrackNumberLabel(tracks, t.id);
           const velocityValue = t.pattern?.velocities?.[0] ?? 1;
           const pitchValue = t.pattern?.pitches?.[0] ?? 0;
@@ -1026,31 +1079,122 @@ export function LoopStrip({
                               </option>
                             ))}
                         </select>
-                        <button
-                          type="button"
-                          onClick={hideTrackDetails}
-                          disabled={!t.instrument}
-                          aria-label="Done editing track"
+                        <div
                           style={{
-                            width: 40,
-                            height: 36,
-                            borderRadius: 6,
-                            border: "1px solid #333",
-                            background: t.instrument ? "#27E0B0" : "#1f2532",
-                            color: t.instrument ? "#0f1420" : "#475569",
                             display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: t.instrument ? "pointer" : "not-allowed",
+                            gap: 8,
+                            flexShrink: 0,
                           }}
                         >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: 20 }}
-                          >
-                            check
-                          </span>
-                        </button>
+                          {isPending ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelNewTrack(t.id)}
+                                aria-label="Cancel new track"
+                                title="Cancel new track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: "#1f2532",
+                                  color: "#e6f2ff",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  close
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCompleteTrack(t.id)}
+                                disabled={!t.instrument}
+                                aria-label="Done editing track"
+                                title="Done editing track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: t.instrument ? "#27E0B0" : "#1f2532",
+                                  color: t.instrument ? "#0f1420" : "#475569",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: t.instrument ? "pointer" : "not-allowed",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  check
+                                </span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleCompleteTrack(t.id)}
+                                aria-label="Done editing track"
+                                title="Done editing track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: "#27E0B0",
+                                  color: "#0f1420",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  check
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTrack(t.id)}
+                                aria-label="Delete track"
+                                title="Delete track"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 6,
+                                  border: "1px solid #333",
+                                  background: "#1f2532",
+                                  color: "#f87171",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 20 }}
+                                >
+                                  delete
+                                </span>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
