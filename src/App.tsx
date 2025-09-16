@@ -14,7 +14,7 @@ import { createPatternGroupId } from "./song";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
-  name: "group01",
+  name: "sequence01",
   trackIds: [],
   autoPopulate: true,
 });

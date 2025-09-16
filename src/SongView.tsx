@@ -241,7 +241,7 @@ export function SongView({
                   fontSize: 13,
                 }}
               >
-                Add a section to start placing Pattern Groups into the song timeline.
+                Add a section to start placing sequences into the song timeline.
               </div>
             ) : (
               <>
@@ -377,7 +377,7 @@ export function SongView({
                                       ? formatTrackCount(group?.trackIds.length ?? 0)
                                       : patternGroups.length > 0
                                       ? "Tap to assign"
-                                      : "Create a Pattern Group"}
+                                      : "Save a sequence in Track view"}
                                   </span>
                                 </button>
                               )}
@@ -504,7 +504,7 @@ export function SongView({
               color: "#e6f2ff",
             }}
           >
-            Pattern Groups
+            Sequences
           </h3>
           <span
             style={{
@@ -512,8 +512,8 @@ export function SongView({
               color: "#94a3b8",
             }}
           >
-            Create and edit groups from Track view, then place them onto the
-            song timeline.
+            Save and edit sequences in Track view, then place them onto the song
+            timeline.
           </span>
         </div>
         {patternGroups.length === 0 ? (
@@ -526,8 +526,8 @@ export function SongView({
               fontSize: 13,
             }}
           >
-            No Pattern Groups yet. Build groups in Track view to start arranging
-            the song.
+            No sequences yet. Save sequences in Track view to start arranging the
+            song.
           </div>
         ) : (
           <div
@@ -574,7 +574,7 @@ export function SongView({
                   </div>
                   {trackLabels.length === 0 ? (
                     <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                      This group has no playable tracks.
+                      This sequence has no playable tracks.
                     </span>
                   ) : (
                     <div

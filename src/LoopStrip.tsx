@@ -111,7 +111,7 @@ export function LoopStrip({
     );
     let index = 1;
     while (true) {
-      const candidate = `group${String(index).padStart(2, "0")}`;
+      const candidate = `sequence${String(index).padStart(2, "0")}`;
       if (!existingNames.has(candidate.toLowerCase())) {
         return candidate;
       }
@@ -498,7 +498,7 @@ export function LoopStrip({
             color: "#94a3b8",
           }}
         >
-          Add a track to start building scenes.
+          Add a track to start building sequences.
         </div>
       );
     }
@@ -685,7 +685,8 @@ export function LoopStrip({
           <button
             type="button"
             onClick={openCreateGroup}
-            aria-label="Create scene"
+            aria-label="Save sequence"
+            title="Save sequence"
             style={{
               width: 32,
               height: 32,
@@ -702,11 +703,11 @@ export function LoopStrip({
               className="material-symbols-outlined"
               style={{ fontSize: 20 }}
             >
-              add
+              save
             </span>
           </button>
           <select
-            aria-label="Current scene"
+            aria-label="Current sequence"
             value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
             onChange={(event) => {
               const value = event.target.value;
@@ -740,7 +741,7 @@ export function LoopStrip({
             type="button"
             onClick={openEditGroup}
             disabled={!selectedGroup}
-            aria-label="Edit scene"
+            aria-label="Edit sequence"
             style={{
               width: 32,
               height: 32,
@@ -769,7 +770,7 @@ export function LoopStrip({
             type="button"
             onClick={handleDuplicateGroup}
             disabled={!selectedGroup}
-            aria-label="Duplicate scene"
+            aria-label="Duplicate sequence"
             style={{
               width: 32,
               height: 32,
@@ -794,7 +795,7 @@ export function LoopStrip({
             type="button"
             onClick={handleDeleteGroup}
             disabled={!selectedGroup || patternGroups.length <= 1}
-            aria-label="Delete scene"
+            aria-label="Delete sequence"
             style={{
               width: 32,
               height: 32,
@@ -1410,12 +1411,13 @@ export function LoopStrip({
             }}
           />
           <span style={{ fontSize: 12, color: "#94a3b8" }}>
-            Select tracks to include in this scene.
+            Select tracks to include in this sequence.
           </span>
           {renderTrackChooser(groupEditor.trackIds, handleEditorTrackToggle)}
           {groupEditor.trackIds.length === 0 && tracks.length > 0 && (
             <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              This scene is empty. Add tracks to hear it in Song view.
+              This sequence has no tracks yet. Choose tracks to hear it in Song
+              view.
             </span>
           )}
           <div style={{ display: "flex", gap: 8 }}>
@@ -1432,7 +1434,7 @@ export function LoopStrip({
                 cursor: "pointer",
               }}
             >
-              Save Scene
+              Save Sequence
             </button>
             <button
               type="button"
@@ -1487,7 +1489,7 @@ export function LoopStrip({
             color: "#94a3b8",
           }}
         >
-          Create a scene to capture the current track mix.
+          Save a sequence to capture the current track mix.
         </div>
       )}
       {stepEditing && (() => {
