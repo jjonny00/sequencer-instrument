@@ -179,6 +179,7 @@ export function Keyboard({
           id: nextId,
           name: "Keyboard",
           instrument: "chord",
+          muted: false,
           pattern: {
             id: `kb-${Date.now()}`,
             name: "Keyboard",
@@ -238,6 +239,7 @@ export function Keyboard({
               id: tid,
               name: "Keyboard",
               instrument: "chord",
+              muted: false,
               pattern: {
                 id: `kb-${Date.now()}`,
                 name: "Keyboard",

@@ -85,6 +85,7 @@ export function Arpeggiator({
           id: nextId,
           name: "Mushy",
           instrument: "arpeggiator",
+          muted: false,
           pattern: {
             id: `arp-${Date.now()}`,
             name: "Mushy Pattern",
@@ -179,6 +180,7 @@ export function Arpeggiator({
                   id: tid,
                   name: "Mushy",
                   instrument: "arpeggiator",
+                  muted: false,
                   pattern: {
                     id: `arp-${Date.now()}`,
                     name: "Mushy Pattern",
