@@ -1363,8 +1363,10 @@ function PatternEditor({
   return (
     <div
       style={{
+        flex: 1,
+        width: "100%",
         display: "grid",
-        gridTemplateColumns: "repeat(16, 1fr)",
+        gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
         gap: 2,
         height: "100%",
       }}
