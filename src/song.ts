@@ -2,6 +2,7 @@ export interface PatternGroup {
   id: string;
   name: string;
   trackIds: number[];
+  autoPopulate: boolean;
 }
 
 export const createPatternGroupId = () =>

@@ -41,6 +41,9 @@ const formatPitchDisplay = (value: number) =>
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
 
+const areTrackListsEqual = (a: number[], b: number[]) =>
+  a.length === b.length && a.every((id, index) => id === b[index]);
+
 type GroupEditorState =
   | {
       mode: "create";
@@ -345,7 +348,12 @@ export function LoopStrip({
   };
 
   const openCreateGroup = () => {
-    setGroupEditor({ mode: "create", name: getNextGroupName(), trackIds: [] });
+    const allTrackIds = tracks.map((track) => track.id);
+    setGroupEditor({
+      mode: "create",
+      name: getNextGroupName(),
+      trackIds: allTrackIds,
+    });
   };
 
   const openEditGroup = () => {
@@ -380,15 +388,20 @@ export function LoopStrip({
 
   const handleSaveGroup = () => {
     if (!groupEditor) return;
+    const allTrackIds = tracks.map((track) => track.id);
     if (groupEditor.mode === "edit") {
       setPatternGroups((groups) =>
         groups.map((group) => {
           if (group.id !== groupEditor.groupId) return group;
           const trimmed = groupEditor.name.trim();
+          const maintainAuto =
+            group.autoPopulate &&
+            areTrackListsEqual(groupEditor.trackIds, allTrackIds);
           return {
             ...group,
             name: trimmed || group.name,
-            trackIds: groupEditor.trackIds,
+            trackIds: groupEditor.trackIds.slice(),
+            autoPopulate: maintainAuto,
           };
         })
       );
@@ -397,6 +410,7 @@ export function LoopStrip({
     }
     const newId = createPatternGroupId();
     const trimmed = groupEditor.name.trim();
+    const selectedTrackIds = groupEditor.trackIds.slice();
     setPatternGroups((groups) => {
       const name = trimmed || getNextGroupName(groups);
       return [
@@ -404,7 +418,8 @@ export function LoopStrip({
         {
           id: newId,
           name,
-          trackIds: groupEditor.trackIds,
+          trackIds: selectedTrackIds,
+          autoPopulate: false,
         },
       ];
     });
@@ -429,7 +444,12 @@ export function LoopStrip({
       }
       return [
         ...groups,
-        { id: newId, name: candidate, trackIds: [...source.trackIds] },
+        {
+          id: newId,
+          name: candidate,
+          trackIds: [...source.trackIds],
+          autoPopulate: false,
+        },
       ];
     });
     setSelectedGroupId(newId);
@@ -447,6 +467,7 @@ export function LoopStrip({
           id: createPatternGroupId(),
           name: getNextGroupName([]),
           trackIds: [],
+          autoPopulate: true,
         };
         fallbackId = fallbackGroup.id;
         return [fallbackGroup];
