@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { JSX } from "react";
 import * as Tone from "tone";
 
 import type { Chunk } from "./chunks";
@@ -24,10 +25,7 @@ export function PatternPlaybackManager({
   songRows,
   currentSectionIndex,
 }: PatternPlaybackManagerProps) {
-  const shouldGate = viewMode === "song";
-  const activeTrackIds = new Set<number>();
-
-  if (shouldGate) {
+  if (viewMode === "song") {
     const activeGroupIds = new Set<string>();
     songRows.forEach((row) => {
       if (currentSectionIndex >= row.length) return;
@@ -37,13 +35,30 @@ export function PatternPlaybackManager({
       }
     });
 
-    if (activeGroupIds.size > 0) {
-      patternGroups.forEach((group) => {
-        if (activeGroupIds.has(group.id)) {
-          group.trackIds.forEach((trackId) => activeTrackIds.add(trackId));
-        }
+    const players: JSX.Element[] = [];
+    patternGroups
+      .filter((group) => activeGroupIds.has(group.id))
+      .forEach((group) => {
+        group.tracks.forEach((track, index) => {
+          if (!track.pattern) return;
+          const instrument = track.instrument;
+          if (!instrument) return;
+          const trigger = triggers[instrument];
+          if (!trigger) return;
+          if (track.muted) return;
+          players.push(
+            <PatternPlayer
+              key={`${group.id}-${track.id}-${index}`}
+              pattern={track.pattern}
+              trigger={trigger}
+              started={started}
+              isTrackActive={() => true}
+            />
+          );
+        });
       });
-    }
+
+    return <>{players}</>;
   }
 
   return (
@@ -54,11 +69,7 @@ export function PatternPlaybackManager({
         if (!instrument) return null;
         const trigger = triggers[instrument];
         if (!trigger) return null;
-        const isTrackActive = () => {
-          if (track.muted) return false;
-          if (!shouldGate) return true;
-          return activeTrackIds.has(track.id);
-        };
+        const isTrackActive = () => !track.muted;
         return (
           <PatternPlayer
             key={track.id}

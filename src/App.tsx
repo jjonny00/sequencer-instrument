@@ -16,6 +16,7 @@ const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
   name: "sequence01",
   trackIds: [],
+  tracks: [],
 });
 
 type Subdivision = "16n" | "8n" | "4n";
@@ -181,9 +182,16 @@ export default function App() {
       let changed = false;
       const next = prev.map((group) => {
         const filtered = group.trackIds.filter((id) => idSet.has(id));
-        if (filtered.length !== group.trackIds.length) {
+        const filteredSet = new Set(filtered);
+        const filteredSnapshots = group.tracks.filter((track) =>
+          filteredSet.has(track.id)
+        );
+        if (
+          filtered.length !== group.trackIds.length ||
+          filteredSnapshots.length !== group.tracks.length
+        ) {
           changed = true;
-          return { ...group, trackIds: filtered };
+          return { ...group, trackIds: filtered, tracks: filteredSnapshots };
         }
         return group;
       });
@@ -598,7 +606,6 @@ export default function App() {
               </>
             ) : (
               <SongView
-                tracks={tracks}
                 patternGroups={patternGroups}
                 songRows={songRows}
                 setSongRows={setSongRows}

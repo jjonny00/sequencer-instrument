@@ -41,6 +41,20 @@ const formatPitchDisplay = (value: number) =>
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
 
+const cloneChunk = (chunk: Chunk): Chunk => ({
+  ...chunk,
+  steps: chunk.steps.slice(),
+  velocities: chunk.velocities ? chunk.velocities.slice() : undefined,
+  pitches: chunk.pitches ? chunk.pitches.slice() : undefined,
+  notes: chunk.notes ? chunk.notes.slice() : undefined,
+  degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
+});
+
+const cloneTrack = (track: Track): Track => ({
+  ...track,
+  pattern: track.pattern ? cloneChunk(track.pattern) : null,
+});
+
 type GroupEditorState =
   | {
       mode: "create";
@@ -121,6 +135,14 @@ export function LoopStrip({
     const selectedIds = new Set(selectedGroup.trackIds);
     return tracks.filter((track) => selectedIds.has(track.id));
   }, [selectedGroup, tracks]);
+
+  const captureTracks = (trackIds: number[]) => {
+    const trackMap = new Map(tracks.map((track) => [track.id, track]));
+    return trackIds
+      .map((trackId) => trackMap.get(trackId))
+      .filter((track): track is Track => Boolean(track))
+      .map((track) => cloneTrack(track));
+  };
 
   const isCreatingGroup = groupEditor?.mode === "create";
   const isEditingCurrentGroup =
@@ -313,6 +335,7 @@ export function LoopStrip({
         return {
           ...group,
           trackIds: group.trackIds.filter((id) => id !== trackId),
+          tracks: group.tracks.filter((track) => track.id !== trackId),
         };
       });
       return changed ? next : groups;
@@ -389,10 +412,12 @@ export function LoopStrip({
         groups.map((group) => {
           if (group.id !== groupEditor.groupId) return group;
           const trimmed = groupEditor.name.trim();
+          const selectedTrackIds = groupEditor.trackIds.slice();
           return {
             ...group,
             name: trimmed || group.name,
-            trackIds: groupEditor.trackIds.slice(),
+            trackIds: selectedTrackIds,
+            tracks: captureTracks(selectedTrackIds),
           };
         })
       );
@@ -402,6 +427,7 @@ export function LoopStrip({
     const newId = createPatternGroupId();
     const trimmed = groupEditor.name.trim();
     const selectedTrackIds = groupEditor.trackIds.slice();
+    const capturedTracks = captureTracks(selectedTrackIds);
     setPatternGroups((groups) => {
       const name = trimmed || getNextGroupName(groups);
       return [
@@ -410,6 +436,7 @@ export function LoopStrip({
           id: newId,
           name,
           trackIds: selectedTrackIds,
+          tracks: capturedTracks,
         },
       ];
     });
@@ -438,6 +465,7 @@ export function LoopStrip({
           id: newId,
           name: candidate,
           trackIds: [...source.trackIds],
+          tracks: source.tracks.map((track) => cloneTrack(track)),
         },
       ];
     });
@@ -456,6 +484,7 @@ export function LoopStrip({
           id: createPatternGroupId(),
           name: getNextGroupName([]),
           trackIds: [],
+          tracks: [],
         };
         fallbackId = fallbackGroup.id;
         return [fallbackGroup];

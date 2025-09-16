@@ -2,10 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
 
 import type { PatternGroup } from "./song";
-import type { Track } from "./tracks";
-
 interface SongViewProps {
-  tracks: Track[];
   patternGroups: PatternGroup[];
   songRows: (string | null)[][];
   setSongRows: Dispatch<SetStateAction<(string | null)[][]>>;
@@ -28,7 +25,6 @@ const formatTrackCount = (count: number) =>
   `${count} track${count === 1 ? "" : "s"}`;
 
 export function SongView({
-  tracks,
   patternGroups,
   songRows,
   setSongRows,
@@ -42,11 +38,6 @@ export function SongView({
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
   >(null);
-
-  const trackMap = useMemo(
-    () => new Map(tracks.map((track) => [track.id, track])),
-    [tracks]
-  );
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -350,7 +341,7 @@ export function SongView({
                                   {patternGroups.map((groupOption) => (
                                     <option key={groupOption.id} value={groupOption.id}>
                                       {groupOption.name} (
-                                      {formatTrackCount(groupOption.trackIds.length)})
+                                      {formatTrackCount(groupOption.tracks.length)})
                                     </option>
                                   ))}
                                 </select>
@@ -374,7 +365,7 @@ export function SongView({
                                     }}
                                   >
                                     {assigned
-                                      ? formatTrackCount(group?.trackIds.length ?? 0)
+                                      ? formatTrackCount(group?.tracks.length ?? 0)
                                       : patternGroups.length > 0
                                       ? "Tap to assign"
                                       : "Save a sequence in Track view"}
@@ -538,8 +529,8 @@ export function SongView({
             }}
           >
             {patternGroups.map((group) => {
-              const trackLabels = group.trackIds
-                .map((trackId) => trackMap.get(trackId)?.name)
+              const trackLabels = group.tracks
+                .map((track) => track.name)
                 .filter((name): name is string => Boolean(name));
               return (
                 <div
@@ -568,7 +559,7 @@ export function SongView({
                         color: "#94a3b8",
                       }}
                     >
-                      {formatTrackCount(group.trackIds.length)}
+                      {formatTrackCount(group.tracks.length)}
                     </span>
                     <div style={{ marginLeft: "auto" }} />
                   </div>
