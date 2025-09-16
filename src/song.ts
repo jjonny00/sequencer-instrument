@@ -3,7 +3,6 @@ import type { Track } from "./tracks";
 export interface PatternGroup {
   id: string;
   name: string;
-  trackIds: number[];
   tracks: Track[];
 }
 

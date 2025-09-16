@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
@@ -59,13 +59,11 @@ type GroupEditorState =
   | {
       mode: "create";
       name: string;
-      trackIds: number[];
     }
   | {
       mode: "edit";
       groupId: string;
       name: string;
-      trackIds: number[];
     };
 
 /**
@@ -130,19 +128,19 @@ export function LoopStrip({
     }
   };
 
-  const selectedTracks = useMemo(() => {
-    if (!selectedGroup) return [] as Track[];
-    const selectedIds = new Set(selectedGroup.trackIds);
-    return tracks.filter((track) => selectedIds.has(track.id));
-  }, [selectedGroup, tracks]);
+  const captureCurrentTracks = () => tracks.map((track) => cloneTrack(track));
 
-  const captureTracks = (trackIds: number[]) => {
-    const trackMap = new Map(tracks.map((track) => [track.id, track]));
-    return trackIds
-      .map((trackId) => trackMap.get(trackId))
-      .filter((track): track is Track => Boolean(track))
-      .map((track) => cloneTrack(track));
-  };
+  const applyGroupTracks = useCallback(
+    (group: PatternGroup | null) => {
+      const cloned = group ? group.tracks.map((track) => cloneTrack(track)) : [];
+      setTracks(cloned);
+      setPendingTrackIds([]);
+      setEditing(null);
+      setDetailTrackId(null);
+      setStepEditing(null);
+    },
+    [setTracks, setPendingTrackIds, setEditing, setDetailTrackId, setStepEditing]
+  );
 
   const isCreatingGroup = groupEditor?.mode === "create";
   const isEditingCurrentGroup =
@@ -152,15 +150,18 @@ export function LoopStrip({
     if (patternGroups.length === 0) {
       setSelectedGroupId(null);
       setGroupEditor(null);
+      applyGroupTracks(null);
       return;
     }
     setSelectedGroupId((prev) => {
       if (prev && patternGroups.some((group) => group.id === prev)) {
         return prev;
       }
-      return patternGroups[0]?.id ?? null;
+      const fallbackGroup = patternGroups[0] ?? null;
+      applyGroupTracks(fallbackGroup ?? null);
+      return fallbackGroup?.id ?? null;
     });
-  }, [patternGroups]);
+  }, [patternGroups, applyGroupTracks]);
 
   useEffect(() => {
     setGroupEditor(null);
@@ -177,16 +178,6 @@ export function LoopStrip({
       }
     }
   }, [groupEditor, patternGroups]);
-
-  useEffect(() => {
-    setGroupEditor((state) => {
-      if (!state) return state;
-      const validTrackIds = new Set(tracks.map((track) => track.id));
-      const filtered = state.trackIds.filter((id) => validTrackIds.has(id));
-      if (filtered.length === state.trackIds.length) return state;
-      return { ...state, trackIds: filtered };
-    });
-  }, [tracks]);
 
   useEffect(() => {
     if (detailTrackId === null) return;
@@ -327,19 +318,6 @@ export function LoopStrip({
 
   const removeTrack = (trackId: number) => {
     setTracks((ts) => ts.filter((t) => t.id !== trackId));
-    setPatternGroups((groups) => {
-      let changed = false;
-      const next = groups.map((group) => {
-        if (!group.trackIds.includes(trackId)) return group;
-        changed = true;
-        return {
-          ...group,
-          trackIds: group.trackIds.filter((id) => id !== trackId),
-          tracks: group.tracks.filter((track) => track.id !== trackId),
-        };
-      });
-      return changed ? next : groups;
-    });
     setPendingTrackIds((ids) => {
       if (!ids.includes(trackId)) return ids;
       return ids.filter((id) => id !== trackId);
@@ -371,7 +349,6 @@ export function LoopStrip({
     setGroupEditor({
       mode: "create",
       name: getNextGroupName(),
-      trackIds: [],
     });
   };
 
@@ -381,28 +358,11 @@ export function LoopStrip({
       mode: "edit",
       groupId: selectedGroup.id,
       name: selectedGroup.name,
-      trackIds: selectedGroup.trackIds,
     });
   };
 
   const handleEditorNameChange = (value: string) => {
     setGroupEditor((state) => (state ? { ...state, name: value } : state));
-  };
-
-  const handleEditorTrackToggle = (trackId: number) => {
-    setGroupEditor((state) => {
-      if (!state) return state;
-      const next = new Set(state.trackIds);
-      if (next.has(trackId)) {
-        next.delete(trackId);
-      } else {
-        next.add(trackId);
-      }
-      const ordered = tracks
-        .filter((track) => next.has(track.id))
-        .map((track) => track.id);
-      return { ...state, trackIds: ordered };
-    });
   };
 
   const handleSaveGroup = () => {
@@ -412,12 +372,9 @@ export function LoopStrip({
         groups.map((group) => {
           if (group.id !== groupEditor.groupId) return group;
           const trimmed = groupEditor.name.trim();
-          const selectedTrackIds = groupEditor.trackIds.slice();
           return {
             ...group,
             name: trimmed || group.name,
-            trackIds: selectedTrackIds,
-            tracks: captureTracks(selectedTrackIds),
           };
         })
       );
@@ -426,26 +383,29 @@ export function LoopStrip({
     }
     const newId = createPatternGroupId();
     const trimmed = groupEditor.name.trim();
-    const selectedTrackIds = groupEditor.trackIds.slice();
-    const capturedTracks = captureTracks(selectedTrackIds);
+    let created: PatternGroup | null = null;
     setPatternGroups((groups) => {
       const name = trimmed || getNextGroupName(groups);
-      return [
-        ...groups,
-        {
-          id: newId,
-          name,
-          trackIds: selectedTrackIds,
-          tracks: capturedTracks,
-        },
-      ];
+      created = {
+        id: newId,
+        name,
+        tracks: [],
+      };
+      return [...groups, created];
     });
-    setSelectedGroupId(newId);
+    if (created) {
+      setSelectedGroupId(newId);
+      applyGroupTracks(created);
+    } else {
+      setSelectedGroupId(newId);
+      applyGroupTracks(null);
+    }
     setGroupEditor(null);
   };
 
   const handleDuplicateGroup = () => {
     if (!selectedGroupId) return;
+    let created: PatternGroup | null = null;
     const newId = createPatternGroupId();
     setPatternGroups((groups) => {
       const source = groups.find((group) => group.id === selectedGroupId);
@@ -459,35 +419,32 @@ export function LoopStrip({
         candidate = `${source.name} copy ${suffix}`;
         suffix += 1;
       }
-      return [
-        ...groups,
-        {
-          id: newId,
-          name: candidate,
-          trackIds: [...source.trackIds],
-          tracks: source.tracks.map((track) => cloneTrack(track)),
-        },
-      ];
+      const duplicatedTracks =
+        source.id === selectedGroupId
+          ? captureCurrentTracks()
+          : source.tracks.map((track) => cloneTrack(track));
+      created = {
+        id: newId,
+        name: candidate,
+        tracks: duplicatedTracks,
+      };
+      return [...groups, created];
     });
-    setSelectedGroupId(newId);
+    if (created) {
+      setSelectedGroupId(newId);
+      applyGroupTracks(created);
+    }
     setGroupEditor(null);
   };
 
   const handleSnapshotSelectedGroup = () => {
     if (!selectedGroupId) return;
-    const orderedIds = tracks.map((track) => track.id);
-    const availableIds = new Set(orderedIds);
     setPatternGroups((groups) =>
       groups.map((group) => {
         if (group.id !== selectedGroupId) return group;
-        const selectedIds =
-          group.trackIds.length > 0
-            ? group.trackIds.filter((id) => availableIds.has(id))
-            : orderedIds;
         return {
           ...group,
-          trackIds: selectedIds,
-          tracks: captureTracks(selectedIds),
+          tracks: captureCurrentTracks(),
         };
       })
     );
@@ -496,93 +453,33 @@ export function LoopStrip({
   const handleDeleteGroup = () => {
     if (!selectedGroupId) return;
     if (patternGroups.length <= 1) return;
-    let fallbackId: string | null = null;
     setPatternGroups((groups) => {
       const filtered = groups.filter((group) => group.id !== selectedGroupId);
       if (filtered.length === 0) {
         const fallbackGroup: PatternGroup = {
           id: createPatternGroupId(),
           name: getNextGroupName([]),
-          trackIds: [],
           tracks: [],
         };
-        fallbackId = fallbackGroup.id;
+        setSelectedGroupId(fallbackGroup.id);
+        applyGroupTracks(fallbackGroup);
         return [fallbackGroup];
+      }
+      const nextGroup = filtered[0] ?? null;
+      if (nextGroup) {
+        setSelectedGroupId(nextGroup.id);
+        applyGroupTracks(nextGroup);
+      } else {
+        setSelectedGroupId(null);
+        applyGroupTracks(null);
       }
       return filtered;
     });
-    if (fallbackId) {
-      setSelectedGroupId(fallbackId);
-    }
     setGroupEditor(null);
   };
 
   const handleCancelGroupEdit = () => {
     setGroupEditor(null);
-  };
-
-  const renderTrackChooser = (
-    selectedIds: number[],
-    onToggle: (trackId: number) => void,
-    disabled = false
-  ) => {
-    if (tracks.length === 0) {
-      return (
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 12,
-            color: "#94a3b8",
-          }}
-        >
-          Add a track to start building sequences.
-        </div>
-      );
-    }
-
-    return (
-      <div
-        style={{
-          marginTop: 8,
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        {tracks.map((track, index) => {
-          const checked = selectedIds.includes(track.id);
-          const label = (index + 1).toString().padStart(2, "0");
-          return (
-            <label
-              key={track.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 8px",
-                borderRadius: 6,
-                border: `1px solid ${checked ? "#27E0B0" : "#333"}`,
-                background: checked ? "rgba(39, 224, 176, 0.08)" : "#1f2532",
-                cursor: disabled ? "default" : "pointer",
-                opacity: disabled ? 0.6 : 1,
-                fontSize: 12,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => {
-                  if (disabled) return;
-                  onToggle(track.id);
-                }}
-                disabled={disabled}
-              />
-              <span>{label}</span>
-            </label>
-          );
-        })}
-      </div>
-    );
   };
 
   const updatePattern = (trackId: number, steps: number[]) => {
@@ -750,6 +647,9 @@ export function LoopStrip({
               const value = event.target.value;
               setSelectedGroupId(value || null);
               setGroupEditor(null);
+              const targetGroup =
+                patternGroups.find((group) => group.id === value) ?? null;
+              applyGroupTracks(targetGroup ?? null);
             }}
             style={{
               flex: 1,
@@ -1474,15 +1374,10 @@ export function LoopStrip({
             }}
           />
           <span style={{ fontSize: 12, color: "#94a3b8" }}>
-            Select tracks to include in this sequence.
+            {groupEditor.mode === "create"
+              ? "New sequences start blank. Name it to keep things organized."
+              : "Rename this sequence."}
           </span>
-          {renderTrackChooser(groupEditor.trackIds, handleEditorTrackToggle)}
-          {groupEditor.trackIds.length === 0 && tracks.length > 0 && (
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              This sequence has no tracks yet. Choose tracks to hear it in Song
-              view.
-            </span>
-          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
@@ -1518,34 +1413,19 @@ export function LoopStrip({
           </div>
         </div>
       ) : selectedGroup ? (
-        selectedTracks.length ? (
-          <div
-            style={{
-              marginTop: 12,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-            }}
-          >
-            {selectedTracks.map((track) => {
-              const label = getTrackNumberLabel(tracks, track.id);
-              return (
-                <span
-                  key={track.id}
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 9999,
-                    background: "rgba(39, 224, 176, 0.1)",
-                    border: "1px solid #27E0B0",
-                    fontSize: 12,
-                  }}
-                >
-                  {label}
-                </span>
-              );
-            })}
-          </div>
-        ) : null
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            color: "#94a3b8",
+          }}
+        >
+          {selectedGroup.tracks.length === 0
+            ? "No saved tracks yet. Tap Save Sequence to capture the current loop."
+            : `${selectedGroup.tracks.length} saved track${
+                selectedGroup.tracks.length === 1 ? "" : "s"
+              } including mute states.`}
+        </div>
       ) : (
         <div
           style={{

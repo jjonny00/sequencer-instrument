@@ -15,7 +15,6 @@ import { createPatternGroupId, createSongRow } from "./song";
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
   name: "sequence01",
-  trackIds: [],
   tracks: [],
 });
 
@@ -176,30 +175,6 @@ export default function App() {
     newTriggers["arpeggiator"] = newTriggers["chord"];
     setTriggers(newTriggers);
   }, [packIndex, started]);
-
-  useEffect(() => {
-    setPatternGroups((prev) => {
-      if (prev.length === 0) return prev;
-      const idSet = new Set(tracks.map((track) => track.id));
-      let changed = false;
-      const next = prev.map((group) => {
-        const filtered = group.trackIds.filter((id) => idSet.has(id));
-        const filteredSet = new Set(filtered);
-        const filteredSnapshots = group.tracks.filter((track) =>
-          filteredSet.has(track.id)
-        );
-        if (
-          filtered.length !== group.trackIds.length ||
-          filteredSnapshots.length !== group.tracks.length
-        ) {
-          changed = true;
-          return { ...group, trackIds: filtered, tracks: filteredSnapshots };
-        }
-        return group;
-      });
-      return changed ? next : prev;
-    });
-  }, [tracks]);
 
   useEffect(() => {
     setSongRows((rows) => {
