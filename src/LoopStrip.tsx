@@ -193,10 +193,13 @@ export function LoopStrip({
   }, [isPlaying]);
 
   const addPattern = (trackId: number) => {
+    let created = false;
     setTracks((ts) =>
       ts.map((t) => {
         if (t.id !== trackId) return t;
+        if (!t.instrument) return t;
         const label = getTrackNumberLabel(ts, trackId);
+        created = true;
         return {
           ...t,
           pattern: {
@@ -210,13 +213,13 @@ export function LoopStrip({
         };
       })
     );
-    setEditing(trackId);
+    if (created) {
+      setEditing(trackId);
+    }
   };
 
   const handleAddTrack = () => {
     if (!addTrackEnabled) return;
-    const defaultInstrument = instrumentOptions[0];
-    if (!defaultInstrument) return;
     let createdId: number | null = null;
     setTracks((ts) => {
       const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
@@ -227,7 +230,7 @@ export function LoopStrip({
         {
           id: nextId,
           name: label,
-          instrument: defaultInstrument as keyof TriggerMap,
+          instrument: "",
           pattern: null,
           muted: false,
         },
@@ -261,6 +264,12 @@ export function LoopStrip({
     setTracks((ts) =>
       ts.map((t) => {
         if (t.id !== trackId) return t;
+        if (!value) {
+          return {
+            ...t,
+            instrument: "",
+          };
+        }
         const instrument = value as keyof TriggerMap;
         const pattern = t.pattern
           ? { ...t.pattern, instrument }
@@ -921,17 +930,20 @@ export function LoopStrip({
                   ) : (
                     <button
                       onClick={() => addPattern(t.id)}
+                      disabled={!t.instrument}
                       style={{
                         width: "100%",
                         height: "100%",
                         borderRadius: 6,
-                        border: "1px dashed #3b4252",
-                        background: "#1d2432",
-                        color: "#e6f2ff",
+                        border: t.instrument
+                          ? "1px dashed #3b4252"
+                          : "1px dashed #242c3c",
+                        background: t.instrument ? "#1d2432" : "#161b27",
+                        color: t.instrument ? "#e6f2ff" : "#475569",
                         textTransform: "uppercase",
                         letterSpacing: 0.4,
                         fontWeight: 600,
-                        cursor: "pointer",
+                        cursor: t.instrument ? "pointer" : "not-allowed",
                       }}
                     >
                       New Pattern
@@ -959,78 +971,86 @@ export function LoopStrip({
                           gap: 12,
                           width: "100%",
                           flexWrap: "nowrap",
-                          alignItems: "flex-start",
+                          alignItems: "center",
                         }}
                       >
-                        <label
+                        <select
+                          value={t.instrument}
+                          onChange={(event) =>
+                            handleInstrumentChange(t.id, event.target.value)
+                          }
+                          aria-label="Select instrument"
                           style={{
                             flex: "1 1 0%",
                             minWidth: 0,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 4,
-                            fontSize: 12,
-                            color: "#94a3b8",
+                            padding: 6,
+                            borderRadius: 6,
+                            border: "1px solid #333",
+                            background: "#1f2532",
+                            color: t.instrument ? "#e6f2ff" : "#64748b",
                           }}
                         >
-                          <span>Instrument</span>
-                          <select
-                            value={t.instrument}
-                            onChange={(event) =>
-                              handleInstrumentChange(t.id, event.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: 6,
-                              borderRadius: 6,
-                              border: "1px solid #333",
-                              background: "#1f2532",
-                              color: "#e6f2ff",
-                            }}
-                          >
-                            {instrumentOptions.map((instrument) => (
-                              <option key={instrument} value={instrument}>
-                                {formatInstrumentLabel(instrument)}
+                          <option value="" disabled>
+                            Select instrument
+                          </option>
+                          {instrumentOptions.map((instrument) => (
+                            <option key={instrument} value={instrument}>
+                              {formatInstrumentLabel(instrument)}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value=""
+                          onChange={(event) =>
+                            handlePresetLoad(t.id, event.target.value)
+                          }
+                          aria-label="Preset (optional)"
+                          disabled={!t.instrument}
+                          style={{
+                            flex: "1 1 0%",
+                            minWidth: 0,
+                            padding: 6,
+                            borderRadius: 6,
+                            border: "1px solid #333",
+                            background: "#1f2532",
+                            color: t.instrument ? "#e6f2ff" : "#475569",
+                            opacity: t.instrument ? 1 : 0.5,
+                          }}
+                        >
+                          <option value="">Preset (optional)</option>
+                          {pack.chunks
+                            .filter((chunk) => chunk.instrument === t.instrument)
+                            .map((chunk) => (
+                              <option key={chunk.id} value={chunk.id}>
+                                {chunk.name}
                               </option>
                             ))}
-                          </select>
-                        </label>
-                        <label
+                        </select>
+                        <button
+                          type="button"
+                          onClick={hideTrackDetails}
+                          disabled={!t.instrument}
+                          aria-label="Done editing track"
                           style={{
-                            flex: "1 1 0%",
-                            minWidth: 0,
+                            width: 40,
+                            height: 36,
+                            borderRadius: 6,
+                            border: "1px solid #333",
+                            background: t.instrument ? "#27E0B0" : "#1f2532",
+                            color: t.instrument ? "#0f1420" : "#475569",
                             display: "flex",
-                            flexDirection: "column",
-                            gap: 4,
-                            fontSize: 12,
-                            color: "#94a3b8",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: t.instrument ? "pointer" : "not-allowed",
                           }}
                         >
-                          <span>Preset</span>
-                          <select
-                            value=""
-                            onChange={(event) =>
-                              handlePresetLoad(t.id, event.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: 6,
-                              borderRadius: 6,
-                              border: "1px solid #333",
-                              background: "#1f2532",
-                              color: "#e6f2ff",
-                            }}
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: 20 }}
                           >
-                            <option value="">Load preset…</option>
-                            {pack.chunks
-                              .filter((chunk) => chunk.instrument === t.instrument)
-                              .map((chunk) => (
-                                <option key={chunk.id} value={chunk.id}>
-                                  {chunk.name}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
+                            check
+                          </span>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1058,123 +1078,111 @@ export function LoopStrip({
                       gap: 12,
                     }}
                   >
-                    {t.pattern ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 12,
-                          alignItems: "center",
-                        }}
-                      >
-                        <label
-                          style={{
-                            flex: "1 1 260px",
-                            minWidth: 0,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            fontSize: 12,
-                            color: "#94a3b8",
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: 18 }}
-                            aria-hidden="true"
-                          >
-                            speed
-                          </span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            value={velocityValue}
-                            onChange={(event) =>
-                              updatePatternControls(t.id, {
-                                velocity: Number(event.target.value),
-                              })
-                            }
-                            style={{ flex: 1 }}
-                            aria-label="Velocity"
-                            title="Velocity"
-                          />
-                          <span
-                            style={{
-                              width: 48,
-                              textAlign: "right",
-                              color: "#94a3b8",
-                            }}
-                          >
-                            {velocityValue.toFixed(2)}
-                          </span>
-                        </label>
-                        <label
-                          style={{
-                            flex: "1 1 260px",
-                            minWidth: 0,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            fontSize: 12,
-                            color: "#94a3b8",
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: 18 }}
-                            aria-hidden="true"
-                          >
-                            music_note
-                          </span>
-                          <input
-                            type="range"
-                            min={-12}
-                            max={12}
-                            step={1}
-                            value={pitchValue}
-                            onChange={(event) =>
-                              updatePatternControls(t.id, {
-                                pitch: Number(event.target.value),
-                              })
-                            }
-                            style={{ flex: 1 }}
-                            aria-label="Pitch"
-                            title="Pitch"
-                          />
-                          <span
-                            style={{
-                              width: 48,
-                              textAlign: "right",
-                              color: "#94a3b8",
-                            }}
-                          >
-                            {formatPitchDisplay(pitchValue)}
-                          </span>
-                        </label>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                        Create a pattern to edit velocity and pitch.
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                      type="button"
-                      onClick={hideTrackDetails}
+                    <div
                       style={{
-                        padding: "6px 12px",
-                        borderRadius: 6,
-                        border: "1px solid #333",
-                        background: "#1f2532",
-                        color: "#e6f2ff",
-                        cursor: "pointer",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        alignItems: "center",
                       }}
                     >
-                      Hide Controls
-                    </button>
+                      <label
+                        style={{
+                          flex: "1 1 260px",
+                          minWidth: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12,
+                          color: t.pattern ? "#94a3b8" : "#475569",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 18 }}
+                          aria-hidden="true"
+                        >
+                          speed
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={velocityValue}
+                          onChange={(event) =>
+                            updatePatternControls(t.id, {
+                              velocity: Number(event.target.value),
+                            })
+                          }
+                          style={{
+                            flex: 1,
+                            opacity: t.pattern ? 1 : 0.4,
+                            cursor: t.pattern ? "pointer" : "not-allowed",
+                          }}
+                          aria-label="Velocity"
+                          title="Velocity"
+                          disabled={!t.pattern}
+                        />
+                        <span
+                          style={{
+                            width: 48,
+                            textAlign: "right",
+                            color: t.pattern ? "#94a3b8" : "#475569",
+                          }}
+                        >
+                          {velocityValue.toFixed(2)}
+                        </span>
+                      </label>
+                      <label
+                        style={{
+                          flex: "1 1 260px",
+                          minWidth: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12,
+                          color: t.pattern ? "#94a3b8" : "#475569",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 18 }}
+                          aria-hidden="true"
+                        >
+                          music_note
+                        </span>
+                        <input
+                          type="range"
+                          min={-12}
+                          max={12}
+                          step={1}
+                          value={pitchValue}
+                          onChange={(event) =>
+                            updatePatternControls(t.id, {
+                              pitch: Number(event.target.value),
+                            })
+                          }
+                          style={{
+                            flex: 1,
+                            opacity: t.pattern ? 1 : 0.4,
+                            cursor: t.pattern ? "pointer" : "not-allowed",
+                          }}
+                          aria-label="Pitch"
+                          title="Pitch"
+                          disabled={!t.pattern}
+                        />
+                        <span
+                          style={{
+                            width: 48,
+                            textAlign: "right",
+                            color: t.pattern ? "#94a3b8" : "#475569",
+                          }}
+                        >
+                          {formatPitchDisplay(pitchValue)}
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               )}

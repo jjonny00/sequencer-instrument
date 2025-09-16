@@ -68,9 +68,10 @@ export default function App() {
         "chord",
         "arpeggiator",
       ]);
-      const filtered = prev.filter((track) =>
-        allowed.has(track.instrument as string)
-      );
+      const filtered = prev.filter((track) => {
+        if (!track.instrument) return true;
+        return allowed.has(track.instrument);
+      });
       return filtered.length === prev.length ? prev : filtered;
     });
     setEditing(null);
