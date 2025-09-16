@@ -10,6 +10,13 @@ import { Keyboard } from "./Keyboard";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import type { PatternGroup } from "./song";
+import { createPatternGroupId } from "./song";
+
+const createInitialPatternGroup = (): PatternGroup => ({
+  id: createPatternGroupId(),
+  name: "group01",
+  trackIds: [],
+});
 
 type Subdivision = "16n" | "8n" | "4n";
 
@@ -43,7 +50,9 @@ export default function App() {
   const [triggers, setTriggers] = useState<TriggerMap>({});
   const [tab, setTab] = useState<"mushy" | "keyboard">("mushy");
   const [viewMode, setViewMode] = useState<"track" | "song">("track");
-  const [patternGroups, setPatternGroups] = useState<PatternGroup[]>([]);
+  const [patternGroups, setPatternGroups] = useState<PatternGroup[]>(() => [
+    createInitialPatternGroup(),
+  ]);
   const [songRows, setSongRows] = useState<(string | null)[][]>([[]]);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 
@@ -65,7 +74,8 @@ export default function App() {
       return filtered.length === prev.length ? prev : filtered;
     });
     setEditing(null);
-    setPatternGroups([]);
+    const initialGroup = createInitialPatternGroup();
+    setPatternGroups([initialGroup]);
     setSongRows([[]]);
     setCurrentSectionIndex(0);
     if (!started) return;
