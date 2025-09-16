@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
@@ -66,24 +74,12 @@ type GroupEditorState =
       name: string;
     };
 
-/**
- * Top strip visualizing a 16-step loop.
- * - Displays each track's 16-step pattern.
- * - Highlights the current step in sync with Tone.Transport.
- * - Allows editing a track's pattern inline.
- */
-export function LoopStrip({
-  started,
-  isPlaying,
-  tracks,
-  editing,
-  setEditing,
-  setTracks,
-  packIndex,
-  setPackIndex,
-  patternGroups,
-  setPatternGroups,
-}: {
+export interface LoopStripHandle {
+  openSequenceLibrary: () => void;
+  addTrack: () => void;
+}
+
+interface LoopStripProps {
   started: boolean;
   isPlaying: boolean;
   tracks: Track[];
@@ -94,15 +90,42 @@ export function LoopStrip({
   setPackIndex: Dispatch<SetStateAction<number>>;
   patternGroups: PatternGroup[];
   setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
-}) {
+  selectedGroupId: string | null;
+  setSelectedGroupId: Dispatch<SetStateAction<string | null>>;
+}
+
+/**
+ * Top strip visualizing a 16-step loop.
+ * - Displays each track's 16-step pattern.
+ * - Highlights the current step in sync with Tone.Transport.
+ * - Allows editing a track's pattern inline.
+ */
+export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
+  function LoopStrip(
+    {
+      started,
+      isPlaying,
+      tracks,
+      editing,
+      setEditing,
+      setTracks,
+      packIndex,
+      setPackIndex,
+      patternGroups,
+      setPatternGroups,
+      selectedGroupId,
+      setSelectedGroupId,
+    },
+    ref
+  ) {
   const [step, setStep] = useState(-1);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupEditor, setGroupEditor] = useState<GroupEditorState | null>(null);
   const [stepEditing, setStepEditing] = useState<
     { trackId: number; index: number } | null
   >(null);
   const [detailTrackId, setDetailTrackId] = useState<number | null>(null);
   const [pendingTrackIds, setPendingTrackIds] = useState<number[]>([]);
+  const [isSequenceLibraryOpen, setIsSequenceLibraryOpen] = useState(false);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const pack = packs[packIndex];
@@ -148,20 +171,27 @@ export function LoopStrip({
 
   useEffect(() => {
     if (patternGroups.length === 0) {
-      setSelectedGroupId(null);
+      if (selectedGroupId !== null) {
+        setSelectedGroupId(null);
+      }
       setGroupEditor(null);
-      applyGroupTracks(null);
+      setIsSequenceLibraryOpen(false);
       return;
     }
-    setSelectedGroupId((prev) => {
-      if (prev && patternGroups.some((group) => group.id === prev)) {
-        return prev;
-      }
-      const fallbackGroup = patternGroups[0] ?? null;
-      applyGroupTracks(fallbackGroup ?? null);
-      return fallbackGroup?.id ?? null;
-    });
-  }, [patternGroups, applyGroupTracks]);
+    const exists = selectedGroupId
+      ? patternGroups.some((group) => group.id === selectedGroupId)
+      : false;
+    if (exists) return;
+    const fallbackGroup = patternGroups[0] ?? null;
+    setSelectedGroupId(fallbackGroup?.id ?? null);
+  }, [patternGroups, selectedGroupId, setSelectedGroupId]);
+
+  useEffect(() => {
+    const group = selectedGroupId
+      ? patternGroups.find((g) => g.id === selectedGroupId) ?? null
+      : null;
+    applyGroupTracks(group ?? null);
+  }, [selectedGroupId, patternGroups, applyGroupTracks]);
 
   useEffect(() => {
     setGroupEditor(null);
@@ -240,7 +270,7 @@ export function LoopStrip({
     }
   };
 
-  const handleAddTrack = () => {
+  const handleAddTrack = useCallback(() => {
     if (!addTrackEnabled) return;
     let createdId: number | null = null;
     setTracks((ts) => {
@@ -264,7 +294,22 @@ export function LoopStrip({
       setEditing(newId);
       setDetailTrackId(newId);
     }
-  };
+  }, [
+    addTrackEnabled,
+    setTracks,
+    setPendingTrackIds,
+    setEditing,
+    setDetailTrackId,
+  ]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openSequenceLibrary: () => setIsSequenceLibraryOpen(true),
+      addTrack: () => handleAddTrack(),
+    }),
+    [handleAddTrack]
+  );
 
   const handleToggleMute = (trackId: number) => {
     setTracks((ts) =>
@@ -578,6 +623,64 @@ export function LoopStrip({
         overflow: "hidden",
       }}
     >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          marginBottom: 8,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            setIsSequenceLibraryOpen((open) => !open && patternGroups.length > 0)
+          }
+          disabled={patternGroups.length === 0}
+          style={{
+            padding: "6px 14px",
+            borderRadius: 999,
+            border: "1px solid #333",
+            background: "#1f2532",
+            color: patternGroups.length === 0 ? "#475569" : "#e6f2ff",
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
+          }}
+        >
+          <span>Sequence: {selectedGroup?.name ?? "None"}</span>
+          <span aria-hidden="true" style={{ fontSize: 10 }}>
+            ▴
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={handleAddTrack}
+          disabled={!addTrackEnabled}
+          style={{
+            padding: "6px 16px",
+            borderRadius: 999,
+            border: "1px solid #333",
+            background: addTrackEnabled ? "#27E0B0" : "#1f2532",
+            color: addTrackEnabled ? "#1F2532" : "#475569",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+            cursor: addTrackEnabled ? "pointer" : "not-allowed",
+            boxShadow: addTrackEnabled
+              ? "0 2px 6px rgba(15, 20, 32, 0.35)"
+              : "none",
+          }}
+        >
+          + Track
+        </button>
+      </div>
       <div style={{ marginBottom: 4 }}>
         <select
           value={packIndex}
@@ -597,195 +700,6 @@ export function LoopStrip({
             </option>
           ))}
         </select>
-      </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexWrap: "wrap",
-          marginBottom: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flex: "1 1 auto",
-            minWidth: 0,
-          }}
-        >
-          <button
-            type="button"
-            onClick={openCreateGroup}
-            aria-label="Create new sequence"
-            title="Create new sequence"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              border: "1px solid #333",
-              background: isCreatingGroup ? "#27E0B0" : "#1f2532",
-              color: isCreatingGroup ? "#1F2532" : "#e6f2ff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 20 }}
-            >
-              add
-            </span>
-          </button>
-          <select
-            aria-label="Current sequence"
-            value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              setSelectedGroupId(value || null);
-              setGroupEditor(null);
-              const targetGroup =
-                patternGroups.find((group) => group.id === value) ?? null;
-              applyGroupTracks(targetGroup ?? null);
-            }}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: 6,
-              borderRadius: 6,
-              border: "1px solid #333",
-              background: "#1f2532",
-              color: "#e6f2ff",
-            }}
-          >
-            {patternGroups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleSnapshotSelectedGroup}
-            disabled={!selectedGroup}
-            aria-label="Save sequence"
-            title="Save sequence"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              border: "1px solid #333",
-              background: selectedGroup ? "#27E0B0" : "#1f2532",
-              color: selectedGroup ? "#1F2532" : "#64748b",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: selectedGroup ? "pointer" : "default",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 18 }}
-            >
-              save
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={openEditGroup}
-            disabled={!selectedGroup}
-            aria-label="Edit sequence"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              border: "1px solid #333",
-              background: isEditingCurrentGroup ? "#27E0B0" : "#1f2532",
-              color: selectedGroup
-                ? isEditingCurrentGroup
-                  ? "#1F2532"
-                  : "#e6f2ff"
-                : "#64748b",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: selectedGroup ? "pointer" : "default",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 18 }}
-            >
-              edit
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={handleDuplicateGroup}
-            disabled={!selectedGroup}
-            aria-label="Duplicate sequence"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              border: "1px solid #333",
-              background: "#1f2532",
-              color: selectedGroup ? "#e6f2ff" : "#64748b",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: selectedGroup ? "pointer" : "default",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 18 }}
-            >
-              content_copy
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteGroup}
-            disabled={!selectedGroup || patternGroups.length <= 1}
-            aria-label="Delete sequence"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              border: "1px solid #333",
-              background: "#1f2532",
-              color:
-                selectedGroup && patternGroups.length > 1
-                  ? "#e6f2ff"
-                  : "#64748b",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor:
-                selectedGroup && patternGroups.length > 1
-                  ? "pointer"
-                  : "default",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 18 }}
-            >
-              delete
-            </span>
-          </button>
-        </div>
       </div>
       <div
         ref={trackAreaRef}
@@ -1318,123 +1232,321 @@ export function LoopStrip({
             </div>
           );
         })}
-        <div>
-          <button
-            type="button"
-            onClick={handleAddTrack}
-            disabled={!addTrackEnabled}
+      </div>
+      {isSequenceLibraryOpen && (
+        <div
+          onClick={() => setIsSequenceLibraryOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 40,
+            background: "rgba(8, 12, 20, 0.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
             style={{
               width: "100%",
-              height: ROW_HEIGHT,
-              borderRadius: 6,
-              border: addTrackEnabled
-                ? "1px dashed #3b4252"
-                : "1px dashed #242c3c",
-              background: addTrackEnabled ? "#141924" : "#161b27",
-              color: addTrackEnabled ? "#e6f2ff" : "#475569",
+              maxWidth: 480,
+              background: "#111827",
+              border: "1px solid #2a3344",
+              borderRadius: 12,
+              padding: 20,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              textTransform: "uppercase",
-              letterSpacing: 0.6,
-              fontWeight: 600,
-              cursor: addTrackEnabled ? "pointer" : "not-allowed",
+              flexDirection: "column",
+              gap: 16,
+              boxShadow: "0 18px 40px rgba(8, 12, 20, 0.6)",
             }}
           >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 18 }}
-            >
-              add
-            </span>
-            Add Track
-          </button>
-        </div>
-      </div>
-      {groupEditor ? (
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          <input
-            value={groupEditor.name}
-            onChange={(event) => handleEditorNameChange(event.target.value)}
-            placeholder={getNextGroupName()}
-            style={{
-              padding: 6,
-              borderRadius: 6,
-              border: "1px solid #333",
-              background: "#1f2532",
-              color: "#e6f2ff",
-            }}
-          />
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>
-            {groupEditor.mode === "create"
-              ? "New sequences start blank. Name it to keep things organized."
-              : "Rename this sequence."}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              onClick={handleSaveGroup}
+            <div
               style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: "#27E0B0",
-                color: "#1F2532",
-                fontWeight: 600,
-                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
               }}
             >
-              {groupEditor.mode === "create"
-                ? "Create New Sequence"
-                : "Save Changes"}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelGroupEdit}
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: "#e6f2ff",
+                }}
+              >
+                Sequence Library
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSequenceLibraryOpen(false)}
+                style={{
+                  marginLeft: "auto",
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #333",
+                  background: "#1f2532",
+                  color: "#e6f2ff",
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <div
               style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: "#1f2532",
-                color: "#e6f2ff",
-                cursor: "pointer",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                alignItems: "center",
               }}
             >
-              Cancel
-            </button>
+              <button
+                type="button"
+                onClick={openCreateGroup}
+                aria-label="Create new sequence"
+                title="Create new sequence"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: isCreatingGroup ? "#27E0B0" : "#1f2532",
+                  color: isCreatingGroup ? "#1F2532" : "#e6f2ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 22 }}
+                >
+                  add
+                </span>
+              </button>
+              <select
+                aria-label="Current sequence"
+                value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedGroupId(value || null);
+                  setGroupEditor(null);
+                  setIsSequenceLibraryOpen(false);
+                }}
+                style={{
+                  flex: "1 1 auto",
+                  minWidth: 0,
+                  padding: 8,
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: "#1f2532",
+                  color: "#e6f2ff",
+                }}
+              >
+                {patternGroups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                justifyContent: "space-between",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleSnapshotSelectedGroup}
+                disabled={!selectedGroup}
+                aria-label="Save sequence"
+                title="Save sequence"
+                style={{
+                  flex: "1 1 100px",
+                  minWidth: 0,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: selectedGroup ? "#27E0B0" : "#1f2532",
+                  color: selectedGroup ? "#1F2532" : "#64748b",
+                  cursor: selectedGroup ? "pointer" : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  fontWeight: 600,
+                }}
+              >
+                <span className="material-symbols-outlined">save</span>
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={openEditGroup}
+                disabled={!selectedGroup}
+                aria-label="Edit sequence"
+                style={{
+                  flex: "1 1 100px",
+                  minWidth: 0,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: isEditingCurrentGroup ? "#27E0B0" : "#1f2532",
+                  color: selectedGroup
+                    ? isEditingCurrentGroup
+                      ? "#1F2532"
+                      : "#e6f2ff"
+                    : "#64748b",
+                  cursor: selectedGroup ? "pointer" : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  fontWeight: 600,
+                }}
+              >
+                <span className="material-symbols-outlined">edit</span>
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={handleDuplicateGroup}
+                disabled={!selectedGroup}
+                aria-label="Duplicate sequence"
+                style={{
+                  flex: "1 1 110px",
+                  minWidth: 0,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: "#1f2532",
+                  color: selectedGroup ? "#e6f2ff" : "#64748b",
+                  cursor: selectedGroup ? "pointer" : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  fontWeight: 600,
+                }}
+              >
+                <span className="material-symbols-outlined">content_copy</span>
+                Duplicate
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteGroup}
+                disabled={!selectedGroup || patternGroups.length <= 1}
+                aria-label="Delete sequence"
+                style={{
+                  flex: "1 1 110px",
+                  minWidth: 0,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: "#1f2532",
+                  color:
+                    selectedGroup && patternGroups.length > 1
+                      ? "#fca5a5"
+                      : "#64748b",
+                  cursor:
+                    selectedGroup && patternGroups.length > 1
+                      ? "pointer"
+                      : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  fontWeight: 600,
+                }}
+              >
+                <span className="material-symbols-outlined">delete</span>
+                Delete
+              </button>
+            </div>
+            {groupEditor ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <input
+                  value={groupEditor.name}
+                  onChange={(event) =>
+                    handleEditorNameChange(event.target.value)
+                  }
+                  placeholder={getNextGroupName()}
+                  style={{
+                    padding: 8,
+                    borderRadius: 8,
+                    border: "1px solid #333",
+                    background: "#1f2532",
+                    color: "#e6f2ff",
+                  }}
+                />
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                  {groupEditor.mode === "create"
+                    ? "New sequences start blank. Name it to keep things organized."
+                    : "Rename this sequence."}
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSaveGroup();
+                      setIsSequenceLibraryOpen(false);
+                    }}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #333",
+                      background: "#27E0B0",
+                      color: "#1F2532",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {groupEditor.mode === "create"
+                      ? "Create New Sequence"
+                      : "Save Changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelGroupEdit}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #333",
+                      background: "#1f2532",
+                      color: "#e6f2ff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : selectedGroup ? (
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                {selectedGroup.tracks.length === 0
+                  ? "No saved tracks yet. Tap Save Sequence to capture the current loop."
+                  : `${selectedGroup.tracks.length} saved track${
+                      selectedGroup.tracks.length === 1 ? "" : "s"
+                    } including mute states.`}
+              </span>
+            ) : (
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                Create a sequence to capture the current track mix.
+              </span>
+            )}
           </div>
-        </div>
-      ) : selectedGroup ? (
-        <div
-          style={{
-            marginTop: 12,
-            fontSize: 12,
-            color: "#94a3b8",
-          }}
-        >
-          {selectedGroup.tracks.length === 0
-            ? "No saved tracks yet. Tap Save Sequence to capture the current loop."
-            : `${selectedGroup.tracks.length} saved track${
-                selectedGroup.tracks.length === 1 ? "" : "s"
-              } including mute states.`}
-        </div>
-      ) : (
-        <div
-          style={{
-            marginTop: 12,
-            fontSize: 12,
-            color: "#94a3b8",
-          }}
-        >
-          Create a sequence to capture the current track mix.
         </div>
       )}
       {stepEditing && (() => {
@@ -1455,6 +1567,7 @@ export function LoopStrip({
     </div>
   );
 }
+);
 
 function PatternEditor({
   steps,

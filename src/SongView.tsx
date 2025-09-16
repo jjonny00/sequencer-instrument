@@ -18,6 +18,9 @@ interface SongViewProps {
   setBpm: Dispatch<SetStateAction<number>>;
   onPlayPause: () => void;
   onStop: () => void;
+  selectedGroupId: string | null;
+  onOpenSequenceLibrary: () => void;
+  onAddTrack: () => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -37,6 +40,9 @@ export function SongView({
   setBpm,
   onPlayPause,
   onStop,
+  selectedGroupId,
+  onOpenSequenceLibrary,
+  onAddTrack,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -49,6 +55,11 @@ export function SongView({
     () => new Map(patternGroups.map((group) => [group.id, group])),
     [patternGroups]
   );
+
+  const activeGroup = useMemo(() => {
+    if (!selectedGroupId) return null;
+    return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
+  }, [patternGroups, selectedGroupId]);
 
   const sectionCount = useMemo(
     () => songRows.reduce((max, row) => Math.max(max, row.slots.length), 0),
@@ -150,6 +161,60 @@ export function SongView({
         minHeight: 0,
       }}
     >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onOpenSequenceLibrary}
+          disabled={patternGroups.length === 0}
+          style={{
+            padding: "6px 14px",
+            borderRadius: 999,
+            border: "1px solid #333",
+            background: "#1f2532",
+            color: patternGroups.length === 0 ? "#475569" : "#e6f2ff",
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
+          }}
+        >
+          <span>
+            Sequence: {activeGroup?.name ?? "None"}
+          </span>
+          <span aria-hidden="true" style={{ fontSize: 10 }}>
+            ▴
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onAddTrack}
+          style={{
+            padding: "6px 16px",
+            borderRadius: 999,
+            border: "1px solid #333",
+            background: "#27E0B0",
+            color: "#1F2532",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+            cursor: "pointer",
+            boxShadow: "0 2px 6px rgba(15, 20, 32, 0.3)",
+          }}
+        >
+          + Track
+        </button>
+      </div>
       <div
         style={{
           border: "1px solid #333",
