@@ -526,8 +526,8 @@ export function SongView({
               fontSize: 13,
             }}
           >
-            No sequences yet. Save sequences in Track view to start arranging the
-            song.
+            No sequences yet. Create sequences in Track view to start arranging
+            the song.
           </div>
         ) : (
           <div

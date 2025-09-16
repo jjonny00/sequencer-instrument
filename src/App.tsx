@@ -16,7 +16,6 @@ const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
   name: "sequence01",
   trackIds: [],
-  autoPopulate: true,
 });
 
 type Subdivision = "16n" | "8n" | "4n";
@@ -178,22 +177,10 @@ export default function App() {
   useEffect(() => {
     setPatternGroups((prev) => {
       if (prev.length === 0) return prev;
-      const orderedIds = tracks.map((track) => track.id);
-      const idSet = new Set(orderedIds);
+      const idSet = new Set(tracks.map((track) => track.id));
       let changed = false;
       const next = prev.map((group) => {
         const filtered = group.trackIds.filter((id) => idSet.has(id));
-        if (group.autoPopulate) {
-          const needsSync =
-            filtered.length !== orderedIds.length ||
-            filtered.length !== group.trackIds.length ||
-            filtered.some((id, index) => id !== orderedIds[index]);
-          if (needsSync) {
-            changed = true;
-            return { ...group, trackIds: orderedIds.slice() };
-          }
-          return group;
-        }
         if (filtered.length !== group.trackIds.length) {
           changed = true;
           return { ...group, trackIds: filtered };

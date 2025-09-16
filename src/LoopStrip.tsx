@@ -41,9 +41,6 @@ const formatPitchDisplay = (value: number) =>
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
 
-const areTrackListsEqual = (a: number[], b: number[]) =>
-  a.length === b.length && a.every((id, index) => id === b[index]);
-
 type GroupEditorState =
   | {
       mode: "create";
@@ -348,11 +345,10 @@ export function LoopStrip({
   };
 
   const openCreateGroup = () => {
-    const allTrackIds = tracks.map((track) => track.id);
     setGroupEditor({
       mode: "create",
       name: getNextGroupName(),
-      trackIds: allTrackIds,
+      trackIds: [],
     });
   };
 
@@ -388,20 +384,15 @@ export function LoopStrip({
 
   const handleSaveGroup = () => {
     if (!groupEditor) return;
-    const allTrackIds = tracks.map((track) => track.id);
     if (groupEditor.mode === "edit") {
       setPatternGroups((groups) =>
         groups.map((group) => {
           if (group.id !== groupEditor.groupId) return group;
           const trimmed = groupEditor.name.trim();
-          const maintainAuto =
-            group.autoPopulate &&
-            areTrackListsEqual(groupEditor.trackIds, allTrackIds);
           return {
             ...group,
             name: trimmed || group.name,
             trackIds: groupEditor.trackIds.slice(),
-            autoPopulate: maintainAuto,
           };
         })
       );
@@ -419,7 +410,6 @@ export function LoopStrip({
           id: newId,
           name,
           trackIds: selectedTrackIds,
-          autoPopulate: false,
         },
       ];
     });
@@ -448,7 +438,6 @@ export function LoopStrip({
           id: newId,
           name: candidate,
           trackIds: [...source.trackIds],
-          autoPopulate: false,
         },
       ];
     });
@@ -467,7 +456,6 @@ export function LoopStrip({
           id: createPatternGroupId(),
           name: getNextGroupName([]),
           trackIds: [],
-          autoPopulate: true,
         };
         fallbackId = fallbackGroup.id;
         return [fallbackGroup];
@@ -685,8 +673,8 @@ export function LoopStrip({
           <button
             type="button"
             onClick={openCreateGroup}
-            aria-label="Save sequence"
-            title="Save sequence"
+            aria-label="Create new sequence"
+            title="Create new sequence"
             style={{
               width: 32,
               height: 32,
@@ -703,7 +691,7 @@ export function LoopStrip({
               className="material-symbols-outlined"
               style={{ fontSize: 20 }}
             >
-              save
+              add
             </span>
           </button>
           <select
@@ -1434,7 +1422,9 @@ export function LoopStrip({
                 cursor: "pointer",
               }}
             >
-              Save Sequence
+              {groupEditor.mode === "create"
+                ? "Create New Sequence"
+                : "Save Changes"}
             </button>
             <button
               type="button"
@@ -1489,7 +1479,7 @@ export function LoopStrip({
             color: "#94a3b8",
           }}
         >
-          Save a sequence to capture the current track mix.
+          Create a sequence to capture the current track mix.
         </div>
       )}
       {stepEditing && (() => {
