@@ -29,11 +29,14 @@ const formatInstrumentLabel = (value: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
-const computeDefaultTrackName = (instrument: string, tracks: Track[]) => {
-  const base = formatInstrumentLabel(instrument);
-  const count = tracks.filter((track) => track.instrument === instrument).length;
-  return count ? `${base} ${count + 1}` : base;
+const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
+  const index = tracks.findIndex((track) => track.id === trackId);
+  const number = index >= 0 ? index + 1 : trackId;
+  return number.toString().padStart(2, "0");
 };
+
+const formatPitchDisplay = (value: number) =>
+  value > 0 ? `+${value}` : value.toString();
 
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
@@ -193,11 +196,12 @@ export function LoopStrip({
     setTracks((ts) =>
       ts.map((t) => {
         if (t.id !== trackId) return t;
+        const label = getTrackNumberLabel(ts, trackId);
         return {
           ...t,
           pattern: {
             id: `track-${trackId}-${Date.now()}`,
-            name: `${t.name} Pattern`,
+            name: `Track ${label} Pattern`,
             instrument: t.instrument,
             steps: Array(16).fill(0),
             velocities: Array(16).fill(1),
@@ -216,13 +220,13 @@ export function LoopStrip({
     let createdId: number | null = null;
     setTracks((ts) => {
       const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
-      const name = computeDefaultTrackName(defaultInstrument, ts);
+      const label = (ts.length + 1).toString().padStart(2, "0");
       createdId = nextId;
       return [
         ...ts,
         {
           id: nextId,
-          name,
+          name: label,
           instrument: defaultInstrument as keyof TriggerMap,
           pattern: null,
           muted: false,
@@ -426,8 +430,9 @@ export function LoopStrip({
           gap: 8,
         }}
       >
-        {tracks.map((track) => {
+        {tracks.map((track, index) => {
           const checked = selectedIds.includes(track.id);
+          const label = (index + 1).toString().padStart(2, "0");
           return (
             <label
               key={track.id}
@@ -453,7 +458,7 @@ export function LoopStrip({
                 }}
                 disabled={disabled}
               />
-              <span>{track.name}</span>
+              <span>{label}</span>
             </label>
           );
         })}
@@ -767,6 +772,9 @@ export function LoopStrip({
           const color = getInstrumentColor(t.instrument);
           const isMuted = t.muted;
           const isEditing = editing === t.id;
+          const trackLabel = getTrackNumberLabel(tracks, t.id);
+          const velocityValue = t.pattern?.velocities?.[0] ?? 1;
+          const pitchValue = t.pattern?.pitches?.[0] ?? 0;
 
           const handleLabelPointerDown = (
             event: ReactPointerEvent<HTMLDivElement>
@@ -850,7 +858,7 @@ export function LoopStrip({
                   }}
                   title={isMuted ? "Unmute track" : "Mute track"}
                 >
-                  {t.name}
+                  {trackLabel}
                 </div>
                 <div
                   style={{
@@ -950,13 +958,14 @@ export function LoopStrip({
                           display: "flex",
                           gap: 12,
                           width: "100%",
-                          flexWrap: "wrap",
+                          flexWrap: "nowrap",
+                          alignItems: "flex-start",
                         }}
                       >
                         <label
                           style={{
-                            flex: "1 1 200px",
-                            minWidth: 160,
+                            flex: "1 1 0%",
+                            minWidth: 0,
                             display: "flex",
                             flexDirection: "column",
                             gap: 4,
@@ -988,8 +997,8 @@ export function LoopStrip({
                         </label>
                         <label
                           style={{
-                            flex: "1 1 200px",
-                            minWidth: 180,
+                            flex: "1 1 0%",
+                            minWidth: 0,
                             display: "flex",
                             flexDirection: "column",
                             gap: 4,
@@ -1050,58 +1059,101 @@ export function LoopStrip({
                     }}
                   >
                     {t.pattern ? (
-                      <>
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: 12,
-                              color: "#94a3b8",
-                              marginBottom: 4,
-                            }}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 12,
+                          alignItems: "center",
+                        }}
+                      >
+                        <label
+                          style={{
+                            flex: "1 1 260px",
+                            minWidth: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            fontSize: 12,
+                            color: "#94a3b8",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: 18 }}
+                            aria-hidden="true"
                           >
-                            Velocity: {(t.pattern.velocities?.[0] ?? 1).toFixed(2)}
-                          </label>
+                            speed
+                          </span>
                           <input
                             type="range"
                             min={0}
                             max={1}
                             step={0.01}
-                            value={t.pattern.velocities?.[0] ?? 1}
+                            value={velocityValue}
                             onChange={(event) =>
                               updatePatternControls(t.id, {
                                 velocity: Number(event.target.value),
                               })
                             }
-                            style={{ width: "100%" }}
+                            style={{ flex: 1 }}
+                            aria-label="Velocity"
+                            title="Velocity"
                           />
-                        </div>
-                        <div>
-                          <label
+                          <span
                             style={{
-                              display: "block",
-                              fontSize: 12,
+                              width: 48,
+                              textAlign: "right",
                               color: "#94a3b8",
-                              marginBottom: 4,
                             }}
                           >
-                            Pitch: {t.pattern.pitches?.[0] ?? 0}
-                          </label>
+                            {velocityValue.toFixed(2)}
+                          </span>
+                        </label>
+                        <label
+                          style={{
+                            flex: "1 1 260px",
+                            minWidth: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            fontSize: 12,
+                            color: "#94a3b8",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: 18 }}
+                            aria-hidden="true"
+                          >
+                            music_note
+                          </span>
                           <input
                             type="range"
                             min={-12}
                             max={12}
                             step={1}
-                            value={t.pattern.pitches?.[0] ?? 0}
+                            value={pitchValue}
                             onChange={(event) =>
                               updatePatternControls(t.id, {
                                 pitch: Number(event.target.value),
                               })
                             }
-                            style={{ width: "100%" }}
+                            style={{ flex: 1 }}
+                            aria-label="Pitch"
+                            title="Pitch"
                           />
-                        </div>
-                      </>
+                          <span
+                            style={{
+                              width: 48,
+                              textAlign: "right",
+                              color: "#94a3b8",
+                            }}
+                          >
+                            {formatPitchDisplay(pitchValue)}
+                          </span>
+                        </label>
+                      </div>
                     ) : (
                       <span style={{ fontSize: 12, color: "#94a3b8" }}>
                         Create a pattern to edit velocity and pitch.
@@ -1235,20 +1287,23 @@ export function LoopStrip({
               gap: 6,
             }}
           >
-            {selectedTracks.map((track) => (
-              <span
-                key={track.id}
-                style={{
-                  padding: "4px 8px",
-                  borderRadius: 9999,
-                  background: "rgba(39, 224, 176, 0.1)",
-                  border: "1px solid #27E0B0",
-                  fontSize: 12,
-                }}
-              >
-                {track.name}
-              </span>
-            ))}
+            {selectedTracks.map((track) => {
+              const label = getTrackNumberLabel(tracks, track.id);
+              return (
+                <span
+                  key={track.id}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 9999,
+                    background: "rgba(39, 224, 176, 0.1)",
+                    border: "1px solid #27E0B0",
+                    fontSize: 12,
+                  }}
+                >
+                  {label}
+                </span>
+              );
+            })}
           </div>
         ) : null
       ) : (

@@ -78,17 +78,18 @@ export function Arpeggiator({
       const steps = Array(16).fill(0);
       const velocities = Array(16).fill(1);
       const pitches = Array(16).fill(0);
+      const label = (ts.length + 1).toString().padStart(2, "0");
       trackIdRef.current = nextId;
       return [
         ...ts,
         {
           id: nextId,
-          name: "Mushy",
+          name: label,
           instrument: "arpeggiator",
           muted: false,
           pattern: {
             id: `arp-${Date.now()}`,
-            name: "Mushy Pattern",
+            name: `Track ${label} Pattern`,
             instrument: "arpeggiator",
             steps,
             velocities,
@@ -171,6 +172,7 @@ export function Arpeggiator({
               const steps = Array(16).fill(0);
               const velocities = Array(16).fill(1);
               const pitches = Array(16).fill(0);
+              const label = (ts.length + 1).toString().padStart(2, "0");
               steps[stepIndex] = 1;
               velocities[stepIndex] = 1;
               pitches[stepIndex] = pitch;
@@ -178,12 +180,12 @@ export function Arpeggiator({
                 ...ts,
                 {
                   id: tid,
-                  name: "Mushy",
+                  name: label,
                   instrument: "arpeggiator",
                   muted: false,
                   pattern: {
                     id: `arp-${Date.now()}`,
-                    name: "Mushy Pattern",
+                    name: `Track ${label} Pattern`,
                     instrument: "arpeggiator",
                     steps,
                     velocities,
@@ -201,10 +203,17 @@ export function Arpeggiator({
             }
             return ts.map((t) => {
               if (t.id !== tid) return t;
+              const label = /^\d+$/.test(t.name)
+                ? t.name
+                : (() => {
+                    const index = ts.findIndex((candidate) => candidate.id === t.id);
+                    const number = index >= 0 ? index + 1 : t.id;
+                    return number.toString().padStart(2, "0");
+                  })();
               const pattern =
                 t.pattern ?? {
                   id: `arp-${Date.now()}`,
-                  name: "Mushy Pattern",
+                  name: `Track ${label} Pattern`,
                   instrument: "arpeggiator",
                   steps: Array(16).fill(0),
                   velocities: Array(16).fill(1),
