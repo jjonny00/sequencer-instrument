@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
@@ -81,18 +81,17 @@ export function LoopStrip({
   setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
 }) {
   const [step, setStep] = useState(-1);
-  const [selectedChunk, setSelectedChunk] = useState("");
-  const [newTrackInstrument, setNewTrackInstrument] = useState("");
-  const [newTrackName, setNewTrackName] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupEditor, setGroupEditor] = useState<GroupEditorState | null>(null);
   const [stepEditing, setStepEditing] = useState<
-    { trackId: number; index: number | null } | null
+    { trackId: number; index: number } | null
   >(null);
+  const [detailTrackId, setDetailTrackId] = useState<number | null>(null);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const pack = packs[packIndex];
   const instrumentOptions = Object.keys(pack.instruments);
+  const canAddTrack = instrumentOptions.length > 0;
   const selectedGroup = useMemo(() => {
     if (!selectedGroupId) return null;
     return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
@@ -121,14 +120,6 @@ export function LoopStrip({
   const isCreatingGroup = groupEditor?.mode === "create";
   const isEditingCurrentGroup =
     groupEditor?.mode === "edit" && groupEditor.groupId === selectedGroupId;
-
-  useEffect(() => {
-    setSelectedChunk("");
-    setNewTrackInstrument((prev) => {
-      if (!prev) return prev;
-      return pack.instruments[prev] ? prev : "";
-    });
-  }, [pack]);
 
   useEffect(() => {
     if (patternGroups.length === 0) {
@@ -169,6 +160,13 @@ export function LoopStrip({
       return { ...state, trackIds: filtered };
     });
   }, [tracks]);
+
+  useEffect(() => {
+    if (detailTrackId === null) return;
+    if (!tracks.some((track) => track.id === detailTrackId)) {
+      setDetailTrackId(null);
+    }
+  }, [detailTrackId, tracks]);
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
@@ -211,29 +209,73 @@ export function LoopStrip({
   };
 
   const handleAddTrack = () => {
-    if (!newTrackInstrument) return;
+    const defaultInstrument = instrumentOptions[0];
+    if (!defaultInstrument) return;
     let createdId: number | null = null;
     setTracks((ts) => {
       const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
-      const trimmedName = newTrackName.trim();
-      const name =
-        trimmedName || computeDefaultTrackName(newTrackInstrument, ts);
+      const name = computeDefaultTrackName(defaultInstrument, ts);
       createdId = nextId;
       return [
         ...ts,
         {
           id: nextId,
           name,
-          instrument: newTrackInstrument as keyof TriggerMap,
+          instrument: defaultInstrument as keyof TriggerMap,
           pattern: null,
+          muted: false,
         },
       ];
     });
     if (createdId !== null) {
       setEditing(createdId);
+      setDetailTrackId(createdId);
     }
-    setNewTrackName("");
   };
+
+  const handleToggleMute = (trackId: number) => {
+    setTracks((ts) =>
+      ts.map((t) =>
+        t.id === trackId
+          ? {
+              ...t,
+              muted: !t.muted,
+            }
+          : t
+      )
+    );
+  };
+
+  const showTrackDetails = (trackId: number) => {
+    setDetailTrackId(trackId);
+    setEditing(trackId);
+  };
+
+  const handleInstrumentChange = (trackId: number, value: string) => {
+    setTracks((ts) =>
+      ts.map((t) => {
+        if (t.id !== trackId) return t;
+        const instrument = value as keyof TriggerMap;
+        const pattern = t.pattern
+          ? { ...t.pattern, instrument }
+          : t.pattern;
+        return {
+          ...t,
+          instrument,
+          pattern,
+        };
+      })
+    );
+  };
+
+  const handlePresetLoad = (trackId: number, chunkId: string) => {
+    if (!chunkId) return;
+    const chunk = pack.chunks.find((c) => c.id === chunkId);
+    if (!chunk) return;
+    loadChunk(chunk, trackId);
+  };
+
+  const hideTrackDetails = () => setDetailTrackId(null);
 
   const openCreateGroup = () => {
     setGroupEditor({ mode: "create", name: getNextGroupName(), trackIds: [] });
@@ -480,56 +522,23 @@ export function LoopStrip({
   };
 
 
-  const loadChunk = (chunk: Chunk) => {
-    let targetId: number | null = null;
+  const loadChunk = (chunk: Chunk, targetTrackId: number) => {
     setTracks((ts) => {
-      if (editing !== null) {
-        const trackExists = ts.some((t) => t.id === editing);
-        if (!trackExists) {
-          targetId = null;
-          return ts;
-        }
-        targetId = editing;
-        return ts.map((t) =>
-          t.id === editing
-            ? {
-                ...t,
-                name: chunk.name,
-                instrument: chunk.instrument as keyof TriggerMap,
-                pattern: { ...chunk },
-              }
-            : t
-        );
-      }
-      const existing = ts.find((t) => t.instrument === chunk.instrument);
-      if (existing) {
-        targetId = existing.id;
-        return ts.map((t) =>
-          t.id === existing.id
-            ? {
-                ...t,
-                name: chunk.name,
-                instrument: chunk.instrument as keyof TriggerMap,
-                pattern: { ...chunk },
-              }
-            : t
-        );
-      }
-      const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
-      targetId = nextId;
-      return [
-        ...ts,
-        {
-          id: nextId,
-          name: chunk.name,
-          instrument: chunk.instrument as keyof TriggerMap,
-          pattern: { ...chunk },
-        },
-      ];
+      const exists = ts.some((t) => t.id === targetTrackId);
+      if (!exists) return ts;
+      return ts.map((t) =>
+        t.id === targetTrackId
+          ? {
+              ...t,
+              name: chunk.name,
+              instrument: chunk.instrument as keyof TriggerMap,
+              pattern: { ...chunk },
+            }
+          : t
+      );
     });
-    if (targetId !== null) {
-      setEditing(targetId);
-    }
+    setEditing(targetTrackId);
+    setDetailTrackId(targetTrackId);
   };
 
   return (
@@ -566,94 +575,196 @@ export function LoopStrip({
           ))}
         </select>
       </div>
-      <div style={{ marginBottom: 4 }}>
-        <select
-          value={selectedChunk}
-          onChange={(e) => {
-            const id = e.target.value;
-            setSelectedChunk("");
-            const chunk = pack.chunks.find((c) => c.id === id);
-            if (chunk) loadChunk(chunk);
-          }}
-          style={{
-            padding: 4,
-            borderRadius: 4,
-            background: "#121827",
-            color: "white",
-            width: "100%",
-          }}
-        >
-          <option value="">Load preset…</option>
-          {pack.chunks.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          handleAddTrack();
-        }}
+      <div
         style={{
           display: "flex",
-          flexWrap: "wrap",
+          alignItems: "center",
           gap: 8,
-          marginBottom: 8,
+          flexWrap: "wrap",
+          marginBottom: 12,
         }}
       >
-        <select
-          value={newTrackInstrument}
-          onChange={(event) => setNewTrackInstrument(event.target.value)}
+        <div
           style={{
-            flex: "1 1 150px",
-            minWidth: 140,
-            padding: 4,
-            borderRadius: 4,
-            background: "#121827",
-            color: "white",
-            border: "1px solid #333",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: "1 1 auto",
+            minWidth: 0,
           }}
         >
-          <option value="">Choose instrument…</option>
-          {instrumentOptions.map((instrument) => (
-            <option key={instrument} value={instrument}>
-              {formatInstrumentLabel(instrument)}
-            </option>
-          ))}
-        </select>
-        <input
-          value={newTrackName}
-          onChange={(event) => setNewTrackName(event.target.value)}
-          placeholder="Optional name"
+          <button
+            type="button"
+            onClick={openCreateGroup}
+            aria-label="Create scene"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: isCreatingGroup ? "#27E0B0" : "#1f2532",
+              color: isCreatingGroup ? "#1F2532" : "#e6f2ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 20 }}
+            >
+              add
+            </span>
+          </button>
+          <select
+            aria-label="Current scene"
+            value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSelectedGroupId(value || null);
+              setGroupEditor(null);
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: 6,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color: "#e6f2ff",
+            }}
+          >
+            {patternGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div
           style={{
-            flex: "2 1 160px",
-            minWidth: 160,
-            padding: 4,
-            borderRadius: 4,
-            border: "1px solid #333",
-            background: "#121827",
-            color: "white",
+            display: "flex",
+            gap: 6,
           }}
-        />
+        >
+          <button
+            type="button"
+            onClick={openEditGroup}
+            disabled={!selectedGroup}
+            aria-label="Edit scene"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: isEditingCurrentGroup ? "#27E0B0" : "#1f2532",
+              color: selectedGroup
+                ? isEditingCurrentGroup
+                  ? "#1F2532"
+                  : "#e6f2ff"
+                : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: selectedGroup ? "pointer" : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              edit
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDuplicateGroup}
+            disabled={!selectedGroup}
+            aria-label="Duplicate scene"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color: selectedGroup ? "#e6f2ff" : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: selectedGroup ? "pointer" : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              content_copy
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteGroup}
+            disabled={!selectedGroup || patternGroups.length <= 1}
+            aria-label="Delete scene"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color:
+                selectedGroup && patternGroups.length > 1
+                  ? "#e6f2ff"
+                  : "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor:
+                selectedGroup && patternGroups.length > 1
+                  ? "pointer"
+                  : "default",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              delete
+            </span>
+          </button>
+        </div>
+      </div>
+      <div style={{ marginBottom: 8 }}>
         <button
-          type="submit"
-          disabled={!newTrackInstrument}
+          type="button"
+          onClick={handleAddTrack}
+          disabled={!canAddTrack}
           style={{
-            flex: "0 0 auto",
-            padding: "4px 12px",
-            borderRadius: 4,
-            border: "1px solid #333",
-            background: newTrackInstrument ? "#27E0B0" : "#1f2532",
-            color: newTrackInstrument ? "#1F2532" : "#64748b",
-            cursor: newTrackInstrument ? "pointer" : "default",
+            width: "100%",
+            height: ROW_HEIGHT,
+            borderRadius: 6,
+            border: canAddTrack ? "1px dashed #3b4252" : "1px dashed #242c3c",
+            background: canAddTrack ? "#141924" : "#161b27",
+            color: canAddTrack ? "#e6f2ff" : "#475569",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
             fontWeight: 600,
+            cursor: canAddTrack ? "pointer" : "not-allowed",
           }}
         >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: 18 }}
+          >
+            add
+          </span>
           Add Track
         </button>
-      </form>
+      </div>
       <div
         ref={trackAreaRef}
         className="scrollable"
@@ -667,435 +778,492 @@ export function LoopStrip({
           minHeight: 0,
         }}
       >
-        {tracks.map((t) => {
-          let labelTimer: number | null = null;
-          const handleLabelPointerDown = () => {
-            if (editing !== t.id) return;
-            labelTimer = window.setTimeout(() => {
-              setStepEditing({ trackId: t.id, index: null });
-            }, 500);
-          };
-          const clearLabelTimer = () => {
-            if (labelTimer) window.clearTimeout(labelTimer);
-            labelTimer = null;
-          };
-          const color = getInstrumentColor(t.instrument);
-          return (
-            <div
-              key={t.id}
-              onPointerDown={(e) => {
-                swipeRef.current = e.clientX;
-              }}
-              onPointerUp={(e) => {
-                const dx = e.clientX - swipeRef.current;
-                if (editing === t.id && dx > 50) {
-                  setEditing(null);
-                } else if (editing === null && t.pattern && Math.abs(dx) < 10) {
-                  setEditing(t.id);
-                }
-              }}
-              style={{
-                display: "flex",
-                height: ROW_HEIGHT,
-                minHeight: ROW_HEIGHT,
-                flex: "none",
-                boxSizing: "border-box",
-                cursor: t.pattern ? "pointer" : "default",
-                opacity: editing !== null && editing !== t.id ? 0.3 : 1,
-                border: editing === t.id ? "2px solid #27E0B0" : "1px solid #555",
-                pointerEvents: editing !== null && editing !== t.id ? "none" : "auto",
-              }}
-            >
-              <div
-                onPointerDown={handleLabelPointerDown}
-                onPointerUp={clearLabelTimer}
-                onPointerLeave={clearLabelTimer}
-                style={{
-                  width: LABEL_WIDTH,
-                  borderRight: "1px solid #555",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontSize: 12,
-                }}
-              >
-                {t.name}
-              </div>
-              <div style={{ flex: 1 }}>
-                {t.pattern ? (
-                  editing === t.id ? (
-                    <PatternEditor
-                      steps={t.pattern.steps}
-                      onToggle={(i) => {
-                        const next = t.pattern!.steps.slice();
-                        next[i] = next[i] ? 0 : 1;
-                        updatePattern(t.id, next);
-                      }}
-                      onStepLongPress={(i) =>
-                        setStepEditing({ trackId: t.id, index: i })
-                      }
-                      color={color}
-                      currentStep={step}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(16, 1fr)",
-                        gap: 2,
-                        height: "100%",
-                      }}
-                    >
-                      {Array.from({ length: 16 }).map((_, i) => {
-                        const active = t.pattern?.steps[i] ?? 0;
-                        const playing = step === i && active;
-                        return (
-                          <div
-                            key={i}
-                            style={{
-                              border: "1px solid #555",
-                              background: active ? color : "#1f2532",
-                              opacity: active ? 1 : 0.2,
-                              boxShadow: playing
-                                ? `0 0 6px ${color}`
-                                : "none",
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  )
-                ) : (
-                  <button
-                    onClick={() => addPattern(t.id)}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      background: "#2a2f3a",
-                      color: "white",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    New Pattern
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div
-        style={{
-          marginTop: 8,
-          borderRadius: 8,
-          border: "1px solid #333",
-          padding: 12,
-          background: "#121827",
-          color: "#e6f2ff",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
+        {tracks.length === 0 && (
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flex: "1 1 auto",
-              minWidth: 0,
-            }}
-          >
-            <button
-              type="button"
-              onClick={openCreateGroup}
-              aria-label="Create scene"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: isCreatingGroup ? "#27E0B0" : "#1f2532",
-                color: isCreatingGroup ? "#1F2532" : "#e6f2ff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 20 }}
-              >
-                add
-              </span>
-            </button>
-            <select
-              aria-label="Current scene"
-              value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                setSelectedGroupId(value || null);
-                setGroupEditor(null);
-              }}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                padding: 6,
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: "#1f2532",
-                color: "#e6f2ff",
-              }}
-            >
-              {patternGroups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              gap: 6,
-            }}
-          >
-            <button
-              type="button"
-              onClick={openEditGroup}
-              disabled={!selectedGroup}
-              aria-label="Edit scene"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: isEditingCurrentGroup ? "#27E0B0" : "#1f2532",
-                color: selectedGroup
-                  ? isEditingCurrentGroup
-                    ? "#1F2532"
-                    : "#e6f2ff"
-                  : "#64748b",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: selectedGroup ? "pointer" : "default",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 18 }}
-              >
-                edit
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={handleDuplicateGroup}
-              disabled={!selectedGroup}
-              aria-label="Duplicate scene"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: "#1f2532",
-                color: selectedGroup ? "#e6f2ff" : "#64748b",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: selectedGroup ? "pointer" : "default",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 18 }}
-              >
-                content_copy
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteGroup}
-              disabled={!selectedGroup || patternGroups.length <= 1}
-              aria-label="Delete scene"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: "#1f2532",
-                color:
-                  selectedGroup && patternGroups.length > 1
-                    ? "#e6f2ff"
-                    : "#64748b",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor:
-                  selectedGroup && patternGroups.length > 1
-                    ? "pointer"
-                    : "default",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 18 }}
-              >
-                delete
-              </span>
-            </button>
-          </div>
-        </div>
-        {groupEditor ? (
-          <div
-            style={{
-              marginTop: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <input
-              value={groupEditor.name}
-              onChange={(event) => handleEditorNameChange(event.target.value)}
-              placeholder={getNextGroupName()}
-              style={{
-                padding: 6,
-                borderRadius: 6,
-                border: "1px solid #333",
-                background: "#1f2532",
-                color: "#e6f2ff",
-              }}
-            />
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Select tracks to include in this scene.
-            </span>
-            {renderTrackChooser(
-              groupEditor.trackIds,
-              handleEditorTrackToggle
-            )}
-            {groupEditor.trackIds.length === 0 && tracks.length > 0 && (
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                This scene is empty. Add tracks to hear it in Song view.
-              </span>
-            )}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={handleSaveGroup}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "1px solid #333",
-                  background: "#27E0B0",
-                  color: "#1F2532",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Save Scene
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelGroupEdit}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "1px solid #333",
-                  background: "#1f2532",
-                  color: "#e6f2ff",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : selectedGroup ? (
-          <div
-            style={{
-              marginTop: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Tracks in this scene:
-            </span>
-            {selectedTracks.length ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 6,
-                }}
-              >
-                {selectedTracks.map((track) => (
-                  <span
-                    key={track.id}
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: 9999,
-                      background: "rgba(39, 224, 176, 0.1)",
-                      border: "1px solid #27E0B0",
-                      fontSize: 12,
-                    }}
-                  >
-                    {track.name}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                Use the edit button to assign tracks to this scene.
-              </span>
-            )}
-          </div>
-        ) : (
-          <div
-            style={{
-              marginTop: 12,
+              padding: 16,
+              textAlign: "center",
               fontSize: 12,
               color: "#94a3b8",
             }}
           >
-            Create a scene to capture the current track mix.
+            Tap “Add Track” to start building your loop.
           </div>
         )}
+        {tracks.map((t) => {
+          let labelTimer: number | null = null;
+          let longPressTriggered = false;
+          const color = getInstrumentColor(t.instrument);
+          const isMuted = t.muted;
+          const isEditing = editing === t.id;
+
+          const handleLabelPointerDown = (
+            event: ReactPointerEvent<HTMLDivElement>
+          ) => {
+            event.stopPropagation();
+            longPressTriggered = false;
+            if (labelTimer) window.clearTimeout(labelTimer);
+            labelTimer = window.setTimeout(() => {
+              longPressTriggered = true;
+              showTrackDetails(t.id);
+            }, 500);
+          };
+
+          const handleLabelPointerUp = (
+            event: ReactPointerEvent<HTMLDivElement>
+          ) => {
+            event.stopPropagation();
+            if (labelTimer) window.clearTimeout(labelTimer);
+            labelTimer = null;
+            if (longPressTriggered) return;
+            handleToggleMute(t.id);
+          };
+
+          const handleLabelPointerLeave = () => {
+            if (labelTimer) window.clearTimeout(labelTimer);
+            labelTimer = null;
+          };
+
+          return (
+            <div
+              key={t.id}
+              style={{ display: "flex", flexDirection: "column", gap: 8 }}
+            >
+              <div
+                onPointerDown={(event) => {
+                  swipeRef.current = event.clientX;
+                }}
+                onPointerUp={(event) => {
+                  const dx = event.clientX - swipeRef.current;
+                  if (isEditing && dx > 50) {
+                    setEditing(null);
+                  } else if (!isEditing && Math.abs(dx) < 10) {
+                    setEditing(t.id);
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  height: ROW_HEIGHT,
+                  minHeight: ROW_HEIGHT,
+                  flex: "none",
+                  boxSizing: "border-box",
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  border: isEditing ? "2px solid #27E0B0" : "1px solid #555",
+                  background: "#111827",
+                  opacity: editing !== null && !isEditing ? 0.4 : 1,
+                  pointerEvents:
+                    editing !== null && !isEditing ? "none" : "auto",
+                  transition: "opacity 0.2s ease, border 0.2s ease",
+                }}
+              >
+                <div
+                  onPointerDown={handleLabelPointerDown}
+                  onPointerUp={handleLabelPointerUp}
+                  onPointerLeave={handleLabelPointerLeave}
+                  style={{
+                    width: LABEL_WIDTH,
+                    borderRight: "1px solid #333",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.6,
+                    userSelect: "none",
+                    background: isMuted ? "#1b2332" : color,
+                    color: isMuted ? "#94a3b8" : "#0f1420",
+                    cursor: "pointer",
+                    transition: "background 0.2s ease, color 0.2s ease",
+                  }}
+                  title={isMuted ? "Unmute track" : "Mute track"}
+                >
+                  {t.name}
+                </div>
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "0 8px",
+                    background: "#161d2b",
+                    opacity: isMuted ? 0.3 : 1,
+                    filter: isMuted ? "grayscale(0.7)" : "none",
+                    transition: "opacity 0.2s ease, filter 0.2s ease",
+                  }}
+                >
+                  {t.pattern ? (
+                    isEditing ? (
+                      <PatternEditor
+                        steps={t.pattern.steps}
+                        onToggle={(i) => {
+                          const next = t.pattern!.steps.slice();
+                          next[i] = next[i] ? 0 : 1;
+                          updatePattern(t.id, next);
+                        }}
+                        onStepLongPress={(i) =>
+                          setStepEditing({ trackId: t.id, index: i })
+                        }
+                        color={color}
+                        currentStep={step}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(16, 1fr)",
+                          gap: 2,
+                          width: "100%",
+                          height: "100%",
+                        }}
+                      >
+                        {Array.from({ length: 16 }).map((_, i) => {
+                          const active = t.pattern?.steps[i] ?? 0;
+                          const playing = step === i && active;
+                          return (
+                            <div
+                              key={i}
+                              style={{
+                                border: "1px solid #555",
+                                background: active ? color : "#1f2532",
+                                opacity: active ? 1 : 0.2,
+                                boxShadow: playing
+                                  ? `0 0 6px ${color}`
+                                  : "none",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    )
+                  ) : (
+                    <button
+                      onClick={() => addPattern(t.id)}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 6,
+                        border: "1px dashed #3b4252",
+                        background: "#1d2432",
+                        color: "#e6f2ff",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.4,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      New Pattern
+                    </button>
+                  )}
+                </div>
+              </div>
+              {detailTrackId === t.id && (
+                <div
+                  style={{
+                    marginLeft: LABEL_WIDTH,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    background: "#101522",
+                    border: "1px solid #333",
+                    borderRadius: 8,
+                    padding: 16,
+                    boxShadow: "0 8px 18px rgba(8, 12, 20, 0.6)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <label
+                      style={{
+                        flex: "1 1 160px",
+                        minWidth: 140,
+                        fontSize: 12,
+                        color: "#94a3b8",
+                      }}
+                    >
+                      <span style={{ display: "block", marginBottom: 4 }}>
+                        Instrument
+                      </span>
+                      <select
+                        value={t.instrument}
+                        onChange={(event) =>
+                          handleInstrumentChange(t.id, event.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: 6,
+                          borderRadius: 6,
+                          border: "1px solid #333",
+                          background: "#1f2532",
+                          color: "#e6f2ff",
+                        }}
+                      >
+                        {instrumentOptions.map((instrument) => (
+                          <option key={instrument} value={instrument}>
+                            {formatInstrumentLabel(instrument)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label
+                      style={{
+                        flex: "1 1 200px",
+                        minWidth: 180,
+                        fontSize: 12,
+                        color: "#94a3b8",
+                      }}
+                    >
+                      <span style={{ display: "block", marginBottom: 4 }}>
+                        Preset
+                      </span>
+                      <select
+                        value=""
+                        onChange={(event) =>
+                          handlePresetLoad(t.id, event.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: 6,
+                          borderRadius: 6,
+                          border: "1px solid #333",
+                          background: "#1f2532",
+                          color: "#e6f2ff",
+                        }}
+                      >
+                        <option value="">Load preset…</option>
+                        {pack.chunks
+                          .filter((chunk) => chunk.instrument === t.instrument)
+                          .map((chunk) => (
+                            <option key={chunk.id} value={chunk.id}>
+                              {chunk.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div
+                    style={{
+                      padding: 12,
+                      background: "rgba(15, 21, 34, 0.92)",
+                      borderRadius: 8,
+                      border: "1px solid #333",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}
+                  >
+                    {t.pattern ? (
+                      <>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 12,
+                              color: "#94a3b8",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Velocity: {(t.pattern.velocities?.[0] ?? 1).toFixed(2)}
+                          </label>
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={t.pattern.velocities?.[0] ?? 1}
+                            onChange={(event) =>
+                              updatePatternControls(t.id, {
+                                velocity: Number(event.target.value),
+                              })
+                            }
+                            style={{ width: "100%" }}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 12,
+                              color: "#94a3b8",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Pitch: {t.pattern.pitches?.[0] ?? 0}
+                          </label>
+                          <input
+                            type="range"
+                            min={-12}
+                            max={12}
+                            step={1}
+                            value={t.pattern.pitches?.[0] ?? 0}
+                            onChange={(event) =>
+                              updatePatternControls(t.id, {
+                                pitch: Number(event.target.value),
+                              })
+                            }
+                            style={{ width: "100%" }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                        Create a pattern to edit velocity and pitch.
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      type="button"
+                      onClick={hideTrackDetails}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        border: "1px solid #333",
+                        background: "#1f2532",
+                        color: "#e6f2ff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Hide Controls
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+      {groupEditor ? (
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <input
+            value={groupEditor.name}
+            onChange={(event) => handleEditorNameChange(event.target.value)}
+            placeholder={getNextGroupName()}
+            style={{
+              padding: 6,
+              borderRadius: 6,
+              border: "1px solid #333",
+              background: "#1f2532",
+              color: "#e6f2ff",
+            }}
+          />
+          <span style={{ fontSize: 12, color: "#94a3b8" }}>
+            Select tracks to include in this scene.
+          </span>
+          {renderTrackChooser(groupEditor.trackIds, handleEditorTrackToggle)}
+          {groupEditor.trackIds.length === 0 && tracks.length > 0 && (
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              This scene is empty. Add tracks to hear it in Song view.
+            </span>
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={handleSaveGroup}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #333",
+                background: "#27E0B0",
+                color: "#1F2532",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Save Scene
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelGroupEdit}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #333",
+                background: "#1f2532",
+                color: "#e6f2ff",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : selectedGroup ? (
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#94a3b8" }}>
+            Tracks in this scene:
+          </span>
+          {selectedTracks.length ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              {selectedTracks.map((track) => (
+                <span
+                  key={track.id}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 9999,
+                    background: "rgba(39, 224, 176, 0.1)",
+                    border: "1px solid #27E0B0",
+                    fontSize: 12,
+                  }}
+                >
+                  {track.name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              Use the edit button to assign tracks to this scene.
+            </span>
+          )}
+        </div>
+      ) : (
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            color: "#94a3b8",
+          }}
+        >
+          Create a scene to capture the current track mix.
+        </div>
+      )}
       {stepEditing && (() => {
         const track = tracks.find((tr) => tr.id === stepEditing.trackId);
         if (!track || !track.pattern) return null;
         const velocity =
-          stepEditing.index === null
-            ? track.pattern.velocities?.[0] ?? 1
-            : track.pattern.velocities?.[stepEditing.index] ?? 1;
-        const pitch =
-          stepEditing.index === null
-            ? track.pattern.pitches?.[0] ?? 0
-            : track.pattern.pitches?.[stepEditing.index] ?? 0;
-        const onChange = (p: { velocity?: number; pitch?: number }) => {
-          if (stepEditing.index === null) {
-            updatePatternControls(track.id, p);
-          } else {
-            updateStep(track.id, stepEditing.index, p);
-          }
-        };
+          track.pattern.velocities?.[stepEditing.index] ?? 1;
+        const pitch = track.pattern.pitches?.[stepEditing.index] ?? 0;
         return (
           <StepModal
             velocity={velocity}
             pitch={pitch}
-            onChange={onChange}
+            onChange={(p) => updateStep(track.id, stepEditing.index, p)}
             onClose={() => setStepEditing(null)}
           />
         );

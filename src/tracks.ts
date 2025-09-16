@@ -17,4 +17,5 @@ export interface Track {
   name: string;
   instrument: keyof TriggerMap;
   pattern: Chunk | null;
+  muted: boolean;
 }

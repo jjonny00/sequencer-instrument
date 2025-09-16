@@ -52,8 +52,11 @@ export function PatternPlaybackManager({
         if (!track.pattern) return null;
         const trigger = triggers[track.instrument];
         if (!trigger) return null;
-        const isTrackActive = () =>
-          !shouldGate || activeTrackIds.has(track.id);
+        const isTrackActive = () => {
+          if (track.muted) return false;
+          if (!shouldGate) return true;
+          return activeTrackIds.has(track.id);
+        };
         return (
           <PatternPlayer
             key={track.id}
