@@ -15,6 +15,7 @@ import { packs } from "./packs";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
+import { formatInstrumentLabel } from "./utils/instrument";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -30,12 +31,6 @@ const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";
 
 const getInstrumentColor = (instrument: string) =>
   baseInstrumentColors[instrument] ?? FALLBACK_INSTRUMENT_COLOR;
-
-const formatInstrumentLabel = (value: string) =>
-  value
-    .split(/[-_]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 
 const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   const index = tracks.findIndex((track) => track.id === trackId);
@@ -61,7 +56,15 @@ const cloneChunk = (chunk: Chunk): Chunk => ({
 const cloneTrack = (track: Track): Track => ({
   ...track,
   pattern: track.pattern ? cloneChunk(track.pattern) : null,
+  source: track.source ? { ...track.source } : undefined,
 });
+
+export interface AddTrackRequest {
+  packId: string;
+  instrumentId: string;
+  characterId: string;
+  presetId?: string | null;
+}
 
 type GroupEditorState =
   | {
@@ -77,6 +80,7 @@ type GroupEditorState =
 export interface LoopStripHandle {
   openSequenceLibrary: () => void;
   addTrack: () => void;
+  addTrackWithOptions: (options: AddTrackRequest) => void;
 }
 
 interface LoopStripProps {
@@ -92,6 +96,7 @@ interface LoopStripProps {
   setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
   selectedGroupId: string | null;
   setSelectedGroupId: Dispatch<SetStateAction<string | null>>;
+  onAddTrack: () => void;
 }
 
 /**
@@ -115,6 +120,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       setPatternGroups,
       selectedGroupId,
       setSelectedGroupId,
+      onAddTrack,
     },
     ref
   ) {
@@ -292,7 +298,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       const newId = createdId;
       setPendingTrackIds((ids) => [...ids, newId]);
       setEditing(newId);
-      setDetailTrackId(newId);
+    setDetailTrackId(newId);
     }
   }, [
     addTrackEnabled,
@@ -302,13 +308,80 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     setDetailTrackId,
   ]);
 
+  const handleAddTrackWithOptions = useCallback(
+    ({ packId, instrumentId, characterId, presetId }: AddTrackRequest) => {
+      if (!addTrackEnabled) return;
+      if (!instrumentId) return;
+      const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
+      if (!activePack || activePack.id !== pack.id) {
+        return;
+      }
+      let createdId: number | null = null;
+      setTracks((ts) => {
+        const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+        const label = (ts.length + 1).toString().padStart(2, "0");
+        const preset = presetId
+          ? activePack.chunks.find((chunk) => chunk.id === presetId)
+          : null;
+        const pattern: Chunk = preset
+          ? {
+              ...cloneChunk(preset),
+              id: `${preset.id}-${Date.now()}`,
+              instrument: instrumentId,
+              name: preset.name,
+            }
+          : {
+              id: `track-${nextId}-${Date.now()}`,
+              name: `Track ${label} Pattern`,
+              instrument: instrumentId,
+              steps: Array(16).fill(0),
+              velocities: Array(16).fill(1),
+              pitches: Array(16).fill(0),
+            };
+        createdId = nextId;
+        return [
+          ...ts,
+          {
+            id: nextId,
+            name: label,
+            instrument: instrumentId as keyof TriggerMap,
+            pattern,
+            muted: false,
+            source: {
+              packId,
+              instrumentId,
+              characterId,
+              presetId: presetId ?? null,
+            },
+          },
+        ];
+      });
+      if (createdId !== null) {
+        const newId = createdId;
+        setPendingTrackIds((ids) => [...ids, newId]);
+        setEditing(newId);
+        setDetailTrackId(newId);
+      }
+    },
+    [
+      addTrackEnabled,
+      pack,
+      setTracks,
+      setPendingTrackIds,
+      setEditing,
+      setDetailTrackId,
+    ]
+  );
+
   useImperativeHandle(
     ref,
     () => ({
       openSequenceLibrary: () => setIsSequenceLibraryOpen(true),
       addTrack: () => handleAddTrack(),
+      addTrackWithOptions: (options: AddTrackRequest) =>
+        handleAddTrackWithOptions(options),
     }),
-    [handleAddTrack]
+    [handleAddTrack, handleAddTrackWithOptions]
   );
 
   const handleToggleMute = (trackId: number) => {
@@ -337,6 +410,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           return {
             ...t,
             instrument: "",
+            pattern: t.pattern ? { ...t.pattern, instrument: "" } : t.pattern,
+            source: t.source
+              ? { ...t.source, instrumentId: "", presetId: null }
+              : t.source,
           };
         }
         const instrument = value as keyof TriggerMap;
@@ -347,6 +424,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           ...t,
           instrument,
           pattern,
+          source: t.source
+            ? { ...t.source, instrumentId: value, presetId: null }
+            : t.source,
         };
       })
     );
@@ -594,16 +674,33 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     setTracks((ts) => {
       const exists = ts.some((t) => t.id === targetTrackId);
       if (!exists) return ts;
-      return ts.map((t) =>
-        t.id === targetTrackId
+      return ts.map((t) => {
+        if (t.id !== targetTrackId) return t;
+        const pattern = {
+          ...cloneChunk(chunk),
+          id: `${chunk.id}-${Date.now()}`,
+          instrument: chunk.instrument,
+        };
+        const nextSource = t.source
           ? {
-              ...t,
-              name: chunk.name,
-              instrument: chunk.instrument as keyof TriggerMap,
-              pattern: { ...chunk },
+              ...t.source,
+              instrumentId: chunk.instrument,
+              presetId: chunk.id,
             }
-          : t
-      );
+          : {
+              packId: pack.id,
+              instrumentId: chunk.instrument,
+              characterId: `${chunk.instrument}-default`,
+              presetId: chunk.id,
+            };
+        return {
+          ...t,
+          name: chunk.name,
+          instrument: chunk.instrument as keyof TriggerMap,
+          pattern,
+          source: nextSource,
+        };
+      });
     });
     setEditing(targetTrackId);
     setDetailTrackId(targetTrackId);
@@ -661,7 +758,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         </button>
         <button
           type="button"
-          onClick={handleAddTrack}
+          onClick={() => {
+            if (!addTrackEnabled) return;
+            onAddTrack();
+          }}
           disabled={!addTrackEnabled}
           style={{
             padding: "6px 16px",
