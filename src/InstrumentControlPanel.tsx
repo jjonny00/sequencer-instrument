@@ -20,6 +20,8 @@ interface InstrumentControlPanelProps {
     sustain?: number,
     chunk?: Chunk
   ) => void;
+  isRecording?: boolean;
+  onRecordingChange?: (recording: boolean) => void;
 }
 
 interface SliderProps {
@@ -267,6 +269,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   allTracks,
   onUpdatePattern,
   trigger,
+  isRecording = false,
+  onRecordingChange,
 }) => {
   const pattern = track.pattern;
   const instrumentLabel = formatInstrumentLabel(track.instrument ?? "");
@@ -278,7 +282,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const [pressedKeyboardNotes, setPressedKeyboardNotes] = useState<
     Set<string>
   >(() => new Set());
-  const [isRecording, setIsRecording] = useState(false);
   const arpScheduleIdRef = useRef<number | null>(null);
   const latchedDegreeRef = useRef<number | null>(null);
   const unfoldProgressRef = useRef(0);
@@ -307,7 +310,14 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const activeVelocity = pattern?.velocityFactor ?? 1;
   const manualVelocity = Math.max(0, Math.min(1, activeVelocity));
   const canTrigger = Boolean(trigger && pattern);
-  const showRecordButton = (isArp || isKeyboard) && Boolean(onUpdatePattern);
+  const updateRecording = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      if (!onRecordingChange) return;
+      const resolved = typeof next === "function" ? next(isRecording) : next;
+      onRecordingChange(resolved);
+    },
+    [isRecording, onRecordingChange]
+  );
 
   const arpRoot = pattern?.note ?? "C4";
   const arpRateOptions = ["1/32", "1/16", "1/8", "1/4"] as const;
@@ -855,11 +865,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   useEffect(() => () => stopArpPlayback(), [stopArpPlayback]);
 
   useEffect(() => {
-    setIsRecording(false);
+    updateRecording(false);
     stopArpPlayback();
     setActiveDegree(null);
     setPressedKeyboardNotes(new Set());
-  }, [track.id, track.instrument, stopArpPlayback]);
+  }, [track.id, track.instrument, stopArpPlayback, updateRecording]);
 
   useEffect(() => {
     if (!pattern || !updatePattern) return;
@@ -894,9 +904,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   useEffect(() => {
     if (!isArp && !isKeyboard) {
-      setIsRecording(false);
+      updateRecording(false);
     }
-  }, [isArp, isKeyboard]);
+  }, [isArp, isKeyboard, updateRecording]);
 
   useEffect(() => {
     if (!canTrigger) {
@@ -1077,35 +1087,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     );
   }
 
-
-  const renderRecordToggle = () => {
-    if (!showRecordButton) return null;
-    return (
-      <div
-        style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}
-      >
-        <button
-          type="button"
-          onClick={() => setIsRecording((prev) => !prev)}
-          disabled={!onUpdatePattern}
-          style={{
-            padding: "6px 12px",
-            borderRadius: 6,
-            border: "1px solid #2a3344",
-            background: isRecording ? "#E02749" : "#27E0B0",
-            color: isRecording ? "#ffe4e6" : "#1F2532",
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: onUpdatePattern ? "pointer" : "not-allowed",
-            opacity: onUpdatePattern ? 1 : 0.5,
-          }}
-        >
-          {isRecording ? "Recording" : "Record"}
-        </button>
-      </div>
-    );
-  };
-
   if (isArp) {
     const canAutopilot = timingMode === "sync" && autopHasHits;
     const autopilotMessage = !autopHasHits
@@ -1126,7 +1107,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               "linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(11, 18, 32, 0.88) 65%, rgba(11, 18, 32, 0) 100%)",
           }}
         >
-          {renderRecordToggle()}
           <div
             style={{
               display: "flex",
@@ -1597,7 +1577,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   if (isKeyboard) {
     stickySections.push(
       <Section key="keyboard" padding={10}>
-        {renderRecordToggle()}
         <div
           style={{
             position: "relative",

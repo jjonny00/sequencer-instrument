@@ -90,6 +90,7 @@ export default function App() {
   } | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
   const [viewMode, setViewMode] = useState<"track" | "song">("track");
@@ -112,6 +113,18 @@ export default function App() {
     () => (editing !== null ? tracks.find((track) => track.id === editing) ?? null : null),
     [editing, tracks]
   );
+
+  useEffect(() => {
+    setIsRecording(false);
+  }, [editing]);
+
+  const canRecordSelectedTrack = useMemo(() => {
+    if (!selectedTrack || !selectedTrack.instrument) return false;
+    if (!selectedTrack.pattern) return false;
+    return ["arpeggiator", "chord"].includes(selectedTrack.instrument);
+  }, [selectedTrack]);
+
+  const canClearSelectedTrack = Boolean(selectedTrack?.pattern);
 
   const openAddTrackModal = useCallback(() => {
     setAddTrackModalState(() => {
@@ -375,20 +388,26 @@ export default function App() {
       velocity = 1,
       pitch = 0,
       note = "C4",
-      sustain = 0.1,
+      sustain?: number,
       chunk?: Chunk
     ) => {
-      if (chunk) {
-        if (chunk.attack !== undefined) {
-          noteRef.current?.set({ envelope: { attack: chunk.attack } });
-        }
-        if (chunk.sustain !== undefined) {
-          noteRef.current?.set({ envelope: { release: chunk.sustain } });
-        }
-        if (chunk.glide !== undefined) {
-          noteRef.current?.set({ portamento: chunk.glide });
-        }
+      const releaseOverride =
+        sustain ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+      const envelope: Record<string, number> = {};
+      if (chunk?.attack !== undefined) {
+        envelope.attack = chunk.attack;
+      }
+      if (releaseOverride !== undefined) {
+        envelope.release = releaseOverride;
+      }
+      if (Object.keys(envelope).length > 0) {
+        noteRef.current?.set({ envelope });
+      }
+      if (chunk?.glide !== undefined) {
+        noteRef.current?.set({ portamento: chunk.glide });
+      }
 
+      if (chunk) {
         const fx = keyboardFxRef.current;
         if (fx) {
           if (chunk.pan !== undefined) {
@@ -417,7 +436,8 @@ export default function App() {
         }
       }
       const n = Tone.Frequency(note).transpose(pitch).toNote();
-      noteRef.current?.triggerAttackRelease(n, sustain, time, velocity);
+      const duration = releaseOverride ?? 0.1;
+      noteRef.current?.triggerAttackRelease(n, duration, time, velocity);
     };
     instrumentRefs.current["chord"] = noteRef.current! as ToneInstrument;
     instrumentRefs.current["arpeggiator"] = noteRef.current! as ToneInstrument;
@@ -553,6 +573,31 @@ export default function App() {
       );
     },
     [setTracks]
+  );
+
+  const clearTrackPattern = useCallback(
+    (trackId: number) => {
+      updateTrackPattern(trackId, (pattern) => {
+        const length = pattern.steps.length || 16;
+        const steps = Array(length).fill(0);
+        const velocities = pattern.velocities
+          ? pattern.velocities.map(() => 1)
+          : undefined;
+        const pitches = pattern.pitches
+          ? pattern.pitches.map(() => 0)
+          : Array(length).fill(0);
+        const next: Chunk = {
+          ...pattern,
+          steps,
+          velocities,
+          pitches,
+          noteEvents: [],
+          noteLoopLength: undefined,
+        };
+        return next;
+      });
+    },
+    [updateTrackPattern]
   );
 
   const initAudioGraph = async () => {
@@ -802,19 +847,66 @@ export default function App() {
                     }}
                   >
                     {editing !== null ? (
-                      <button
-                        onClick={() => setEditing(null)}
+                      <div
                         style={{
-                          padding: "4px 12px",
-                          borderRadius: 4,
-                          border: "1px solid #333",
-                          background: "#27E0B0",
-                          color: "#1F2532",
-                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
                         }}
                       >
-                        Done
-                      </button>
+                        {selectedTrack && canRecordSelectedTrack ? (
+                          <button
+                            onClick={() =>
+                              setIsRecording((prev) => !prev)
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 4,
+                              border: "1px solid #2a3344",
+                              background: isRecording ? "#E02749" : "#27E0B0",
+                              color: isRecording ? "#ffe4e6" : "#1F2532",
+                              cursor: "pointer",
+                              fontWeight: 600,
+                              fontSize: 12,
+                              letterSpacing: 0.6,
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {isRecording ? "Recording" : "Record"}
+                          </button>
+                        ) : null}
+                        <button
+                          onClick={() =>
+                            selectedTrack && clearTrackPattern(selectedTrack.id)
+                          }
+                          disabled={!canClearSelectedTrack}
+                          style={{
+                            padding: "4px 12px",
+                            borderRadius: 4,
+                            border: "1px solid #2a3344",
+                            background: canClearSelectedTrack
+                              ? "#111a2c"
+                              : "#0b121f",
+                            color: canClearSelectedTrack ? "#e2e8f0" : "#475569",
+                            cursor: canClearSelectedTrack ? "pointer" : "not-allowed",
+                          }}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          onClick={() => setEditing(null)}
+                          style={{
+                            padding: "4px 12px",
+                            borderRadius: 4,
+                            border: "1px solid #333",
+                            background: "#27E0B0",
+                            color: "#1F2532",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
                     ) : (
                       <>
                         <label>BPM</label>
@@ -940,6 +1032,8 @@ export default function App() {
                               updateTrackPattern(selectedTrack.id, updater)
                           : undefined
                       }
+                      isRecording={isRecording}
+                      onRecordingChange={setIsRecording}
                     />
                   ) : (
                     <div

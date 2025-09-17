@@ -174,9 +174,16 @@ function PatternPlayer({
       }
     }
 
+    const stepsArray =
+      pattern.steps && pattern.steps.length
+        ? pattern.steps.slice()
+        : Array(16).fill(0);
+    const stepCount = stepsArray.length || 16;
+    const stepDurationSeconds = Tone.Time("16n").toSeconds();
+
     const seq = new Tone.Sequence(
       (time, index: number) => {
-        const active = pattern.steps[index] ?? 0;
+        const active = stepsArray[index] ?? 0;
         if (active && isTrackActiveRef.current()) {
           const baseVelocity = pattern.velocities?.[index] ?? 1;
           const velocity = Math.max(
@@ -189,17 +196,30 @@ function PatternPlayer({
             swingOffsetSeconds && index % 2 === 1
               ? time + swingOffsetSeconds
               : time;
+          let holdSteps = 0;
+          for (let offset = 1; offset < stepCount; offset += 1) {
+            const nextIndex = (index + offset) % stepCount;
+            if (stepsArray[nextIndex]) {
+              break;
+            }
+            holdSteps += 1;
+          }
+          const baseRelease = pattern.sustain ?? stepDurationSeconds;
+          const sustainSeconds = Math.max(
+            baseRelease,
+            (holdSteps + 1) * stepDurationSeconds
+          );
           trigger(
             scheduledTime,
             velocity,
             combinedPitch,
             pattern.note,
-            pattern.sustain,
+            sustainSeconds,
             pattern
           );
         }
       },
-      Array.from({ length: 16 }, (_, i) => i),
+      Array.from({ length: stepCount }, (_, i) => i),
       "16n"
     ).start(0);
     seq.humanize = humanizeAmount
