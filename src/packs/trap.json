@@ -1,0 +1,416 @@
+{
+  "id": "trap",
+  "name": "Trap",
+  "instruments": {
+    "kick": {
+      "defaultCharacterId": "808-boom",
+      "characters": [
+        {
+          "id": "808-boom",
+          "name": "808 Boom",
+          "type": "MembraneSynth",
+          "note": "C1",
+          "options": {
+            "pitchDecay": 0.05,
+            "octaves": 4,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 1.2,
+              "sustain": 0.01,
+              "release": 1.8
+            }
+          }
+        },
+        {
+          "id": "punch-kick",
+          "name": "Punch Kick",
+          "type": "MembraneSynth",
+          "note": "C2",
+          "options": {
+            "pitchDecay": 0.02,
+            "octaves": 3,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.4,
+              "sustain": 0.01,
+              "release": 0.8
+            }
+          }
+        }
+      ]
+    },
+    "snare": {
+      "defaultCharacterId": "trap-snap",
+      "characters": [
+        {
+          "id": "trap-snap",
+          "name": "Trap Snap",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "white" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.2,
+              "sustain": 0,
+              "release": 0.2
+            },
+            "filter": { "type": "bandpass", "frequency": 5000, "Q": 1 }
+          }
+        },
+        {
+          "id": "clap-layer",
+          "name": "Clap Layer",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "pink" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.28,
+              "sustain": 0,
+              "release": 0.25
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.6, "wet": 0.25 } },
+            { "type": "Distortion", "options": { "distortion": 0.15, "wet": 0.2 } }
+          ]
+        }
+      ]
+    },
+    "hihat": {
+      "defaultCharacterId": "tick-hat",
+      "characters": [
+        {
+          "id": "tick-hat",
+          "name": "Tick Hat",
+          "type": "MetalSynth",
+          "options": {
+            "frequency": 500,
+            "harmonicity": 3.5,
+            "resonance": 6000,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.05,
+              "sustain": 0.01,
+              "release": 0.05
+            }
+          }
+        },
+        {
+          "id": "roll-hat",
+          "name": "Roll Hat",
+          "type": "MetalSynth",
+          "options": {
+            "frequency": 600,
+            "harmonicity": 4,
+            "resonance": 6500,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.1,
+              "sustain": 0.01,
+              "release": 0.1
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.1, "wet": 0.15 } }
+          ]
+        }
+      ]
+    },
+    "bass": {
+      "defaultCharacterId": "808-sub",
+      "characters": [
+        {
+          "id": "808-sub",
+          "name": "808 Sub",
+          "type": "MonoSynth",
+          "note": "C1",
+          "options": {
+            "oscillator": { "type": "sine" },
+            "filter": { "type": "lowpass", "frequency": 120, "Q": 1.1 },
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.8,
+              "sustain": 0.7,
+              "release": 1.5
+            }
+          }
+        },
+        {
+          "id": "glide-bass",
+          "name": "Glide Bass",
+          "type": "MonoSynth",
+          "note": "C1",
+          "options": {
+            "oscillator": { "type": "triangle" },
+            "portamento": 0.1,
+            "filter": { "type": "lowpass", "frequency": 100, "Q": 1.2 },
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.7,
+              "sustain": 0.6,
+              "release": 1.2
+            }
+          }
+        }
+      ]
+    },
+    "arp": {
+      "defaultCharacterId": "bell-arp",
+      "characters": [
+        {
+          "id": "bell-arp",
+          "name": "Bell Arp",
+          "type": "FMSynth",
+          "note": "C5",
+          "options": {
+            "harmonicity": 2,
+            "modulationIndex": 4,
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.3,
+              "sustain": 0.4,
+              "release": 0.8
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.8, "wet": 0.25 } }
+          ]
+        },
+        {
+          "id": "trap-lead",
+          "name": "Trap Lead",
+          "type": "Synth",
+          "note": "C5",
+          "options": {
+            "oscillator": { "type": "sawtooth" },
+            "envelope": {
+              "attack": 0.005,
+              "decay": 0.2,
+              "sustain": 0.3,
+              "release": 0.8
+            }
+          },
+          "effects": [
+            { "type": "FeedbackDelay", "options": { "delayTime": 0.25, "feedback": 0.32, "wet": 0.25 } }
+          ]
+        }
+      ]
+    },
+    "keyboard": {
+      "defaultCharacterId": "pluck-keys",
+      "characters": [
+        {
+          "id": "pluck-keys",
+          "name": "Pluck Keys",
+          "type": "PluckSynth",
+          "note": "C4",
+          "options": {
+            "dampening": 2500,
+            "resonance": 0.9,
+            "attackNoise": 1
+          }
+        },
+        {
+          "id": "dark-pad",
+          "name": "Dark Pad",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 8,
+            "voiceOptions": {
+              "oscillator": { "type": "sawtooth" },
+              "envelope": {
+                "attack": 0.6,
+                "decay": 0.6,
+                "sustain": 0.7,
+                "release": 2.5
+              }
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 2.6, "wet": 0.4 } }
+          ]
+        }
+      ]
+    }
+  },
+  "chunks": [
+    {
+      "id": "trap-kick-four",
+      "name": "Club Stomp",
+      "instrument": "kick",
+      "characterId": "808-boom",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [1,0,0,0,0.9,0,0,0,0.95,0,0,0,0.9,0,0,0]
+    },
+    {
+      "id": "trap-kick-sparse",
+      "name": "Sparse Trap",
+      "instrument": "kick",
+      "characterId": "punch-kick",
+      "steps": [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],
+      "velocities": [1,0,0,0,0,0,0.85,0,0,0,0,0,0.9,0,0,0],
+      "humanize": 0.03
+    },
+    {
+      "id": "trap-kick-sync",
+      "name": "Syncopated 808s",
+      "instrument": "kick",
+      "characterId": "808-boom",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0.8,0,0,0],
+      "swing": 0.06
+    },
+    {
+      "id": "trap-snare-backbeat",
+      "name": "Backbeat",
+      "instrument": "snare",
+      "characterId": "trap-snap",
+      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      "velocities": [0,0,0,0,1,0,0,0,0,0,0,0,0.95,0,0,0]
+    },
+    {
+      "id": "trap-snare-sparse",
+      "name": "Sparse Clap",
+      "instrument": "snare",
+      "characterId": "clap-layer",
+      "steps": [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [0,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
+      "humanize": 0.04
+    },
+    {
+      "id": "trap-snare-ghost",
+      "name": "Trap Ghosts",
+      "instrument": "snare",
+      "characterId": "clap-layer",
+      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      "velocities": [0,0,0,0,1,0,0,0,0,0,0,0,0.7,0,0,0],
+      "humanize": 0.07
+    },
+    {
+      "id": "trap-hat-eighth",
+      "name": "8ths",
+      "instrument": "hihat",
+      "characterId": "tick-hat",
+      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+      "velocities": [0.85,0,0.75,0,0.8,0,0.72,0,0.8,0,0.75,0,0.78,0,0.7,0]
+    },
+    {
+      "id": "trap-hat-sixteenth",
+      "name": "16ths",
+      "instrument": "hihat",
+      "characterId": "roll-hat",
+      "steps": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      "velocities": [0.75,0.6,0.72,0.6,0.74,0.6,0.72,0.6,0.75,0.6,0.72,0.6,0.74,0.6,0.72,0.6]
+    },
+    {
+      "id": "trap-hat-rolls",
+      "name": "Trap Rolls",
+      "instrument": "hihat",
+      "characterId": "roll-hat",
+      "steps": [1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1],
+      "velocities": [0.8,0,0,0.7,0.65,0,0,0.68,0.75,0,0,0.7,0.65,0,0,0.68],
+      "swing": 0.12
+    },
+    {
+      "id": "trap-bass-pulse",
+      "name": "Trap Pulse",
+      "instrument": "bass",
+      "characterId": "808-sub",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.9,0,0,0,0.85,0,0,0,0.88,0,0,0,0.82,0,0,0],
+      "note": "C1"
+    },
+    {
+      "id": "trap-bass-sparse",
+      "name": "Sub Drop",
+      "instrument": "bass",
+      "characterId": "glide-bass",
+      "steps": [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+      "velocities": [0.92,0,0,0,0,0,0,0,0,0,0.85,0,0,0,0,0],
+      "pitches": [0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0],
+      "glide": 0.15,
+      "note": "C1"
+    },
+    {
+      "id": "trap-bass-drive",
+      "name": "Rolling Low",
+      "instrument": "bass",
+      "characterId": "glide-bass",
+      "steps": [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1,0],
+      "velocities": [0.9,0,0,0,0.82,0,0,0,0.85,0,0.78,0,0,0,0.8,0],
+      "note": "C1"
+    },
+    {
+      "id": "trap-arp-bell",
+      "name": "Bell Drops",
+      "instrument": "arp",
+      "characterId": "bell-arp",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.85,0,0,0,0.78,0,0,0,0.8,0,0,0,0.75,0,0,0],
+      "note": "C5"
+    },
+    {
+      "id": "trap-arp-pulse",
+      "name": "Lead Pulse",
+      "instrument": "arp",
+      "characterId": "trap-lead",
+      "steps": [1,0,1,0,0,0,1,0,1,0,0,1,0,0,1,0],
+      "velocities": [0.9,0,0.7,0,0,0,0.8,0,0.88,0,0,0.76,0,0,0.8,0],
+      "pitches": [0,0,7,0,0,0,5,0,12,0,0,7,0,0,5,0],
+      "note": "C5"
+    },
+    {
+      "id": "trap-arp-rush",
+      "name": "Hi Hat Rush",
+      "instrument": "arp",
+      "characterId": "trap-lead",
+      "steps": [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0],
+      "velocities": [0.85,0,0,0.78,0,0,0.8,0,0.82,0,0,0.76,0,0,0.8,0],
+      "pitches": [0,0,0,5,0,0,7,0,10,0,0,12,0,0,14,0],
+      "note": "C5"
+    },
+    {
+      "id": "trap-key-sustain",
+      "name": "Downbeat Chords",
+      "instrument": "keyboard",
+      "characterId": "dark-pad",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [0.9,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
+      "sustain": 1.2,
+      "reverb": 0.4,
+      "delay": 0.18,
+      "note": "A♭4"
+    },
+    {
+      "id": "trap-key-stab",
+      "name": "Offbeat Stabs",
+      "instrument": "keyboard",
+      "characterId": "pluck-keys",
+      "steps": [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0],
+      "velocities": [0,0.85,0,0,0,0.8,0,0,0,0.75,0,0,0,0.8,0,0],
+      "sustain": 0.35,
+      "reverb": 0.2,
+      "delay": 0.22,
+      "pan": -0.1,
+      "note": "D♭5"
+    },
+    {
+      "id": "trap-key-pad",
+      "name": "Pad Wash",
+      "instrument": "keyboard",
+      "characterId": "dark-pad",
+      "steps": [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      "velocities": [0.85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      "sustain": 2.5,
+      "reverb": 0.5,
+      "delay": 0.3,
+      "chorus": 0.25,
+      "note": "F4"
+    }
+  ]
+}

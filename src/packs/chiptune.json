@@ -1,0 +1,398 @@
+{
+  "id": "chiptune",
+  "name": "Chip Tune",
+  "instruments": {
+    "kick": {
+      "defaultCharacterId": "tri-kick",
+      "characters": [
+        {
+          "id": "tri-kick",
+          "name": "Tri Kick",
+          "type": "MonoSynth",
+          "note": "C2",
+          "options": {
+            "oscillator": { "type": "triangle" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.1,
+              "sustain": 0.01,
+              "release": 0.15
+            }
+          }
+        },
+        {
+          "id": "square-thump",
+          "name": "Square Thump",
+          "type": "MonoSynth",
+          "note": "C1",
+          "options": {
+            "oscillator": { "type": "square" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.2,
+              "sustain": 0.01,
+              "release": 0.25
+            }
+          }
+        }
+      ]
+    },
+    "snare": {
+      "defaultCharacterId": "noise-crack",
+      "characters": [
+        {
+          "id": "noise-crack",
+          "name": "Noise Crack",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "white" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.1,
+              "sustain": 0,
+              "release": 0.08
+            }
+          }
+        },
+        {
+          "id": "retro-pop",
+          "name": "Retro Pop",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "white" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.15,
+              "sustain": 0,
+              "release": 0.12
+            }
+          },
+          "effects": [
+            { "type": "FeedbackDelay", "options": { "delayTime": 0.12, "feedback": 0.2, "wet": 0.18 } }
+          ]
+        }
+      ]
+    },
+    "hihat": {
+      "defaultCharacterId": "noise-hat",
+      "characters": [
+        {
+          "id": "noise-hat",
+          "name": "Noise Hat",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "white" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.05,
+              "sustain": 0,
+              "release": 0.04
+            }
+          }
+        },
+        {
+          "id": "click-hat",
+          "name": "Click Hat",
+          "type": "MetalSynth",
+          "options": {
+            "frequency": 2000,
+            "harmonicity": 2,
+            "resonance": 4500,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.05,
+              "sustain": 0,
+              "release": 0.05
+            }
+          }
+        }
+      ]
+    },
+    "bass": {
+      "defaultCharacterId": "square-bass",
+      "characters": [
+        {
+          "id": "square-bass",
+          "name": "Square Bass",
+          "type": "MonoSynth",
+          "note": "C2",
+          "options": {
+            "oscillator": { "type": "square" },
+            "filter": { "type": "lowpass", "frequency": 200, "Q": 1 },
+            "envelope": {
+              "attack": 0.005,
+              "decay": 0.3,
+              "sustain": 0.4,
+              "release": 0.4
+            }
+          }
+        },
+        {
+          "id": "pulse-bass",
+          "name": "Pulse Bass",
+          "type": "MonoSynth",
+          "note": "C2",
+          "options": {
+            "oscillator": { "type": "pulse", "width": 0.25 },
+            "filter": { "type": "lowpass", "frequency": 220, "Q": 1.1 },
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.25,
+              "sustain": 0.3,
+              "release": 0.35
+            }
+          }
+        }
+      ]
+    },
+    "arp": {
+      "defaultCharacterId": "tri-arp",
+      "characters": [
+        {
+          "id": "tri-arp",
+          "name": "Tri Arp",
+          "type": "Synth",
+          "note": "C4",
+          "options": {
+            "oscillator": { "type": "triangle" },
+            "envelope": {
+              "attack": 0.005,
+              "decay": 0.2,
+              "sustain": 0.2,
+              "release": 0.3
+            }
+          }
+        },
+        {
+          "id": "square-arp",
+          "name": "Square Arp",
+          "type": "Synth",
+          "note": "C4",
+          "options": {
+            "oscillator": { "type": "square" },
+            "envelope": {
+              "attack": 0.005,
+              "decay": 0.15,
+              "sustain": 0.15,
+              "release": 0.25
+            }
+          }
+        }
+      ]
+    },
+    "keyboard": {
+      "defaultCharacterId": "pulse-keys",
+      "characters": [
+        {
+          "id": "pulse-keys",
+          "name": "Pulse Keys",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "oscillator": { "type": "pulse", "width": 0.5 },
+              "envelope": {
+                "attack": 0.02,
+                "decay": 0.2,
+                "sustain": 0.5,
+                "release": 0.4
+              }
+            }
+          }
+        },
+        {
+          "id": "game-pad",
+          "name": "Game Pad",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "oscillator": { "type": "triangle" },
+              "envelope": {
+                "attack": 0.1,
+                "decay": 0.3,
+                "sustain": 0.6,
+                "release": 1.2
+              }
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.8, "wet": 0.3 } }
+          ]
+        }
+      ]
+    }
+  },
+  "chunks": [
+    {
+      "id": "chip-kick-sparse",
+      "name": "Sparse Kick",
+      "instrument": "kick",
+      "characterId": "tri-kick",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0]
+    },
+    {
+      "id": "chip-kick-drive",
+      "name": "Drive Kick",
+      "instrument": "kick",
+      "characterId": "square-thump",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.95,0,0,0,0.9,0,0,0,0.92,0,0,0,0.88,0,0,0]
+    },
+    {
+      "id": "chip-kick-sync",
+      "name": "Pulse Kick",
+      "instrument": "kick",
+      "characterId": "tri-kick",
+      "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
+      "velocities": [0.95,0,0,0,0.9,0,0.82,0,0.9,0,0,0,0.88,0,0.8,0]
+    },
+    {
+      "id": "chip-snare-backbeat",
+      "name": "Backbeat",
+      "instrument": "snare",
+      "characterId": "noise-crack",
+      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]
+    },
+    {
+      "id": "chip-snare-sparse",
+      "name": "Sparse Pop",
+      "instrument": "snare",
+      "characterId": "retro-pop",
+      "steps": [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [0,0,0,0,0,0,0,0,0.8,0,0,0,0,0,0,0]
+    },
+    {
+      "id": "chip-snare-ghost",
+      "name": "Ghost Snare",
+      "instrument": "snare",
+      "characterId": "retro-pop",
+      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      "velocities": [0,0,0,0,0.9,0,0,0,0,0,0,0,0.7,0,0,0],
+      "humanize": 0.03
+    },
+    {
+      "id": "chip-hat-8ths",
+      "name": "8-bit 8ths",
+      "instrument": "hihat",
+      "characterId": "noise-hat",
+      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+      "velocities": [0.8,0,0.7,0,0.78,0,0.7,0,0.8,0,0.7,0,0.78,0,0.7,0]
+    },
+    {
+      "id": "chip-hat-chop",
+      "name": "Chop Hat",
+      "instrument": "hihat",
+      "characterId": "click-hat",
+      "steps": [1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0],
+      "velocities": [0.7,0.6,0.7,0.6,0,0,0,0,0.7,0.6,0.7,0.6,0,0,0,0]
+    },
+    {
+      "id": "chip-hat-rolls",
+      "name": "Trap Rolls",
+      "instrument": "hihat",
+      "characterId": "click-hat",
+      "steps": [1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1],
+      "velocities": [0.8,0,0,0.7,0.65,0,0,0.68,0.75,0,0,0.7,0.65,0,0,0.68],
+      "swing": 0.06
+    },
+    {
+      "id": "chip-bass-drive",
+      "name": "Drive Bass",
+      "instrument": "bass",
+      "characterId": "square-bass",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.9,0,0,0,0.82,0,0,0,0.86,0,0,0,0.8,0,0,0],
+      "note": "C3"
+    },
+    {
+      "id": "chip-bass-skip",
+      "name": "Skip Bass",
+      "instrument": "bass",
+      "characterId": "pulse-bass",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [0.88,0,0,0,0,0,0,0,0.82,0,0,0,0,0,0,0],
+      "note": "C3"
+    },
+    {
+      "id": "chip-bass-galop",
+      "name": "Galop Bass",
+      "instrument": "bass",
+      "characterId": "pulse-bass",
+      "steps": [1,0,1,0,0,1,0,0,1,0,1,0,0,1,0,0],
+      "velocities": [0.85,0,0.75,0,0,0.8,0,0,0.85,0,0.75,0,0,0.8,0,0],
+      "pitches": [0,0,7,0,0,5,0,0,0,0,7,0,0,5,0,0],
+      "note": "C3"
+    },
+    {
+      "id": "chip-arp-fast",
+      "name": "Fast Sweep",
+      "instrument": "arp",
+      "characterId": "tri-arp",
+      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+      "velocities": [0.85,0,0.78,0,0.82,0,0.76,0,0.84,0,0.78,0,0.82,0,0.76,0],
+      "pitches": [0,4,7,12,7,4,0,7,12,16,12,7,0,4,7,12],
+      "note": "C4"
+    },
+    {
+      "id": "chip-arp-nest",
+      "name": "NES Cascade",
+      "instrument": "arp",
+      "characterId": "square-arp",
+      "steps": [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0],
+      "velocities": [0.8,0,0,0.75,0,0,0.78,0,0.82,0,0,0.76,0,0,0.78,0],
+      "pitches": [0,0,0,5,0,0,7,0,12,0,0,17,0,0,19,0],
+      "note": "C4"
+    },
+    {
+      "id": "chip-arp-loop",
+      "name": "Looping 3-Step",
+      "instrument": "arp",
+      "characterId": "tri-arp",
+      "steps": [1,0,1,0,0,1,0,0,1,0,1,0,0,1,0,0],
+      "velocities": [0.82,0,0.72,0,0,0.7,0,0,0.8,0,0.7,0,0,0.68,0,0],
+      "pitches": [0,7,12,0,0,4,0,0,7,12,19,0,0,4,0,0],
+      "note": "C4"
+    },
+    {
+      "id": "chip-key-block",
+      "name": "Block Chords",
+      "instrument": "keyboard",
+      "characterId": "pulse-keys",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [0.9,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
+      "sustain": 0.8,
+      "note": "C4"
+    },
+    {
+      "id": "chip-key-sync",
+      "name": "Sync Stabs",
+      "instrument": "keyboard",
+      "characterId": "pulse-keys",
+      "steps": [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0],
+      "velocities": [0,0.85,0,0,0,0.82,0,0,0,0.8,0,0,0,0.82,0,0],
+      "sustain": 0.3,
+      "pan": -0.05,
+      "note": "E4"
+    },
+    {
+      "id": "chip-key-pad",
+      "name": "Pad Sweep",
+      "instrument": "keyboard",
+      "characterId": "game-pad",
+      "steps": [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
+      "velocities": [0.8,0,0,0,0,0,0,0,0,0,0,0,0.78,0,0,0],
+      "sustain": 1.2,
+      "reverb": 0.3,
+      "note": "G3"
+    }
+  ]
+}

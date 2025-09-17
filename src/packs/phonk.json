@@ -1,99 +1,453 @@
 {
   "id": "phonk",
-  "name": "Hip Hop",
+  "name": "Phonk",
   "instruments": {
     "kick": {
-      "type": "MembraneSynth",
-      "note": "C1",
-      "options": {
-        "pitchDecay": 0.05,
-        "octaves": 4,
-        "envelope": {
-          "attack": 0.001,
-          "decay": 1.0,
-          "sustain": 0.01,
-          "release": 1.4
+      "defaultCharacterId": "classic-808",
+      "characters": [
+        {
+          "id": "classic-808",
+          "name": "Classic 808",
+          "type": "MembraneSynth",
+          "note": "C1",
+          "options": {
+            "pitchDecay": 0.05,
+            "octaves": 4,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 1.2,
+              "sustain": 0.01,
+              "release": 1.6
+            }
+          }
+        },
+        {
+          "id": "distorted-808",
+          "name": "Distorted 808",
+          "type": "MembraneSynth",
+          "note": "C1",
+          "options": {
+            "pitchDecay": 0.04,
+            "octaves": 4,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 1.0,
+              "sustain": 0.02,
+              "release": 1.4
+            }
+          },
+          "effects": [
+            { "type": "Distortion", "options": { "distortion": 0.4, "wet": 0.4 } },
+            { "type": "EQ3", "options": { "low": 4, "high": -6 } }
+          ]
         }
-      }
+      ]
     },
     "snare": {
-      "type": "NoiseSynth",
-      "note": "16n",
-      "options": {
-        "noise": { "type": "white" },
-        "envelope": {
-          "attack": 0.001,
-          "decay": 0.2,
-          "sustain": 0
-        }
-      },
-      "effects": [
-        { "type": "Distortion", "options": { "distortion": 0.4 } }
-      ]
-    },
-    "hat": {
-      "type": "MetalSynth",
-      "options": {
-        "frequency": 400,
-        "envelope": {
-          "attack": 0.001,
-          "decay": 0.1,
-          "sustain": 0.01
+      "defaultCharacterId": "tight-snap",
+      "characters": [
+        {
+          "id": "tight-snap",
+          "name": "Tight Snap",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "white" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.18,
+              "sustain": 0,
+              "release": 0.12
+            },
+            "filter": { "type": "bandpass", "frequency": 4600, "Q": 1.1 }
+          }
         },
-        "harmonicity": 5
-      },
-      "effects": [
-        { "type": "Reverb", "options": { "decay": 1.2, "wet": 0.3 } }
+        {
+          "id": "dusty-crack",
+          "name": "Dusty Crack",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "pink" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.24,
+              "sustain": 0,
+              "release": 0.18
+            },
+            "filter": { "type": "bandpass", "frequency": 3000, "Q": 0.9 }
+          },
+          "effects": [
+            { "type": "BitCrusher", "options": { "bits": 6, "wet": 0.3 } },
+            { "type": "Reverb", "options": { "decay": 1.2, "wet": 0.25 } }
+          ]
+        }
       ]
     },
-    "cowbell": {
-      "type": "MetalSynth",
-      "options": {
-        "frequency": 600,
-        "harmonicity": 3,
-        "resonance": 7000,
-        "envelope": {
-          "attack": 0.001,
-          "decay": 0.25,
-          "sustain": 0
+    "hihat": {
+      "defaultCharacterId": "shufflin",
+      "characters": [
+        {
+          "id": "shufflin",
+          "name": "Shufflin' Hat",
+          "type": "MetalSynth",
+          "options": {
+            "frequency": 420,
+            "harmonicity": 5,
+            "resonance": 7000,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.08,
+              "sustain": 0.01,
+              "release": 0.08
+            }
+          }
+        },
+        {
+          "id": "spray-hat",
+          "name": "Spray Hat",
+          "type": "MetalSynth",
+          "options": {
+            "frequency": 620,
+            "harmonicity": 4.5,
+            "resonance": 8000,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.12,
+              "sustain": 0.02,
+              "release": 0.12
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.4, "wet": 0.3 } }
+          ]
         }
-      }
-    },
-    "chord": {
-      "type": "Synth",
-      "note": "C4",
-      "options": {
-        "oscillator": { "type": "triangle" },
-        "envelope": {
-          "attack": 0.03,
-          "decay": 0.4,
-          "sustain": 0.8,
-          "release": 0.9
-        }
-      },
-      "effects": [
-        { "type": "Reverb", "options": { "decay": 2.2, "wet": 0.25 } }
       ]
     },
-    "arpeggiator": {
-      "type": "Synth",
-      "note": "C4",
-      "options": {
-        "oscillator": { "type": "sawtooth" },
-        "envelope": {
-          "attack": 0.01,
-          "decay": 0.2,
-          "sustain": 0.4,
-          "release": 0.6
+    "bass": {
+      "defaultCharacterId": "808-sub",
+      "characters": [
+        {
+          "id": "808-sub",
+          "name": "808 Sub",
+          "type": "MonoSynth",
+          "note": "C2",
+          "options": {
+            "oscillator": { "type": "sine" },
+            "filter": { "type": "lowpass", "frequency": 120, "Q": 1.1 },
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.8,
+              "sustain": 0.7,
+              "release": 1.5
+            },
+            "filterEnvelope": {
+              "attack": 0.01,
+              "decay": 0.3,
+              "sustain": 0.5,
+              "release": 0.8,
+              "baseFrequency": 120,
+              "octaves": 1
+            }
+          }
+        },
+        {
+          "id": "lofi-sub",
+          "name": "Lo-Fi Sub",
+          "type": "MonoSynth",
+          "note": "C2",
+          "options": {
+            "oscillator": { "type": "triangle" },
+            "portamento": 0.1,
+            "filter": { "type": "lowpass", "frequency": 80, "Q": 1.4 },
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.7,
+              "sustain": 0.6,
+              "release": 1.8
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.6, "wet": 0.2 } }
+          ]
         }
-      }
+      ]
+    },
+    "arp": {
+      "defaultCharacterId": "midnight-arp",
+      "characters": [
+        {
+          "id": "midnight-arp",
+          "name": "Midnight Arp",
+          "type": "Synth",
+          "note": "C4",
+          "options": {
+            "oscillator": { "type": "sawtooth" },
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.25,
+              "sustain": 0.4,
+              "release": 0.6
+            }
+          },
+          "effects": [
+            { "type": "FeedbackDelay", "options": { "delayTime": 0.25, "feedback": 0.3, "wet": 0.25 } }
+          ]
+        },
+        {
+          "id": "midnight-bells",
+          "name": "Midnight Bells",
+          "type": "FMSynth",
+          "note": "C5",
+          "options": {
+            "harmonicity": 2.4,
+            "modulationIndex": 4,
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.4,
+              "sustain": 0.5,
+              "release": 1.2
+            },
+            "modulationEnvelope": {
+              "attack": 0.01,
+              "decay": 0.3,
+              "sustain": 0.2,
+              "release": 0.8
+            }
+          },
+          "effects": [
+            { "type": "FeedbackDelay", "options": { "delayTime": 0.33, "feedback": 0.35, "wet": 0.3 } },
+            { "type": "Reverb", "options": { "decay": 2.1, "wet": 0.25 } }
+          ]
+        }
+      ]
+    },
+    "keyboard": {
+      "defaultCharacterId": "dusty-keys",
+      "characters": [
+        {
+          "id": "dusty-keys",
+          "name": "Dusty Keys",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "oscillator": { "type": "triangle" },
+              "envelope": {
+                "attack": 0.05,
+                "decay": 0.4,
+                "sustain": 0.7,
+                "release": 0.9
+              }
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 2.2, "wet": 0.25 } }
+          ]
+        },
+        {
+          "id": "rhodes-pad",
+          "name": "Rhodes Pad",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 8,
+            "voiceOptions": {
+              "oscillator": { "type": "sine" },
+              "envelope": {
+                "attack": 0.18,
+                "decay": 0.6,
+                "sustain": 0.8,
+                "release": 2.4
+              }
+            }
+          },
+          "effects": [
+            { "type": "Chorus", "options": { "frequency": 1.5, "delayTime": 3.2, "depth": 0.4, "wet": 0.35 } },
+            { "type": "Reverb", "options": { "decay": 2.8, "wet": 0.32 } }
+          ]
+        }
+      ]
     }
   },
   "chunks": [
-    { "id": "phonk-kick", "name": "Four on the Floor", "instrument": "kick", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
-    { "id": "phonk-snare", "name": "Sharp Snare", "instrument": "snare", "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
-    { "id": "phonk-hat", "name": "Fast Hat", "instrument": "hat", "steps": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] },
-    { "id": "phonk-cowbell", "name": "Cowbell", "instrument": "cowbell", "steps": [0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0] },
-    { "id": "phonk-chord", "name": "Dusty Keys", "instrument": "chord", "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], "velocities": [1,0,0,0,0,0,0,0,0.8,0,0,0,0,0,0,0], "sustain": 0.8, "reverb": 0.3 }
+    {
+      "id": "phonk-kick-deep",
+      "name": "Deep Pulse",
+      "instrument": "kick",
+      "characterId": "classic-808",
+      "steps": [1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,0],
+      "velocities": [1,0,0,0,0,0.85,0,0,0.95,0,0,0.9,0,0,0,0.8]
+    },
+    {
+      "id": "phonk-kick-stutter",
+      "name": "Stuttered Boom",
+      "instrument": "kick",
+      "characterId": "distorted-808",
+      "steps": [1,0,0,1,0,0,0,0,1,0,1,0,0,0,1,0],
+      "velocities": [1,0,0,0.7,0,0,0,0,0.95,0,0.75,0,0,0,0.85,0],
+      "swing": 0.08
+    },
+    {
+      "id": "phonk-kick-spill",
+      "name": "Slide Accents",
+      "instrument": "kick",
+      "characterId": "classic-808",
+      "steps": [1,0,0,0,0,0,1,1,0,0,0,1,0,1,0,0],
+      "velocities": [1,0,0,0,0,0,0.9,0.6,0,0,0,0.85,0,0.7,0,0.6],
+      "humanize": 0.03
+    },
+    {
+      "id": "phonk-snare-backbeat",
+      "name": "Dusty Backbeat",
+      "instrument": "snare",
+      "characterId": "tight-snap",
+      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      "velocities": [0,0,0,0,1,0,0,0,0,0,0,0,0.92,0,0,0]
+    },
+    {
+      "id": "phonk-snare-sparse",
+      "name": "Sparse Crack",
+      "instrument": "snare",
+      "characterId": "dusty-crack",
+      "steps": [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [0,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
+      "humanize": 0.05
+    },
+    {
+      "id": "phonk-snare-ghosts",
+      "name": "Trap Ghosts",
+      "instrument": "snare",
+      "characterId": "dusty-crack",
+      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      "velocities": [0,0,0,0,1,0,0,0,0,0,0,0,0.8,0,0,0],
+      "note": "16n",
+      "humanize": 0.06
+    },
+    {
+      "id": "phonk-hat-swing",
+      "name": "Swung Hats",
+      "instrument": "hihat",
+      "characterId": "shufflin",
+      "steps": [1,0,1,0,0,1,1,0,1,0,1,0,0,1,1,0],
+      "velocities": [0.9,0,0.7,0,0,0.85,0.6,0,0.88,0,0.7,0,0,0.82,0.6,0],
+      "swing": 0.18
+    },
+    {
+      "id": "phonk-hat-ride",
+      "name": "Straight 16ths",
+      "instrument": "hihat",
+      "characterId": "shufflin",
+      "steps": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      "velocities": [0.8,0.6,0.75,0.6,0.8,0.6,0.75,0.6,0.8,0.6,0.75,0.6,0.8,0.6,0.75,0.6]
+    },
+    {
+      "id": "phonk-hat-spray",
+      "name": "Spray Rolls",
+      "instrument": "hihat",
+      "characterId": "spray-hat",
+      "steps": [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1],
+      "velocities": [0.7,0.6,0,0.55,0.7,0.6,0,0.5,0.7,0.6,0,0.55,0.7,0.6,0,0.5],
+      "humanize": 0.04
+    },
+    {
+      "id": "phonk-bass-bounce",
+      "name": "Bounce Line",
+      "instrument": "bass",
+      "characterId": "808-sub",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.95,0,0,0,0.85,0,0,0,0.9,0,0,0,0.8,0,0,0],
+      "note": "C2"
+    },
+    {
+      "id": "phonk-bass-slide",
+      "name": "Slide Down",
+      "instrument": "bass",
+      "characterId": "lofi-sub",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,1,0,0,1,0],
+      "velocities": [0.9,0,0,0,0,0,0,0,0.85,0,0,0.8,0,0,0.75,0],
+      "pitches": [0,0,0,0,0,0,0,0,-2,0,0,3,0,0,5,0],
+      "glide": 0.18
+    },
+    {
+      "id": "phonk-bass-sync",
+      "name": "Sync Pulse",
+      "instrument": "bass",
+      "characterId": "808-sub",
+      "steps": [1,0,0,0,1,0,0,0,1,0,1,0,1,0,0,0],
+      "velocities": [0.9,0,0,0,0.8,0,0,0,0.85,0,0.75,0,0.8,0,0,0],
+      "note": "C2"
+    },
+    {
+      "id": "phonk-arp-midnight",
+      "name": "Midnight Steps",
+      "instrument": "arp",
+      "characterId": "midnight-arp",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.85,0,0,0,0.75,0,0,0,0.8,0,0,0,0.7,0,0,0],
+      "note": "C4"
+    },
+    {
+      "id": "phonk-arp-glow",
+      "name": "Glow Cascade",
+      "instrument": "arp",
+      "characterId": "midnight-bells",
+      "steps": [1,0,1,0,0,0,1,0,1,0,0,1,0,0,1,0],
+      "velocities": [0.9,0,0.6,0,0,0,0.7,0,0.85,0,0,0.65,0,0,0.7,0],
+      "pitches": [0,0,7,0,0,0,5,0,12,0,0,7,0,0,5,0],
+      "note": "C4"
+    },
+    {
+      "id": "phonk-arp-echo",
+      "name": "Echo Shimmer",
+      "instrument": "arp",
+      "characterId": "midnight-bells",
+      "steps": [1,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0],
+      "velocities": [0.85,0,0,0.7,0,0,0.65,0,0.8,0,0,0.75,0,0.7,0,0],
+      "pitches": [0,0,0,7,0,0,5,0,12,0,0,7,0,5,0,0],
+      "note": "C4"
+    },
+    {
+      "id": "phonk-key-dusty",
+      "name": "Dusty Chords",
+      "instrument": "keyboard",
+      "characterId": "dusty-keys",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "velocities": [0.95,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
+      "sustain": 1.1,
+      "reverb": 0.3,
+      "chorus": 0.18,
+      "note": "C4"
+    },
+    {
+      "id": "phonk-key-stabs",
+      "name": "Sync Stabs",
+      "instrument": "keyboard",
+      "characterId": "dusty-keys",
+      "steps": [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0],
+      "velocities": [0,0.85,0,0,0,0.8,0,0,0,0.75,0,0,0,0.78,0,0],
+      "sustain": 0.45,
+      "reverb": 0.22,
+      "delay": 0.18,
+      "pan": -0.15,
+      "note": "E♭4"
+    },
+    {
+      "id": "phonk-key-pad",
+      "name": "Pad Wash",
+      "instrument": "keyboard",
+      "characterId": "rhodes-pad",
+      "steps": [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      "velocities": [0.9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      "sustain": 2.4,
+      "reverb": 0.5,
+      "delay": 0.28,
+      "chorus": 0.35,
+      "pan": 0.1,
+      "note": "C4"
+    }
   ]
 }

@@ -24,7 +24,8 @@ interface InstrumentControlPanelProps {
     pitch?: number,
     note?: string,
     sustain?: number,
-    chunk?: Chunk
+    chunk?: Chunk,
+    characterId?: string
   ) => void;
   isRecording?: boolean;
   onRecordingChange?: Dispatch<SetStateAction<boolean>>;
@@ -166,7 +167,7 @@ const CollapsibleSection: FC<
 };
 
 const isPercussiveInstrument = (instrument: string) =>
-  ["kick", "snare", "hat", "cowbell"].includes(instrument);
+  ["kick", "snare", "hihat"].includes(instrument);
 
 const createChordNotes = (rootNote: string, degrees: number[]) => {
   const rootMidi = Tone.Frequency(rootNote).toMidi();
@@ -282,8 +283,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const instrumentLabel = formatInstrumentLabel(track.instrument ?? "");
   const isPercussive = isPercussiveInstrument(track.instrument ?? "");
   const isBass = track.instrument === "bass";
-  const isArp = track.instrument === "arpeggiator";
-  const isKeyboard = track.instrument === "chord";
+  const isArp = track.instrument === "arp";
+  const isKeyboard = track.instrument === "keyboard";
   const [activeDegree, setActiveDegree] = useState<number | null>(null);
   const [pressedKeyboardNotes, setPressedKeyboardNotes] = useState<
     Set<string>

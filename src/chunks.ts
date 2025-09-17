@@ -9,6 +9,7 @@ export interface Chunk {
   id: string;
   name: string;
   instrument: string;
+  characterId?: string;
   steps: number[];
   velocities?: number[];
   pitches?: number[];
