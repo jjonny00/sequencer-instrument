@@ -341,7 +341,14 @@ export default function App() {
     setSongRows([createSongRow()]);
     setCurrentSectionIndex(0);
     if (!started) return;
-    Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
+    const disposed = new Set<ToneInstrument>();
+    Object.values(instrumentRefs.current).forEach((inst) => {
+      if (!inst || inst === noteRef.current || disposed.has(inst)) {
+        return;
+      }
+      inst.dispose?.();
+      disposed.add(inst);
+    });
     instrumentRefs.current = {};
     const newTriggers: TriggerMap = {};
     Object.entries(pack.instruments).forEach(([name, spec]) => {
