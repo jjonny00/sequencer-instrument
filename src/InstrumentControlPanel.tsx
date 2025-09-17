@@ -1,4 +1,4 @@
-import type { FC, PropsWithChildren } from "react";
+import type { FC, PropsWithChildren, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import * as Tone from "tone";
 
@@ -306,8 +306,221 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     );
   }
 
+  const stickySections: ReactNode[] = [];
+
+  if (isArp) {
+    stickySections.push(
+      <Section key="arp-pads" title="Arp Pads">
+        <span style={{ color: "#94a3b8", fontSize: 12 }}>
+          Tap a pad to audition the arpeggiator with the current settings.
+        </span>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
+            gap: 8,
+          }}
+        >
+          {arpPadNotes.map((note) => (
+            <button
+              key={note}
+              type="button"
+              disabled={!canTrigger}
+              onPointerDown={(event) => {
+                if (!canTrigger) return;
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setActiveArpNote(note);
+                scheduleArpPlayback(note);
+              }}
+              onPointerUp={(event) => {
+                if (!canTrigger) return;
+                event.preventDefault();
+                event.currentTarget.releasePointerCapture(event.pointerId);
+                setActiveArpNote(null);
+              }}
+              onPointerCancel={() => {
+                if (!canTrigger) return;
+                setActiveArpNote(null);
+              }}
+              style={{
+                padding: "12px 10px",
+                borderRadius: 10,
+                border: "1px solid #2a3344",
+                background: activeArpNote === note ? "#27E0B0" : "#1f2532",
+                color: activeArpNote === note ? "#1F2532" : "#e6f2ff",
+                cursor: canTrigger ? "pointer" : "not-allowed",
+                fontWeight: 600,
+                opacity: canTrigger ? 1 : 0.5,
+              }}
+            >
+              {note}
+            </button>
+          ))}
+        </div>
+      </Section>
+    );
+  }
+
+  if (isKeyboard) {
+    stickySections.push(
+      <Section key="keyboard" title="Keyboard">
+        <span style={{ color: "#94a3b8", fontSize: 12 }}>
+          Play melodies or chords with a two-octave keyboard preview.
+        </span>
+        <div
+          style={{
+            position: "relative",
+            height: 160,
+            borderRadius: 12,
+            background: "#0f172a",
+            padding: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              height: "100%",
+              borderRadius: 8,
+              overflow: "hidden",
+              background: "#0f172a",
+              position: "relative",
+              zIndex: 1,
+            }}
+          >
+            {keyboardLayout.white.map(({ note }) => {
+              const isPressed = pressedKeyboardNotes.has(note);
+              return (
+                <button
+                  key={note}
+                  type="button"
+                  disabled={!canTrigger}
+                  onPointerDown={(event) => {
+                    if (!canTrigger) return;
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    setPressedKeyboardNotes((prev) => {
+                      const next = new Set(prev);
+                      next.add(note);
+                      return next;
+                    });
+                    triggerKeyboardNote(note);
+                  }}
+                  onPointerUp={(event) => {
+                    if (!canTrigger) return;
+                    event.preventDefault();
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                    setPressedKeyboardNotes((prev) => {
+                      const next = new Set(prev);
+                      next.delete(note);
+                      return next;
+                    });
+                  }}
+                  onPointerCancel={() => {
+                    setPressedKeyboardNotes((prev) => {
+                      const next = new Set(prev);
+                      next.delete(note);
+                      return next;
+                    });
+                  }}
+                  style={{
+                    flex: 1,
+                    height: "100%",
+                    border: "1px solid #1e293b",
+                    borderTop: "none",
+                    borderBottom: "none",
+                    background: isPressed ? "#27E0B0" : "#f8fafc",
+                    color: isPressed ? "#1F2532" : "#0f172a",
+                    cursor: canTrigger ? "pointer" : "not-allowed",
+                    opacity: canTrigger ? 1 : 0.5,
+                    position: "relative",
+                  }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 600 }}>{note}</span>
+                </button>
+              );
+            })}
+          </div>
+          {keyboardLayout.black.map(({ note, leftIndex }) => {
+            const isPressed = pressedKeyboardNotes.has(note);
+            const left = (leftIndex + 1) * whiteKeyWidth - blackKeyWidth / 2;
+            return (
+              <button
+                key={note}
+                type="button"
+                disabled={!canTrigger}
+                onPointerDown={(event) => {
+                  if (!canTrigger) return;
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setPressedKeyboardNotes((prev) => {
+                    const next = new Set(prev);
+                    next.add(note);
+                    return next;
+                  });
+                  triggerKeyboardNote(note);
+                }}
+                onPointerUp={(event) => {
+                  if (!canTrigger) return;
+                  event.preventDefault();
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                  setPressedKeyboardNotes((prev) => {
+                    const next = new Set(prev);
+                    next.delete(note);
+                    return next;
+                  });
+                }}
+                onPointerCancel={() => {
+                  setPressedKeyboardNotes((prev) => {
+                    const next = new Set(prev);
+                    next.delete(note);
+                    return next;
+                  });
+                }}
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: `${Math.max(0, Math.min(100, left))}%`,
+                  transform: "translateX(-50%)",
+                  width: `${blackKeyWidth}%`,
+                  height: "60%",
+                  borderRadius: 6,
+                  border: "1px solid #1e293b",
+                  background: isPressed ? "#27E0B0" : "#1f2532",
+                  color: isPressed ? "#1F2532" : "#e6f2ff",
+                  cursor: canTrigger ? "pointer" : "not-allowed",
+                  opacity: canTrigger ? 1 : 0.5,
+                  zIndex: 2,
+                }}
+              >
+                <span style={{ fontSize: 9, fontWeight: 600 }}>{note}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {stickySections.length ? (
+        <div
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            paddingBottom: 12,
+            background: "linear-gradient(180deg, #0b1220 0%, rgba(11, 18, 32, 0.85) 70%, rgba(11, 18, 32, 0) 100%)",
+          }}
+        >
+          {stickySections}
+        </div>
+      ) : null}
+
       <Section title={`${instrumentLabel} Settings`}>
         <div
           style={{
@@ -344,59 +557,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           onChange={updatePattern ? (value) => updatePattern({ velocityFactor: value }) : undefined}
         />
       </Section>
-
-      {isArp ? (
-        <Section title="Arp Pads">
-          <span style={{ color: "#94a3b8", fontSize: 12 }}>
-            Tap a pad to audition the arpeggiator with the current settings.
-          </span>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
-              gap: 8,
-            }}
-          >
-            {arpPadNotes.map((note) => (
-              <button
-                key={note}
-                type="button"
-                disabled={!canTrigger}
-                onPointerDown={(event) => {
-                  if (!canTrigger) return;
-                  event.preventDefault();
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  setActiveArpNote(note);
-                  scheduleArpPlayback(note);
-                }}
-                onPointerUp={(event) => {
-                  if (!canTrigger) return;
-                  event.preventDefault();
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                  setActiveArpNote(null);
-                }}
-                onPointerCancel={() => {
-                  if (!canTrigger) return;
-                  setActiveArpNote(null);
-                }}
-                style={{
-                  padding: "12px 10px",
-                  borderRadius: 10,
-                  border: "1px solid #2a3344",
-                  background:
-                    activeArpNote === note ? "#27E0B0" : "#1f2532",
-                  color: activeArpNote === note ? "#1F2532" : "#e6f2ff",
-                  cursor: canTrigger ? "pointer" : "not-allowed",
-                  fontWeight: 600,
-                  opacity: canTrigger ? 1 : 0.5,
-                }}
-              >
-                {note}
-              </button>
-            ))}
-          </div>
-        </Section>
-      ) : null}
 
       {isPercussive ? (
         <Section title="Parameters">
@@ -687,146 +847,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           </div>
         </Section>
       ) : null}
-
-      {isKeyboard ? (
-        <Section title="Keyboard">
-          <span style={{ color: "#94a3b8", fontSize: 12 }}>
-            Play melodies or chords with a two-octave keyboard preview.
-          </span>
-          <div
-            style={{
-              position: "relative",
-              height: 160,
-              borderRadius: 12,
-              background: "#0f172a",
-              padding: 12,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                height: "100%",
-                borderRadius: 8,
-                overflow: "hidden",
-                background: "#0f172a",
-                position: "relative",
-                zIndex: 1,
-              }}
-            >
-              {keyboardLayout.white.map(({ note }) => {
-                const isPressed = pressedKeyboardNotes.has(note);
-                return (
-                  <button
-                    key={note}
-                    type="button"
-                    disabled={!canTrigger}
-                    onPointerDown={(event) => {
-                      if (!canTrigger) return;
-                      event.preventDefault();
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                      setPressedKeyboardNotes((prev) => {
-                        const next = new Set(prev);
-                        next.add(note);
-                        return next;
-                      });
-                      triggerKeyboardNote(note);
-                    }}
-                    onPointerUp={(event) => {
-                      if (!canTrigger) return;
-                      event.preventDefault();
-                      event.currentTarget.releasePointerCapture(event.pointerId);
-                      setPressedKeyboardNotes((prev) => {
-                        const next = new Set(prev);
-                        next.delete(note);
-                        return next;
-                      });
-                    }}
-                    onPointerCancel={() => {
-                      setPressedKeyboardNotes((prev) => {
-                        const next = new Set(prev);
-                        next.delete(note);
-                        return next;
-                      });
-                    }}
-                    style={{
-                      flex: 1,
-                      height: "100%",
-                      border: "1px solid #1e293b",
-                      borderTop: "none",
-                      borderBottom: "none",
-                      background: isPressed ? "#27E0B0" : "#f8fafc",
-                      color: isPressed ? "#1F2532" : "#0f172a",
-                      cursor: canTrigger ? "pointer" : "not-allowed",
-                      opacity: canTrigger ? 1 : 0.5,
-                      position: "relative",
-                    }}
-                  >
-                    <span style={{ fontSize: 10, fontWeight: 600 }}>{note}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {keyboardLayout.black.map(({ note, leftIndex }) => {
-              const isPressed = pressedKeyboardNotes.has(note);
-              const left =
-                (leftIndex + 1) * whiteKeyWidth - blackKeyWidth / 2;
-              return (
-                <button
-                  key={note}
-                  type="button"
-                  disabled={!canTrigger}
-                  onPointerDown={(event) => {
-                    if (!canTrigger) return;
-                    event.preventDefault();
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    setPressedKeyboardNotes((prev) => {
-                      const next = new Set(prev);
-                      next.add(note);
-                      return next;
-                    });
-                    triggerKeyboardNote(note);
-                  }}
-                  onPointerUp={(event) => {
-                    if (!canTrigger) return;
-                    event.preventDefault();
-                    event.currentTarget.releasePointerCapture(event.pointerId);
-                    setPressedKeyboardNotes((prev) => {
-                      const next = new Set(prev);
-                      next.delete(note);
-                      return next;
-                    });
-                  }}
-                  onPointerCancel={() => {
-                    setPressedKeyboardNotes((prev) => {
-                      const next = new Set(prev);
-                      next.delete(note);
-                      return next;
-                    });
-                  }}
-                  style={{
-                    position: "absolute",
-                    top: 12,
-                    left: `${Math.max(0, Math.min(100, left))}%`,
-                    transform: "translateX(-50%)",
-                    width: `${blackKeyWidth}%`,
-                    height: "60%",
-                    borderRadius: 6,
-                    border: "1px solid #1e293b",
-                    background: isPressed ? "#27E0B0" : "#1f2532",
-                    color: isPressed ? "#1F2532" : "#e6f2ff",
-                    cursor: canTrigger ? "pointer" : "not-allowed",
-                    opacity: canTrigger ? 1 : 0.5,
-                    zIndex: 2,
-                  }}
-                >
-                  <span style={{ fontSize: 9, fontWeight: 600 }}>{note}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      ) : null}
-
       {isKeyboard ? (
         <Section title="Keyboard Controls">
           <Slider
