@@ -6,6 +6,7 @@ import { formatInstrumentLabel } from "./utils/instrument";
 
 interface AddTrackModalProps {
   isOpen: boolean;
+  mode: "add" | "edit";
   packs: Pack[];
   selectedPackId: string;
   selectedInstrumentId: string;
@@ -17,10 +18,12 @@ interface AddTrackModalProps {
   onSelectPreset: (presetId: string | null) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  onDelete?: () => void;
 }
 
 export const AddTrackModal: FC<AddTrackModalProps> = ({
   isOpen,
+  mode,
   packs,
   selectedPackId,
   selectedInstrumentId,
@@ -32,6 +35,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   onSelectPreset,
   onCancel,
   onConfirm,
+  onDelete,
 }) => {
   if (!isOpen) return null;
 
@@ -47,6 +51,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     : [];
 
   const confirmDisabled = !pack || !selectedInstrumentId;
+  const isEditMode = mode === "edit";
+  const title = isEditMode ? "Edit Track" : "Add Track";
+  const description = isEditMode
+    ? "Adjust the sound pack, instrument, character, and preset for this track."
+    : "Choose a sound pack, instrument, character, and optional preset to start a new groove.";
+  const confirmLabel = isEditMode ? "Update Track" : "Add Track";
 
   return (
     <div
@@ -77,11 +87,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 20, fontWeight: 700 }}>Add Track</span>
-          <span style={{ fontSize: 13, color: "#94a3b8" }}>
-            Choose a sound pack, instrument, character, and optional preset to
-            start a new groove.
-          </span>
+          <span style={{ fontSize: 20, fontWeight: 700 }}>{title}</span>
+          <span style={{ fontSize: 13, color: "#94a3b8" }}>{description}</span>
         </div>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -190,43 +197,70 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           </select>
         </label>
 
-        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{
-              flex: 1,
-              padding: "10px 14px",
-              borderRadius: 999,
-              border: "1px solid #334155",
-              background: "#111827",
-              color: "#cbd5f5",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={confirmDisabled}
-            style={{
-              flex: 1,
-              padding: "10px 14px",
-              borderRadius: 999,
-              border: "1px solid #1b4332",
-              background: confirmDisabled ? "#1f2532" : "#27E0B0",
-              color: confirmDisabled ? "#475569" : "#0f1420",
-              fontWeight: 700,
-              cursor: confirmDisabled ? "not-allowed" : "pointer",
-              boxShadow: confirmDisabled
-                ? "none"
-                : "0 8px 18px rgba(15, 32, 38, 0.45)",
-            }}
-          >
-            Add Track
-          </button>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            marginTop: 8,
+          }}
+        >
+          {isEditMode && onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: 999,
+                border: "1px solid #4c1d24",
+                background: "#E02749",
+                color: "#e6f2ff",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Remove Track
+            </button>
+          )}
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                flex: 1,
+                padding: "10px 14px",
+                borderRadius: 999,
+                border: "1px solid #334155",
+                background: "#111827",
+                color: "#cbd5f5",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={confirmDisabled}
+              style={{
+                flex: 1,
+                padding: "10px 14px",
+                borderRadius: 999,
+                border: "1px solid #1b4332",
+                background: confirmDisabled ? "#1f2532" : "#27E0B0",
+                color: confirmDisabled ? "#475569" : "#0f1420",
+                fontWeight: 700,
+                cursor: confirmDisabled ? "not-allowed" : "pointer",
+                boxShadow: confirmDisabled
+                  ? "none"
+                  : "0 8px 18px rgba(15, 32, 38, 0.45)",
+              }}
+            >
+              {confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>

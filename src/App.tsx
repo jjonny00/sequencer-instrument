@@ -24,6 +24,8 @@ type Subdivision = "16n" | "8n" | "4n";
 
 interface AddTrackModalState {
   isOpen: boolean;
+  mode: "add" | "edit";
+  targetTrackId: number | null;
   packId: string;
   instrumentId: string;
   characterId: string;
@@ -37,6 +39,8 @@ const createDefaultAddTrackState = (
   if (!pack) {
     return {
       isOpen: false,
+      mode: "add",
+      targetTrackId: null,
       packId: "",
       instrumentId: "",
       characterId: "",
@@ -51,6 +55,8 @@ const createDefaultAddTrackState = (
   const preset = pack.chunks.find((chunk) => chunk.instrument === instrumentId);
   return {
     isOpen: false,
+    mode: "add",
+    targetTrackId: null,
     packId: pack.id,
     instrumentId,
     characterId,
@@ -110,6 +116,8 @@ export default function App() {
       if (!pack) {
         return {
           isOpen: true,
+          mode: "add",
+          targetTrackId: null,
           packId: "",
           instrumentId: "",
           characterId: "",
@@ -126,6 +134,8 @@ export default function App() {
       );
       return {
         isOpen: true,
+        mode: "add",
+        targetTrackId: null,
         packId: pack.id,
         instrumentId,
         characterId,
@@ -160,6 +170,49 @@ export default function App() {
   const handleSelectAddTrackPreset = useCallback((presetId: string | null) => {
     setAddTrackModalState((state) => ({ ...state, presetId }));
   }, []);
+
+  const handleRequestTrackModal = useCallback(
+    (track: Track) => {
+      const pack = packs[packIndex];
+      if (!pack) return;
+      const instrumentOptions = Object.keys(pack.instruments);
+      let instrumentId =
+        track.source?.instrumentId ?? (track.instrument ? track.instrument : "");
+      if (!instrumentOptions.includes(instrumentId) && instrumentOptions.length > 0) {
+        instrumentId = instrumentOptions[0];
+      }
+      if (!instrumentId && instrumentOptions.length > 0) {
+        instrumentId = instrumentOptions[0];
+      }
+      const characters = instrumentId
+        ? getCharacterOptions(pack.id, instrumentId)
+        : [];
+      let characterId = track.source?.characterId ?? (characters[0]?.id ?? "");
+      if (
+        characters.length > 0 &&
+        !characters.some((character) => character.id === characterId)
+      ) {
+        characterId = characters[0].id;
+      }
+      const presetOptions = pack.chunks.filter(
+        (chunk) => chunk.instrument === instrumentId
+      );
+      let presetId = track.source?.presetId ?? null;
+      if (presetId && !presetOptions.some((preset) => preset.id === presetId)) {
+        presetId = presetOptions[0]?.id ?? null;
+      }
+      setAddTrackModalState({
+        isOpen: true,
+        mode: "edit",
+        targetTrackId: track.id,
+        packId: pack.id,
+        instrumentId,
+        characterId,
+        presetId,
+      });
+    },
+    [packIndex]
+  );
 
   useEffect(() => {
     if (!addTrackModalState.isOpen) return;
@@ -526,12 +579,39 @@ export default function App() {
       closeAddTrackModal();
       return;
     }
-    loopStripRef.current?.addTrackWithOptions({
-      packId: addTrackModalState.packId,
-      instrumentId: addTrackModalState.instrumentId,
-      characterId: addTrackModalState.characterId,
-      presetId: addTrackModalState.presetId,
-    });
+    if (
+      addTrackModalState.mode === "edit" &&
+      addTrackModalState.targetTrackId !== null
+    ) {
+      loopStripRef.current?.updateTrackWithOptions(
+        addTrackModalState.targetTrackId,
+        {
+          packId: addTrackModalState.packId,
+          instrumentId: addTrackModalState.instrumentId,
+          characterId: addTrackModalState.characterId,
+          presetId: addTrackModalState.presetId,
+        }
+      );
+    } else {
+      loopStripRef.current?.addTrackWithOptions({
+        packId: addTrackModalState.packId,
+        instrumentId: addTrackModalState.instrumentId,
+        characterId: addTrackModalState.characterId,
+        presetId: addTrackModalState.presetId,
+      });
+    }
+    closeAddTrackModal();
+  }, [addTrackModalState, closeAddTrackModal]);
+
+  const handleDeleteTrackFromModal = useCallback(() => {
+    if (
+      addTrackModalState.mode !== "edit" ||
+      addTrackModalState.targetTrackId === null
+    ) {
+      closeAddTrackModal();
+      return;
+    }
+    loopStripRef.current?.removeTrack(addTrackModalState.targetTrackId);
     closeAddTrackModal();
   }, [addTrackModalState, closeAddTrackModal]);
 
@@ -551,6 +631,7 @@ export default function App() {
     >
       <AddTrackModal
         isOpen={addTrackModalState.isOpen}
+        mode={addTrackModalState.mode}
         packs={packs}
         selectedPackId={addTrackModalState.packId}
         selectedInstrumentId={addTrackModalState.instrumentId}
@@ -562,6 +643,11 @@ export default function App() {
         onSelectPreset={handleSelectAddTrackPreset}
         onCancel={closeAddTrackModal}
         onConfirm={handleConfirmAddTrack}
+        onDelete={
+          addTrackModalState.mode === "edit"
+            ? handleDeleteTrackFromModal
+            : undefined
+        }
       />
       {!started ? (
         <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
@@ -639,6 +725,7 @@ export default function App() {
               selectedGroupId={selectedGroupId}
               setSelectedGroupId={setSelectedGroupId}
               onAddTrack={openAddTrackModal}
+              onRequestTrackModal={handleRequestTrackModal}
             />
           )}
           <div
