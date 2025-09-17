@@ -436,12 +436,13 @@ export default function App() {
         const { voice, voiceOptions, ...polyOptions } = options;
         if (voice && voice in Tone) {
           const VoiceCtor = (
-            Tone as unknown as Record<
-              string,
-              new (opts?: Record<string, unknown>) => Tone.Synth
-            >
+            Tone as unknown as Record<string, new (opts?: Record<string, unknown>) => Tone.Synth>
           )[voice];
-          instrument = new Tone.PolySynth(VoiceCtor, voiceOptions ?? {}) as ToneInstrument;
+          const PolyCtor = Tone.PolySynth as unknown as new (
+            voice?: new (opts?: Record<string, unknown>) => Tone.Synth,
+            options?: Record<string, unknown>
+          ) => ToneInstrument;
+          instrument = new PolyCtor(VoiceCtor, voiceOptions ?? {});
           (instrument as unknown as { set?: (values: Record<string, unknown>) => void }).set?.(
             polyOptions
           );
