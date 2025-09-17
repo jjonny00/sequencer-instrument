@@ -20,6 +20,9 @@ import {
   frequencyToFilterValue,
 } from "./utils/audio";
 
+const PITCH_SLIDER_WIDTH = 60;
+const PITCH_SLIDER_GAP = 12;
+
 type FxChain = {
   reverb: Tone.Reverb;
   delay: Tone.FeedbackDelay;
@@ -484,20 +487,33 @@ export function Keyboard({
     }
   };
 
+  const applyPitchBend = (value: number) => {
+    setBend(value);
+    const synth = noteRef.current as unknown as { detune?: Tone.Signal } | null;
+    synth?.detune?.rampTo(value, 0.05);
+  };
+
+  const resetPitchBend = () => {
+    setBend(0);
+    const synth = noteRef.current as unknown as { detune?: Tone.Signal } | null;
+    synth?.detune?.rampTo(0, 0.2);
+  };
+
   const renderKeyboardSurface = (height: number | string) => {
     const resolvedHeight =
       typeof height === "number" ? `${height}px` : height;
     return (
       <div
         style={{
-          display: "flex",
-          gap: 8,
+          display: "grid",
+          gridTemplateColumns: `minmax(0, 1fr) ${PITCH_SLIDER_WIDTH}px`,
+          columnGap: PITCH_SLIDER_GAP,
           height: resolvedHeight,
         }}
       >
         <div
           style={{
-            flex: 1,
+            width: "100%",
             position: "relative",
             height: resolvedHeight,
             touchAction: "pan-y",
@@ -572,7 +588,7 @@ export function Keyboard({
         </div>
         <div
           style={{
-            width: 48,
+            width: PITCH_SLIDER_WIDTH,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -590,40 +606,21 @@ export function Keyboard({
             value={bend}
             onChange={(event) => {
               const value = parseInt(event.target.value, 10);
-              setBend(value);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(value, 0.05);
+              applyPitchBend(value);
             }}
             onInput={(event) => {
               const value = parseInt((event.target as HTMLInputElement).value, 10);
-              setBend(value);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(value, 0.05);
+              applyPitchBend(value);
             }}
-            onPointerUp={() => {
-              setBend(0);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(0, 0.2);
-            }}
-            onPointerCancel={() => {
-              setBend(0);
-              const synth = noteRef.current as unknown as {
-                detune: Tone.Signal;
-              };
-              synth?.detune.rampTo(0, 0.2);
-            }}
+            onPointerUp={resetPitchBend}
+            onPointerCancel={resetPitchBend}
+            onPointerLeave={resetPitchBend}
             style={{
-              width: 32,
+              width: "100%",
               height: "100%",
               writingMode: "vertical-rl",
               WebkitAppearance: "slider-vertical",
-              touchAction: "pan-y",
+              touchAction: "none",
             }}
           />
         </div>
