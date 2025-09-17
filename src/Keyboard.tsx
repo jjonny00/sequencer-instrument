@@ -509,6 +509,7 @@ export function Keyboard({
           gridTemplateColumns: `minmax(0, 1fr) ${PITCH_SLIDER_WIDTH}px`,
           columnGap: PITCH_SLIDER_GAP,
           height: resolvedHeight,
+          width: "100%",
         }}
       >
         <div
@@ -675,12 +676,12 @@ export function Keyboard({
               <div
                 style={{
                   position: "relative",
-                  width: "calc(100vh - 32px)",
-                  height: "calc(100vw - 32px)",
+                  width: "100vh",
+                  height: "100vw",
                   transform: "rotate(90deg)",
                   transformOrigin: "center",
                   display: "flex",
-                  alignItems: "center",
+                  alignItems: "stretch",
                   justifyContent: "center",
                   maxWidth: "100vh",
                   maxHeight: "100vw",
@@ -688,13 +689,17 @@ export function Keyboard({
               >
                 <div
                   style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "min(4vh, 24px) 0",
+                    boxSizing: "border-box",
                     width: "100%",
                     height: "100%",
-                    padding: 16,
-                    boxSizing: "border-box",
                   }}
                 >
-                  {renderKeyboardSurface("100%")}
+                  {renderKeyboardSurface("100%")} 
                 </div>
               </div>
             </div>
