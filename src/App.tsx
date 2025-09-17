@@ -5,7 +5,7 @@ import * as Tone from "tone";
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
-import { packs } from "./packs";
+import { packs, type InstrumentCharacter } from "./packs";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
@@ -69,7 +69,10 @@ const createDefaultAddTrackState = (
   const characters = instrumentId
     ? getCharacterOptions(pack.id, instrumentId)
     : [];
-  const characterId = characters[0]?.id ?? "";
+  const preferredCharacterId = pack.instruments[instrumentId]?.defaultCharacterId;
+  const characterId = characters.find((character) => character.id === preferredCharacterId)?.id
+    ?? characters[0]?.id
+    ?? "";
   const preset = pack.chunks.find((chunk) => chunk.instrument === instrumentId);
   return {
     isOpen: false,
@@ -95,17 +98,21 @@ export default function App() {
     triggerAttackRelease: (...args: any[]) => any;
   };
   const instrumentRefs = useRef<Record<string, ToneInstrument>>({});
-  const noteRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
-  const keyboardFxRef = useRef<{
-    reverb: Tone.Reverb;
-    delay: Tone.FeedbackDelay;
-    distortion: Tone.Distortion;
-    bitCrusher: Tone.BitCrusher;
-    panner: Tone.Panner;
-    chorus: Tone.Chorus;
-    tremolo: Tone.Tremolo;
-    filter: Tone.Filter;
-  } | null>(null);
+  const keyboardFxRefs = useRef<
+    Record<
+      string,
+      {
+        reverb: Tone.Reverb;
+        delay: Tone.FeedbackDelay;
+        distortion: Tone.Distortion;
+        bitCrusher: Tone.BitCrusher;
+        panner: Tone.Panner;
+        chorus: Tone.Chorus;
+        tremolo: Tone.Tremolo;
+        filter: Tone.Filter;
+      }
+    >
+  >({});
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -139,7 +146,7 @@ export default function App() {
   const canRecordSelectedTrack = useMemo(() => {
     if (!selectedTrack || !selectedTrack.instrument) return false;
     if (!selectedTrack.pattern) return false;
-    return ["arpeggiator", "chord"].includes(selectedTrack.instrument);
+    return ["arp", "keyboard"].includes(selectedTrack.instrument);
   }, [selectedTrack]);
 
   const canClearSelectedTrack = Boolean(selectedTrack?.pattern);
@@ -198,7 +205,29 @@ export default function App() {
   );
 
   const handleSelectAddTrackInstrument = useCallback((instrumentId: string) => {
-    setAddTrackModalState((state) => ({ ...state, instrumentId }));
+    setAddTrackModalState((state) => {
+      const pack = packs.find((candidate) => candidate.id === state.packId);
+      const characters = instrumentId
+        ? getCharacterOptions(state.packId, instrumentId)
+        : [];
+      const instrumentDefinition = pack?.instruments[instrumentId];
+      const preferredCharacterId = instrumentDefinition?.defaultCharacterId;
+      const nextCharacterId = characters.length
+        ? characters.find((character) => character.id === preferredCharacterId)?.id ?? characters[0].id
+        : "";
+      const presetOptions = pack
+        ? pack.chunks.filter((chunk) => chunk.instrument === instrumentId)
+        : [];
+      const nextPresetId = state.presetId && presetOptions.some((preset) => preset.id === state.presetId)
+        ? state.presetId
+        : presetOptions[0]?.id ?? null;
+      return {
+        ...state,
+        instrumentId,
+        characterId: nextCharacterId,
+        presetId: nextPresetId,
+      };
+    });
   }, []);
 
   const handleSelectAddTrackCharacter = useCallback((characterId: string) => {
@@ -324,11 +353,7 @@ export default function App() {
   useEffect(() => {
     const pack = packs[packIndex];
     setTracks((prev) => {
-      const allowed = new Set([
-        ...Object.keys(pack.instruments),
-        "chord",
-        "arpeggiator",
-      ]);
+      const allowed = new Set(Object.keys(pack.instruments));
       const filtered = prev.filter((track) => {
         if (!track.instrument) return true;
         return allowed.has(track.instrument);
@@ -340,61 +365,183 @@ export default function App() {
     setPatternGroups([initialGroup]);
     setSongRows([createSongRow()]);
     setCurrentSectionIndex(0);
-    if (!started) return;
-    const disposed = new Set<ToneInstrument>();
-    Object.values(instrumentRefs.current).forEach((inst) => {
-      if (!inst || inst === noteRef.current || disposed.has(inst)) {
-        return;
+
+    const disposeAll = () => {
+      Object.values(instrumentRefs.current).forEach((inst) => {
+        inst?.dispose?.();
+      });
+      instrumentRefs.current = {};
+      Object.values(keyboardFxRefs.current).forEach((fx) => {
+        fx.reverb.dispose();
+        fx.delay.dispose();
+        fx.distortion.dispose();
+        fx.bitCrusher.dispose();
+        fx.panner.dispose();
+        fx.chorus.dispose();
+        fx.tremolo.dispose();
+        fx.filter.dispose();
+      });
+      keyboardFxRefs.current = {};
+    };
+
+    if (!started) {
+      disposeAll();
+      setTriggers({});
+      return;
+    }
+
+    disposeAll();
+
+    const resolveCharacter = (
+      instrumentId: string,
+      requestedId?: string
+    ): InstrumentCharacter | undefined => {
+      const definition = pack.instruments[instrumentId];
+      if (!definition) return undefined;
+      if (requestedId) {
+        const specific = definition.characters.find(
+          (character) => character.id === requestedId
+        );
+        if (specific) {
+          return specific;
+        }
       }
-      inst.dispose?.();
-      disposed.add(inst);
-    });
-    instrumentRefs.current = {};
-    const newTriggers: TriggerMap = {};
-    Object.entries(pack.instruments).forEach(([name, spec]) => {
-      if (name === "chord" || name === "arpeggiator") return;
-      const Ctor = (
+      if (definition.defaultCharacterId) {
+        const preferred = definition.characters.find(
+          (character) => character.id === definition.defaultCharacterId
+        );
+        if (preferred) {
+          return preferred;
+        }
+      }
+      return definition.characters[0];
+    };
+
+    const createInstrumentInstance = (
+      instrumentId: string,
+      character: InstrumentCharacter
+    ) => {
+      const ctor = (
         Tone as unknown as Record<
           string,
           new (opts?: Record<string, unknown>) => ToneInstrument
         >
-      )[spec.type];
-      const inst = new Ctor(spec.options ?? {});
-      let node: Tone.ToneAudioNode = inst;
-      (spec.effects ?? []).forEach((e) => {
+      )[character.type];
+      let instrument: ToneInstrument;
+      if (character.type === "PolySynth") {
+        const options = (character.options ?? {}) as {
+          voice?: string;
+          voiceOptions?: Record<string, unknown>;
+        } & Record<string, unknown>;
+        const { voice, voiceOptions, ...polyOptions } = options;
+        if (voice && voice in Tone) {
+          const VoiceCtor = (
+            Tone as unknown as Record<
+              string,
+              new (opts?: Record<string, unknown>) => Tone.Synth
+            >
+          )[voice];
+          instrument = new Tone.PolySynth(VoiceCtor, voiceOptions ?? {}) as ToneInstrument;
+          (instrument as unknown as { set?: (values: Record<string, unknown>) => void }).set?.(
+            polyOptions
+          );
+        } else {
+          instrument = new ctor(character.options ?? {});
+        }
+      } else {
+        instrument = new ctor(character.options ?? {});
+      }
+      let node: Tone.ToneAudioNode = instrument;
+      (character.effects ?? []).forEach((effect) => {
         const EffectCtor = (
           Tone as unknown as Record<
             string,
             new (opts?: Record<string, unknown>) => Tone.ToneAudioNode
           >
-        )[e.type];
-        const eff = new EffectCtor(e.options ?? {});
+        )[effect.type];
+        const eff = new EffectCtor(effect.options ?? {});
         node.connect(eff);
         node = eff;
       });
+      if (instrumentId === "keyboard") {
+        const reverb = new Tone.Reverb({ decay: 3, wet: 0 });
+        const delay = new Tone.FeedbackDelay({
+          delayTime: 0.25,
+          feedback: 0.3,
+          wet: 0,
+        });
+        const distortion = new Tone.Distortion({ distortion: 0 });
+        const bitCrusher = new Tone.BitCrusher(4);
+        bitCrusher.wet.value = 0;
+        const chorus = new Tone.Chorus(4, 2.5, 0.5).start();
+        chorus.wet.value = 0;
+        const tremolo = new Tone.Tremolo(9, 0.75).start();
+        tremolo.wet.value = 0;
+        const filter = new Tone.Filter({ type: "lowpass", frequency: 20000 });
+        const panner = new Tone.Panner(0);
+        node.connect(distortion);
+        distortion.connect(bitCrusher);
+        bitCrusher.connect(chorus);
+        chorus.connect(tremolo);
+        tremolo.connect(filter);
+        filter.connect(reverb);
+        reverb.connect(delay);
+        delay.connect(panner);
+        panner.connect(Tone.Destination);
+        return {
+          instrument,
+          keyboardFx: {
+            reverb,
+            delay,
+            distortion,
+            bitCrusher,
+            panner,
+            chorus,
+            tremolo,
+            filter,
+          },
+        };
+      }
       node.toDestination();
-      instrumentRefs.current[name] = inst;
-      newTriggers[name] = (
+      return { instrument };
+    };
+
+    const newTriggers: TriggerMap = {};
+    Object.keys(pack.instruments).forEach((instrumentId) => {
+      newTriggers[instrumentId] = (
         time: number,
         velocity = 1,
         pitch = 0,
         noteArg?: string,
         sustainArg?: number,
-        chunk?: Chunk
+        chunk?: Chunk,
+        characterId?: string
       ) => {
         void ensureAudioContextRunning();
-        void noteArg;
-        void sustainArg;
+        const character = resolveCharacter(instrumentId, characterId);
+        if (!character) return;
+        const key = `${instrumentId}:${character.id}`;
+        let inst = instrumentRefs.current[key];
+        if (!inst) {
+          const created = createInstrumentInstance(instrumentId, character);
+          inst = created.instrument;
+          instrumentRefs.current[key] = inst;
+          if (created.keyboardFx) {
+            keyboardFxRefs.current[key] = created.keyboardFx;
+          }
+        }
+        const sustainOverride =
+          sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
         if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
-          settable.set?.({
-            envelope: {
-              ...(chunk.attack !== undefined ? { attack: chunk.attack } : {}),
-              ...(chunk.sustain !== undefined ? { release: chunk.sustain } : {}),
-            },
-          });
+          const envelope: Record<string, unknown> = {};
+          if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+          if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+          if (Object.keys(envelope).length > 0) {
+            settable.set?.({ envelope });
+          }
         }
         if (chunk?.glide !== undefined) {
           settable.set?.({ portamento: chunk.glide });
@@ -404,76 +551,53 @@ export default function App() {
             filter: { frequency: filterValueToFrequency(chunk.filter) },
           });
         }
-        if (inst instanceof Tone.NoiseSynth) {
-          inst.triggerAttackRelease(spec.note ?? "8n", time, velocity);
-        } else {
-          const base = spec.note ?? "C2";
-          const n = Tone.Frequency(base).transpose(pitch).toNote();
-          inst.triggerAttackRelease(n, "8n", time, velocity);
+        if (instrumentId === "keyboard") {
+          const fx = keyboardFxRefs.current[key];
+          if (fx) {
+            if (chunk?.pan !== undefined) {
+              fx.panner.pan.rampTo(chunk.pan, 0.1);
+            }
+            if (chunk?.reverb !== undefined) {
+              fx.reverb.wet.value = chunk.reverb;
+            }
+            if (chunk?.delay !== undefined) {
+              fx.delay.wet.value = chunk.delay;
+            }
+            if (chunk?.distortion !== undefined) {
+              fx.distortion.distortion = chunk.distortion;
+            }
+            if (chunk?.bitcrusher !== undefined) {
+              fx.bitCrusher.wet.value = chunk.bitcrusher;
+            }
+            if (chunk?.chorus !== undefined) {
+              fx.chorus.wet.value = chunk.chorus;
+            }
+            if (chunk?.filter !== undefined) {
+              const frequency = filterValueToFrequency(chunk.filter);
+              fx.filter.frequency.rampTo(frequency, 0.1);
+            }
+          }
         }
+        if (inst instanceof Tone.NoiseSynth) {
+          inst.triggerAttackRelease(
+            sustainOverride ?? character.note ?? "8n",
+            time,
+            velocity
+          );
+          return;
+        }
+        const baseNote = noteArg ?? chunk?.note ?? character.note ?? "C2";
+        const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
+        const duration = sustainOverride ?? (instrumentId === "keyboard" ? 0.3 : "8n");
+        inst.triggerAttackRelease(targetNote, duration, time, velocity);
       };
     });
-    newTriggers["chord"] = (
-      time: number,
-      velocity = 1,
-      pitch = 0,
-      note = "C4",
-      sustain?: number,
-      chunk?: Chunk
-    ) => {
-      void ensureAudioContextRunning();
-      const releaseOverride =
-        sustain ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
-      const envelope: Record<string, number> = {};
-      if (chunk?.attack !== undefined) {
-        envelope.attack = chunk.attack;
-      }
-      if (releaseOverride !== undefined) {
-        envelope.release = releaseOverride;
-      }
-      if (Object.keys(envelope).length > 0) {
-        noteRef.current?.set({ envelope });
-      }
-      if (chunk?.glide !== undefined) {
-        noteRef.current?.set({ portamento: chunk.glide });
-      }
 
-      if (chunk) {
-        const fx = keyboardFxRef.current;
-        if (fx) {
-          if (chunk.pan !== undefined) {
-            fx.panner.pan.rampTo(chunk.pan, 0.1);
-          }
-          if (chunk.reverb !== undefined) {
-            fx.reverb.wet.value = chunk.reverb;
-            fx.delay.wet.value = chunk.delay ?? chunk.reverb;
-          }
-          if (chunk.delay !== undefined) {
-            fx.delay.wet.value = chunk.delay;
-          }
-          if (chunk.distortion !== undefined) {
-            fx.distortion.distortion = chunk.distortion;
-          }
-          if (chunk.bitcrusher !== undefined) {
-            fx.bitCrusher.wet.value = chunk.bitcrusher;
-          }
-          if (chunk.chorus !== undefined) {
-            fx.chorus.wet.value = chunk.chorus;
-          }
-          if (chunk.filter !== undefined) {
-            const frequency = filterValueToFrequency(chunk.filter);
-            fx.filter.frequency.rampTo(frequency, 0.1);
-          }
-        }
-      }
-      const n = Tone.Frequency(note).transpose(pitch).toNote();
-      const duration = releaseOverride ?? 0.1;
-      noteRef.current?.triggerAttackRelease(n, duration, time, velocity);
-    };
-    instrumentRefs.current["chord"] = noteRef.current! as ToneInstrument;
-    instrumentRefs.current["arpeggiator"] = noteRef.current! as ToneInstrument;
-    newTriggers["arpeggiator"] = newTriggers["chord"];
     setTriggers(newTriggers);
+
+    return () => {
+      disposeAll();
+    };
   }, [packIndex, started]);
 
   useEffect(() => {
@@ -641,25 +765,6 @@ export default function App() {
 
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
-    const synth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.4 },
-    });
-    const reverb = new Tone.Reverb({ decay: 3, wet: 0 });
-    const delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.3, wet: 0 });
-    const distortion = new Tone.Distortion({ distortion: 0 });
-    const bitCrusher = new Tone.BitCrusher(4);
-    bitCrusher.wet.value = 0;
-    const chorus = new Tone.Chorus(4, 2.5, 0.5).start();
-    chorus.wet.value = 0;
-    const tremolo = new Tone.Tremolo(9, 0.75).start();
-    tremolo.wet.value = 0;
-    const filter = new Tone.Filter({ type: "lowpass", frequency: 20000 });
-    const panner = new Tone.Panner(0);
-    synth.chain(distortion, bitCrusher, chorus, tremolo, filter, reverb, delay, panner, Tone.Destination);
-    noteRef.current = synth;
-    keyboardFxRef.current = { reverb, delay, distortion, bitCrusher, panner, chorus, tremolo, filter };
-
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.start(); // start clock; we’ll schedule to it
     setStarted(true);
@@ -1036,11 +1141,30 @@ export default function App() {
                     <InstrumentControlPanel
                       track={selectedTrack}
                       allTracks={tracks}
-                      trigger={
-                        selectedTrack.instrument
-                          ? triggers[selectedTrack.instrument] ?? undefined
-                          : undefined
-                      }
+                      trigger={(() => {
+                        if (!selectedTrack.instrument) return undefined;
+                        const trigger =
+                          triggers[selectedTrack.instrument] ?? undefined;
+                        if (!trigger) return undefined;
+                        const characterId = selectedTrack.source?.characterId;
+                        return (
+                          time: number,
+                          velocity?: number,
+                          pitch?: number,
+                          note?: string,
+                          sustain?: number,
+                          chunk?: Chunk
+                        ) =>
+                          trigger(
+                            time,
+                            velocity,
+                            pitch,
+                            note,
+                            sustain,
+                            chunk,
+                            characterId
+                          );
+                      })()}
                       onUpdatePattern={
                         selectedTrack.pattern
                           ? (updater) =>

@@ -1,6 +1,7 @@
 const CUSTOM_LABELS: Record<string, string> = {
-  chord: "Keyboard",
-  arpeggiator: "Arp",
+  keyboard: "Keyboard",
+  arp: "Arp",
+  hihat: "Hi-Hat",
 };
 
 export const formatInstrumentLabel = (value: string) => {

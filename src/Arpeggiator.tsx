@@ -85,12 +85,12 @@ export function Arpeggiator({
         {
           id: nextId,
           name: label,
-          instrument: "arpeggiator",
+          instrument: "arp",
           muted: false,
           pattern: {
             id: `arp-${Date.now()}`,
             name: `Track ${label} Pattern`,
-            instrument: "arpeggiator",
+            instrument: "arp",
             steps,
             velocities,
             pitches,
@@ -181,12 +181,12 @@ export function Arpeggiator({
                 {
                   id: tid,
                   name: label,
-                  instrument: "arpeggiator",
+                  instrument: "arp",
                   muted: false,
                   pattern: {
                     id: `arp-${Date.now()}`,
                     name: `Track ${label} Pattern`,
-                    instrument: "arpeggiator",
+                    instrument: "arp",
                     steps,
                     velocities,
                     pitches,
@@ -214,7 +214,7 @@ export function Arpeggiator({
                 t.pattern ?? {
                   id: `arp-${Date.now()}`,
                   name: `Track ${label} Pattern`,
-                  instrument: "arpeggiator",
+                  instrument: "arp",
                   steps: Array(16).fill(0),
                   velocities: Array(16).fill(1),
                   pitches: Array(16).fill(0),

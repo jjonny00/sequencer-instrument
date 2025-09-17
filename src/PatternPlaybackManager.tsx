@@ -58,7 +58,15 @@ export function PatternPlaybackManager({
             0,
             Math.min(1, velocity * velocityFactor)
           );
-          trigger(time, combinedVelocity, pitch, note, sustain, chunk);
+          trigger(
+            time,
+            combinedVelocity,
+            pitch,
+            note,
+            sustain,
+            chunk,
+            track.source?.characterId
+          );
         };
         const isTrackActive = () => !row.muted && !track.muted;
         players.push(
@@ -89,7 +97,17 @@ export function PatternPlaybackManager({
           <PatternPlayer
             key={track.id}
             pattern={track.pattern}
-            trigger={trigger}
+            trigger={(time, velocity, pitch, note, sustain, chunk) =>
+              trigger(
+                time,
+                velocity,
+                pitch,
+                note,
+                sustain,
+                chunk,
+                track.source?.characterId
+              )
+            }
             started={started}
             isTrackActive={isTrackActive}
           />

@@ -19,11 +19,10 @@ import { createPatternGroupId } from "./song";
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
   snare: "#3498db",
-  hat: "#f1c40f",
+  hihat: "#f1c40f",
   bass: "#1abc9c",
-  cowbell: "#ff9f1c",
-  chord: "#2ecc71",
-  arpeggiator: "#9b59b6",
+  keyboard: "#2ecc71",
+  arp: "#9b59b6",
 };
 
 const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";
@@ -319,7 +318,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         const preset = presetId
           ? activePack.chunks.find((chunk) => chunk.id === presetId)
           : null;
-        const pattern: Chunk = preset
+        const basePattern: Chunk = preset
           ? {
               ...cloneChunk(preset),
               id: `${preset.id}-${Date.now()}`,
@@ -334,6 +333,14 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               velocities: Array(16).fill(1),
               pitches: Array(16).fill(0),
             };
+        const instrumentDefinition = activePack.instruments[instrumentId];
+        const resolvedCharacterId =
+          characterId ||
+          basePattern.characterId ||
+          instrumentDefinition?.defaultCharacterId ||
+          instrumentDefinition?.characters?.[0]?.id ||
+          "";
+        const pattern: Chunk = { ...basePattern, characterId: resolvedCharacterId };
         createdId = nextId;
         return [
           ...ts,
@@ -346,7 +353,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             source: {
               packId,
               instrumentId,
-              characterId,
+              characterId: resolvedCharacterId,
               presetId: presetId ?? null,
             },
           },
@@ -380,7 +387,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const preset = presetId
             ? activePack.chunks.find((chunk) => chunk.id === presetId)
             : null;
-          const nextPattern: Chunk | null = preset
+          const basePattern: Chunk | null = preset
             ? {
                 ...cloneChunk(preset),
                 id: `${preset.id}-${Date.now()}`,
@@ -388,7 +395,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 name: preset.name,
               }
             : t.pattern
-            ? { ...t.pattern, instrument: instrumentId }
+            ? { ...cloneChunk(t.pattern), instrument: instrumentId }
             : {
                 id: `track-${trackId}-${Date.now()}`,
                 name: t.name,
@@ -397,6 +404,16 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 velocities: Array(16).fill(1),
                 pitches: Array(16).fill(0),
               };
+          const instrumentDefinition = activePack.instruments[instrumentId];
+          const resolvedCharacterId =
+            characterId ||
+            basePattern?.characterId ||
+            instrumentDefinition?.defaultCharacterId ||
+            instrumentDefinition?.characters?.[0]?.id ||
+            "";
+          const nextPattern = basePattern
+            ? { ...basePattern, characterId: resolvedCharacterId }
+            : null;
           const nextName = preset ? preset.name : t.name;
           return {
             ...t,
@@ -406,7 +423,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             source: {
               packId,
               instrumentId,
-              characterId,
+              characterId: resolvedCharacterId,
               presetId: presetId ?? null,
             },
           };

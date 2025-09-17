@@ -8,7 +8,8 @@ export type TriggerMap = Record<
     pitch?: number,
     note?: string,
     sustain?: number,
-    chunk?: Chunk
+    chunk?: Chunk,
+    characterId?: string
   ) => void
 >;
 

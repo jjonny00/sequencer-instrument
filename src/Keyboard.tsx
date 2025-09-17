@@ -354,7 +354,7 @@ export function Keyboard({
       const basePattern: Chunk = {
         id: `kb-${Date.now()}`,
         name: `Track ${label} Pattern`,
-        instrument: "chord",
+        instrument: "keyboard",
         steps,
         velocities,
         pitches,
@@ -365,7 +365,7 @@ export function Keyboard({
         {
           id: nextId,
           name: label,
-          instrument: "chord",
+          instrument: "keyboard",
           muted: false,
           pattern,
         },
@@ -408,7 +408,7 @@ export function Keyboard({
           const basePattern: Chunk = {
             id: `kb-${Date.now()}`,
             name: `Track ${label} Pattern`,
-            instrument: "chord",
+            instrument: "keyboard",
             steps,
             velocities,
             pitches,
@@ -419,7 +419,7 @@ export function Keyboard({
             {
               id: trackId,
               name: label,
-              instrument: "chord",
+              instrument: "keyboard",
               muted: false,
               pattern,
             },
@@ -442,7 +442,7 @@ export function Keyboard({
             {
               id: `kb-${Date.now()}`,
               name: `Track ${label} Pattern`,
-              instrument: "chord",
+              instrument: "keyboard",
               steps: Array(16).fill(0),
               velocities: Array(16).fill(1),
               pitches: Array(16).fill(0),

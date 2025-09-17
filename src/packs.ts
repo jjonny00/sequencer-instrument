@@ -7,6 +7,17 @@ export interface InstrumentSpec {
   effects?: EffectSpec[];
 }
 
+export interface InstrumentCharacter extends InstrumentSpec {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface InstrumentDefinition {
+  defaultCharacterId?: string;
+  characters: InstrumentCharacter[];
+}
+
 export interface EffectSpec {
   type: string;
   options?: Record<string, unknown>;
@@ -15,7 +26,7 @@ export interface EffectSpec {
 export interface Pack {
   id: string;
   name: string;
-  instruments: Record<string, InstrumentSpec>;
+  instruments: Record<string, InstrumentDefinition>;
   chunks: Chunk[];
 }
 

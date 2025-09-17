@@ -1,102 +1,382 @@
 {
   "id": "kraftwerk",
-  "name": "Kraftwerk Style",
+  "name": "Kraftwerk",
   "instruments": {
     "kick": {
-      "type": "MembraneSynth",
-      "note": "C2",
-      "options": {
-        "pitchDecay": 0.01,
-        "octaves": 2,
-        "envelope": {
-          "attack": 0.001,
-          "decay": 0.4,
-          "sustain": 0,
-          "release": 0.4
-        }
-      }
-    },
-    "snare": {
-      "type": "NoiseSynth",
-      "note": "8n",
-      "options": {
-        "noise": { "type": "white" },
-        "envelope": {
-          "attack": 0.001,
-          "decay": 0.1,
-          "sustain": 0
-        }
-      }
-    },
-    "hat": {
-      "type": "MetalSynth",
-      "options": {
-        "frequency": 180,
-        "envelope": {
-          "attack": 0.001,
-          "decay": 0.05,
-          "sustain": 0
+      "defaultCharacterId": "motor-kick",
+      "characters": [
+        {
+          "id": "motor-kick",
+          "name": "Motor Kick",
+          "type": "MembraneSynth",
+          "note": "C2",
+          "options": {
+            "pitchDecay": 0.03,
+            "octaves": 3,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.7,
+              "sustain": 0.02,
+              "release": 0.8
+            }
+          }
         },
-        "harmonicity": 4
-      }
-    },
-    "bass": {
-      "type": "MonoSynth",
-      "note": "C2",
-      "options": {
-        "oscillator": { "type": "square" },
-        "filter": { "type": "lowpass", "rolloff": -24 },
-        "envelope": {
-          "attack": 0.01,
-          "decay": 0.2,
-          "sustain": 0.3,
-          "release": 0.2
-        },
-        "filterEnvelope": {
-          "attack": 0.01,
-          "decay": 0.2,
-          "sustain": 0.2,
-          "release": 0.2,
-          "baseFrequency": 120,
-          "octaves": 2
+        {
+          "id": "analog-punch",
+          "name": "Analog Punch",
+          "type": "MembraneSynth",
+          "note": "C2",
+          "options": {
+            "pitchDecay": 0.025,
+            "octaves": 2.5,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.5,
+              "sustain": 0.02,
+              "release": 0.6
+            }
+          }
         }
-      }
-    },
-    "chord": {
-      "type": "Synth",
-      "note": "C4",
-      "options": {
-        "oscillator": { "type": "sine" },
-        "envelope": {
-          "attack": 0.02,
-          "decay": 0.3,
-          "sustain": 0.9,
-          "release": 0.8
-        }
-      },
-      "effects": [
-        { "type": "Reverb", "options": { "decay": 1.5, "wet": 0.3 } }
       ]
     },
-    "arpeggiator": {
-      "type": "Synth",
-      "note": "C4",
-      "options": {
-        "oscillator": { "type": "triangle" },
-        "envelope": {
-          "attack": 0.01,
-          "decay": 0.25,
-          "sustain": 0.6,
-          "release": 0.5
+    "snare": {
+      "defaultCharacterId": "machine-snare",
+      "characters": [
+        {
+          "id": "machine-snare",
+          "name": "Machine Snare",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "white" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.18,
+              "sustain": 0,
+              "release": 0.12
+            }
+          }
+        },
+        {
+          "id": "air-lock",
+          "name": "Air Lock",
+          "type": "NoiseSynth",
+          "note": "16n",
+          "options": {
+            "noise": { "type": "pink" },
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.22,
+              "sustain": 0,
+              "release": 0.16
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.2, "wet": 0.2 } }
+          ]
         }
-      }
+      ]
+    },
+    "hihat": {
+      "defaultCharacterId": "robot-hat",
+      "characters": [
+        {
+          "id": "robot-hat",
+          "name": "Robot Hat",
+          "type": "MetalSynth",
+          "options": {
+            "frequency": 180,
+            "harmonicity": 5,
+            "resonance": 4000,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.05,
+              "sustain": 0,
+              "release": 0.05
+            }
+          }
+        },
+        {
+          "id": "metronome-hat",
+          "name": "Metronome Hat",
+          "type": "MetalSynth",
+          "options": {
+            "frequency": 260,
+            "harmonicity": 4,
+            "resonance": 4500,
+            "envelope": {
+              "attack": 0.001,
+              "decay": 0.06,
+              "sustain": 0,
+              "release": 0.06
+            }
+          }
+        }
+      ]
+    },
+    "bass": {
+      "defaultCharacterId": "square-robot",
+      "characters": [
+        {
+          "id": "square-robot",
+          "name": "Square Robot",
+          "type": "MonoSynth",
+          "note": "C2",
+          "options": {
+            "oscillator": { "type": "square" },
+            "filter": { "type": "lowpass", "frequency": 160, "Q": 1.2 },
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.4,
+              "sustain": 0.5,
+              "release": 0.6
+            }
+          }
+        },
+        {
+          "id": "pulse-drive",
+          "name": "Pulse Drive",
+          "type": "MonoSynth",
+          "note": "C2",
+          "options": {
+            "oscillator": { "type": "pulse", "width": 0.3 },
+            "filter": { "type": "lowpass", "frequency": 180, "Q": 1.1 },
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.35,
+              "sustain": 0.4,
+              "release": 0.5
+            }
+          }
+        }
+      ]
+    },
+    "arp": {
+      "defaultCharacterId": "neon-steps",
+      "characters": [
+        {
+          "id": "neon-steps",
+          "name": "Neon Steps",
+          "type": "Synth",
+          "note": "C4",
+          "options": {
+            "oscillator": { "type": "sawtooth" },
+            "envelope": {
+              "attack": 0.01,
+              "decay": 0.25,
+              "sustain": 0.3,
+              "release": 0.4
+            }
+          }
+        },
+        {
+          "id": "data-stream",
+          "name": "Data Stream",
+          "type": "FMSynth",
+          "note": "C4",
+          "options": {
+            "harmonicity": 2,
+            "modulationIndex": 3,
+            "envelope": {
+              "attack": 0.02,
+              "decay": 0.3,
+              "sustain": 0.4,
+              "release": 0.5
+            }
+          }
+        }
+      ]
+    },
+    "keyboard": {
+      "defaultCharacterId": "organ-pad",
+      "characters": [
+        {
+          "id": "organ-pad",
+          "name": "Organ Pad",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "oscillator": { "type": "square" },
+              "envelope": {
+                "attack": 0.05,
+                "decay": 0.4,
+                "sustain": 0.6,
+                "release": 1.5
+              }
+            }
+          }
+        },
+        {
+          "id": "glass-wave",
+          "name": "Glass Wave",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "oscillator": { "type": "triangle" },
+              "envelope": {
+                "attack": 0.1,
+                "decay": 0.5,
+                "sustain": 0.5,
+                "release": 1.8
+              }
+            }
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.5, "wet": 0.3 } }
+          ]
+        }
+      ]
     }
   },
   "chunks": [
-    { "id": "kw-kick", "name": "Motor Kick", "instrument": "kick", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
-    { "id": "kw-snare", "name": "Machine Snare", "instrument": "snare", "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
-    { "id": "kw-hat", "name": "Robot Hat", "instrument": "hat", "steps": [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1] },
-    { "id": "kw-bass", "name": "Square Bass", "instrument": "bass", "steps": [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1] },
-    { "id": "kw-chord", "name": "Organ Chord", "instrument": "chord", "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] }
+    {
+      "id": "kw-kick-motor",
+      "name": "Motor Kick",
+      "instrument": "kick",
+      "characterId": "motor-kick",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]
+    },
+    {
+      "id": "kw-kick-stutter",
+      "name": "Stutter Kick",
+      "instrument": "kick",
+      "characterId": "analog-punch",
+      "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
+      "velocities": [0.95,0,0,0,0.9,0,0.8,0,0.88,0,0,0,0.86,0,0.78,0]
+    },
+    {
+      "id": "kw-kick-break",
+      "name": "Break Kick",
+      "instrument": "kick",
+      "characterId": "motor-kick",
+      "steps": [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0]
+    },
+    {
+      "id": "kw-snare-backbeat",
+      "name": "Machine Snare",
+      "instrument": "snare",
+      "characterId": "machine-snare",
+      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]
+    },
+    {
+      "id": "kw-snare-sync",
+      "name": "Sync Snare",
+      "instrument": "snare",
+      "characterId": "air-lock",
+      "steps": [0,0,0,0,1,0,0,1,0,0,1,0,1,0,0,1],
+      "velocities": [0,0,0,0,0.9,0,0,0.7,0,0,0.75,0,0.85,0,0,0.7]
+    },
+    {
+      "id": "kw-snare-fill",
+      "name": "Fill",
+      "instrument": "snare",
+      "characterId": "air-lock",
+      "steps": [0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1]
+    },
+    {
+      "id": "kw-hat-robot",
+      "name": "Robot Hat",
+      "instrument": "hihat",
+      "characterId": "robot-hat",
+      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0]
+    },
+    {
+      "id": "kw-hat-metronome",
+      "name": "Metronome",
+      "instrument": "hihat",
+      "characterId": "metronome-hat",
+      "steps": [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1],
+      "velocities": [0.8,0.6,0,0.7,0.6,0.5,0,0.7,0.6,0.5,0,0.7,0.6,0.5,0,0.7]
+    },
+    {
+      "id": "kw-hat-offbeat",
+      "name": "Offbeat Tick",
+      "instrument": "hihat",
+      "characterId": "robot-hat",
+      "steps": [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0]
+    },
+    {
+      "id": "kw-bass-square",
+      "name": "Square Bass",
+      "instrument": "bass",
+      "characterId": "square-robot",
+      "steps": [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
+      "note": "C2"
+    },
+    {
+      "id": "kw-bass-pulse",
+      "name": "Pulse Drive",
+      "instrument": "bass",
+      "characterId": "pulse-drive",
+      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+      "velocities": [0.85,0,0.7,0,0.8,0,0.7,0,0.85,0,0.7,0,0.8,0,0.7,0]
+    },
+    {
+      "id": "kw-bass-sync",
+      "name": "Sync Bass",
+      "instrument": "bass",
+      "characterId": "square-robot",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0],
+      "note": "C2"
+    },
+    {
+      "id": "kw-arp-neon",
+      "name": "Neon Steps",
+      "instrument": "arp",
+      "characterId": "neon-steps",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "note": "C4"
+    },
+    {
+      "id": "kw-arp-stream",
+      "name": "Data Stream",
+      "instrument": "arp",
+      "characterId": "data-stream",
+      "steps": [1,0,1,0,0,1,0,0,1,0,1,0,0,1,0,0],
+      "pitches": [0,0,7,0,0,5,0,0,12,0,7,0,0,5,0,0],
+      "note": "C4"
+    },
+    {
+      "id": "kw-arp-sync",
+      "name": "Sync Lead",
+      "instrument": "arp",
+      "characterId": "neon-steps",
+      "steps": [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1]
+    },
+    {
+      "id": "kw-key-organ",
+      "name": "Organ Chord",
+      "instrument": "keyboard",
+      "characterId": "organ-pad",
+      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "sustain": 1,
+      "note": "C4"
+    },
+    {
+      "id": "kw-key-stabs",
+      "name": "Glass Stabs",
+      "instrument": "keyboard",
+      "characterId": "glass-wave",
+      "steps": [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0],
+      "sustain": 0.4,
+      "reverb": 0.2,
+      "note": "E4"
+    },
+    {
+      "id": "kw-key-pad",
+      "name": "Pad Sweep",
+      "instrument": "keyboard",
+      "characterId": "glass-wave",
+      "steps": [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
+      "sustain": 1.6,
+      "reverb": 0.3,
+      "note": "G4"
+    }
   ]
 }
