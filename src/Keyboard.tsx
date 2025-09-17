@@ -678,13 +678,15 @@ export function Keyboard({
               <div
                 style={{
                   position: "relative",
-                  width: "min(100vh, 720px)",
-                  height: "min(100vw, 420px)",
+                  width: "calc(100vw - 32px)",
+                  height: "calc(100vh - 32px)",
                   transform: "rotate(90deg)",
                   transformOrigin: "center",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  maxWidth: "100vw",
+                  maxHeight: "100vh",
                 }}
               >
                 <div
@@ -692,6 +694,7 @@ export function Keyboard({
                     width: "100%",
                     height: "100%",
                     padding: 16,
+                    boxSizing: "border-box",
                   }}
                 >
                   {renderKeyboardSurface("100%")}
