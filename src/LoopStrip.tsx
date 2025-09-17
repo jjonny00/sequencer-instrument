@@ -67,6 +67,7 @@ const cloneChunk = (chunk: Chunk): Chunk => ({
   pitches: chunk.pitches ? chunk.pitches.slice() : undefined,
   notes: chunk.notes ? chunk.notes.slice() : undefined,
   degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
+  noteEvents: chunk.noteEvents ? chunk.noteEvents.map((event) => ({ ...event })) : undefined,
 });
 
 const cloneTrack = (track: Track): Track => ({

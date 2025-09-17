@@ -113,6 +113,9 @@ interface PatternPlayerProps {
   isTrackActive: () => boolean;
 }
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
 function PatternPlayer({
   pattern,
   trigger,
@@ -127,6 +130,7 @@ function PatternPlayer({
 
   useEffect(() => {
     if (!started) return;
+    const timingMode = pattern.timingMode === "free" ? "free" : "sync";
     const velocityFactor = pattern.velocityFactor ?? 1;
     const pitchOffset = pattern.pitchOffset ?? 0;
     const swingAmount = pattern.swing ?? 0;
@@ -134,6 +138,42 @@ function PatternPlayer({
       ? Tone.Time("16n").toSeconds() * 0.5 * swingAmount
       : 0;
     const humanizeAmount = pattern.humanize ?? 0;
+
+    if (timingMode === "free" && pattern.noteEvents && pattern.noteEvents.length) {
+      const events = pattern.noteEvents
+        .slice()
+        .sort((a, b) => a.time - b.time);
+      const loopLength = pattern.noteLoopLength ?? 0;
+      const computedLoop =
+        loopLength > 0
+          ? loopLength
+          : events[events.length - 1].time + events[events.length - 1].duration;
+      if (computedLoop > 0) {
+        const loopId = Tone.Transport.scheduleRepeat(
+          (time) => {
+            if (!isTrackActiveRef.current()) return;
+            events.forEach((event) => {
+              const scheduledTime = time + event.time;
+              const velocity = clamp(event.velocity * velocityFactor, 0, 1);
+              trigger(
+                scheduledTime,
+                velocity,
+                undefined,
+                event.note,
+                event.duration,
+                pattern
+              );
+            });
+          },
+          computedLoop,
+          0
+        );
+        return () => {
+          Tone.Transport.clear(loopId);
+        };
+      }
+    }
+
     const seq = new Tone.Sequence(
       (time, index: number) => {
         const active = pattern.steps[index] ?? 0;
@@ -193,6 +233,10 @@ function PatternPlayer({
     pattern.arpOctaves,
     pattern.style,
     pattern.mode,
+    pattern.noteEvents,
+    pattern.noteLoopLength,
+    pattern.timingMode,
+    pattern.arpFreeRate,
     trigger,
     started,
     pattern,

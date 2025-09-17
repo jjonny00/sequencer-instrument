@@ -2,10 +2,11 @@ import type { FC, PropsWithChildren, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
-import type { Chunk } from "./chunks";
+import type { Chunk, NoteEvent } from "./chunks";
 import type { Track } from "./tracks";
 import { formatInstrumentLabel } from "./utils/instrument";
 import { filterValueToFrequency } from "./utils/audio";
+import { ARP_PRESETS } from "./arpPresets";
 
 interface InstrumentControlPanelProps {
   track: Track;
@@ -104,6 +105,58 @@ const Section: FC<PropsWithChildren<{ padding?: number }>> = ({
   </div>
 );
 
+const CollapsibleSection: FC<
+  PropsWithChildren<{ title: string; defaultOpen?: boolean }>
+> = ({ title, defaultOpen = true, children }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div
+      style={{
+        borderRadius: 10,
+        border: "1px solid #1d2636",
+        background: "#10192c",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        style={{
+          padding: "10px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: 12,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: 0.8,
+          background: "rgba(15, 23, 42, 0.6)",
+          border: "none",
+          color: "#e2e8f0",
+          cursor: "pointer",
+        }}
+      >
+        <span>{title}</span>
+        <span style={{ fontSize: 16, lineHeight: 1 }}>{open ? "–" : "+"}</span>
+      </button>
+      {open ? (
+        <div
+          style={{
+            padding: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const isPercussiveInstrument = (instrument: string) =>
   ["kick", "snare", "hat", "cowbell"].includes(instrument);
 
@@ -134,6 +187,39 @@ const SCALE_OPTIONS = Object.keys(SCALE_INTERVALS) as ScaleName[];
 
 const isScaleName = (value: string | undefined | null): value is ScaleName =>
   value !== undefined && value !== null && SCALE_OPTIONS.includes(value as ScaleName);
+
+const SYNC_RATE_OPTIONS = [
+  { value: "4n", label: "1/4" },
+  { value: "8n", label: "1/8" },
+  { value: "16n", label: "1/16" },
+  { value: "8t", label: "Triplet" },
+] as const;
+
+const DEFAULT_FREE_RATE = 240;
+
+const normalizeArpRate = (value: string | undefined | null): string => {
+  if (!value) return "8n";
+  const normalized = value.toLowerCase();
+  if (normalized.endsWith("n") || normalized.endsWith("t")) {
+    return normalized;
+  }
+  switch (normalized) {
+    case "1/4":
+      return "4n";
+    case "1/8":
+      return "8n";
+    case "1/16":
+      return "16n";
+    case "triplet":
+    case "1/8t":
+      return "8t";
+    default:
+      return normalized;
+  }
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
 
 const arraysEqual = <T,>(a?: T[] | null, b?: T[] | null) => {
   if (!a || !b) return Boolean(!a && !b);
@@ -198,6 +284,13 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const unfoldProgressRef = useRef(0);
   const autopMaskRef = useRef<boolean[]>(Array(16).fill(false));
   const previousAutopilotRef = useRef(pattern?.autopilot ?? false);
+  const recordingAnchorRef = useRef<number | null>(null);
+  const freeNoteBufferRef = useRef<
+    Map<
+      string,
+      { start: number; baseNote: string; velocity: number; renderedNote: string }
+    >
+  >(new Map());
 
   const updatePattern = useMemo(() => {
     if (!onUpdatePattern || !pattern) {
@@ -233,12 +326,17 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     : "Major";
   const selectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0));
   const extensionsEnabled = pattern?.useExtensions ?? false;
+  const timingMode = pattern?.timingMode === "free" ? "free" : "sync";
   const autopilotEnabled = pattern?.autopilot ?? false;
   const arpStyle = pattern?.style ?? "up";
-  const arpRate = pattern?.arpRate ?? "1/16";
+  const arpRate = normalizeArpRate(pattern?.arpRate);
+  const arpFreeRate = pattern?.arpFreeRate ?? DEFAULT_FREE_RATE;
   const arpGate = pattern?.arpGate ?? 0.6;
   const arpOctaves = pattern?.arpOctaves ?? 1;
   const latchEnabled = pattern?.arpLatch ?? false;
+  const reverbAmount = pattern?.reverb ?? 0;
+  const distortionAmount = pattern?.distortion ?? 0;
+  const bitcrusherAmount = pattern?.bitcrusher ?? 0;
 
   const chordDefinition = useMemo(
     () => buildChordForDegree(tonalCenter, scaleName, selectedDegree, extensionsEnabled),
@@ -356,36 +454,123 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   };
 
   const recordNoteToPattern = useCallback(
-    (
-      noteName: string,
-      eventTime: number,
-      baseNote: string,
-      velocity: number,
-      options?: { includeChordMeta?: boolean }
-    ) => {
+    ({
+      noteName,
+      eventTime,
+      baseNote,
+      velocity,
+      duration,
+      includeChordMeta,
+      mode,
+    }: {
+      noteName: string;
+      eventTime: number;
+      baseNote: string;
+      velocity: number;
+      duration?: number;
+      includeChordMeta?: boolean;
+      mode: "sync" | "free";
+    }) => {
       if (!onUpdatePattern) return;
-      const ticksPerStep = Tone.Transport.PPQ / 4;
-      const ticks = Tone.Transport.getTicksAtTime(eventTime);
+
+      if (mode === "sync") {
+        recordingAnchorRef.current = null;
+        const ticksPerStep = Tone.Transport.PPQ / 4;
+        const ticks = Tone.Transport.getTicksAtTime(eventTime);
+        onUpdatePattern((chunk) => {
+          const length = chunk.steps.length || 16;
+          const stepIndex = length
+            ? Math.floor(ticks / ticksPerStep) % length
+            : 0;
+          const steps = chunk.steps.length
+            ? chunk.steps.slice()
+            : Array(16).fill(0);
+          const velocities = ensureArrayLength(
+            chunk.velocities,
+            steps.length,
+            1
+          );
+          const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+          const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
+          const midi = Tone.Frequency(noteName).toMidi();
+          steps[stepIndex] = 1;
+          velocities[stepIndex] = clamp(velocity, 0, 1);
+          pitches[stepIndex] = midi - baseMidi;
+
+          const nextChunk: Chunk = {
+            ...chunk,
+            note: pattern?.note ?? baseNote,
+            sustain: pattern?.sustain ?? chunk.sustain,
+            attack: pattern?.attack ?? chunk.attack,
+            glide: pattern?.glide ?? chunk.glide,
+            pan: pattern?.pan ?? chunk.pan,
+            reverb: pattern?.reverb ?? chunk.reverb,
+            delay: pattern?.delay ?? chunk.delay,
+            distortion: pattern?.distortion ?? chunk.distortion,
+            bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+            filter: pattern?.filter ?? chunk.filter,
+            chorus: pattern?.chorus ?? chunk.chorus,
+            pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+            style: pattern?.style ?? chunk.style,
+            mode: pattern?.mode ?? chunk.mode,
+            arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
+            arpGate: pattern?.arpGate ?? chunk.arpGate,
+            arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+            arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+            arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+            timingMode: "sync",
+            tonalCenter,
+            scale: scaleName,
+            degree: selectedDegree,
+            useExtensions: extensionsEnabled,
+            autopilot: autopilotEnabled,
+            steps,
+            velocities,
+            pitches,
+            noteEvents: undefined,
+            noteLoopLength: undefined,
+          };
+
+          if (includeChordMeta) {
+            nextChunk.note = chordDefinition.root;
+            nextChunk.notes = chordDefinition.notes.slice();
+            nextChunk.degrees = chordDefinition.degrees.slice();
+          }
+
+          return nextChunk;
+        });
+        return;
+      }
+
+      const anchor = recordingAnchorRef.current ?? eventTime;
+      recordingAnchorRef.current = anchor;
+      const relativeTime = Math.max(0, eventTime - anchor);
+      const durationSeconds = Math.max(0.02, duration ?? 0.02);
+      const event: NoteEvent = {
+        time: relativeTime,
+        duration: durationSeconds,
+        note: noteName,
+        velocity: clamp(velocity, 0, 1),
+      };
+
       onUpdatePattern((chunk) => {
         const length = chunk.steps.length || 16;
-        const stepIndex = length
-          ? Math.floor(ticks / ticksPerStep) % length
-          : 0;
-        const steps = chunk.steps.slice();
-        const velocities = ensureArrayLength(
-          chunk.velocities,
-          length,
-          1
+        const steps = chunk.steps.length
+          ? chunk.steps.slice()
+          : Array(length).fill(0);
+        steps.fill(0);
+        const velocities = ensureArrayLength(chunk.velocities, steps.length, 0);
+        velocities.fill(0);
+        const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+        pitches.fill(0);
+
+        const events = chunk.noteEvents ? chunk.noteEvents.slice() : [];
+        events.push(event);
+        events.sort((a, b) => a.time - b.time);
+        const loopLength = Math.max(
+          chunk.noteLoopLength ?? 0,
+          event.time + event.duration
         );
-        const pitches = ensureArrayLength(chunk.pitches, length, 0);
-        const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
-        const midi = Tone.Frequency(noteName).toMidi();
-        steps[stepIndex] = 1;
-        velocities[stepIndex] = Math.max(
-          0,
-          Math.min(1, velocity)
-        );
-        pitches[stepIndex] = midi - baseMidi;
 
         const nextChunk: Chunk = {
           ...chunk,
@@ -403,10 +588,12 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
           style: pattern?.style ?? chunk.style,
           mode: pattern?.mode ?? chunk.mode,
-          arpRate: pattern?.arpRate ?? chunk.arpRate,
+          arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
           arpGate: pattern?.arpGate ?? chunk.arpGate,
           arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
           arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+          arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+          timingMode: "free",
           tonalCenter,
           scale: scaleName,
           degree: selectedDegree,
@@ -415,9 +602,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           steps,
           velocities,
           pitches,
+          noteEvents: events,
+          noteLoopLength: loopLength,
         };
 
-        if (options?.includeChordMeta) {
+        if (includeChordMeta) {
           nextChunk.note = chordDefinition.root;
           nextChunk.notes = chordDefinition.notes.slice();
           nextChunk.degrees = chordDefinition.degrees.slice();
@@ -456,11 +645,18 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       if (!trigger || !pattern) return;
       const octaves = Math.max(1, pattern.arpOctaves ?? 1);
       const style = pattern.style ?? "up";
-      const rate = pattern.arpRate ?? "1/16";
-    const rateSeconds = Tone.Time(rate).toSeconds();
-    const gate = Math.max(0.1, Math.min(1, pattern.arpGate ?? 0.6));
-    const sustain =
-      pattern.sustain !== undefined ? pattern.sustain : rateSeconds * gate;
+      const mode = pattern.timingMode === "free" ? "free" : "sync";
+      const syncRate = normalizeArpRate(pattern.arpRate ?? arpRate);
+      const freeRate = pattern.arpFreeRate ?? arpFreeRate;
+      const gate = clamp(pattern.arpGate ?? arpGate, 0.1, 1);
+      const intervalSeconds =
+        mode === "free"
+          ? Math.max(0.05, freeRate / 1000)
+          : Tone.Time(syncRate).toSeconds();
+      const sustain =
+        pattern.sustain !== undefined
+          ? pattern.sustain
+          : intervalSeconds * gate;
     const bend = pattern.pitchBend ?? 0;
     const chord = buildChordForDegree(
       tonalCenter,
@@ -521,7 +717,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         }
 
         const mask = autopMaskRef.current;
-        if (autopilotEnabled && mask.some(Boolean)) {
+        if (mode === "sync" && autopilotEnabled && mask.some(Boolean)) {
           const ticksAtTime = Tone.Transport.getTicksAtTime(time);
           const stepIndex = Math.floor(ticksAtTime / ticksPerStep) % 16;
           if (!mask[stepIndex]) {
@@ -538,13 +734,19 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         if (isRecording && onUpdatePattern) {
           const baseNote = chord.root;
           Tone.Draw.schedule(() => {
-            recordNoteToPattern(bentNote, time, baseNote, manualVelocity, {
+            recordNoteToPattern({
+              noteName: bentNote,
+              eventTime: time,
+              baseNote,
+              velocity: manualVelocity,
+              duration: intervalSeconds * gate,
               includeChordMeta: true,
+              mode,
             });
           }, time);
         }
       },
-      rate,
+      mode === "free" ? intervalSeconds : syncRate,
       Tone.Transport.seconds
     );
 
@@ -578,6 +780,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       trigger,
       isRecording,
       extensionsEnabled,
+      arpRate,
+      arpGate,
+      arpFreeRate,
     ]
   );
 
@@ -592,14 +797,60 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     if (isRecording && onUpdatePattern) {
       const baseNote = pattern.note ?? note;
       Tone.Draw.schedule(() => {
-        recordNoteToPattern(noteName, time, baseNote, manualVelocity);
+        if (timingMode === "free") {
+          freeNoteBufferRef.current.set(note, {
+            start: time,
+            baseNote,
+            velocity: manualVelocity,
+            renderedNote: noteName,
+          });
+        } else {
+          recordNoteToPattern({
+            noteName,
+            eventTime: time,
+            baseNote,
+            velocity: manualVelocity,
+            mode: "sync",
+          });
+        }
       }, time);
     }
+  };
+
+  const finalizeFreeKeyboardNote = (note: string) => {
+    if (!isRecording || timingMode !== "free") return;
+    const buffer = freeNoteBufferRef.current.get(note);
+    if (!buffer) return;
+    const releaseTime = Tone.now();
+    const duration = Math.max(0.02, releaseTime - buffer.start);
+    Tone.Draw.schedule(() => {
+      recordNoteToPattern({
+        noteName: buffer.renderedNote,
+        eventTime: buffer.start,
+        baseNote: buffer.baseNote,
+        velocity: buffer.velocity,
+        duration,
+        mode: "free",
+      });
+    }, releaseTime);
+    freeNoteBufferRef.current.delete(note);
   };
 
   useEffect(() => {
     autopMaskRef.current = autopMask;
   }, [autopMask]);
+
+  useEffect(() => {
+    if (!isRecording) {
+      recordingAnchorRef.current = null;
+      freeNoteBufferRef.current.clear();
+    }
+  }, [isRecording]);
+
+  useEffect(() => {
+    recordingAnchorRef.current = null;
+    freeNoteBufferRef.current.clear();
+  }, [timingMode]);
 
   useEffect(() => () => stopArpPlayback(), [stopArpPlayback]);
 
@@ -681,9 +932,132 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     pattern?.sustain,
     pattern?.pitchBend,
     pattern?.arpLatch,
+    pattern?.arpFreeRate,
+    pattern?.timingMode,
     scheduleArpPlayback,
     stopArpPlayback,
   ]);
+
+  const presetSelection = useMemo(() => {
+    const matched = ARP_PRESETS.find((preset) => {
+      const settings = preset.settings;
+      if (settings.timingMode && settings.timingMode !== timingMode) return false;
+      if (settings.style && settings.style !== arpStyle) return false;
+      if (settings.arpRate && normalizeArpRate(settings.arpRate) !== arpRate)
+        return false;
+      if (
+        settings.arpFreeRate !== undefined &&
+        Math.round(settings.arpFreeRate) !== Math.round(arpFreeRate)
+      )
+        return false;
+      if (
+        settings.arpGate !== undefined &&
+        Math.abs(settings.arpGate - arpGate) > 0.02
+      )
+        return false;
+      if (
+        settings.arpOctaves !== undefined &&
+        settings.arpOctaves !== arpOctaves
+      )
+        return false;
+      if (
+        settings.useExtensions !== undefined &&
+        settings.useExtensions !== extensionsEnabled
+      )
+        return false;
+      if (
+        settings.autopilot !== undefined &&
+        settings.autopilot !== autopilotEnabled
+      )
+        return false;
+      if (
+        settings.reverb !== undefined &&
+        Math.abs(settings.reverb - reverbAmount) > 0.02
+      )
+        return false;
+      if (
+        settings.distortion !== undefined &&
+        Math.abs(settings.distortion - distortionAmount) > 0.02
+      )
+        return false;
+      if (
+        settings.bitcrusher !== undefined &&
+        Math.abs(settings.bitcrusher - bitcrusherAmount) > 0.02
+      )
+        return false;
+      if (
+        settings.arpFreeRate === undefined &&
+        settings.arpRate === undefined &&
+        timingMode === "free"
+      )
+        return false;
+      return true;
+    });
+    return matched?.id ?? "custom";
+  }, [
+    timingMode,
+    arpStyle,
+    arpRate,
+    arpFreeRate,
+    arpGate,
+    arpOctaves,
+    extensionsEnabled,
+    autopilotEnabled,
+    reverbAmount,
+    distortionAmount,
+    bitcrusherAmount,
+  ]);
+
+  const activePreset = useMemo(
+    () => ARP_PRESETS.find((preset) => preset.id === presetSelection) ?? null,
+    [presetSelection]
+  );
+
+  const updatePatternAndReschedule = useCallback(
+    (partial: Partial<Chunk>) => {
+      if (!updatePattern) return;
+      updatePattern(partial);
+      if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+        scheduleArpPlayback(selectedDegree);
+      }
+    },
+    [
+      updatePattern,
+      autopilotEnabled,
+      latchEnabled,
+      activeDegree,
+      scheduleArpPlayback,
+      selectedDegree,
+    ]
+  );
+
+  const applyPresetSettings = useCallback(
+    (presetId: string) => {
+      if (!updatePattern) return;
+      const preset = ARP_PRESETS.find((candidate) => candidate.id === presetId);
+      if (!preset) return;
+      const settings = preset.settings;
+      const payload: Partial<Chunk> = {};
+      if (settings.timingMode) {
+        payload.timingMode = settings.timingMode;
+      }
+      if (settings.style) payload.style = settings.style;
+      if (settings.arpRate) payload.arpRate = normalizeArpRate(settings.arpRate);
+      if (settings.arpGate !== undefined) payload.arpGate = settings.arpGate;
+      if (settings.arpOctaves !== undefined) payload.arpOctaves = settings.arpOctaves;
+      if (settings.arpFreeRate !== undefined) payload.arpFreeRate = settings.arpFreeRate;
+      if (settings.useExtensions !== undefined)
+        payload.useExtensions = settings.useExtensions;
+      if (settings.autopilot !== undefined) payload.autopilot = settings.autopilot;
+      if (settings.reverb !== undefined) payload.reverb = settings.reverb;
+      if (settings.distortion !== undefined)
+        payload.distortion = settings.distortion;
+      if (settings.bitcrusher !== undefined)
+        payload.bitcrusher = settings.bitcrusher;
+      updatePatternAndReschedule(payload);
+    },
+    [updatePattern, updatePatternAndReschedule]
+  );
 
   if (!pattern) {
     return (
@@ -703,7 +1077,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     );
   }
 
-  const stickySections: ReactNode[] = [];
 
   const renderRecordToggle = () => {
     if (!showRecordButton) return null;
@@ -734,333 +1107,492 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   };
 
   if (isArp) {
-    stickySections.push(
-      <Section key="arp-controls" padding={12}>
-        {renderRecordToggle()}
+    const canAutopilot = timingMode === "sync" && autopHasHits;
+    const autopilotMessage = !autopHasHits
+      ? "Add kick/snare hits to drive autopilot."
+      : timingMode === "free"
+        ? "Autopilot is available in BPM Sync mode."
+        : "";
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            marginBottom: 12,
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            paddingBottom: 8,
+            background:
+              "linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(11, 18, 32, 0.88) 65%, rgba(11, 18, 32, 0) 100%)",
           }}
         >
-          <label style={{ flex: 1, minWidth: 140, fontSize: 12 }}>
-            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
-              Tonal Center
-            </div>
-            <select
-              value={tonalCenter}
-              onChange={(event) => {
-                const next = event.target.value;
-                applyChordSettings(next, scaleName, selectedDegree, extensionsEnabled);
-                if (autopilotEnabled || latchEnabled || activeDegree !== null) {
-                  scheduleArpPlayback(selectedDegree);
-                }
-              }}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid #273144",
-                background: "#111a2c",
-                color: "#f8fafc",
-              }}
-            >
-              {availableNotes.map((note) => (
-                <option key={note} value={note}>
-                  {note}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ flex: 1.2, minWidth: 160, fontSize: 12 }}>
-            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
-              Scale / Mode
-            </div>
-            <select
-              value={scaleName}
-              onChange={(event) => {
-                const next = isScaleName(event.target.value)
-                  ? (event.target.value as ScaleName)
-                  : "Major";
-                applyChordSettings(tonalCenter, next, selectedDegree, extensionsEnabled);
-                if (autopilotEnabled || latchEnabled || activeDegree !== null) {
-                  scheduleArpPlayback(selectedDegree);
-                }
-              }}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid #273144",
-                background: "#111a2c",
-                color: "#f8fafc",
-              }}
-            >
-              {SCALE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option.replace(/([a-z])([A-Z])/g, "$1 $2")}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ flex: 1, minWidth: 140, fontSize: 12 }}>
-            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
-              Style
-            </div>
-            <select
-              value={arpStyle}
-              onChange={(event) => {
-                updatePattern?.({ style: event.target.value });
-              }}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid #273144",
-                background: "#111a2c",
-                color: "#f8fafc",
-              }}
-            >
-              <option value="up">Up</option>
-              <option value="down">Down</option>
-              <option value="up-down">Up / Down</option>
-              <option value="random">Random</option>
-              <option value="unfold">Unfold</option>
-            </select>
-          </label>
-        </div>
-        <div
-          style={{
-            position: "relative",
-            height: 180,
-            marginBottom: 16,
-            borderRadius: "50%",
-            background: "radial-gradient(circle at center, #1e293b 0%, #101726 70%)",
-            border: "1px solid #273144",
-          }}
-        >
+          {renderRecordToggle()}
           <div
             style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              textAlign: "center",
-              color: "#e2e8f0",
+              display: "flex",
+              justifyContent: "space-between",
+              padding: "0 6px 6px",
+              fontSize: 11,
+              color: "#94a3b8",
             }}
           >
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{degreeLabel}</div>
-            <div style={{ fontSize: 13, letterSpacing: 0.4 }}>{chordDefinition.root}</div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>
-              {chordSummary}
-            </div>
+            <span>
+              Center
+              <span style={{ color: "#e2e8f0", fontWeight: 600, marginLeft: 6 }}>
+                {tonalCenter}
+              </span>
+            </span>
+            <span>
+              Scale
+              <span style={{ color: "#e2e8f0", fontWeight: 600, marginLeft: 6 }}>
+                {scaleName.replace(/([a-z])([A-Z])/g, "$1 $2")}
+              </span>
+            </span>
           </div>
-          {DEGREE_LABELS.map((label, index) => {
-            const position = degreePositions[index];
-            const isSelected = selectedDegree === index;
-            const isActive = activeDegree === index;
-            const highlighted = isActive || isSelected;
-            return (
-              <button
-                key={label}
-                type="button"
-                disabled={!canTrigger}
-                onPointerDown={(event) => {
-                  if (!canTrigger) return;
-                  event.preventDefault();
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  if (latchEnabled && !autopilotEnabled && latchedDegreeRef.current === index) {
-                    latchedDegreeRef.current = null;
+          <div
+            style={{
+              position: "relative",
+              height: 168,
+              margin: "0 6px",
+              borderRadius: 16,
+              background: "radial-gradient(circle at center, #1e293b 0%, #101726 72%)",
+              border: "1px solid #273144",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                textAlign: "center",
+                color: "#e2e8f0",
+              }}
+            >
+              <div style={{ fontSize: 26, fontWeight: 700 }}>{degreeLabel}</div>
+              <div style={{ fontSize: 13, letterSpacing: 0.4 }}>{chordDefinition.root}</div>
+              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>
+                {chordSummary}
+              </div>
+            </div>
+            {DEGREE_LABELS.map((label, index) => {
+              const position = degreePositions[index];
+              const isSelected = selectedDegree === index;
+              const isActive = activeDegree === index;
+              const highlighted = isSelected || isActive;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={!canTrigger}
+                  onPointerDown={(event) => {
+                    if (!canTrigger) return;
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    if (latchEnabled && !autopilotEnabled && latchedDegreeRef.current === index) {
+                      latchedDegreeRef.current = null;
+                      stopArpPlayback();
+                      return;
+                    }
+                    if (latchEnabled) {
+                      latchedDegreeRef.current = index;
+                    }
+                    scheduleArpPlayback(index);
+                  }}
+                  onPointerUp={(event) => {
+                    if (!canTrigger) return;
+                    event.preventDefault();
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                    if (latchEnabled || autopilotEnabled) return;
                     stopArpPlayback();
-                    return;
-                  }
-                  if (latchEnabled) {
-                    latchedDegreeRef.current = index;
-                  }
-                  scheduleArpPlayback(index);
-                }}
-                onPointerUp={(event) => {
-                  if (!canTrigger) return;
-                  event.preventDefault();
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                  if (latchEnabled || autopilotEnabled) return;
-                  stopArpPlayback();
-                }}
-                onPointerCancel={() => {
-                  if (!canTrigger) return;
-                  if (latchEnabled || autopilotEnabled) return;
-                  stopArpPlayback();
-                }}
-                style={{
-                  position: "absolute",
-                  top: `${position.top}%`,
-                  left: `${position.left}%`,
-                  transform: "translate(-50%, -50%)",
-                  width: 64,
-                  height: 64,
-                  borderRadius: "50%",
-                  border: "1px solid #273144",
-                  background: highlighted ? "#27E0B0" : "#0f172a",
-                  color: highlighted ? "#0e151f" : "#f8fafc",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  cursor: canTrigger ? "pointer" : "not-allowed",
-                  opacity: canTrigger ? 1 : 0.5,
-                  boxShadow: highlighted ? "0 0 12px rgba(39,224,176,0.4)" : "none",
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
+                  }}
+                  onPointerCancel={() => {
+                    if (!canTrigger) return;
+                    if (latchEnabled || autopilotEnabled) return;
+                    stopArpPlayback();
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: `${position.top}%`,
+                    left: `${position.left}%`,
+                    transform: "translate(-50%, -50%)",
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    border: "1px solid #273144",
+                    background: highlighted ? "#27E0B0" : "#0f172a",
+                    color: highlighted ? "#0e151f" : "#f8fafc",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 700,
+                    fontSize: 15,
+                    cursor: canTrigger ? "pointer" : "not-allowed",
+                    opacity: canTrigger ? 1 : 0.5,
+                    boxShadow: highlighted ? "0 0 12px rgba(39,224,176,0.4)" : "none",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 12,
+            flex: 1,
+            overflowY: "auto",
+            padding: "0 6px 12px 0",
           }}
         >
-          <button
-            type="button"
-            onClick={() => {
-              if (latchEnabled) {
-                latchedDegreeRef.current = null;
-                if (!autopilotEnabled) stopArpPlayback();
-              }
-              updatePattern?.({ arpLatch: !latchEnabled });
-            }}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "1px solid #273144",
-              background: latchEnabled ? "#27E0B0" : "#111a2c",
-              color: latchEnabled ? "#0e151f" : "#e2e8f0",
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Latch {latchEnabled ? "On" : "Off"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              applyChordSettings(tonalCenter, scaleName, selectedDegree, !extensionsEnabled);
-              if (autopilotEnabled || latchEnabled || activeDegree !== null) {
-                scheduleArpPlayback(selectedDegree);
-              }
-            }}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "1px solid #273144",
-              background: extensionsEnabled ? "#27E0B0" : "#111a2c",
-              color: extensionsEnabled ? "#0e151f" : "#e2e8f0",
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Extensions {extensionsEnabled ? "On" : "Off"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const next = !autopilotEnabled;
-              updatePattern?.({ autopilot: next });
-              if (!next) {
-                latchedDegreeRef.current = null;
-              }
-            }}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "1px solid #273144",
-              background: autopilotEnabled ? "#27E0B0" : "#111a2c",
-              color: autopilotEnabled ? "#0e151f" : "#e2e8f0",
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Autopilot {autopilotEnabled ? "On" : "Off"}
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <CollapsibleSection title="Main" defaultOpen>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+                    <span
+                      style={{
+                        display: "block",
+                        marginBottom: 4,
+                        color: "#94a3b8",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Tonal Center
+                    </span>
+                    <select
+                      value={tonalCenter}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        applyChordSettings(next, scaleName, selectedDegree, extensionsEnabled);
+                        if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+                          scheduleArpPlayback(selectedDegree);
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: "1px solid #273144",
+                        background: "#111a2c",
+                        color: "#f8fafc",
+                      }}
+                    >
+                      {availableNotes.map((note) => (
+                        <option key={note} value={note}>
+                          {note}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ flex: "1 1 160px", fontSize: 12 }}>
+                    <span
+                      style={{
+                        display: "block",
+                        marginBottom: 4,
+                        color: "#94a3b8",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Scale / Mode
+                    </span>
+                    <select
+                      value={scaleName}
+                      onChange={(event) => {
+                        const next = isScaleName(event.target.value)
+                          ? (event.target.value as ScaleName)
+                          : "Major";
+                        applyChordSettings(tonalCenter, next, selectedDegree, extensionsEnabled);
+                        if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+                          scheduleArpPlayback(selectedDegree);
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: "1px solid #273144",
+                        background: "#111a2c",
+                        color: "#f8fafc",
+                      }}
+                    >
+                      {SCALE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option.replace(/([a-z])([A-Z])/g, "$1 $2")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8" }}>
+                    Timing
+                  </span>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[
+                      { mode: "sync", label: "BPM Sync" },
+                      { mode: "free", label: "Free" },
+                    ].map(({ mode, label }) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => {
+                          if (timingMode === mode) return;
+                          updatePatternAndReschedule({ timingMode: mode as "sync" | "free" });
+                        }}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #273144",
+                          background: timingMode === mode ? "#27E0B0" : "#111a2c",
+                          color: timingMode === mode ? "#0e151f" : "#e2e8f0",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {timingMode === "sync" ? (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8" }}>
+                      Rate
+                    </span>
+                    <select
+                      value={arpRate}
+                      onChange={(event) =>
+                        updatePatternAndReschedule({
+                          arpRate: event.target.value,
+                          timingMode: "sync",
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: "1px solid #273144",
+                        background: "#111a2c",
+                        color: "#f8fafc",
+                      }}
+                    >
+                      {SYNC_RATE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <Slider
+                    label="Interval"
+                    min={100}
+                    max={800}
+                    step={10}
+                    value={arpFreeRate}
+                    formatValue={(value) => `${Math.round(value)} ms`}
+                    onChange={(value) =>
+                      updatePatternAndReschedule({
+                        arpFreeRate: value,
+                        timingMode: "free",
+                      })
+                    }
+                  />
+                )}
+                <Slider
+                  label="Gate"
+                  min={0.1}
+                  max={1}
+                  step={0.01}
+                  value={arpGate}
+                  formatValue={(value) => `${Math.round(value * 100)}%`}
+                  onChange={(value) => updatePatternAndReschedule({ arpGate: value })}
+                />
+                <Slider
+                  label="Octave Range"
+                  min={1}
+                  max={4}
+                  step={1}
+                  value={arpOctaves}
+                  formatValue={(value) => `${value}x`}
+                  onChange={(value) => updatePatternAndReschedule({ arpOctaves: value })}
+                />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (latchEnabled) {
+                        latchedDegreeRef.current = null;
+                        if (!autopilotEnabled) stopArpPlayback();
+                      }
+                      updatePattern?.({ arpLatch: !latchEnabled });
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #273144",
+                      background: latchEnabled ? "#27E0B0" : "#111a2c",
+                      color: latchEnabled ? "#0e151f" : "#e2e8f0",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Latch {latchEnabled ? "On" : "Off"}
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8" }}>
+                    Style
+                  </span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {["up", "down", "up-down", "random", "unfold"].map((styleOption) => (
+                      <button
+                        key={styleOption}
+                        type="button"
+                        onClick={() => updatePatternAndReschedule({ style: styleOption })}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #273144",
+                          background: arpStyle === styleOption ? "#27E0B0" : "#111a2c",
+                          color: arpStyle === styleOption ? "#0e151f" : "#e2e8f0",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          textTransform: "capitalize",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {styleOption.replace("-", " ")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CollapsibleSection>
+            <CollapsibleSection title="Advanced">
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyChordSettings(
+                      tonalCenter,
+                      scaleName,
+                      selectedDegree,
+                      !extensionsEnabled
+                    );
+                    if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+                      scheduleArpPlayback(selectedDegree);
+                    }
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #273144",
+                    background: extensionsEnabled ? "#27E0B0" : "#111a2c",
+                    color: extensionsEnabled ? "#0e151f" : "#e2e8f0",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Extensions {extensionsEnabled ? "On" : "Off"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canAutopilot}
+                  onClick={() => updatePatternAndReschedule({ autopilot: !autopilotEnabled })}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #273144",
+                    background: autopilotEnabled ? "#27E0B0" : "#111a2c",
+                    color: autopilotEnabled ? "#0e151f" : "#e2e8f0",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: canAutopilot ? "pointer" : "not-allowed",
+                    opacity: canAutopilot ? 1 : 0.5,
+                  }}
+                >
+                  Autopilot {autopilotEnabled ? "On" : "Off"}
+                </button>
+                {autopilotMessage ? (
+                  <span style={{ fontSize: 10, color: "#64748b" }}>{autopilotMessage}</span>
+                ) : null}
+              </div>
+            </CollapsibleSection>
+            <CollapsibleSection title="Presets & FX" defaultOpen>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8" }}>
+                    Preset
+                  </span>
+                  <select
+                    value={presetSelection}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      if (next === "custom") return;
+                      applyPresetSettings(next);
+                    }}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: "1px solid #273144",
+                      background: "#111a2c",
+                      color: "#f8fafc",
+                    }}
+                  >
+                    <option value="custom">Custom</option>
+                    {ARP_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {activePreset?.description ? (
+                  <span style={{ fontSize: 10, color: "#64748b" }}>
+                    {activePreset.description}
+                  </span>
+                ) : null}
+                <Slider
+                  label="Space"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={reverbAmount}
+                  formatValue={(value) => `${Math.round(value * 100)}%`}
+                  onChange={updatePattern ? (value) => updatePattern({ reverb: value }) : undefined}
+                />
+                <Slider
+                  label="Grit"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={distortionAmount}
+                  formatValue={(value) => `${Math.round(value * 100)}%`}
+                  onChange={updatePattern ? (value) => updatePattern({ distortion: value }) : undefined}
+                />
+                <Slider
+                  label="Lo-fi"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={bitcrusherAmount}
+                  formatValue={(value) => `${Math.round(value * 100)}%`}
+                  onChange={updatePattern ? (value) => updatePattern({ bitcrusher: value }) : undefined}
+                />
+              </div>
+            </CollapsibleSection>
+          </div>
         </div>
-        {autopilotEnabled ? (
-          <div
-            style={{
-              fontSize: 11,
-              marginBottom: 12,
-              color: autopHasHits ? "#94a3b8" : "#fca5a5",
-            }}
-          >
-            {autopHasHits
-              ? "Follows kick and snare accents."
-              : "No kick or snare hits detected in the current loop."}
-          </div>
-        ) : null}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <label style={{ flex: 1, minWidth: 120, fontSize: 12 }}>
-            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
-              Rate
-            </div>
-            <select
-              value={arpRate}
-              onChange={(event) => updatePattern?.({ arpRate: event.target.value })}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid #273144",
-                background: "#111a2c",
-                color: "#f8fafc",
-              }}
-            >
-              {arpRateOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <Slider
-              label="Gate"
-              min={0.1}
-              max={1}
-              step={0.05}
-              value={arpGate}
-              onChange={updatePattern ? (value) => updatePattern({ arpGate: value }) : undefined}
-              formatValue={(value) => `${Math.round(value * 100)}%`}
-            />
-          </div>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <Slider
-              label="Octave Range"
-              min={1}
-              max={4}
-              step={1}
-              value={arpOctaves}
-              onChange={updatePattern ? (value) => updatePattern({ arpOctaves: value }) : undefined}
-            />
-          </div>
-        </div>
-      </Section>
+      </div>
     );
   }
+
+  const stickySections: ReactNode[] = [];
 
   if (isKeyboard) {
     stickySections.push(
@@ -1104,23 +1636,25 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                     });
                     triggerKeyboardNote(note);
                   }}
-                  onPointerUp={(event) => {
-                    if (!canTrigger) return;
-                    event.preventDefault();
-                    event.currentTarget.releasePointerCapture(event.pointerId);
-                    setPressedKeyboardNotes((prev) => {
-                      const next = new Set(prev);
-                      next.delete(note);
-                      return next;
-                    });
-                  }}
-                  onPointerCancel={() => {
-                    setPressedKeyboardNotes((prev) => {
-                      const next = new Set(prev);
-                      next.delete(note);
-                      return next;
-                    });
-                  }}
+                onPointerUp={(event) => {
+                  if (!canTrigger) return;
+                  event.preventDefault();
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                  setPressedKeyboardNotes((prev) => {
+                    const next = new Set(prev);
+                    next.delete(note);
+                    return next;
+                  });
+                  finalizeFreeKeyboardNote(note);
+                }}
+                onPointerCancel={() => {
+                  setPressedKeyboardNotes((prev) => {
+                    const next = new Set(prev);
+                    next.delete(note);
+                    return next;
+                  });
+                  finalizeFreeKeyboardNote(note);
+                }}
                   style={{
                     flex: 1,
                     height: "100%",
@@ -1167,6 +1701,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                     next.delete(note);
                     return next;
                   });
+                  finalizeFreeKeyboardNote(note);
                 }}
                 onPointerCancel={() => {
                   setPressedKeyboardNotes((prev) => {
@@ -1174,6 +1709,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                     next.delete(note);
                     return next;
                   });
+                  finalizeFreeKeyboardNote(note);
                 }}
                 style={{
                   position: "absolute",
