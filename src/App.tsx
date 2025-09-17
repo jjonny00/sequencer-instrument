@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 
-import { LoopStrip } from "./LoopStrip";
+import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs } from "./packs";
@@ -53,10 +53,15 @@ export default function App() {
   const [patternGroups, setPatternGroups] = useState<PatternGroup[]>(() => [
     createInitialPatternGroup(),
   ]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [songRows, setSongRows] = useState<SongRow[]>([
     createSongRow(),
   ]);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const loopStripRef = useRef<LoopStripHandle | null>(null);
+  const [pendingLoopStripAction, setPendingLoopStripAction] = useState<
+    "openLibrary" | "addTrack" | null
+  >(null);
 
   useEffect(() => {
     if (started) Tone.Transport.bpm.value = bpm;
@@ -177,6 +182,19 @@ export default function App() {
   }, [packIndex, started]);
 
   useEffect(() => {
+    if (patternGroups.length === 0) {
+      setSelectedGroupId(null);
+      return;
+    }
+    setSelectedGroupId((prev) => {
+      if (prev && patternGroups.some((group) => group.id === prev)) {
+        return prev;
+      }
+      return patternGroups[0]?.id ?? null;
+    });
+  }, [patternGroups]);
+
+  useEffect(() => {
     setSongRows((rows) => {
       const groupIds = new Set(patternGroups.map((group) => group.id));
       let changed = false;
@@ -254,6 +272,27 @@ export default function App() {
     }
   }, [viewMode]);
 
+  useEffect(() => {
+    if (viewMode !== "track") return;
+    if (!pendingLoopStripAction) return;
+    let frame = 0;
+    const run = () => {
+      const handle = loopStripRef.current;
+      if (!handle) {
+        frame = window.requestAnimationFrame(run);
+        return;
+      }
+      if (pendingLoopStripAction === "openLibrary") {
+        handle.openSequenceLibrary();
+      } else if (pendingLoopStripAction === "addTrack") {
+        handle.addTrack();
+      }
+      setPendingLoopStripAction(null);
+    };
+    frame = window.requestAnimationFrame(run);
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingLoopStripAction, viewMode]);
+
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
     const synth = new Tone.PolySynth(Tone.Synth, {
@@ -299,6 +338,24 @@ export default function App() {
     Tone.Transport.stop();
     setIsPlaying(false);
     setCurrentSectionIndex(0);
+  };
+
+  const handleOpenSequenceLibrary = () => {
+    if (viewMode !== "track") {
+      setViewMode("track");
+      setPendingLoopStripAction("openLibrary");
+      return;
+    }
+    loopStripRef.current?.openSequenceLibrary();
+  };
+
+  const handleAddTrackRequest = () => {
+    if (viewMode !== "track") {
+      setViewMode("track");
+      setPendingLoopStripAction("addTrack");
+      return;
+    }
+    loopStripRef.current?.addTrack();
   };
 
   return (
@@ -377,6 +434,7 @@ export default function App() {
           </div>
           {viewMode === "track" && (
             <LoopStrip
+              ref={loopStripRef}
               started={started}
               isPlaying={isPlaying}
               tracks={tracks}
@@ -387,6 +445,8 @@ export default function App() {
               setPackIndex={setPackIndex}
               patternGroups={patternGroups}
               setPatternGroups={setPatternGroups}
+              selectedGroupId={selectedGroupId}
+              setSelectedGroupId={setSelectedGroupId}
             />
           )}
           <div
@@ -596,6 +656,9 @@ export default function App() {
                 setBpm={setBpm}
                 onPlayPause={handlePlayPause}
                 onStop={handleStop}
+                selectedGroupId={selectedGroupId}
+                onOpenSequenceLibrary={handleOpenSequenceLibrary}
+                onAddTrack={handleAddTrackRequest}
               />
             )}
           </div>
