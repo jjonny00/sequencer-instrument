@@ -928,6 +928,7 @@ export default function App() {
                   {selectedTrack ? (
                     <InstrumentControlPanel
                       track={selectedTrack}
+                      allTracks={tracks}
                       trigger={
                         selectedTrack.instrument
                           ? triggers[selectedTrack.instrument] ?? undefined

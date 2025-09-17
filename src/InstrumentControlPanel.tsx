@@ -1,5 +1,5 @@
 import type { FC, PropsWithChildren, ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import type { Chunk } from "./chunks";
@@ -9,6 +9,7 @@ import { filterValueToFrequency } from "./utils/audio";
 
 interface InstrumentControlPanelProps {
   track: Track;
+  allTracks: Track[];
   onUpdatePattern?: (updater: (pattern: Chunk) => Chunk) => void;
   trigger?: (
     time: number,
@@ -106,8 +107,6 @@ const Section: FC<PropsWithChildren<{ padding?: number }>> = ({
 const isPercussiveInstrument = (instrument: string) =>
   ["kick", "snare", "hat", "cowbell"].includes(instrument);
 
-const DEFAULT_CHORD_DEGREES = [0, 4, 7];
-
 const createChordNotes = (rootNote: string, degrees: number[]) => {
   const rootMidi = Tone.Frequency(rootNote).toMidi();
   return degrees.map((degree) =>
@@ -115,8 +114,71 @@ const createChordNotes = (rootNote: string, degrees: number[]) => {
   );
 };
 
+const DEGREE_LABELS = ["I", "II", "III", "IV", "V", "VI", "VII"] as const;
+
+const SCALE_INTERVALS = {
+  Major: [0, 2, 4, 5, 7, 9, 11],
+  Minor: [0, 2, 3, 5, 7, 8, 10],
+  Dorian: [0, 2, 3, 5, 7, 9, 10],
+  Phrygian: [0, 1, 3, 5, 7, 8, 10],
+  Lydian: [0, 2, 4, 6, 7, 9, 11],
+  Mixolydian: [0, 2, 4, 5, 7, 9, 10],
+  Locrian: [0, 1, 3, 5, 6, 8, 10],
+  HarmonicMinor: [0, 2, 3, 5, 7, 8, 11],
+  MelodicMinor: [0, 2, 3, 5, 7, 9, 11],
+} as const;
+
+type ScaleName = keyof typeof SCALE_INTERVALS;
+
+const SCALE_OPTIONS = Object.keys(SCALE_INTERVALS) as ScaleName[];
+
+const isScaleName = (value: string | undefined | null): value is ScaleName =>
+  value !== undefined && value !== null && SCALE_OPTIONS.includes(value as ScaleName);
+
+const arraysEqual = <T,>(a?: T[] | null, b?: T[] | null) => {
+  if (!a || !b) return Boolean(!a && !b);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const getScaleDegreeOffset = (intervals: readonly number[], degreeIndex: number) => {
+  if (!intervals.length) return 0;
+  const length = intervals.length;
+  const normalizedIndex = ((degreeIndex % length) + length) % length;
+  const base = intervals[normalizedIndex];
+  const octaves = Math.floor((degreeIndex - normalizedIndex) / length);
+  return base + octaves * 12;
+};
+
+const buildChordForDegree = (
+  tonalCenter: string,
+  scale: ScaleName,
+  degreeIndex: number,
+  includeExtensions: boolean
+) => {
+  const intervals = SCALE_INTERVALS[scale] ?? SCALE_INTERVALS.Major;
+  const centerMidi = Tone.Frequency(tonalCenter).toMidi();
+  const rootOffset = getScaleDegreeOffset(intervals, degreeIndex);
+  const chordRootMidi = centerMidi + rootOffset;
+  const chordRoot = Tone.Frequency(chordRootMidi, "midi").toNote();
+  const noteCount = includeExtensions ? 7 : 3;
+  const midiNotes: number[] = [];
+  const degrees: number[] = [];
+  for (let i = 0; i < noteCount; i += 1) {
+    const offset = getScaleDegreeOffset(intervals, degreeIndex + i * 2) - rootOffset;
+    midiNotes.push(chordRootMidi + offset);
+    degrees.push(offset);
+  }
+  const notes = midiNotes.map((value) => Tone.Frequency(value, "midi").toNote());
+  return { root: chordRoot, midiNotes, degrees, notes };
+};
+
 export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   track,
+  allTracks,
   onUpdatePattern,
   trigger,
 }) => {
@@ -126,22 +188,28 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const isBass = track.instrument === "bass";
   const isArp = track.instrument === "arpeggiator";
   const isKeyboard = track.instrument === "chord";
-  const [activeArpNote, setActiveArpNote] = useState<string | null>(null);
+  const [activeDegree, setActiveDegree] = useState<number | null>(null);
   const [pressedKeyboardNotes, setPressedKeyboardNotes] = useState<
     Set<string>
   >(() => new Set());
   const [isRecording, setIsRecording] = useState(false);
   const arpScheduleIdRef = useRef<number | null>(null);
+  const latchedDegreeRef = useRef<number | null>(null);
+  const unfoldProgressRef = useRef(0);
+  const autopMaskRef = useRef<boolean[]>(Array(16).fill(false));
+  const previousAutopilotRef = useRef(autopilotEnabled);
 
-  const updatePattern =
-    onUpdatePattern && pattern
-      ? (partial: Partial<Chunk>) => {
-          onUpdatePattern((chunk) => ({
-            ...chunk,
-            ...partial,
-          }));
-        }
-      : undefined;
+  const updatePattern = useMemo(() => {
+    if (!onUpdatePattern || !pattern) {
+      return undefined;
+    }
+    return (partial: Partial<Chunk>) => {
+      onUpdatePattern((chunk) => ({
+        ...chunk,
+        ...partial,
+      }));
+    };
+  }, [onUpdatePattern, pattern]);
 
   const activeVelocity = pattern?.velocityFactor ?? 1;
   const manualVelocity = Math.max(0, Math.min(1, activeVelocity));
@@ -159,26 +227,73 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     );
   }, []);
 
-  const chordDegrees = useMemo(() => {
-    if (!pattern) return DEFAULT_CHORD_DEGREES;
-    if (pattern.degrees && pattern.degrees.length) {
-      return pattern.degrees;
-    }
-    if (pattern.notes && pattern.notes.length && pattern.note) {
-      const baseMidi = Tone.Frequency(pattern.note).toMidi();
-      return pattern.notes.map(
-        (note) => Tone.Frequency(note).toMidi() - baseMidi
-      );
-    }
-    return DEFAULT_CHORD_DEGREES;
-  }, [pattern]);
+  const tonalCenter = pattern?.tonalCenter ?? pattern?.note ?? "C4";
+  const scaleName = isScaleName(pattern?.scale)
+    ? (pattern?.scale as ScaleName)
+    : "Major";
+  const selectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0));
+  const extensionsEnabled = pattern?.useExtensions ?? false;
+  const autopilotEnabled = pattern?.autopilot ?? false;
+  const arpStyle = pattern?.style ?? "up";
+  const arpRate = pattern?.arpRate ?? "1/16";
+  const arpGate = pattern?.arpGate ?? 0.6;
+  const arpOctaves = pattern?.arpOctaves ?? 1;
+  const latchEnabled = pattern?.arpLatch ?? false;
 
-  const arpPadNotes = useMemo(() => {
-    const rootNote = pattern?.note ?? "C4";
-    return Array.from({ length: 8 }, (_, index) =>
-      Tone.Frequency(rootNote).transpose(index).toNote()
-    );
-  }, [pattern?.note]);
+  const chordDefinition = useMemo(
+    () => buildChordForDegree(tonalCenter, scaleName, selectedDegree, extensionsEnabled),
+    [tonalCenter, scaleName, selectedDegree, extensionsEnabled]
+  );
+
+  const degreeLabel = DEGREE_LABELS[selectedDegree] ?? "I";
+  const chordSummary = chordDefinition.notes.join(" • ");
+
+  const autopMask = useMemo(() => {
+    const mask = Array(16).fill(false);
+    allTracks.forEach((candidate) => {
+      if (
+        !candidate.pattern ||
+        (candidate.instrument !== "kick" && candidate.instrument !== "snare")
+      ) {
+        return;
+      }
+      candidate.pattern.steps.forEach((step, index) => {
+        if (step) mask[index % 16] = true;
+      });
+    });
+    return mask;
+  }, [allTracks]);
+
+  const autopHasHits = autopMask.some(Boolean);
+
+  const degreePositions = useMemo(() => {
+    const total = DEGREE_LABELS.length;
+    return DEGREE_LABELS.map((_, index) => {
+      const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
+      const radius = 36;
+      return {
+        left: 50 + Math.cos(angle) * radius,
+        top: 50 + Math.sin(angle) * radius,
+      };
+    });
+  }, []);
+
+  const applyChordSettings = useCallback(
+    (center: string, scale: ScaleName, degree: number, includeExtensions: boolean) => {
+      if (!updatePattern) return;
+      const chord = buildChordForDegree(center, scale, degree, includeExtensions);
+      updatePattern({
+        tonalCenter: center,
+        scale,
+        degree,
+        note: chord.root,
+        notes: chord.notes.slice(),
+        degrees: chord.degrees.slice(),
+        useExtensions: includeExtensions,
+      });
+    },
+    [updatePattern]
+  );
 
   const keyboardLayout = useMemo(() => {
     const baseNote = pattern?.note ?? "C4";
@@ -232,12 +347,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     return pattern.degrees.every((value, index) => value === degrees[index]);
   };
 
-  const getChordNotesForRoot = (rootNote: string) => {
-    const degrees = chordDegrees.length ? chordDegrees : DEFAULT_CHORD_DEGREES;
-    const notes = createChordNotes(rootNote, degrees);
-    return notes.length ? notes : [rootNote];
-  };
-
   const ensureArrayLength = (values: number[] | undefined, length: number, fill: number) => {
     const next = values ? values.slice(0, length) : Array(length).fill(fill);
     if (next.length < length) {
@@ -246,109 +355,161 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     return next;
   };
 
-  const recordNoteToPattern = (
-    noteName: string,
-    eventTime: number,
-    baseNote: string,
-    velocity: number,
-    options?: { includeChordMeta?: boolean }
-  ) => {
-    if (!onUpdatePattern) return;
-    const ticksPerStep = Tone.Transport.PPQ / 4;
-    const ticks = Tone.Transport.getTicksAtTime(eventTime);
-    onUpdatePattern((chunk) => {
-      const length = chunk.steps.length || 16;
-      const stepIndex = length
-        ? Math.floor(ticks / ticksPerStep) % length
-        : 0;
-      const steps = chunk.steps.slice();
-      const velocities = ensureArrayLength(
-        chunk.velocities,
-        length,
-        1
-      );
-      const pitches = ensureArrayLength(chunk.pitches, length, 0);
-      const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
-      const midi = Tone.Frequency(noteName).toMidi();
-      steps[stepIndex] = 1;
-      velocities[stepIndex] = Math.max(
-        0,
-        Math.min(1, velocity)
-      );
-      pitches[stepIndex] = midi - baseMidi;
+  const recordNoteToPattern = useCallback(
+    (
+      noteName: string,
+      eventTime: number,
+      baseNote: string,
+      velocity: number,
+      options?: { includeChordMeta?: boolean }
+    ) => {
+      if (!onUpdatePattern) return;
+      const ticksPerStep = Tone.Transport.PPQ / 4;
+      const ticks = Tone.Transport.getTicksAtTime(eventTime);
+      onUpdatePattern((chunk) => {
+        const length = chunk.steps.length || 16;
+        const stepIndex = length
+          ? Math.floor(ticks / ticksPerStep) % length
+          : 0;
+        const steps = chunk.steps.slice();
+        const velocities = ensureArrayLength(
+          chunk.velocities,
+          length,
+          1
+        );
+        const pitches = ensureArrayLength(chunk.pitches, length, 0);
+        const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
+        const midi = Tone.Frequency(noteName).toMidi();
+        steps[stepIndex] = 1;
+        velocities[stepIndex] = Math.max(
+          0,
+          Math.min(1, velocity)
+        );
+        pitches[stepIndex] = midi - baseMidi;
 
-      const nextChunk: Chunk = {
-        ...chunk,
-        steps,
-        velocities,
-        pitches,
-      };
+        const nextChunk: Chunk = {
+          ...chunk,
+          note: pattern?.note ?? baseNote,
+          sustain: pattern?.sustain ?? chunk.sustain,
+          attack: pattern?.attack ?? chunk.attack,
+          glide: pattern?.glide ?? chunk.glide,
+          pan: pattern?.pan ?? chunk.pan,
+          reverb: pattern?.reverb ?? chunk.reverb,
+          delay: pattern?.delay ?? chunk.delay,
+          distortion: pattern?.distortion ?? chunk.distortion,
+          bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+          filter: pattern?.filter ?? chunk.filter,
+          chorus: pattern?.chorus ?? chunk.chorus,
+          pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+          style: pattern?.style ?? chunk.style,
+          mode: pattern?.mode ?? chunk.mode,
+          arpRate: pattern?.arpRate ?? chunk.arpRate,
+          arpGate: pattern?.arpGate ?? chunk.arpGate,
+          arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+          arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+          tonalCenter,
+          scale: scaleName,
+          degree: selectedDegree,
+          useExtensions: extensionsEnabled,
+          autopilot: autopilotEnabled,
+          steps,
+          velocities,
+          pitches,
+        };
 
-      if (options?.includeChordMeta) {
-        const nextNotes = chunk.notes ? chunk.notes.slice() : [];
-        if (!nextNotes.includes(noteName)) {
-          nextNotes.push(noteName);
+        if (options?.includeChordMeta) {
+          nextChunk.note = chordDefinition.root;
+          nextChunk.notes = chordDefinition.notes.slice();
+          nextChunk.degrees = chordDefinition.degrees.slice();
         }
-        nextChunk.notes = nextNotes;
-        if (!chunk.degrees || chunk.degrees.length === 0) {
-          nextChunk.degrees = chordDegrees;
-        }
-      }
 
-      return nextChunk;
-    });
-  };
+        return nextChunk;
+      });
+    },
+    [
+      onUpdatePattern,
+      pattern,
+      tonalCenter,
+      scaleName,
+      selectedDegree,
+      extensionsEnabled,
+      autopilotEnabled,
+      chordDefinition,
+    ]
+  );
 
-  const stopArpPlayback = () => {
+  const stopArpPlayback = useCallback((options?: { preserveState?: boolean }) => {
     if (arpScheduleIdRef.current !== null) {
       Tone.Transport.clear(arpScheduleIdRef.current);
       arpScheduleIdRef.current = null;
     }
-  };
-
-  const scheduleArpPlayback = (rootNote: string) => {
-    stopArpPlayback();
-    if (!trigger || !pattern) return;
-    const chordNotes = getChordNotesForRoot(rootNote);
-    const octaves = Math.max(1, pattern.arpOctaves ?? 1);
-    const midiNotes = chordNotes
-      .map((note) => Tone.Frequency(note).toMidi())
-      .sort((a, b) => a - b);
-    const expanded: string[] = [];
-    for (let octave = 0; octave < octaves; octave += 1) {
-      midiNotes.forEach((midi) => {
-        expanded.push(Tone.Frequency(midi + octave * 12, "midi").toNote());
-      });
+    unfoldProgressRef.current = 0;
+    if (!options?.preserveState) {
+      latchedDegreeRef.current = null;
+      setActiveDegree(null);
     }
-    if (!expanded.length) return;
+  }, []);
 
-    const style = pattern.style ?? "up";
-    const rate = pattern.arpRate ?? "1/16";
+  const scheduleArpPlayback = useCallback(
+    (degreeIndex: number) => {
+      stopArpPlayback({ preserveState: true });
+      if (!trigger || !pattern) return;
+      const octaves = Math.max(1, pattern.arpOctaves ?? 1);
+      const style = pattern.style ?? "up";
+      const rate = pattern.arpRate ?? "1/16";
     const rateSeconds = Tone.Time(rate).toSeconds();
     const gate = Math.max(0.1, Math.min(1, pattern.arpGate ?? 0.6));
     const sustain =
       pattern.sustain !== undefined ? pattern.sustain : rateSeconds * gate;
     const bend = pattern.pitchBend ?? 0;
+    const chord = buildChordForDegree(
+      tonalCenter,
+      scaleName,
+      degreeIndex,
+      extensionsEnabled
+    );
+    if (!chord.notes.length) {
+      return;
+    }
+    const midiNotes = chord.midiNotes.slice().sort((a, b) => a - b);
+    const expanded: number[] = [];
+    for (let octave = 0; octave < octaves; octave += 1) {
+      midiNotes.forEach((value) => {
+        expanded.push(value + octave * 12);
+      });
+    }
+    if (!expanded.length) return;
 
+    const ticksPerStep = Tone.Transport.PPQ / 4;
     let currentIndex = style === "down" ? expanded.length - 1 : 0;
     let direction: 1 | -1 = style === "down" ? -1 : 1;
+    unfoldProgressRef.current = 0;
 
     const scheduleId = Tone.Transport.scheduleRepeat(
       (time) => {
         if (!expanded.length) return;
-        let noteName: string;
+        if (style === "unfold" && unfoldProgressRef.current >= expanded.length) {
+          stopArpPlayback();
+          return;
+        }
+
+        let midiValue: number;
         if (style === "random") {
           const idx = Math.floor(Math.random() * expanded.length);
-          noteName = expanded[idx];
+          midiValue = expanded[idx];
+        } else if (style === "unfold") {
+          const position = unfoldProgressRef.current;
+          midiValue = expanded[position];
+          unfoldProgressRef.current += 1;
         } else {
-          noteName = expanded[currentIndex];
+          midiValue = expanded[currentIndex];
           if (expanded.length > 1) {
             if (style === "up") {
               currentIndex = (currentIndex + 1) % expanded.length;
             } else if (style === "down") {
               currentIndex =
                 (currentIndex - 1 + expanded.length) % expanded.length;
-            } else if (style === "up-down") {
+            } else {
               if (currentIndex === expanded.length - 1) {
                 direction = -1;
               } else if (currentIndex === 0) {
@@ -359,11 +520,23 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           }
         }
 
-        const bentNote = Tone.Frequency(noteName).transpose(bend).toNote();
+        const mask = autopMaskRef.current;
+        if (autopilotEnabled && mask.some(Boolean)) {
+          const ticksAtTime = Tone.Transport.getTicksAtTime(time);
+          const stepIndex = Math.floor(ticksAtTime / ticksPerStep) % 16;
+          if (!mask[stepIndex]) {
+            return;
+          }
+        }
+
+        const noteName = Tone.Frequency(midiValue, "midi").toNote();
+        const bentNote = bend
+          ? Tone.Frequency(noteName).transpose(bend).toNote()
+          : noteName;
         trigger(time, manualVelocity, 0, bentNote, sustain, pattern);
 
         if (isRecording && onUpdatePattern) {
-          const baseNote = pattern.note ?? rootNote;
+          const baseNote = chord.root;
           Tone.Draw.schedule(() => {
             recordNoteToPattern(bentNote, time, baseNote, manualVelocity, {
               includeChordMeta: true,
@@ -375,8 +548,38 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       Tone.Transport.seconds
     );
 
-    arpScheduleIdRef.current = scheduleId;
-  };
+    if (onUpdatePattern) {
+      const degrees = chord.degrees.slice();
+      const notes = chord.notes.slice();
+      onUpdatePattern((chunk) => ({
+        ...chunk,
+        note: chord.root,
+        notes,
+        degrees,
+        tonalCenter,
+        scale: scaleName,
+        degree: degreeIndex,
+        useExtensions: extensionsEnabled,
+      }));
+    }
+
+      setActiveDegree(degreeIndex);
+      arpScheduleIdRef.current = scheduleId;
+    },
+    [
+      autopilotEnabled,
+      manualVelocity,
+      onUpdatePattern,
+      pattern,
+      recordNoteToPattern,
+      scaleName,
+      stopArpPlayback,
+      tonalCenter,
+      trigger,
+      isRecording,
+      extensionsEnabled,
+    ]
+  );
 
   const triggerKeyboardNote = (note: string) => {
     if (!trigger || !pattern) return;
@@ -394,14 +597,49 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     }
   };
 
-  useEffect(() => () => stopArpPlayback(), []);
+  useEffect(() => {
+    autopMaskRef.current = autopMask;
+  }, [autopMask]);
+
+  useEffect(() => () => stopArpPlayback(), [stopArpPlayback]);
 
   useEffect(() => {
     setIsRecording(false);
     stopArpPlayback();
-    setActiveArpNote(null);
+    setActiveDegree(null);
     setPressedKeyboardNotes(new Set());
-  }, [track.id, track.instrument]);
+  }, [track.id, track.instrument, stopArpPlayback]);
+
+  useEffect(() => {
+    if (!pattern || !updatePattern) return;
+    const needsRoot = pattern.note !== chordDefinition.root;
+    const needsNotes = !arraysEqual(pattern.notes, chordDefinition.notes);
+    const needsDegrees = !arraysEqual(pattern.degrees, chordDefinition.degrees);
+    const needsCenter = pattern.tonalCenter !== tonalCenter;
+    const needsScale = pattern.scale !== scaleName;
+    const needsDegree = (pattern.degree ?? selectedDegree) !== selectedDegree;
+    const needsExtensions = (pattern.useExtensions ?? false) !== extensionsEnabled;
+    if (
+      needsRoot ||
+      needsNotes ||
+      needsDegrees ||
+      needsCenter ||
+      needsScale ||
+      needsDegree ||
+      needsExtensions
+    ) {
+      applyChordSettings(tonalCenter, scaleName, selectedDegree, extensionsEnabled);
+    }
+  }, [
+    pattern,
+    updatePattern,
+    chordDefinition,
+    tonalCenter,
+    scaleName,
+    selectedDegree,
+    extensionsEnabled,
+    applyChordSettings,
+  ]);
 
   useEffect(() => {
     if (!isArp && !isKeyboard) {
@@ -413,7 +651,39 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     if (!canTrigger) {
       stopArpPlayback();
     }
-  }, [canTrigger]);
+  }, [canTrigger, stopArpPlayback]);
+
+  useEffect(() => {
+    if (!isArp || !canTrigger) return;
+    const wasAutopilot = previousAutopilotRef.current;
+    if (!autopilotEnabled) {
+      if (wasAutopilot && !pattern?.arpLatch) {
+        stopArpPlayback();
+      }
+      previousAutopilotRef.current = autopilotEnabled;
+      return;
+    }
+    previousAutopilotRef.current = autopilotEnabled;
+    latchedDegreeRef.current = selectedDegree;
+    scheduleArpPlayback(selectedDegree);
+  }, [
+    isArp,
+    canTrigger,
+    autopilotEnabled,
+    selectedDegree,
+    tonalCenter,
+    scaleName,
+    extensionsEnabled,
+    pattern?.style,
+    pattern?.arpRate,
+    pattern?.arpGate,
+    pattern?.arpOctaves,
+    pattern?.sustain,
+    pattern?.pitchBend,
+    pattern?.arpLatch,
+    scheduleArpPlayback,
+    stopArpPlayback,
+  ]);
 
   if (!pattern) {
     return (
@@ -465,54 +735,328 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   if (isArp) {
     stickySections.push(
-      <Section key="arp-pads" padding={10}>
+      <Section key="arp-controls" padding={12}>
         {renderRecordToggle()}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))",
-            gap: 6,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 12,
+            marginBottom: 12,
           }}
         >
-          {arpPadNotes.map((note) => (
-            <button
-              key={note}
-              type="button"
-              disabled={!canTrigger}
-              onPointerDown={(event) => {
-                if (!canTrigger) return;
-                event.preventDefault();
-                event.currentTarget.setPointerCapture(event.pointerId);
-                setActiveArpNote(note);
-                scheduleArpPlayback(note);
-              }}
-              onPointerUp={(event) => {
-                if (!canTrigger) return;
-                event.preventDefault();
-                event.currentTarget.releasePointerCapture(event.pointerId);
-                setActiveArpNote(null);
-                stopArpPlayback();
-              }}
-              onPointerCancel={() => {
-                if (!canTrigger) return;
-                setActiveArpNote(null);
-                stopArpPlayback();
+          <label style={{ flex: 1, minWidth: 140, fontSize: 12 }}>
+            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
+              Tonal Center
+            </div>
+            <select
+              value={tonalCenter}
+              onChange={(event) => {
+                const next = event.target.value;
+                applyChordSettings(next, scaleName, selectedDegree, extensionsEnabled);
+                if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+                  scheduleArpPlayback(selectedDegree);
+                }
               }}
               style={{
-                padding: "10px 8px",
+                width: "100%",
+                padding: "8px 10px",
                 borderRadius: 8,
                 border: "1px solid #273144",
-                background: activeArpNote === note ? "#27E0B0" : "#1a2333",
-                color: activeArpNote === note ? "#0e151f" : "#f1f5f9",
-                cursor: canTrigger ? "pointer" : "not-allowed",
-                fontWeight: 600,
-                fontSize: 12,
-                opacity: canTrigger ? 1 : 0.5,
+                background: "#111a2c",
+                color: "#f8fafc",
               }}
             >
-              {note}
-            </button>
-          ))}
+              {availableNotes.map((note) => (
+                <option key={note} value={note}>
+                  {note}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ flex: 1.2, minWidth: 160, fontSize: 12 }}>
+            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
+              Scale / Mode
+            </div>
+            <select
+              value={scaleName}
+              onChange={(event) => {
+                const next = isScaleName(event.target.value)
+                  ? (event.target.value as ScaleName)
+                  : "Major";
+                applyChordSettings(tonalCenter, next, selectedDegree, extensionsEnabled);
+                if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+                  scheduleArpPlayback(selectedDegree);
+                }
+              }}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid #273144",
+                background: "#111a2c",
+                color: "#f8fafc",
+              }}
+            >
+              {SCALE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option.replace(/([a-z])([A-Z])/g, "$1 $2")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ flex: 1, minWidth: 140, fontSize: 12 }}>
+            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
+              Style
+            </div>
+            <select
+              value={arpStyle}
+              onChange={(event) => {
+                updatePattern?.({ style: event.target.value });
+              }}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid #273144",
+                background: "#111a2c",
+                color: "#f8fafc",
+              }}
+            >
+              <option value="up">Up</option>
+              <option value="down">Down</option>
+              <option value="up-down">Up / Down</option>
+              <option value="random">Random</option>
+              <option value="unfold">Unfold</option>
+            </select>
+          </label>
+        </div>
+        <div
+          style={{
+            position: "relative",
+            height: 180,
+            marginBottom: 16,
+            borderRadius: "50%",
+            background: "radial-gradient(circle at center, #1e293b 0%, #101726 70%)",
+            border: "1px solid #273144",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              textAlign: "center",
+              color: "#e2e8f0",
+            }}
+          >
+            <div style={{ fontSize: 28, fontWeight: 700 }}>{degreeLabel}</div>
+            <div style={{ fontSize: 13, letterSpacing: 0.4 }}>{chordDefinition.root}</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>
+              {chordSummary}
+            </div>
+          </div>
+          {DEGREE_LABELS.map((label, index) => {
+            const position = degreePositions[index];
+            const isSelected = selectedDegree === index;
+            const isActive = activeDegree === index;
+            const highlighted = isActive || isSelected;
+            return (
+              <button
+                key={label}
+                type="button"
+                disabled={!canTrigger}
+                onPointerDown={(event) => {
+                  if (!canTrigger) return;
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  if (latchEnabled && !autopilotEnabled && latchedDegreeRef.current === index) {
+                    latchedDegreeRef.current = null;
+                    stopArpPlayback();
+                    return;
+                  }
+                  if (latchEnabled) {
+                    latchedDegreeRef.current = index;
+                  }
+                  scheduleArpPlayback(index);
+                }}
+                onPointerUp={(event) => {
+                  if (!canTrigger) return;
+                  event.preventDefault();
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                  if (latchEnabled || autopilotEnabled) return;
+                  stopArpPlayback();
+                }}
+                onPointerCancel={() => {
+                  if (!canTrigger) return;
+                  if (latchEnabled || autopilotEnabled) return;
+                  stopArpPlayback();
+                }}
+                style={{
+                  position: "absolute",
+                  top: `${position.top}%`,
+                  left: `${position.left}%`,
+                  transform: "translate(-50%, -50%)",
+                  width: 64,
+                  height: 64,
+                  borderRadius: "50%",
+                  border: "1px solid #273144",
+                  background: highlighted ? "#27E0B0" : "#0f172a",
+                  color: highlighted ? "#0e151f" : "#f8fafc",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  cursor: canTrigger ? "pointer" : "not-allowed",
+                  opacity: canTrigger ? 1 : 0.5,
+                  boxShadow: highlighted ? "0 0 12px rgba(39,224,176,0.4)" : "none",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (latchEnabled) {
+                latchedDegreeRef.current = null;
+                if (!autopilotEnabled) stopArpPlayback();
+              }
+              updatePattern?.({ arpLatch: !latchEnabled });
+            }}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #273144",
+              background: latchEnabled ? "#27E0B0" : "#111a2c",
+              color: latchEnabled ? "#0e151f" : "#e2e8f0",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Latch {latchEnabled ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              applyChordSettings(tonalCenter, scaleName, selectedDegree, !extensionsEnabled);
+              if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+                scheduleArpPlayback(selectedDegree);
+              }
+            }}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #273144",
+              background: extensionsEnabled ? "#27E0B0" : "#111a2c",
+              color: extensionsEnabled ? "#0e151f" : "#e2e8f0",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Extensions {extensionsEnabled ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !autopilotEnabled;
+              updatePattern?.({ autopilot: next });
+              if (!next) {
+                latchedDegreeRef.current = null;
+              }
+            }}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #273144",
+              background: autopilotEnabled ? "#27E0B0" : "#111a2c",
+              color: autopilotEnabled ? "#0e151f" : "#e2e8f0",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Autopilot {autopilotEnabled ? "On" : "Off"}
+          </button>
+        </div>
+        {autopilotEnabled ? (
+          <div
+            style={{
+              fontSize: 11,
+              marginBottom: 12,
+              color: autopHasHits ? "#94a3b8" : "#fca5a5",
+            }}
+          >
+            {autopHasHits
+              ? "Follows kick and snare accents."
+              : "No kick or snare hits detected in the current loop."}
+          </div>
+        ) : null}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <label style={{ flex: 1, minWidth: 120, fontSize: 12 }}>
+            <div style={{ marginBottom: 4, color: "#94a3b8", fontWeight: 600 }}>
+              Rate
+            </div>
+            <select
+              value={arpRate}
+              onChange={(event) => updatePattern?.({ arpRate: event.target.value })}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid #273144",
+                background: "#111a2c",
+                color: "#f8fafc",
+              }}
+            >
+              {arpRateOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <Slider
+              label="Gate"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={arpGate}
+              onChange={updatePattern ? (value) => updatePattern({ arpGate: value }) : undefined}
+              formatValue={(value) => `${Math.round(value * 100)}%`}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <Slider
+              label="Octave Range"
+              min={1}
+              max={4}
+              step={1}
+              value={arpOctaves}
+              onChange={updatePattern ? (value) => updatePattern({ arpOctaves: value }) : undefined}
+            />
+          </div>
         </div>
       </Section>
     );
@@ -830,7 +1374,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>Style</span>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {["up", "down", "up-down", "random"].map((style) => (
+                {["up", "down", "up-down", "random", "unfold"].map((style) => (
                   <button
                     key={style}
                     onClick={() => updatePattern?.({ style })}

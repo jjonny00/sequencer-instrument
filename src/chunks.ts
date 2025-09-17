@@ -16,6 +16,9 @@ export interface Chunk {
   bitcrusher?: number;
   filter?: number;
   chorus?: number;
+  tonalCenter?: string;
+  scale?: string;
+  degree?: number;
   velocityFactor?: number;
   pitchOffset?: number;
   swing?: number;
@@ -29,5 +32,7 @@ export interface Chunk {
   arpGate?: number;
   arpLatch?: boolean;
   arpOctaves?: number;
+  useExtensions?: boolean;
+  autopilot?: boolean;
 }
 

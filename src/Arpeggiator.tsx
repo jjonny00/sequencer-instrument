@@ -11,7 +11,7 @@ import type { Track } from "./tracks";
 
 type Subdivision = "16n" | "8n" | "4n";
 
-type ArpStyle = "up" | "down" | "up-down" | "random";
+type ArpStyle = "up" | "down" | "up-down" | "random" | "unfold";
 
 function nextGridTime(subdivision: Subdivision): number {
   const now = Tone.now();
@@ -358,6 +358,7 @@ export function Arpeggiator({
           <option value="down">Down</option>
           <option value="up-down">Up-Down</option>
           <option value="random">Random</option>
+          <option value="unfold">Unfold</option>
         </select>
         <label>Playback</label>
         <select
