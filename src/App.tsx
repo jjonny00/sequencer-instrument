@@ -928,6 +928,11 @@ export default function App() {
                   {selectedTrack ? (
                     <InstrumentControlPanel
                       track={selectedTrack}
+                      trigger={
+                        selectedTrack.instrument
+                          ? triggers[selectedTrack.instrument] ?? undefined
+                          : undefined
+                      }
                       onUpdatePattern={
                         selectedTrack.pattern
                           ? (updater) =>
