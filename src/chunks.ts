@@ -14,10 +14,16 @@ export interface Chunk {
   delay?: number;
   distortion?: number;
   bitcrusher?: number;
+  filter?: number;
+  chorus?: number;
   notes?: string[];
   degrees?: number[];
   pitchBend?: number;
   style?: string;
   mode?: string;
+  arpRate?: string;
+  arpGate?: number;
+  arpLatch?: boolean;
+  arpOctaves?: number;
 }
 
