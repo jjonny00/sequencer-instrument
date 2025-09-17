@@ -1,4 +1,10 @@
-import type { FC, PropsWithChildren, ReactNode } from "react";
+import type {
+  Dispatch,
+  FC,
+  PropsWithChildren,
+  ReactNode,
+  SetStateAction,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -21,7 +27,7 @@ interface InstrumentControlPanelProps {
     chunk?: Chunk
   ) => void;
   isRecording?: boolean;
-  onRecordingChange?: (recording: boolean) => void;
+  onRecordingChange?: Dispatch<SetStateAction<boolean>>;
 }
 
 interface SliderProps {
@@ -312,11 +318,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const canTrigger = Boolean(trigger && pattern);
   const updateRecording = useCallback(
     (next: boolean | ((prev: boolean) => boolean)) => {
-      if (!onRecordingChange) return;
-      const resolved = typeof next === "function" ? next(isRecording) : next;
-      onRecordingChange(resolved);
+      onRecordingChange?.(next);
     },
-    [isRecording, onRecordingChange]
+    [onRecordingChange]
   );
 
   const arpRoot = pattern?.note ?? "C4";
@@ -865,11 +869,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   useEffect(() => () => stopArpPlayback(), [stopArpPlayback]);
 
   useEffect(() => {
-    updateRecording(false);
+    onRecordingChange?.(false);
     stopArpPlayback();
     setActiveDegree(null);
     setPressedKeyboardNotes(new Set());
-  }, [track.id, track.instrument, stopArpPlayback, updateRecording]);
+  }, [track.id, track.instrument, stopArpPlayback, onRecordingChange]);
 
   useEffect(() => {
     if (!pattern || !updatePattern) return;

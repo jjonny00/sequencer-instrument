@@ -151,6 +151,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const [isSequenceLibraryOpen, setIsSequenceLibraryOpen] = useState(false);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
+  const labelLongPressRef = useRef<Map<number, boolean>>(new Map());
   const pack = packs[packIndex];
   const instrumentOptions = Object.keys(pack.instruments);
   const canAddTrack = instrumentOptions.length > 0;
@@ -734,7 +735,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         )}
         {tracks.map((t) => {
           let labelTimer: number | null = null;
-          let longPressTriggered = false;
           const color = getInstrumentColor(t.instrument);
           const isMuted = t.muted;
           const isEditing = editing === t.id;
@@ -744,10 +744,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             event: ReactPointerEvent<HTMLDivElement>
           ) => {
             event.stopPropagation();
-            longPressTriggered = false;
+            labelLongPressRef.current.set(t.id, false);
             if (labelTimer) window.clearTimeout(labelTimer);
             labelTimer = window.setTimeout(() => {
-              longPressTriggered = true;
+              labelLongPressRef.current.set(t.id, true);
               onRequestTrackModal(t);
             }, 500);
           };
@@ -758,13 +758,16 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             event.stopPropagation();
             if (labelTimer) window.clearTimeout(labelTimer);
             labelTimer = null;
-            if (longPressTriggered) return;
+            const triggered = labelLongPressRef.current.get(t.id);
+            labelLongPressRef.current.set(t.id, false);
+            if (triggered) return;
             handleToggleMute(t.id);
           };
 
           const handleLabelPointerLeave = () => {
             if (labelTimer) window.clearTimeout(labelTimer);
             labelTimer = null;
+            labelLongPressRef.current.set(t.id, false);
           };
 
           return (
@@ -804,6 +807,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   onPointerDown={handleLabelPointerDown}
                   onPointerUp={handleLabelPointerUp}
                   onPointerLeave={handleLabelPointerLeave}
+                  onPointerCancel={handleLabelPointerLeave}
                   style={{
                     width: LABEL_WIDTH,
                     borderRight: "1px solid #333",

@@ -126,6 +126,10 @@ export default function App() {
 
   const canClearSelectedTrack = Boolean(selectedTrack?.pattern);
 
+  const handleToggleRecording = useCallback(() => {
+    setIsRecording((prev) => !prev);
+  }, []);
+
   const openAddTrackModal = useCallback(() => {
     setAddTrackModalState(() => {
       const pack = packs[packIndex];
@@ -600,6 +604,14 @@ export default function App() {
     [updateTrackPattern]
   );
 
+  const handleClearSelectedTrack = useCallback(() => {
+    if (!selectedTrack || !canClearSelectedTrack) return;
+    if (!window.confirm("Clear all steps for this track?")) {
+      return;
+    }
+    clearTrackPattern(selectedTrack.id);
+  }, [selectedTrack, canClearSelectedTrack, clearTrackPattern]);
+
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
     const synth = new Tone.PolySynth(Tone.Synth, {
@@ -628,10 +640,11 @@ export default function App() {
     setCurrentSectionIndex(0);
   };
 
-  const handlePlayPause = () => {
+  const handlePlayStop = () => {
     if (isPlaying) {
-      Tone.Transport.pause();
+      Tone.Transport.stop();
       setIsPlaying(false);
+      setCurrentSectionIndex(0);
       return;
     }
     if (Tone.Transport.state === "stopped") {
@@ -639,12 +652,6 @@ export default function App() {
     }
     Tone.Transport.start();
     setIsPlaying(true);
-  };
-
-  const handleStop = () => {
-    Tone.Transport.stop();
-    setIsPlaying(false);
-    setCurrentSectionIndex(0);
   };
 
   const handleOpenSequenceLibrary = () => {
@@ -854,57 +861,68 @@ export default function App() {
                           gap: 10,
                         }}
                       >
-                        {selectedTrack && canRecordSelectedTrack ? (
-                          <button
-                            onClick={() =>
-                              setIsRecording((prev) => !prev)
-                            }
-                            style={{
-                              padding: "4px 12px",
-                              borderRadius: 4,
-                              border: "1px solid #2a3344",
-                              background: isRecording ? "#E02749" : "#27E0B0",
-                              color: isRecording ? "#ffe4e6" : "#1F2532",
-                              cursor: "pointer",
-                              fontWeight: 600,
-                              fontSize: 12,
-                              letterSpacing: 0.6,
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            {isRecording ? "Recording" : "Record"}
-                          </button>
-                        ) : null}
                         <button
-                          onClick={() =>
-                            selectedTrack && clearTrackPattern(selectedTrack.id)
-                          }
-                          disabled={!canClearSelectedTrack}
-                          style={{
-                            padding: "4px 12px",
-                            borderRadius: 4,
-                            border: "1px solid #2a3344",
-                            background: canClearSelectedTrack
-                              ? "#111a2c"
-                              : "#0b121f",
-                            color: canClearSelectedTrack ? "#e2e8f0" : "#475569",
-                            cursor: canClearSelectedTrack ? "pointer" : "not-allowed",
-                          }}
-                        >
-                          Clear
-                        </button>
-                        <button
+                          aria-label="Done editing"
                           onClick={() => setEditing(null)}
                           style={{
-                            padding: "4px 12px",
-                            borderRadius: 4,
+                            width: 40,
+                            height: 40,
+                            borderRadius: 8,
                             border: "1px solid #333",
                             background: "#27E0B0",
                             color: "#1F2532",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             cursor: "pointer",
                           }}
                         >
-                          Done
+                          <span className="material-symbols-outlined">check</span>
+                        </button>
+                        {selectedTrack && canRecordSelectedTrack ? (
+                          <button
+                            aria-label={
+                              isRecording ? "Stop recording" : "Start recording"
+                            }
+                            onClick={handleToggleRecording}
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 8,
+                              border: "1px solid #333",
+                              background: isRecording ? "#E02749" : "#1f2532",
+                              color: isRecording ? "#ffe4e6" : "#e6f2ff",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <span className="material-symbols-outlined">
+                              fiber_manual_record
+                            </span>
+                          </button>
+                        ) : null}
+                        <button
+                          aria-label="Clear track"
+                          onClick={handleClearSelectedTrack}
+                          disabled={!canClearSelectedTrack}
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 8,
+                            border: "1px solid #333",
+                            background: canClearSelectedTrack
+                              ? "#1f2532"
+                              : "#111827",
+                            color: canClearSelectedTrack ? "#e6f2ff" : "#475569",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: canClearSelectedTrack ? "pointer" : "not-allowed",
+                          }}
+                        >
+                          <span className="material-symbols-outlined">backspace</span>
                         </button>
                       </div>
                     ) : (
@@ -958,49 +976,24 @@ export default function App() {
                   />
                   <div style={{ display: "flex", gap: 12 }}>
                     <button
-                      aria-label={isPlaying ? "Pause" : "Play"}
-                      onPointerDown={handlePlayPause}
+                      aria-label={isPlaying ? "Stop" : "Play"}
+                      onPointerDown={handlePlayStop}
                       onPointerUp={(e) => e.currentTarget.blur()}
                       style={{
-                        width: 40,
-                        height: 40,
+                        width: 44,
+                        height: 44,
                         borderRadius: 8,
                         border: "1px solid #333",
-                        background: "#27E0B0",
-                        color: "#1F2532",
+                        background: isPlaying ? "#E02749" : "#27E0B0",
+                        color: isPlaying ? "#ffe4e6" : "#1F2532",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: 20,
+                        fontSize: 24,
                       }}
                     >
                       <span className="material-symbols-outlined">
-                        {isPlaying ? "pause" : "play_arrow"}
-                      </span>
-                    </button>
-                    <button
-                      aria-label="Stop"
-                      onPointerDown={handleStop}
-                      onPointerUp={(e) => e.currentTarget.blur()}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 8,
-                        border: "1px solid #333",
-                        background: "#E02749",
-                        color: "#e6f2ff",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 40,
-                        padding: 0,
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ lineHeight: 1, width: "100%", height: "100%" }}
-                      >
-                        stop
+                        {isPlaying ? "stop" : "play_arrow"}
                       </span>
                     </button>
                   </div>
@@ -1060,8 +1053,7 @@ export default function App() {
                 isPlaying={isPlaying}
                 bpm={bpm}
                 setBpm={setBpm}
-                onPlayPause={handlePlayPause}
-                onStop={handleStop}
+                onToggleTransport={handlePlayStop}
                 selectedGroupId={selectedGroupId}
                 onOpenSequenceLibrary={handleOpenSequenceLibrary}
                 onAddTrack={handleAddTrackRequest}
