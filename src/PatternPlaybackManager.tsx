@@ -127,18 +127,44 @@ function PatternPlayer({
 
   useEffect(() => {
     if (!started) return;
+    const velocityFactor = pattern.velocityFactor ?? 1;
+    const pitchOffset = pattern.pitchOffset ?? 0;
+    const swingAmount = pattern.swing ?? 0;
+    const swingOffsetSeconds = swingAmount
+      ? Tone.Time("16n").toSeconds() * 0.5 * swingAmount
+      : 0;
+    const humanizeAmount = pattern.humanize ?? 0;
     const seq = new Tone.Sequence(
       (time, index: number) => {
         const active = pattern.steps[index] ?? 0;
         if (active && isTrackActiveRef.current()) {
-          const velocity = pattern.velocities?.[index];
-          const pitch = pattern.pitches?.[index];
-          trigger(time, velocity, pitch, pattern.note, pattern.sustain, pattern);
+          const baseVelocity = pattern.velocities?.[index] ?? 1;
+          const velocity = Math.max(
+            0,
+            Math.min(1, baseVelocity * velocityFactor)
+          );
+          const basePitch = pattern.pitches?.[index] ?? 0;
+          const combinedPitch = basePitch + pitchOffset;
+          const scheduledTime =
+            swingOffsetSeconds && index % 2 === 1
+              ? time + swingOffsetSeconds
+              : time;
+          trigger(
+            scheduledTime,
+            velocity,
+            combinedPitch,
+            pattern.note,
+            pattern.sustain,
+            pattern
+          );
         }
       },
       Array.from({ length: 16 }, (_, i) => i),
       "16n"
     ).start(0);
+    seq.humanize = humanizeAmount
+      ? Tone.Time("32n").toSeconds() * humanizeAmount
+      : false;
     return () => {
       seq.dispose();
     };
@@ -157,6 +183,10 @@ function PatternPlayer({
     pattern.bitcrusher,
     pattern.filter,
     pattern.chorus,
+    pattern.velocityFactor,
+    pattern.pitchOffset,
+    pattern.swing,
+    pattern.humanize,
     pattern.arpRate,
     pattern.arpGate,
     pattern.arpLatch,

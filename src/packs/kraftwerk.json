@@ -77,6 +77,19 @@
       "effects": [
         { "type": "Reverb", "options": { "decay": 1.5, "wet": 0.3 } }
       ]
+    },
+    "arpeggiator": {
+      "type": "Synth",
+      "note": "C4",
+      "options": {
+        "oscillator": { "type": "triangle" },
+        "envelope": {
+          "attack": 0.01,
+          "decay": 0.25,
+          "sustain": 0.6,
+          "release": 0.5
+        }
+      }
     }
   },
   "chunks": [

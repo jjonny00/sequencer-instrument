@@ -58,12 +58,42 @@
           "sustain": 0
         }
       }
+    },
+    "chord": {
+      "type": "Synth",
+      "note": "C4",
+      "options": {
+        "oscillator": { "type": "triangle" },
+        "envelope": {
+          "attack": 0.03,
+          "decay": 0.4,
+          "sustain": 0.8,
+          "release": 0.9
+        }
+      },
+      "effects": [
+        { "type": "Reverb", "options": { "decay": 2.2, "wet": 0.25 } }
+      ]
+    },
+    "arpeggiator": {
+      "type": "Synth",
+      "note": "C4",
+      "options": {
+        "oscillator": { "type": "sawtooth" },
+        "envelope": {
+          "attack": 0.01,
+          "decay": 0.2,
+          "sustain": 0.4,
+          "release": 0.6
+        }
+      }
     }
   },
   "chunks": [
     { "id": "phonk-kick", "name": "Four on the Floor", "instrument": "kick", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
     { "id": "phonk-snare", "name": "Sharp Snare", "instrument": "snare", "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
     { "id": "phonk-hat", "name": "Fast Hat", "instrument": "hat", "steps": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] },
-    { "id": "phonk-cowbell", "name": "Cowbell", "instrument": "cowbell", "steps": [0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0] }
+    { "id": "phonk-cowbell", "name": "Cowbell", "instrument": "cowbell", "steps": [0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0] },
+    { "id": "phonk-chord", "name": "Dusty Keys", "instrument": "chord", "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], "velocities": [1,0,0,0,0,0,0,0,0.8,0,0,0,0,0,0,0], "sustain": 0.8, "reverb": 0.3 }
   ]
 }

@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs } from "./packs";
-import { Arpeggiator } from "./Arpeggiator";
-import { Keyboard } from "./Keyboard";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { filterValueToFrequency } from "./utils/audio";
@@ -14,6 +12,7 @@ import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { getCharacterOptions } from "./addTrackOptions";
+import { InstrumentControlPanel } from "./InstrumentControlPanel";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -93,7 +92,6 @@ export default function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
-  const [tab, setTab] = useState<"mushy" | "keyboard">("mushy");
   const [viewMode, setViewMode] = useState<"track" | "song">("track");
   const [patternGroups, setPatternGroups] = useState<PatternGroup[]>(() => [
     createInitialPatternGroup(),
@@ -109,6 +107,10 @@ export default function App() {
   >(null);
   const [addTrackModalState, setAddTrackModalState] = useState<AddTrackModalState>(
     () => createDefaultAddTrackState(packIndex)
+  );
+  const selectedTrack = useMemo(
+    () => (editing !== null ? tracks.find((track) => track.id === editing) ?? null : null),
+    [editing, tracks]
   );
 
   const openAddTrackModal = useCallback(() => {
@@ -308,7 +310,7 @@ export default function App() {
     instrumentRefs.current = {};
     const newTriggers: TriggerMap = {};
     Object.entries(pack.instruments).forEach(([name, spec]) => {
-      if (name === "chord") return;
+      if (name === "chord" || name === "arpeggiator") return;
       const Ctor = (
         Tone as unknown as Record<
           string,
@@ -334,13 +336,31 @@ export default function App() {
         time: number,
         velocity = 1,
         pitch = 0,
-        _noteArg?: string,
-        _sustainArg?: number,
-        _chunk?: Chunk
+        noteArg?: string,
+        sustainArg?: number,
+        chunk?: Chunk
       ) => {
-        void _noteArg;
-        void _sustainArg;
-        void _chunk;
+        void noteArg;
+        void sustainArg;
+        const settable = inst as unknown as {
+          set?: (values: Record<string, unknown>) => void;
+        };
+        if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+          settable.set?.({
+            envelope: {
+              ...(chunk.attack !== undefined ? { attack: chunk.attack } : {}),
+              ...(chunk.sustain !== undefined ? { release: chunk.sustain } : {}),
+            },
+          });
+        }
+        if (chunk?.glide !== undefined) {
+          settable.set?.({ portamento: chunk.glide });
+        }
+        if (chunk?.filter !== undefined) {
+          settable.set?.({
+            filter: { frequency: filterValueToFrequency(chunk.filter) },
+          });
+        }
         if (inst instanceof Tone.NoiseSynth) {
           inst.triggerAttackRelease(spec.note ?? "8n", time, velocity);
         } else {
@@ -516,6 +536,24 @@ export default function App() {
     frame = window.requestAnimationFrame(run);
     return () => window.cancelAnimationFrame(frame);
   }, [pendingLoopStripAction, viewMode, openAddTrackModal]);
+
+  const updateTrackPattern = useCallback(
+    (trackId: number, updater: (pattern: Chunk) => Chunk) => {
+      setTracks((prev) =>
+        prev.map((track) => {
+          if (track.id !== trackId) return track;
+          if (!track.pattern) return track;
+          const nextPattern = updater(track.pattern);
+          if (nextPattern === track.pattern) return track;
+          return {
+            ...track,
+            pattern: nextPattern,
+          };
+        })
+      );
+    },
+    [setTracks]
+  );
 
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
@@ -887,47 +925,29 @@ export default function App() {
                     minHeight: 0,
                   }}
                 >
-                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                    <button
-                      onClick={() => setTab("mushy")}
-                      style={{
-                        flex: 1,
-                        padding: "8px 0",
-                        borderRadius: 8,
-                        border: "1px solid #333",
-                        background: tab === "mushy" ? "#27E0B0" : "#1f2532",
-                        color: tab === "mushy" ? "#1F2532" : "#e6f2ff",
-                      }}
-                    >
-                      Mushy
-                    </button>
-                    <button
-                      onClick={() => setTab("keyboard")}
-                      style={{
-                        flex: 1,
-                        padding: "8px 0",
-                        borderRadius: 8,
-                        border: "1px solid #333",
-                        background: tab === "keyboard" ? "#27E0B0" : "#1f2532",
-                        color: tab === "keyboard" ? "#1F2532" : "#e6f2ff",
-                      }}
-                    >
-                      Keyboard
-                    </button>
-                  </div>
-                  {tab === "mushy" ? (
-                    <Arpeggiator
-                      started={started}
-                      subdiv={subdiv}
-                      setTracks={setTracks}
+                  {selectedTrack ? (
+                    <InstrumentControlPanel
+                      track={selectedTrack}
+                      onUpdatePattern={
+                        selectedTrack.pattern
+                          ? (updater) =>
+                              updateTrackPattern(selectedTrack.id, updater)
+                          : undefined
+                      }
                     />
                   ) : (
-                    <Keyboard
-                      subdiv={subdiv}
-                      noteRef={noteRef}
-                      fxRef={keyboardFxRef}
-                      setTracks={setTracks}
-                    />
+                    <div
+                      style={{
+                        borderRadius: 12,
+                        border: "1px solid #2a3344",
+                        padding: 24,
+                        textAlign: "center",
+                        color: "#94a3b8",
+                        fontSize: 13,
+                      }}
+                    >
+                      Select a track above to adjust its instrument settings.
+                    </div>
                   )}
                 </div>
               </>
