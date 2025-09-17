@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -21,6 +22,23 @@ const createInitialPatternGroup = (): PatternGroup => ({
 });
 
 type Subdivision = "16n" | "8n" | "4n";
+
+const CONTROL_BUTTON_SIZE = 44;
+
+const controlButtonBaseStyle: CSSProperties = {
+  width: CONTROL_BUTTON_SIZE,
+  height: CONTROL_BUTTON_SIZE,
+  borderRadius: 8,
+  border: "1px solid #333",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+};
+
+const controlIconStyle: CSSProperties = {
+  fontSize: 24,
+};
 
 interface AddTrackModalState {
   isOpen: boolean;
@@ -865,19 +883,17 @@ export default function App() {
                           aria-label="Done editing"
                           onClick={() => setEditing(null)}
                           style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 8,
-                            border: "1px solid #333",
+                            ...controlButtonBaseStyle,
                             background: "#27E0B0",
                             color: "#1F2532",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "pointer",
                           }}
                         >
-                          <span className="material-symbols-outlined">check</span>
+                          <span
+                            className="material-symbols-outlined"
+                            style={controlIconStyle}
+                          >
+                            check
+                          </span>
                         </button>
                         {selectedTrack && canRecordSelectedTrack ? (
                           <button
@@ -885,20 +901,17 @@ export default function App() {
                               isRecording ? "Stop recording" : "Start recording"
                             }
                             onClick={handleToggleRecording}
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 8,
-                              border: "1px solid #333",
-                              background: isRecording ? "#E02749" : "#1f2532",
-                              color: isRecording ? "#ffe4e6" : "#e6f2ff",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
+                          style={{
+                              ...controlButtonBaseStyle,
+                              background: isRecording ? "#E02749" : "#111827",
+                              border: `1px solid ${isRecording ? "#E02749" : "#333"}`,
+                              color: isRecording ? "#ffe4e6" : "#f43f5e",
                             }}
                           >
-                            <span className="material-symbols-outlined">
+                            <span
+                              className="material-symbols-outlined"
+                              style={controlIconStyle}
+                            >
                               fiber_manual_record
                             </span>
                           </button>
@@ -908,21 +921,24 @@ export default function App() {
                           onClick={handleClearSelectedTrack}
                           disabled={!canClearSelectedTrack}
                           style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 8,
-                            border: "1px solid #333",
+                            ...controlButtonBaseStyle,
                             background: canClearSelectedTrack
                               ? "#1f2532"
                               : "#111827",
+                            border: `1px solid ${
+                              canClearSelectedTrack ? "#333" : "#1f2937"
+                            }`,
                             color: canClearSelectedTrack ? "#e6f2ff" : "#475569",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
                             cursor: canClearSelectedTrack ? "pointer" : "not-allowed",
+                            opacity: canClearSelectedTrack ? 1 : 0.6,
                           }}
                         >
-                          <span className="material-symbols-outlined">backspace</span>
+                          <span
+                            className="material-symbols-outlined"
+                            style={controlIconStyle}
+                          >
+                            delete
+                          </span>
                         </button>
                       </div>
                     ) : (
@@ -980,19 +996,16 @@ export default function App() {
                       onPointerDown={handlePlayStop}
                       onPointerUp={(e) => e.currentTarget.blur()}
                       style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 8,
-                        border: "1px solid #333",
+                        ...controlButtonBaseStyle,
                         background: isPlaying ? "#E02749" : "#27E0B0",
                         color: isPlaying ? "#ffe4e6" : "#1F2532",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
                         fontSize: 24,
                       }}
                     >
-                      <span className="material-symbols-outlined">
+                      <span
+                        className="material-symbols-outlined"
+                        style={controlIconStyle}
+                      >
                         {isPlaying ? "stop" : "play_arrow"}
                       </span>
                     </button>

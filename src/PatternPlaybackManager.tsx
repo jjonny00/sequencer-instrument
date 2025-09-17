@@ -204,11 +204,15 @@ function PatternPlayer({
             }
             holdSteps += 1;
           }
-          const baseRelease = pattern.sustain ?? stepDurationSeconds;
-          const sustainSeconds = Math.max(
-            baseRelease,
-            (holdSteps + 1) * stepDurationSeconds
-          );
+          const holdDurationSeconds = (holdSteps + 1) * stepDurationSeconds;
+          const releaseControl = pattern.sustain;
+          const sustainSeconds =
+            releaseControl === undefined
+              ? holdDurationSeconds
+              : Math.min(
+                  Math.max(releaseControl, 0),
+                  holdDurationSeconds
+                );
           trigger(
             scheduledTime,
             velocity,
