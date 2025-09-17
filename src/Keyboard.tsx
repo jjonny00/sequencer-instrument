@@ -675,15 +675,15 @@ export function Keyboard({
               <div
                 style={{
                   position: "relative",
-                  width: "calc(100vw - 32px)",
-                  height: "calc(100vh - 32px)",
+                  width: "calc(100vh - 32px)",
+                  height: "calc(100vw - 32px)",
                   transform: "rotate(90deg)",
                   transformOrigin: "center",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  maxWidth: "100vw",
-                  maxHeight: "100vh",
+                  maxWidth: "100vh",
+                  maxHeight: "100vw",
                 }}
               >
                 <div
