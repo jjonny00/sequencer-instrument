@@ -9,6 +9,7 @@ import { Arpeggiator } from "./Arpeggiator";
 import { Keyboard } from "./Keyboard";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
+import { filterValueToFrequency } from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
@@ -385,6 +386,13 @@ export default function App() {
           }
           if (chunk.bitcrusher !== undefined) {
             fx.bitCrusher.wet.value = chunk.bitcrusher;
+          }
+          if (chunk.chorus !== undefined) {
+            fx.chorus.wet.value = chunk.chorus;
+          }
+          if (chunk.filter !== undefined) {
+            const frequency = filterValueToFrequency(chunk.filter);
+            fx.filter.frequency.rampTo(frequency, 0.1);
           }
         }
       }

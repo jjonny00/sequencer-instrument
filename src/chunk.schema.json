@@ -98,6 +98,18 @@
       "minimum": 0,
       "maximum": 1
     },
+    "filter": {
+      "type": "number",
+      "description": "Normalized low-pass filter cutoff",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "chorus": {
+      "type": "number",
+      "description": "Chorus wet mix",
+      "minimum": 0,
+      "maximum": 1
+    },
     "notes": {
       "type": "array",
       "description": "Chord notes for arpeggiator",
@@ -125,6 +137,26 @@
       "type": "string",
       "description": "Arpeggiator playback mode",
       "enum": ["continuous", "manual"]
+    },
+    "arpRate": {
+      "type": "string",
+      "description": "Arpeggiator rate (e.g. 1/8, 1/16)"
+    },
+    "arpGate": {
+      "type": "number",
+      "description": "Arpeggiator gate length",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "arpLatch": {
+      "type": "boolean",
+      "description": "Whether the arpeggiator latch is enabled"
+    },
+    "arpOctaves": {
+      "type": "integer",
+      "description": "Number of octaves for arpeggiator playback",
+      "minimum": 1,
+      "maximum": 4
     }
   }
 }
