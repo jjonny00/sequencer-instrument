@@ -827,7 +827,10 @@ export function Keyboard({
                 }
                 if (presetDefinition.reverb !== undefined) {
                   setReverb(presetDefinition.reverb);
-                  fxRef.current?.reverb.wet.value = presetDefinition.reverb;
+                  const fxNodes = fxRef.current;
+                  if (fxNodes) {
+                    fxNodes.reverb.wet.value = presetDefinition.reverb;
+                  }
                 }
                 const nextDelay =
                   presetDefinition.delay !== undefined
