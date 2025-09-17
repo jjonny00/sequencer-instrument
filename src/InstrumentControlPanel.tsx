@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import type { FC, PropsWithChildren } from "react";
 import { useMemo } from "react";
 
 import type { Chunk } from "./chunks";
@@ -75,7 +75,7 @@ const Slider: FC<SliderProps> = ({
   );
 };
 
-const Section: FC<{ title: string }> = ({ title, children }) => (
+const Section: FC<PropsWithChildren<{ title: string }>> = ({ title, children }) => (
   <div
     style={{
       borderRadius: 12,
