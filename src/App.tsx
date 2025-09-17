@@ -719,7 +719,6 @@ export default function App() {
               setEditing={setEditing}
               setTracks={setTracks}
               packIndex={packIndex}
-              setPackIndex={setPackIndex}
               patternGroups={patternGroups}
               setPatternGroups={setPatternGroups}
               selectedGroupId={selectedGroupId}

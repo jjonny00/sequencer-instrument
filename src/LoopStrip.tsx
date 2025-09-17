@@ -89,7 +89,6 @@ interface LoopStripProps {
   setEditing: Dispatch<SetStateAction<number | null>>;
   setTracks: Dispatch<SetStateAction<Track[]>>;
   packIndex: number;
-  setPackIndex: Dispatch<SetStateAction<number>>;
   patternGroups: PatternGroup[];
   setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
   selectedGroupId: string | null;
@@ -114,7 +113,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       setEditing,
       setTracks,
       packIndex,
-      setPackIndex,
       patternGroups,
       setPatternGroups,
       selectedGroupId,
@@ -687,26 +685,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         >
           + Track
         </button>
-      </div>
-      <div style={{ marginBottom: 4 }}>
-        <select
-          value={packIndex}
-          onChange={(event) => setPackIndex(Number(event.target.value))}
-          style={{
-            width: "100%",
-            padding: 4,
-            borderRadius: 4,
-            background: "#121827",
-            color: "white",
-            border: "1px solid #333",
-          }}
-        >
-          {packs.map((p, i) => (
-            <option key={p.id} value={i}>
-              {p.name}
-            </option>
-          ))}
-        </select>
       </div>
       <div
         ref={trackAreaRef}
