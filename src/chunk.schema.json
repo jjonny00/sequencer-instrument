@@ -110,6 +110,30 @@
       "minimum": 0,
       "maximum": 1
     },
+    "velocityFactor": {
+      "type": "number",
+      "description": "Global velocity multiplier",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "pitchOffset": {
+      "type": "number",
+      "description": "Global pitch offset in semitones",
+      "minimum": -12,
+      "maximum": 12
+    },
+    "swing": {
+      "type": "number",
+      "description": "Normalized swing amount",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "humanize": {
+      "type": "number",
+      "description": "Timing randomization amount",
+      "minimum": 0,
+      "maximum": 1
+    },
     "notes": {
       "type": "array",
       "description": "Chord notes for arpeggiator",

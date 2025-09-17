@@ -70,12 +70,43 @@
           "options": { "frequency": 4, "delayTime": 2.5, "depth": 0.5, "wet": 0.3 }
         }
       ]
+    },
+    "chord": {
+      "type": "Synth",
+      "note": "C4",
+      "options": {
+        "oscillator": { "type": "sawtooth" },
+        "envelope": {
+          "attack": 0.02,
+          "decay": 0.5,
+          "sustain": 0.7,
+          "release": 1.2
+        }
+      },
+      "effects": [
+        { "type": "Chorus", "options": { "frequency": 3, "delayTime": 2, "depth": 0.4, "wet": 0.35 } },
+        { "type": "Reverb", "options": { "decay": 2.8, "wet": 0.3 } }
+      ]
+    },
+    "arpeggiator": {
+      "type": "Synth",
+      "note": "C4",
+      "options": {
+        "oscillator": { "type": "square" },
+        "envelope": {
+          "attack": 0.005,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 0.6
+        }
+      }
     }
   },
   "chunks": [
     { "id": "edm-kick", "name": "Four on the Floor", "instrument": "kick", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
     { "id": "edm-snare", "name": "Offbeat Snare", "instrument": "snare", "steps": [0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1] },
     { "id": "edm-hat", "name": "Trance Hat", "instrument": "hat", "steps": [0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1] },
-    { "id": "edm-bass", "name": "Saw Bass", "instrument": "bass", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }
+    { "id": "edm-bass", "name": "Saw Bass", "instrument": "bass", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
+    { "id": "edm-chord", "name": "Supersaw Pad", "instrument": "chord", "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], "sustain": 1.2, "reverb": 0.4, "chorus": 0.3 }
   ]
 }

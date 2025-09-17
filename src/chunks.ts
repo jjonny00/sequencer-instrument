@@ -16,6 +16,10 @@ export interface Chunk {
   bitcrusher?: number;
   filter?: number;
   chorus?: number;
+  velocityFactor?: number;
+  pitchOffset?: number;
+  swing?: number;
+  humanize?: number;
   notes?: string[];
   degrees?: number[];
   pitchBend?: number;
