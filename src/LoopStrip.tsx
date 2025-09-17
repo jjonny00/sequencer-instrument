@@ -28,6 +28,26 @@ const baseInstrumentColors: Record<string, string> = {
 
 const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";
 
+const lightenColor = (hex: string, amount: number) => {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(normalized)) {
+    return hex;
+  }
+  const value =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((char) => char + char)
+          .join("")
+      : normalized;
+  const num = parseInt(value, 16);
+  const clamp = (component: number) => Math.max(0, Math.min(255, component));
+  const r = clamp(((num >> 16) & 0xff) + Math.round(255 * amount));
+  const g = clamp(((num >> 8) & 0xff) + Math.round(255 * amount));
+  const b = clamp((num & 0xff) + Math.round(255 * amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+};
+
 const getInstrumentColor = (instrument: string) =>
   baseInstrumentColors[instrument] ?? FALLBACK_INSTRUMENT_COLOR;
 
@@ -844,17 +864,28 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                       >
                         {Array.from({ length: 16 }).map((_, i) => {
                           const active = t.pattern?.steps[i] ?? 0;
-                          const playing = step === i && active;
+                          const isCurrentColumn = step === i;
+                          const playing = isCurrentColumn && active;
+                          const accentColor = lightenColor(color, 0.25);
+                          const background = active
+                            ? isCurrentColumn
+                              ? accentColor
+                              : color
+                            : "#1f2532";
+                          const borderColor = isCurrentColumn
+                            ? lightenColor("#555555", 0.2)
+                            : "#555";
                           return (
                             <div
                               key={i}
                               style={{
-                                border: "1px solid #555",
-                                background: active ? color : "#1f2532",
-                                opacity: active ? 1 : 0.2,
+                                border: `1px solid ${borderColor}`,
+                                background,
+                                opacity: active ? 1 : isCurrentColumn ? 0.35 : 0.2,
                                 boxShadow: playing
-                                  ? `0 0 6px ${color}`
+                                  ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
                                   : "none",
+                                transition: "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
                               }}
                             />
                           );

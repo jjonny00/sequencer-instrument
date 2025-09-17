@@ -1,5 +1,5 @@
 import type { FC, PropsWithChildren, ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import type { Chunk } from "./chunks";
@@ -130,6 +130,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const [pressedKeyboardNotes, setPressedKeyboardNotes] = useState<
     Set<string>
   >(() => new Set());
+  const [isRecording, setIsRecording] = useState(false);
+  const arpScheduleIdRef = useRef<number | null>(null);
 
   const updatePattern =
     onUpdatePattern && pattern
@@ -144,6 +146,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const activeVelocity = pattern?.velocityFactor ?? 1;
   const manualVelocity = Math.max(0, Math.min(1, activeVelocity));
   const canTrigger = Boolean(trigger && pattern);
+  const showRecordButton = (isArp || isKeyboard) && Boolean(onUpdatePattern);
 
   const arpRoot = pattern?.note ?? "C4";
   const arpRateOptions = ["1/32", "1/16", "1/8", "1/4"] as const;
@@ -235,51 +238,144 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     return notes.length ? notes : [rootNote];
   };
 
+  const ensureArrayLength = (values: number[] | undefined, length: number, fill: number) => {
+    const next = values ? values.slice(0, length) : Array(length).fill(fill);
+    if (next.length < length) {
+      next.push(...Array(length - next.length).fill(fill));
+    }
+    return next;
+  };
+
+  const recordNoteToPattern = (
+    noteName: string,
+    eventTime: number,
+    baseNote: string,
+    velocity: number,
+    options?: { includeChordMeta?: boolean }
+  ) => {
+    if (!onUpdatePattern) return;
+    const ticksPerStep = Tone.Transport.PPQ / 4;
+    const ticks = Tone.Transport.getTicksAtTime(eventTime);
+    onUpdatePattern((chunk) => {
+      const length = chunk.steps.length || 16;
+      const stepIndex = length
+        ? Math.floor(ticks / ticksPerStep) % length
+        : 0;
+      const steps = chunk.steps.slice();
+      const velocities = ensureArrayLength(
+        chunk.velocities,
+        length,
+        1
+      );
+      const pitches = ensureArrayLength(chunk.pitches, length, 0);
+      const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
+      const midi = Tone.Frequency(noteName).toMidi();
+      steps[stepIndex] = 1;
+      velocities[stepIndex] = Math.max(
+        0,
+        Math.min(1, velocity)
+      );
+      pitches[stepIndex] = midi - baseMidi;
+
+      const nextChunk: Chunk = {
+        ...chunk,
+        steps,
+        velocities,
+        pitches,
+      };
+
+      if (options?.includeChordMeta) {
+        const nextNotes = chunk.notes ? chunk.notes.slice() : [];
+        if (!nextNotes.includes(noteName)) {
+          nextNotes.push(noteName);
+        }
+        nextChunk.notes = nextNotes;
+        if (!chunk.degrees || chunk.degrees.length === 0) {
+          nextChunk.degrees = chordDegrees;
+        }
+      }
+
+      return nextChunk;
+    });
+  };
+
+  const stopArpPlayback = () => {
+    if (arpScheduleIdRef.current !== null) {
+      Tone.Transport.clear(arpScheduleIdRef.current);
+      arpScheduleIdRef.current = null;
+    }
+  };
+
   const scheduleArpPlayback = (rootNote: string) => {
+    stopArpPlayback();
     if (!trigger || !pattern) return;
     const chordNotes = getChordNotesForRoot(rootNote);
     const octaves = Math.max(1, pattern.arpOctaves ?? 1);
-    const baseMidi = chordNotes
+    const midiNotes = chordNotes
       .map((note) => Tone.Frequency(note).toMidi())
       .sort((a, b) => a - b);
     const expanded: string[] = [];
     for (let octave = 0; octave < octaves; octave += 1) {
-      baseMidi.forEach((midi) => {
+      midiNotes.forEach((midi) => {
         expanded.push(Tone.Frequency(midi + octave * 12, "midi").toNote());
       });
     }
     if (!expanded.length) return;
 
     const style = pattern.style ?? "up";
-    let ordered: string[];
-    if (style === "down") {
-      ordered = [...expanded].reverse();
-    } else if (style === "up-down") {
-      const ascending = [...expanded];
-      const descending = ascending.slice(1, -1).reverse();
-      ordered = [...ascending, ...descending];
-    } else if (style === "random") {
-      const shuffled = [...expanded];
-      for (let i = shuffled.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      ordered = shuffled;
-    } else {
-      ordered = [...expanded];
-    }
-
-    const rateSeconds = Tone.Time(pattern.arpRate ?? "1/16").toSeconds();
+    const rate = pattern.arpRate ?? "1/16";
+    const rateSeconds = Tone.Time(rate).toSeconds();
     const gate = Math.max(0.1, Math.min(1, pattern.arpGate ?? 0.6));
     const sustain =
       pattern.sustain !== undefined ? pattern.sustain : rateSeconds * gate;
     const bend = pattern.pitchBend ?? 0;
-    const now = Tone.now();
-    ordered.forEach((note, index) => {
-      const time = now + index * rateSeconds;
-      const bentNote = Tone.Frequency(note).transpose(bend).toNote();
-      trigger(time, manualVelocity, 0, bentNote, sustain, pattern);
-    });
+
+    let currentIndex = style === "down" ? expanded.length - 1 : 0;
+    let direction: 1 | -1 = style === "down" ? -1 : 1;
+
+    const scheduleId = Tone.Transport.scheduleRepeat(
+      (time) => {
+        if (!expanded.length) return;
+        let noteName: string;
+        if (style === "random") {
+          const idx = Math.floor(Math.random() * expanded.length);
+          noteName = expanded[idx];
+        } else {
+          noteName = expanded[currentIndex];
+          if (expanded.length > 1) {
+            if (style === "up") {
+              currentIndex = (currentIndex + 1) % expanded.length;
+            } else if (style === "down") {
+              currentIndex =
+                (currentIndex - 1 + expanded.length) % expanded.length;
+            } else if (style === "up-down") {
+              if (currentIndex === expanded.length - 1) {
+                direction = -1;
+              } else if (currentIndex === 0) {
+                direction = 1;
+              }
+              currentIndex += direction;
+            }
+          }
+        }
+
+        const bentNote = Tone.Frequency(noteName).transpose(bend).toNote();
+        trigger(time, manualVelocity, 0, bentNote, sustain, pattern);
+
+        if (isRecording && onUpdatePattern) {
+          const baseNote = pattern.note ?? rootNote;
+          Tone.Draw.schedule(() => {
+            recordNoteToPattern(bentNote, time, baseNote, manualVelocity, {
+              includeChordMeta: true,
+            });
+          }, time);
+        }
+      },
+      rate,
+      Tone.Transport.seconds
+    );
+
+    arpScheduleIdRef.current = scheduleId;
   };
 
   const triggerKeyboardNote = (note: string) => {
@@ -287,8 +383,37 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     const bend = pattern.pitchBend ?? 0;
     const sustain = pattern.sustain ?? 0.8;
     const noteName = bend ? Tone.Frequency(note).transpose(bend).toNote() : note;
-    trigger(Tone.now(), manualVelocity, 0, noteName, sustain, pattern);
+    const time = Tone.now();
+    trigger(time, manualVelocity, 0, noteName, sustain, pattern);
+
+    if (isRecording && onUpdatePattern) {
+      const baseNote = pattern.note ?? note;
+      Tone.Draw.schedule(() => {
+        recordNoteToPattern(noteName, time, baseNote, manualVelocity);
+      }, time);
+    }
   };
+
+  useEffect(() => () => stopArpPlayback(), []);
+
+  useEffect(() => {
+    setIsRecording(false);
+    stopArpPlayback();
+    setActiveArpNote(null);
+    setPressedKeyboardNotes(new Set());
+  }, [track.id, track.instrument]);
+
+  useEffect(() => {
+    if (!isArp && !isKeyboard) {
+      setIsRecording(false);
+    }
+  }, [isArp, isKeyboard]);
+
+  useEffect(() => {
+    if (!canTrigger) {
+      stopArpPlayback();
+    }
+  }, [canTrigger]);
 
   if (!pattern) {
     return (
@@ -310,9 +435,38 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const stickySections: ReactNode[] = [];
 
+  const renderRecordToggle = () => {
+    if (!showRecordButton) return null;
+    return (
+      <div
+        style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}
+      >
+        <button
+          type="button"
+          onClick={() => setIsRecording((prev) => !prev)}
+          disabled={!onUpdatePattern}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 6,
+            border: "1px solid #2a3344",
+            background: isRecording ? "#E02749" : "#27E0B0",
+            color: isRecording ? "#ffe4e6" : "#1F2532",
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: onUpdatePattern ? "pointer" : "not-allowed",
+            opacity: onUpdatePattern ? 1 : 0.5,
+          }}
+        >
+          {isRecording ? "Recording" : "Record"}
+        </button>
+      </div>
+    );
+  };
+
   if (isArp) {
     stickySections.push(
       <Section key="arp-pads" padding={10}>
+        {renderRecordToggle()}
         <div
           style={{
             display: "grid",
@@ -337,10 +491,12 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 event.preventDefault();
                 event.currentTarget.releasePointerCapture(event.pointerId);
                 setActiveArpNote(null);
+                stopArpPlayback();
               }}
               onPointerCancel={() => {
                 if (!canTrigger) return;
                 setActiveArpNote(null);
+                stopArpPlayback();
               }}
               style={{
                 padding: "10px 8px",
@@ -365,6 +521,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   if (isKeyboard) {
     stickySections.push(
       <Section key="keyboard" padding={10}>
+        {renderRecordToggle()}
         <div
           style={{
             position: "relative",
