@@ -197,7 +197,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const latchedDegreeRef = useRef<number | null>(null);
   const unfoldProgressRef = useRef(0);
   const autopMaskRef = useRef<boolean[]>(Array(16).fill(false));
-  const previousAutopilotRef = useRef(autopilotEnabled);
+  const previousAutopilotRef = useRef(pattern?.autopilot ?? false);
 
   const updatePattern = useMemo(() => {
     if (!onUpdatePattern || !pattern) {
