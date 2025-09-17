@@ -28,7 +28,7 @@ const CONTROL_BUTTON_SIZE = 44;
 const controlButtonBaseStyle: CSSProperties = {
   width: CONTROL_BUTTON_SIZE,
   height: CONTROL_BUTTON_SIZE,
-  borderRadius: 8,
+  borderRadius: CONTROL_BUTTON_SIZE / 2,
   border: "1px solid #333",
   display: "flex",
   alignItems: "center",
@@ -937,7 +937,7 @@ export default function App() {
                             className="material-symbols-outlined"
                             style={controlIconStyle}
                           >
-                            delete
+                            cleaning_services
                           </span>
                         </button>
                       </div>

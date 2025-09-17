@@ -313,6 +313,48 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     };
   }, [onUpdatePattern, pattern]);
 
+  useEffect(() => {
+    if (!pattern || !updatePattern) return;
+    if (!isKeyboard && !isArp) return;
+    const defaults: Partial<Chunk> = {};
+    if (pattern.note === undefined) {
+      defaults.note = "C4";
+    }
+    if (pattern.attack === undefined) {
+      defaults.attack = 0.05;
+    }
+    if (pattern.sustain === undefined) {
+      defaults.sustain = 0.8;
+    }
+    if (pattern.glide === undefined) {
+      defaults.glide = 0;
+    }
+    if (pattern.pan === undefined) {
+      defaults.pan = 0;
+    }
+    if (pattern.reverb === undefined) {
+      defaults.reverb = 0;
+    }
+    if (pattern.delay === undefined) {
+      defaults.delay = 0;
+    }
+    if (pattern.distortion === undefined) {
+      defaults.distortion = 0;
+    }
+    if (pattern.bitcrusher === undefined) {
+      defaults.bitcrusher = 0;
+    }
+    if (pattern.chorus === undefined) {
+      defaults.chorus = 0;
+    }
+    if (pattern.filter === undefined) {
+      defaults.filter = 1;
+    }
+    if (Object.keys(defaults).length > 0) {
+      updatePattern(defaults);
+    }
+  }, [isArp, isKeyboard, pattern, updatePattern]);
+
   const activeVelocity = pattern?.velocityFactor ?? 1;
   const manualVelocity = Math.max(0, Math.min(1, activeVelocity));
   const canTrigger = Boolean(trigger && pattern);
