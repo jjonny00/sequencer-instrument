@@ -84,19 +84,21 @@ const Slider: FC<SliderProps> = ({
   );
 };
 
-const Section: FC<PropsWithChildren<{ title: string }>> = ({ title, children }) => (
+const Section: FC<PropsWithChildren<{ padding?: number }>> = ({
+  padding = 12,
+  children,
+}) => (
   <div
     style={{
-      borderRadius: 12,
-      border: "1px solid #2a3344",
-      background: "#121827",
-      padding: 16,
+      borderRadius: 10,
+      border: "1px solid #1d2636",
+      background: "#10192c",
+      padding,
       display: "flex",
       flexDirection: "column",
-      gap: 16,
+      gap: 10,
     }}
   >
-    <span style={{ fontWeight: 700, letterSpacing: 0.6 }}>{title}</span>
     {children}
   </div>
 );
@@ -310,15 +312,12 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   if (isArp) {
     stickySections.push(
-      <Section key="arp-pads" title="Arp Pads">
-        <span style={{ color: "#94a3b8", fontSize: 12 }}>
-          Tap a pad to audition the arpeggiator with the current settings.
-        </span>
+      <Section key="arp-pads" padding={10}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
-            gap: 8,
+            gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))",
+            gap: 6,
           }}
         >
           {arpPadNotes.map((note) => (
@@ -344,13 +343,14 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 setActiveArpNote(null);
               }}
               style={{
-                padding: "12px 10px",
-                borderRadius: 10,
-                border: "1px solid #2a3344",
-                background: activeArpNote === note ? "#27E0B0" : "#1f2532",
-                color: activeArpNote === note ? "#1F2532" : "#e6f2ff",
+                padding: "10px 8px",
+                borderRadius: 8,
+                border: "1px solid #273144",
+                background: activeArpNote === note ? "#27E0B0" : "#1a2333",
+                color: activeArpNote === note ? "#0e151f" : "#f1f5f9",
                 cursor: canTrigger ? "pointer" : "not-allowed",
                 fontWeight: 600,
+                fontSize: 12,
                 opacity: canTrigger ? 1 : 0.5,
               }}
             >
@@ -364,24 +364,21 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   if (isKeyboard) {
     stickySections.push(
-      <Section key="keyboard" title="Keyboard">
-        <span style={{ color: "#94a3b8", fontSize: 12 }}>
-          Play melodies or chords with a two-octave keyboard preview.
-        </span>
+      <Section key="keyboard" padding={10}>
         <div
           style={{
             position: "relative",
-            height: 160,
-            borderRadius: 12,
+            height: 132,
+            borderRadius: 10,
             background: "#0f172a",
-            padding: 12,
+            padding: 8,
           }}
         >
           <div
             style={{
               display: "flex",
               height: "100%",
-              borderRadius: 8,
+              borderRadius: 6,
               overflow: "hidden",
               background: "#0f172a",
               position: "relative",
@@ -503,7 +500,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {stickySections.length ? (
         <div
           style={{
@@ -512,22 +509,23 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             zIndex: 20,
             display: "flex",
             flexDirection: "column",
-            gap: 12,
-            paddingBottom: 12,
-            background: "linear-gradient(180deg, #0b1220 0%, rgba(11, 18, 32, 0.85) 70%, rgba(11, 18, 32, 0) 100%)",
+            gap: 8,
+            paddingBottom: 8,
+            background:
+              "linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(11, 18, 32, 0.88) 60%, rgba(11, 18, 32, 0) 100%)",
           }}
         >
           {stickySections}
         </div>
       ) : null}
 
-      <Section title={`${instrumentLabel} Settings`}>
+      <Section>
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
-            fontSize: 12,
+            gap: 6,
+            fontSize: 11,
             color: "#94a3b8",
           }}
         >
@@ -546,7 +544,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         </div>
       </Section>
 
-      <Section title="Performance">
+      <Section>
         <Slider
           label="Velocity"
           min={0}
@@ -559,7 +557,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       </Section>
 
       {isPercussive ? (
-        <Section title="Parameters">
+        <Section>
           <Slider
             label="Pitch"
             min={-12}
@@ -591,7 +589,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       ) : null}
 
       {isBass ? (
-        <Section title="Bass Shape">
+        <Section>
           <Slider
             label="Attack"
             min={0}
@@ -634,7 +632,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       ) : null}
 
       {isArp ? (
-        <Section title="Arp Controls">
+        <Section>
           <div
             style={{
               display: "grid",
@@ -753,7 +751,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               display: "grid",
               gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
               gap: 8,
-              marginTop: 16,
+              marginTop: 10,
             }}
           >
             {arpPadPresets.map((preset) => {
@@ -781,7 +779,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               );
             })}
           </div>
-          <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+          <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
             <Slider
               label="Gate"
               min={0.1}
@@ -848,7 +846,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         </Section>
       ) : null}
       {isKeyboard ? (
-        <Section title="Keyboard Controls">
+        <Section>
           <Slider
             label="Attack"
             min={0}
@@ -945,7 +943,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       ) : null}
 
       {!isPercussive && !isBass && !isArp && !isKeyboard ? (
-        <Section title="Instrument">
+        <Section>
           <span style={{ color: "#94a3b8", fontSize: 13 }}>
             This instrument does not have dedicated controls yet.
           </span>
