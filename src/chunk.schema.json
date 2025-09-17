@@ -110,6 +110,25 @@
       "minimum": 0,
       "maximum": 1
     },
+    "timingMode": {
+      "type": "string",
+      "description": "Whether the pattern follows BPM sync or free timing",
+      "enum": ["sync", "free"]
+    },
+    "tonalCenter": {
+      "type": "string",
+      "description": "Arpeggiator tonal center"
+    },
+    "scale": {
+      "type": "string",
+      "description": "Scale or mode name"
+    },
+    "degree": {
+      "type": "integer",
+      "description": "Scale degree index",
+      "minimum": 0,
+      "maximum": 6
+    },
     "velocityFactor": {
       "type": "number",
       "description": "Global velocity multiplier",
@@ -155,7 +174,7 @@
     "style": {
       "type": "string",
       "description": "Arpeggiator style",
-      "enum": ["up", "down", "up-down", "random"]
+      "enum": ["up", "down", "up-down", "random", "unfold"]
     },
     "mode": {
       "type": "string",
@@ -165,6 +184,11 @@
     "arpRate": {
       "type": "string",
       "description": "Arpeggiator rate (e.g. 1/8, 1/16)"
+    },
+    "arpFreeRate": {
+      "type": "number",
+      "description": "Arpeggiator interval in milliseconds when in free timing mode",
+      "minimum": 0
     },
     "arpGate": {
       "type": "number",
@@ -181,6 +205,37 @@
       "description": "Number of octaves for arpeggiator playback",
       "minimum": 1,
       "maximum": 4
+    },
+    "useExtensions": {
+      "type": "boolean",
+      "description": "Whether to include extended chord tones"
+    },
+    "autopilot": {
+      "type": "boolean",
+      "description": "Automatically trigger arp alongside kick/snare"
+    },
+    "noteEvents": {
+      "type": "array",
+      "description": "Recorded free-time note events",
+      "items": {
+        "type": "object",
+        "required": ["time", "duration", "note", "velocity"],
+        "properties": {
+          "time": { "type": "number", "minimum": 0 },
+          "duration": { "type": "number", "minimum": 0 },
+          "note": { "type": "string" },
+          "velocity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "noteLoopLength": {
+      "type": "number",
+      "description": "Loop length in seconds for free-time note events",
+      "minimum": 0
     }
   }
 }

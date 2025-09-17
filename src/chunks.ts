@@ -1,3 +1,10 @@
+export interface NoteEvent {
+  time: number;
+  duration: number;
+  note: string;
+  velocity: number;
+}
+
 export interface Chunk {
   id: string;
   name: string;
@@ -16,6 +23,10 @@ export interface Chunk {
   bitcrusher?: number;
   filter?: number;
   chorus?: number;
+  timingMode?: "sync" | "free";
+  tonalCenter?: string;
+  scale?: string;
+  degree?: number;
   velocityFactor?: number;
   pitchOffset?: number;
   swing?: number;
@@ -29,5 +40,10 @@ export interface Chunk {
   arpGate?: number;
   arpLatch?: boolean;
   arpOctaves?: number;
+  arpFreeRate?: number;
+  useExtensions?: boolean;
+  autopilot?: boolean;
+  noteEvents?: NoteEvent[];
+  noteLoopLength?: number;
 }
 

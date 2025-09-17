@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -7,7 +8,7 @@ import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
-import { filterValueToFrequency } from "./utils/audio";
+import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
@@ -21,6 +22,23 @@ const createInitialPatternGroup = (): PatternGroup => ({
 });
 
 type Subdivision = "16n" | "8n" | "4n";
+
+const CONTROL_BUTTON_SIZE = 44;
+
+const controlButtonBaseStyle: CSSProperties = {
+  width: CONTROL_BUTTON_SIZE,
+  height: CONTROL_BUTTON_SIZE,
+  borderRadius: CONTROL_BUTTON_SIZE / 2,
+  border: "1px solid #333",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+};
+
+const controlIconStyle: CSSProperties = {
+  fontSize: 24,
+};
 
 interface AddTrackModalState {
   isOpen: boolean;
@@ -90,6 +108,7 @@ export default function App() {
   } | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
   const [viewMode, setViewMode] = useState<"track" | "song">("track");
@@ -112,6 +131,22 @@ export default function App() {
     () => (editing !== null ? tracks.find((track) => track.id === editing) ?? null : null),
     [editing, tracks]
   );
+
+  useEffect(() => {
+    setIsRecording(false);
+  }, [editing]);
+
+  const canRecordSelectedTrack = useMemo(() => {
+    if (!selectedTrack || !selectedTrack.instrument) return false;
+    if (!selectedTrack.pattern) return false;
+    return ["arpeggiator", "chord"].includes(selectedTrack.instrument);
+  }, [selectedTrack]);
+
+  const canClearSelectedTrack = Boolean(selectedTrack?.pattern);
+
+  const handleToggleRecording = useCallback(() => {
+    setIsRecording((prev) => !prev);
+  }, []);
 
   const openAddTrackModal = useCallback(() => {
     setAddTrackModalState(() => {
@@ -306,7 +341,14 @@ export default function App() {
     setSongRows([createSongRow()]);
     setCurrentSectionIndex(0);
     if (!started) return;
-    Object.values(instrumentRefs.current).forEach((inst) => inst.dispose?.());
+    const disposed = new Set<ToneInstrument>();
+    Object.values(instrumentRefs.current).forEach((inst) => {
+      if (!inst || inst === noteRef.current || disposed.has(inst)) {
+        return;
+      }
+      inst.dispose?.();
+      disposed.add(inst);
+    });
     instrumentRefs.current = {};
     const newTriggers: TriggerMap = {};
     Object.entries(pack.instruments).forEach(([name, spec]) => {
@@ -340,6 +382,7 @@ export default function App() {
         sustainArg?: number,
         chunk?: Chunk
       ) => {
+        void ensureAudioContextRunning();
         void noteArg;
         void sustainArg;
         const settable = inst as unknown as {
@@ -375,20 +418,27 @@ export default function App() {
       velocity = 1,
       pitch = 0,
       note = "C4",
-      sustain = 0.1,
+      sustain?: number,
       chunk?: Chunk
     ) => {
-      if (chunk) {
-        if (chunk.attack !== undefined) {
-          noteRef.current?.set({ envelope: { attack: chunk.attack } });
-        }
-        if (chunk.sustain !== undefined) {
-          noteRef.current?.set({ envelope: { release: chunk.sustain } });
-        }
-        if (chunk.glide !== undefined) {
-          noteRef.current?.set({ portamento: chunk.glide });
-        }
+      void ensureAudioContextRunning();
+      const releaseOverride =
+        sustain ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+      const envelope: Record<string, number> = {};
+      if (chunk?.attack !== undefined) {
+        envelope.attack = chunk.attack;
+      }
+      if (releaseOverride !== undefined) {
+        envelope.release = releaseOverride;
+      }
+      if (Object.keys(envelope).length > 0) {
+        noteRef.current?.set({ envelope });
+      }
+      if (chunk?.glide !== undefined) {
+        noteRef.current?.set({ portamento: chunk.glide });
+      }
 
+      if (chunk) {
         const fx = keyboardFxRef.current;
         if (fx) {
           if (chunk.pan !== undefined) {
@@ -417,7 +467,8 @@ export default function App() {
         }
       }
       const n = Tone.Frequency(note).transpose(pitch).toNote();
-      noteRef.current?.triggerAttackRelease(n, sustain, time, velocity);
+      const duration = releaseOverride ?? 0.1;
+      noteRef.current?.triggerAttackRelease(n, duration, time, velocity);
     };
     instrumentRefs.current["chord"] = noteRef.current! as ToneInstrument;
     instrumentRefs.current["arpeggiator"] = noteRef.current! as ToneInstrument;
@@ -555,6 +606,39 @@ export default function App() {
     [setTracks]
   );
 
+  const clearTrackPattern = useCallback(
+    (trackId: number) => {
+      updateTrackPattern(trackId, (pattern) => {
+        const length = pattern.steps.length || 16;
+        const steps = Array(length).fill(0);
+        const velocities = pattern.velocities
+          ? pattern.velocities.map(() => 1)
+          : undefined;
+        const pitches = pattern.pitches
+          ? pattern.pitches.map(() => 0)
+          : Array(length).fill(0);
+        const next: Chunk = {
+          ...pattern,
+          steps,
+          velocities,
+          pitches,
+          noteEvents: [],
+          noteLoopLength: undefined,
+        };
+        return next;
+      });
+    },
+    [updateTrackPattern]
+  );
+
+  const handleClearSelectedTrack = useCallback(() => {
+    if (!selectedTrack || !canClearSelectedTrack) return;
+    if (!window.confirm("Clear all steps for this track?")) {
+      return;
+    }
+    clearTrackPattern(selectedTrack.id);
+  }, [selectedTrack, canClearSelectedTrack, clearTrackPattern]);
+
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
     const synth = new Tone.PolySynth(Tone.Synth, {
@@ -583,10 +667,11 @@ export default function App() {
     setCurrentSectionIndex(0);
   };
 
-  const handlePlayPause = () => {
+  const handlePlayStop = () => {
     if (isPlaying) {
-      Tone.Transport.pause();
+      Tone.Transport.stop();
       setIsPlaying(false);
+      setCurrentSectionIndex(0);
       return;
     }
     if (Tone.Transport.state === "stopped") {
@@ -594,12 +679,6 @@ export default function App() {
     }
     Tone.Transport.start();
     setIsPlaying(true);
-  };
-
-  const handleStop = () => {
-    Tone.Transport.stop();
-    setIsPlaying(false);
-    setCurrentSectionIndex(0);
   };
 
   const handleOpenSequenceLibrary = () => {
@@ -802,19 +881,75 @@ export default function App() {
                     }}
                   >
                     {editing !== null ? (
-                      <button
-                        onClick={() => setEditing(null)}
+                      <div
                         style={{
-                          padding: "4px 12px",
-                          borderRadius: 4,
-                          border: "1px solid #333",
-                          background: "#27E0B0",
-                          color: "#1F2532",
-                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
                         }}
                       >
-                        Done
-                      </button>
+                        <button
+                          aria-label="Done editing"
+                          onClick={() => setEditing(null)}
+                          style={{
+                            ...controlButtonBaseStyle,
+                            background: "#27E0B0",
+                            color: "#1F2532",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={controlIconStyle}
+                          >
+                            check
+                          </span>
+                        </button>
+                        {selectedTrack && canRecordSelectedTrack ? (
+                          <button
+                            aria-label={
+                              isRecording ? "Stop recording" : "Start recording"
+                            }
+                            onClick={handleToggleRecording}
+                          style={{
+                              ...controlButtonBaseStyle,
+                              background: isRecording ? "#E02749" : "#111827",
+                              border: `1px solid ${isRecording ? "#E02749" : "#333"}`,
+                              color: isRecording ? "#ffe4e6" : "#f43f5e",
+                            }}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={controlIconStyle}
+                            >
+                              fiber_manual_record
+                            </span>
+                          </button>
+                        ) : null}
+                        <button
+                          aria-label="Clear track"
+                          onClick={handleClearSelectedTrack}
+                          disabled={!canClearSelectedTrack}
+                          style={{
+                            ...controlButtonBaseStyle,
+                            background: canClearSelectedTrack
+                              ? "#1f2532"
+                              : "#111827",
+                            border: `1px solid ${
+                              canClearSelectedTrack ? "#333" : "#1f2937"
+                            }`,
+                            color: canClearSelectedTrack ? "#e6f2ff" : "#475569",
+                            cursor: canClearSelectedTrack ? "pointer" : "not-allowed",
+                            opacity: canClearSelectedTrack ? 1 : 0.6,
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={controlIconStyle}
+                          >
+                            cleaning_services
+                          </span>
+                        </button>
+                      </div>
                     ) : (
                       <>
                         <label>BPM</label>
@@ -866,49 +1001,21 @@ export default function App() {
                   />
                   <div style={{ display: "flex", gap: 12 }}>
                     <button
-                      aria-label={isPlaying ? "Pause" : "Play"}
-                      onPointerDown={handlePlayPause}
+                      aria-label={isPlaying ? "Stop" : "Play"}
+                      onPointerDown={handlePlayStop}
                       onPointerUp={(e) => e.currentTarget.blur()}
                       style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 8,
-                        border: "1px solid #333",
-                        background: "#27E0B0",
-                        color: "#1F2532",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 20,
-                      }}
-                    >
-                      <span className="material-symbols-outlined">
-                        {isPlaying ? "pause" : "play_arrow"}
-                      </span>
-                    </button>
-                    <button
-                      aria-label="Stop"
-                      onPointerDown={handleStop}
-                      onPointerUp={(e) => e.currentTarget.blur()}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 8,
-                        border: "1px solid #333",
-                        background: "#E02749",
-                        color: "#e6f2ff",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 40,
-                        padding: 0,
+                        ...controlButtonBaseStyle,
+                        background: isPlaying ? "#E02749" : "#27E0B0",
+                        color: isPlaying ? "#ffe4e6" : "#1F2532",
+                        fontSize: 24,
                       }}
                     >
                       <span
                         className="material-symbols-outlined"
-                        style={{ lineHeight: 1, width: "100%", height: "100%" }}
+                        style={controlIconStyle}
                       >
-                        stop
+                        {isPlaying ? "stop" : "play_arrow"}
                       </span>
                     </button>
                   </div>
@@ -928,6 +1035,7 @@ export default function App() {
                   {selectedTrack ? (
                     <InstrumentControlPanel
                       track={selectedTrack}
+                      allTracks={tracks}
                       trigger={
                         selectedTrack.instrument
                           ? triggers[selectedTrack.instrument] ?? undefined
@@ -939,6 +1047,8 @@ export default function App() {
                               updateTrackPattern(selectedTrack.id, updater)
                           : undefined
                       }
+                      isRecording={isRecording}
+                      onRecordingChange={setIsRecording}
                     />
                   ) : (
                     <div
@@ -965,8 +1075,7 @@ export default function App() {
                 isPlaying={isPlaying}
                 bpm={bpm}
                 setBpm={setBpm}
-                onPlayPause={handlePlayPause}
-                onStop={handleStop}
+                onToggleTransport={handlePlayStop}
                 selectedGroupId={selectedGroupId}
                 onOpenSequenceLibrary={handleOpenSequenceLibrary}
                 onAddTrack={handleAddTrackRequest}
