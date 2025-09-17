@@ -31,20 +31,11 @@ const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";
 const getInstrumentColor = (instrument: string) =>
   baseInstrumentColors[instrument] ?? FALLBACK_INSTRUMENT_COLOR;
 
-const formatInstrumentLabel = (value: string) =>
-  value
-    .split(/[-_]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-
 const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   const index = tracks.findIndex((track) => track.id === trackId);
   const number = index >= 0 ? index + 1 : trackId;
   return number.toString().padStart(2, "0");
 };
-
-const formatPitchDisplay = (value: number) =>
-  value > 0 ? `+${value}` : value.toString();
 
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
@@ -61,7 +52,15 @@ const cloneChunk = (chunk: Chunk): Chunk => ({
 const cloneTrack = (track: Track): Track => ({
   ...track,
   pattern: track.pattern ? cloneChunk(track.pattern) : null,
+  source: track.source ? { ...track.source } : undefined,
 });
+
+export interface AddTrackRequest {
+  packId: string;
+  instrumentId: string;
+  characterId: string;
+  presetId?: string | null;
+}
 
 type GroupEditorState =
   | {
@@ -77,6 +76,9 @@ type GroupEditorState =
 export interface LoopStripHandle {
   openSequenceLibrary: () => void;
   addTrack: () => void;
+  addTrackWithOptions: (options: AddTrackRequest) => void;
+  updateTrackWithOptions: (trackId: number, options: AddTrackRequest) => void;
+  removeTrack: (trackId: number) => void;
 }
 
 interface LoopStripProps {
@@ -87,11 +89,12 @@ interface LoopStripProps {
   setEditing: Dispatch<SetStateAction<number | null>>;
   setTracks: Dispatch<SetStateAction<Track[]>>;
   packIndex: number;
-  setPackIndex: Dispatch<SetStateAction<number>>;
   patternGroups: PatternGroup[];
   setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
   selectedGroupId: string | null;
   setSelectedGroupId: Dispatch<SetStateAction<string | null>>;
+  onAddTrack: () => void;
+  onRequestTrackModal: (track: Track) => void;
 }
 
 /**
@@ -110,11 +113,12 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       setEditing,
       setTracks,
       packIndex,
-      setPackIndex,
       patternGroups,
       setPatternGroups,
       selectedGroupId,
       setSelectedGroupId,
+      onAddTrack,
+      onRequestTrackModal,
     },
     ref
   ) {
@@ -123,15 +127,13 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const [stepEditing, setStepEditing] = useState<
     { trackId: number; index: number } | null
   >(null);
-  const [detailTrackId, setDetailTrackId] = useState<number | null>(null);
-  const [pendingTrackIds, setPendingTrackIds] = useState<number[]>([]);
   const [isSequenceLibraryOpen, setIsSequenceLibraryOpen] = useState(false);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const pack = packs[packIndex];
   const instrumentOptions = Object.keys(pack.instruments);
   const canAddTrack = instrumentOptions.length > 0;
-  const addTrackEnabled = canAddTrack && detailTrackId === null;
+  const addTrackEnabled = canAddTrack;
   const selectedGroup = useMemo(() => {
     if (!selectedGroupId) return null;
     return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
@@ -157,12 +159,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     (group: PatternGroup | null) => {
       const cloned = group ? group.tracks.map((track) => cloneTrack(track)) : [];
       setTracks(cloned);
-      setPendingTrackIds([]);
       setEditing(null);
-      setDetailTrackId(null);
       setStepEditing(null);
     },
-    [setTracks, setPendingTrackIds, setEditing, setDetailTrackId, setStepEditing]
+    [setTracks, setEditing, setStepEditing]
   );
 
   const isCreatingGroup = groupEditor?.mode === "create";
@@ -208,21 +208,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       }
     }
   }, [groupEditor, patternGroups]);
-
-  useEffect(() => {
-    if (detailTrackId === null) return;
-    if (!tracks.some((track) => track.id === detailTrackId)) {
-      setDetailTrackId(null);
-    }
-  }, [detailTrackId, tracks]);
-
-  useEffect(() => {
-    setPendingTrackIds((ids) => {
-      const activeIds = new Set(tracks.map((track) => track.id));
-      const filtered = ids.filter((id) => activeIds.has(id));
-      return filtered.length === ids.length ? ids : filtered;
-    });
-  }, [tracks]);
 
   // Schedule a step advance on each 16th note when audio has started.
   useEffect(() => {
@@ -289,26 +274,155 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       ];
     });
     if (createdId !== null) {
-      const newId = createdId;
-      setPendingTrackIds((ids) => [...ids, newId]);
-      setEditing(newId);
-      setDetailTrackId(newId);
+      setEditing(createdId);
     }
   }, [
     addTrackEnabled,
     setTracks,
-    setPendingTrackIds,
     setEditing,
-    setDetailTrackId,
   ]);
+
+  const handleAddTrackWithOptions = useCallback(
+    ({ packId, instrumentId, characterId, presetId }: AddTrackRequest) => {
+      if (!addTrackEnabled) return;
+      if (!instrumentId) return;
+      const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
+      if (!activePack || activePack.id !== pack.id) {
+        return;
+      }
+      let createdId: number | null = null;
+      setTracks((ts) => {
+        const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
+        const label = (ts.length + 1).toString().padStart(2, "0");
+        const preset = presetId
+          ? activePack.chunks.find((chunk) => chunk.id === presetId)
+          : null;
+        const pattern: Chunk = preset
+          ? {
+              ...cloneChunk(preset),
+              id: `${preset.id}-${Date.now()}`,
+              instrument: instrumentId,
+              name: preset.name,
+            }
+          : {
+              id: `track-${nextId}-${Date.now()}`,
+              name: `Track ${label} Pattern`,
+              instrument: instrumentId,
+              steps: Array(16).fill(0),
+              velocities: Array(16).fill(1),
+              pitches: Array(16).fill(0),
+            };
+        createdId = nextId;
+        return [
+          ...ts,
+          {
+            id: nextId,
+            name: label,
+            instrument: instrumentId as keyof TriggerMap,
+            pattern,
+            muted: false,
+            source: {
+              packId,
+              instrumentId,
+              characterId,
+              presetId: presetId ?? null,
+            },
+          },
+        ];
+      });
+      if (createdId !== null) {
+        setEditing(createdId);
+      }
+    },
+    [
+      addTrackEnabled,
+      pack,
+      setTracks,
+      setEditing,
+    ]
+  );
+
+  const handleUpdateTrackWithOptions = useCallback(
+    (
+      trackId: number,
+      { packId, instrumentId, characterId, presetId }: AddTrackRequest
+    ) => {
+      if (!instrumentId) return;
+      const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
+      if (!activePack || activePack.id !== pack.id) {
+        return;
+      }
+      setTracks((ts) =>
+        ts.map((t) => {
+          if (t.id !== trackId) return t;
+          const preset = presetId
+            ? activePack.chunks.find((chunk) => chunk.id === presetId)
+            : null;
+          const nextPattern: Chunk | null = preset
+            ? {
+                ...cloneChunk(preset),
+                id: `${preset.id}-${Date.now()}`,
+                instrument: instrumentId,
+                name: preset.name,
+              }
+            : t.pattern
+            ? { ...t.pattern, instrument: instrumentId }
+            : {
+                id: `track-${trackId}-${Date.now()}`,
+                name: t.name,
+                instrument: instrumentId,
+                steps: Array(16).fill(0),
+                velocities: Array(16).fill(1),
+                pitches: Array(16).fill(0),
+              };
+          const nextName = preset ? preset.name : t.name;
+          return {
+            ...t,
+            name: nextName,
+            instrument: instrumentId as keyof TriggerMap,
+            pattern: nextPattern,
+            source: {
+              packId,
+              instrumentId,
+              characterId,
+              presetId: presetId ?? null,
+            },
+          };
+        })
+      );
+      setEditing(trackId);
+    },
+    [pack, setTracks, setEditing]
+  );
+
+  const removeTrack = useCallback(
+    (trackId: number) => {
+      setTracks((ts) => ts.filter((t) => t.id !== trackId));
+      setEditing((current) => (current === trackId ? null : current));
+      setStepEditing((current) =>
+        current && current.trackId === trackId ? null : current
+      );
+    },
+    [setTracks, setEditing, setStepEditing]
+  );
 
   useImperativeHandle(
     ref,
     () => ({
       openSequenceLibrary: () => setIsSequenceLibraryOpen(true),
       addTrack: () => handleAddTrack(),
+      addTrackWithOptions: (options: AddTrackRequest) =>
+        handleAddTrackWithOptions(options),
+      updateTrackWithOptions: (trackId: number, options: AddTrackRequest) =>
+        handleUpdateTrackWithOptions(trackId, options),
+      removeTrack: (trackId: number) => removeTrack(trackId),
     }),
-    [handleAddTrack]
+    [
+      handleAddTrack,
+      handleAddTrackWithOptions,
+      handleUpdateTrackWithOptions,
+      removeTrack,
+    ]
   );
 
   const handleToggleMute = (trackId: number) => {
@@ -322,72 +436,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           : t
       )
     );
-  };
-
-  const showTrackDetails = (trackId: number) => {
-    setDetailTrackId(trackId);
-    setEditing(trackId);
-  };
-
-  const handleInstrumentChange = (trackId: number, value: string) => {
-    setTracks((ts) =>
-      ts.map((t) => {
-        if (t.id !== trackId) return t;
-        if (!value) {
-          return {
-            ...t,
-            instrument: "",
-          };
-        }
-        const instrument = value as keyof TriggerMap;
-        const pattern = t.pattern
-          ? { ...t.pattern, instrument }
-          : t.pattern;
-        return {
-          ...t,
-          instrument,
-          pattern,
-        };
-      })
-    );
-  };
-
-  const handlePresetLoad = (trackId: number, chunkId: string) => {
-    if (!chunkId) return;
-    const chunk = pack.chunks.find((c) => c.id === chunkId);
-    if (!chunk) return;
-    loadChunk(chunk, trackId);
-  };
-
-  const hideTrackDetails = () => setDetailTrackId(null);
-
-  const removeTrack = (trackId: number) => {
-    setTracks((ts) => ts.filter((t) => t.id !== trackId));
-    setPendingTrackIds((ids) => {
-      if (!ids.includes(trackId)) return ids;
-      return ids.filter((id) => id !== trackId);
-    });
-    setEditing((current) => (current === trackId ? null : current));
-    setDetailTrackId((current) => (current === trackId ? null : current));
-    setStepEditing((current) =>
-      current && current.trackId === trackId ? null : current
-    );
-  };
-
-  const handleCancelNewTrack = (trackId: number) => {
-    removeTrack(trackId);
-  };
-
-  const handleDeleteTrack = (trackId: number) => {
-    removeTrack(trackId);
-  };
-
-  const handleCompleteTrack = (trackId: number) => {
-    setPendingTrackIds((ids) => {
-      if (!ids.includes(trackId)) return ids;
-      return ids.filter((id) => id !== trackId);
-    });
-    hideTrackDetails();
   };
 
   const openCreateGroup = () => {
@@ -563,52 +611,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     );
   };
 
-  const updatePatternControls = (
-    trackId: number,
-    props: { velocity?: number; pitch?: number }
-  ) => {
-    setTracks((ts) =>
-      ts.map((t) => {
-        if (t.id === trackId && t.pattern) {
-          const velocities = t.pattern.velocities
-            ? t.pattern.velocities.slice()
-            : Array(16).fill(1);
-          const pitches = t.pattern.pitches
-            ? t.pattern.pitches.slice()
-            : Array(16).fill(0);
-          if (props.velocity !== undefined)
-            velocities.fill(props.velocity);
-          if (props.pitch !== undefined) pitches.fill(props.pitch);
-          return {
-            ...t,
-            pattern: { ...t.pattern, velocities, pitches },
-          };
-        }
-        return t;
-      })
-    );
-  };
-
-
-  const loadChunk = (chunk: Chunk, targetTrackId: number) => {
-    setTracks((ts) => {
-      const exists = ts.some((t) => t.id === targetTrackId);
-      if (!exists) return ts;
-      return ts.map((t) =>
-        t.id === targetTrackId
-          ? {
-              ...t,
-              name: chunk.name,
-              instrument: chunk.instrument as keyof TriggerMap,
-              pattern: { ...chunk },
-            }
-          : t
-      );
-    });
-    setEditing(targetTrackId);
-    setDetailTrackId(targetTrackId);
-  };
-
   return (
     <div
       style={{
@@ -661,7 +663,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         </button>
         <button
           type="button"
-          onClick={handleAddTrack}
+          onClick={() => {
+            if (!addTrackEnabled) return;
+            onAddTrack();
+          }}
           disabled={!addTrackEnabled}
           style={{
             padding: "6px 16px",
@@ -680,26 +685,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         >
           + Track
         </button>
-      </div>
-      <div style={{ marginBottom: 4 }}>
-        <select
-          value={packIndex}
-          onChange={(event) => setPackIndex(Number(event.target.value))}
-          style={{
-            width: "100%",
-            padding: 4,
-            borderRadius: 4,
-            background: "#121827",
-            color: "white",
-            border: "1px solid #333",
-          }}
-        >
-          {packs.map((p, i) => (
-            <option key={p.id} value={i}>
-              {p.name}
-            </option>
-          ))}
-        </select>
       </div>
       <div
         ref={trackAreaRef}
@@ -732,10 +717,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const color = getInstrumentColor(t.instrument);
           const isMuted = t.muted;
           const isEditing = editing === t.id;
-          const isPending = pendingTrackIds.includes(t.id);
           const trackLabel = getTrackNumberLabel(tracks, t.id);
-          const velocityValue = t.pattern?.velocities?.[0] ?? 1;
-          const pitchValue = t.pattern?.pitches?.[0] ?? 0;
 
           const handleLabelPointerDown = (
             event: ReactPointerEvent<HTMLDivElement>
@@ -745,7 +727,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             if (labelTimer) window.clearTimeout(labelTimer);
             labelTimer = window.setTimeout(() => {
               longPressTriggered = true;
-              showTrackDetails(t.id);
+              onRequestTrackModal(t);
             }, 500);
           };
 
@@ -901,334 +883,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                       New Pattern
                     </button>
                   )}
-                  {detailTrackId === t.id && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        zIndex: 1,
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "center",
-                        padding: "8px 12px",
-                        gap: 12,
-                        background: "rgba(17, 24, 39, 0.95)",
-                        border: "1px solid #2a3344",
-                        borderRadius: 6,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 12,
-                          width: "100%",
-                          flexWrap: "nowrap",
-                          alignItems: "center",
-                        }}
-                      >
-                        <select
-                          value={t.instrument}
-                          onChange={(event) =>
-                            handleInstrumentChange(t.id, event.target.value)
-                          }
-                          aria-label="Select instrument"
-                          style={{
-                            flex: "1 1 0%",
-                            minWidth: 0,
-                            padding: 6,
-                            borderRadius: 6,
-                            border: "1px solid #333",
-                            background: "#1f2532",
-                            color: t.instrument ? "#e6f2ff" : "#64748b",
-                          }}
-                        >
-                          <option value="" disabled>
-                            Select instrument
-                          </option>
-                          {instrumentOptions.map((instrument) => (
-                            <option key={instrument} value={instrument}>
-                              {formatInstrumentLabel(instrument)}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value=""
-                          onChange={(event) =>
-                            handlePresetLoad(t.id, event.target.value)
-                          }
-                          aria-label="Preset (optional)"
-                          disabled={!t.instrument}
-                          style={{
-                            flex: "1 1 0%",
-                            minWidth: 0,
-                            padding: 6,
-                            borderRadius: 6,
-                            border: "1px solid #333",
-                            background: "#1f2532",
-                            color: t.instrument ? "#e6f2ff" : "#475569",
-                            opacity: t.instrument ? 1 : 0.5,
-                          }}
-                        >
-                          <option value="">Preset (optional)</option>
-                          {pack.chunks
-                            .filter((chunk) => chunk.instrument === t.instrument)
-                            .map((chunk) => (
-                              <option key={chunk.id} value={chunk.id}>
-                                {chunk.name}
-                              </option>
-                            ))}
-                        </select>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 8,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {isPending ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleCancelNewTrack(t.id)}
-                                aria-label="Cancel new track"
-                                title="Cancel new track"
-                                style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 6,
-                                  border: "1px solid #333",
-                                  background: "#1f2532",
-                                  color: "#e6f2ff",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <span
-                                  className="material-symbols-outlined"
-                                  style={{ fontSize: 20 }}
-                                >
-                                  close
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleCompleteTrack(t.id)}
-                                disabled={!t.instrument}
-                                aria-label="Done editing track"
-                                title="Done editing track"
-                                style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 6,
-                                  border: "1px solid #333",
-                                  background: t.instrument ? "#27E0B0" : "#1f2532",
-                                  color: t.instrument ? "#0f1420" : "#475569",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: t.instrument ? "pointer" : "not-allowed",
-                                }}
-                              >
-                                <span
-                                  className="material-symbols-outlined"
-                                  style={{ fontSize: 20 }}
-                                >
-                                  check
-                                </span>
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleCompleteTrack(t.id)}
-                                aria-label="Done editing track"
-                                title="Done editing track"
-                                style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 6,
-                                  border: "1px solid #333",
-                                  background: "#27E0B0",
-                                  color: "#0f1420",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <span
-                                  className="material-symbols-outlined"
-                                  style={{ fontSize: 20 }}
-                                >
-                                  check
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteTrack(t.id)}
-                                aria-label="Delete track"
-                                title="Delete track"
-                                style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 6,
-                                  border: "1px solid #333",
-                                  background: "#1f2532",
-                                  color: "#f87171",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <span
-                                  className="material-symbols-outlined"
-                                  style={{ fontSize: 20 }}
-                                >
-                                  delete
-                                </span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
-              {detailTrackId === t.id && (
-                <div
-                  style={{
-                    marginLeft: LABEL_WIDTH,
-                    marginTop: 6,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: 12,
-                      background: "rgba(15, 21, 34, 0.95)",
-                      borderRadius: 8,
-                      border: "1px solid #333",
-                      boxShadow: "0 8px 18px rgba(8, 12, 20, 0.6)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 12,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 12,
-                        alignItems: "center",
-                      }}
-                    >
-                      <label
-                        style={{
-                          flex: "1 1 260px",
-                          minWidth: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          fontSize: 12,
-                          color: t.pattern ? "#94a3b8" : "#475569",
-                        }}
-                      >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{ fontSize: 18 }}
-                          aria-hidden="true"
-                        >
-                          speed
-                        </span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={velocityValue}
-                          onChange={(event) =>
-                            updatePatternControls(t.id, {
-                              velocity: Number(event.target.value),
-                            })
-                          }
-                          style={{
-                            flex: 1,
-                            opacity: t.pattern ? 1 : 0.4,
-                            cursor: t.pattern ? "pointer" : "not-allowed",
-                          }}
-                          aria-label="Velocity"
-                          title="Velocity"
-                          disabled={!t.pattern}
-                        />
-                        <span
-                          style={{
-                            width: 48,
-                            textAlign: "right",
-                            color: t.pattern ? "#94a3b8" : "#475569",
-                          }}
-                        >
-                          {velocityValue.toFixed(2)}
-                        </span>
-                      </label>
-                      <label
-                        style={{
-                          flex: "1 1 260px",
-                          minWidth: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          fontSize: 12,
-                          color: t.pattern ? "#94a3b8" : "#475569",
-                        }}
-                      >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{ fontSize: 18 }}
-                          aria-hidden="true"
-                        >
-                          music_note
-                        </span>
-                        <input
-                          type="range"
-                          min={-12}
-                          max={12}
-                          step={1}
-                          value={pitchValue}
-                          onChange={(event) =>
-                            updatePatternControls(t.id, {
-                              pitch: Number(event.target.value),
-                            })
-                          }
-                          style={{
-                            flex: 1,
-                            opacity: t.pattern ? 1 : 0.4,
-                            cursor: t.pattern ? "pointer" : "not-allowed",
-                          }}
-                          aria-label="Pitch"
-                          title="Pitch"
-                          disabled={!t.pattern}
-                        />
-                        <span
-                          style={{
-                            width: 48,
-                            textAlign: "right",
-                            color: t.pattern ? "#94a3b8" : "#475569",
-                          }}
-                        >
-                          {formatPitchDisplay(pitchValue)}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
