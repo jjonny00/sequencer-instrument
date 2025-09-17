@@ -11,7 +11,7 @@ import * as Tone from "tone";
 import type { Chunk, NoteEvent } from "./chunks";
 import type { Track } from "./tracks";
 import { formatInstrumentLabel } from "./utils/instrument";
-import { filterValueToFrequency } from "./utils/audio";
+import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
 import { ARP_PRESETS } from "./arpPresets";
 
 interface InstrumentControlPanelProps {
@@ -699,6 +699,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     (degreeIndex: number) => {
       stopArpPlayback({ preserveState: true });
       if (!trigger || !pattern) return;
+      void ensureAudioContextRunning();
       const octaves = Math.max(1, pattern.arpOctaves ?? 1);
       const style = pattern.style ?? "up";
       const mode = pattern.timingMode === "free" ? "free" : "sync";
@@ -844,6 +845,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const triggerKeyboardNote = (note: string) => {
     if (!trigger || !pattern) return;
+    void ensureAudioContextRunning();
     const bend = pattern.pitchBend ?? 0;
     const sustain = pattern.sustain ?? 0.8;
     const noteName = bend ? Tone.Frequency(note).transpose(bend).toNote() : note;

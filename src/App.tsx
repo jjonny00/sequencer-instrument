@@ -8,7 +8,7 @@ import type { Chunk } from "./chunks";
 import { packs } from "./packs";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
-import { filterValueToFrequency } from "./utils/audio";
+import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
@@ -382,6 +382,7 @@ export default function App() {
         sustainArg?: number,
         chunk?: Chunk
       ) => {
+        void ensureAudioContextRunning();
         void noteArg;
         void sustainArg;
         const settable = inst as unknown as {
@@ -420,6 +421,7 @@ export default function App() {
       sustain?: number,
       chunk?: Chunk
     ) => {
+      void ensureAudioContextRunning();
       const releaseOverride =
         sustain ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
       const envelope: Record<string, number> = {};

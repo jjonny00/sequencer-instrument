@@ -1,3 +1,5 @@
+import * as Tone from "tone";
+
 const MIN_FILTER_FREQUENCY = 80;
 const MAX_FILTER_FREQUENCY = 12000;
 
@@ -17,5 +19,17 @@ export const frequencyToFilterValue = (frequency: number) => {
   const clamped = clamp(frequency, MIN_FILTER_FREQUENCY, MAX_FILTER_FREQUENCY);
   const freqLog = Math.log(clamped);
   return (freqLog - minLog) / (maxLog - minLog);
+};
+
+export const ensureAudioContextRunning = () => {
+  const context = Tone.getContext();
+  if (context.state === "running") {
+    return Promise.resolve();
+  }
+  try {
+    return context.resume();
+  } catch {
+    return Promise.resolve();
+  }
 };
 
