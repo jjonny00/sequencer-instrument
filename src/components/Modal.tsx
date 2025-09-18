@@ -65,29 +65,32 @@ export const Modal: FC<ModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    const win: (Window & typeof globalThis) | null =
-      typeof window !== "undefined" ? window : null;
-    const doc: Document | null =
-      typeof document !== "undefined" ? document : null;
+
+    const win = typeof window !== "undefined" ? window : undefined;
+    const doc = typeof document !== "undefined" ? document : undefined;
     if (!win || !doc) {
       return;
     }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
       }
     };
+
     win.addEventListener("keydown", handleKeyDown);
-    const { body } = doc;
-    const previousOverflow = body.style.overflow;
-    body.style.overflow = "hidden";
+
+    const body = doc.body ?? null;
+    const previousOverflow = body ? body.style.overflow : undefined;
+    if (body) {
+      body.style.overflow = "hidden";
+    }
+
     return () => {
-      if (win) {
-        win.removeEventListener("keydown", handleKeyDown);
-      }
+      win.removeEventListener("keydown", handleKeyDown);
       if (body) {
-        body.style.overflow = previousOverflow;
+        body.style.overflow = previousOverflow ?? "";
       }
     };
   }, [isOpen, onClose]);
@@ -107,23 +110,23 @@ export const Modal: FC<ModalProps> = ({
     updateHeight();
 
     const win = typeof window !== "undefined" ? window : undefined;
+    let observer: ResizeObserver | null = null;
+    let didAttachResizeListener = false;
 
-    if (win && "ResizeObserver" in win) {
-      const observer = new ResizeObserver(() => updateHeight());
+    if (win?.ResizeObserver) {
+      observer = new win.ResizeObserver(updateHeight);
       observer.observe(element);
-      return () => {
-        observer.disconnect();
-      };
-    }
-
-    if (win) {
+    } else if (win) {
       win.addEventListener("resize", updateHeight);
-      return () => {
-        win.removeEventListener("resize", updateHeight);
-      };
+      didAttachResizeListener = true;
     }
 
-    return undefined;
+    return () => {
+      observer?.disconnect();
+      if (didAttachResizeListener && win) {
+        win.removeEventListener("resize", updateHeight);
+      }
+    };
   }, [footer, isOpen]);
 
   if (!isOpen) return null;
