@@ -112,8 +112,11 @@ export const Modal: FC<ModalProps> = ({
     gap: 16,
     overflowY: "auto",
     minHeight: 0,
-    flex: "1 1 auto",
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: "0%",
     WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
   };
 
   return (
