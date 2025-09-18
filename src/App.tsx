@@ -14,6 +14,13 @@ import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
+import {
+  deleteProject,
+  listProjects,
+  loadProject as loadStoredProject,
+  saveProject as saveStoredProject,
+  type StoredProjectData,
+} from "./storage";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -91,6 +98,7 @@ export default function App() {
   const [subdiv, setSubdiv] = useState<Subdivision>("16n");
   const [isPlaying, setIsPlaying] = useState(false);
   const [packIndex, setPackIndex] = useState(0);
+  const [toneGraphVersion, setToneGraphVersion] = useState(0);
 
   // Instruments (kept across renders)
   type ToneInstrument = Tone.ToneAudioNode & {
@@ -134,10 +142,20 @@ export default function App() {
   const [addTrackModalState, setAddTrackModalState] = useState<AddTrackModalState>(
     () => createDefaultAddTrackState(packIndex)
   );
+  const [projectModalMode, setProjectModalMode] = useState<"save" | "load" | null>(
+    null
+  );
+  const [projectNameInput, setProjectNameInput] = useState("");
+  const [projectList, setProjectList] = useState<string[]>([]);
+  const [projectModalError, setProjectModalError] = useState<string | null>(
+    null
+  );
   const selectedTrack = useMemo(
     () => (editing !== null ? tracks.find((track) => track.id === editing) ?? null : null),
     [editing, tracks]
   );
+  const restorationRef = useRef(false);
+  const pendingTransportStateRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     setIsRecording(false);
@@ -361,10 +379,13 @@ export default function App() {
       return filtered.length === prev.length ? prev : filtered;
     });
     setEditing(null);
-    const initialGroup = createInitialPatternGroup();
-    setPatternGroups([initialGroup]);
-    setSongRows([createSongRow()]);
-    setCurrentSectionIndex(0);
+    if (!restorationRef.current) {
+      const initialGroup = createInitialPatternGroup();
+      setPatternGroups([initialGroup]);
+      setSongRows([createSongRow()]);
+      setCurrentSectionIndex(0);
+      setSelectedGroupId(null);
+    }
 
     const disposeAll = () => {
       Object.values(instrumentRefs.current).forEach((inst) => {
@@ -595,11 +616,12 @@ export default function App() {
     });
 
     setTriggers(newTriggers);
+    restorationRef.current = false;
 
     return () => {
       disposeAll();
     };
-  }, [packIndex, started]);
+  }, [packIndex, started, restorationRef, toneGraphVersion]);
 
   useEffect(() => {
     if (patternGroups.length === 0) {
@@ -764,6 +786,143 @@ export default function App() {
     clearTrackPattern(selectedTrack.id);
   }, [selectedTrack, canClearSelectedTrack, clearTrackPattern]);
 
+  const buildProjectSnapshot = useCallback((): StoredProjectData => ({
+    packIndex,
+    bpm,
+    subdivision: subdiv,
+    isPlaying,
+    tracks,
+    patternGroups,
+    songRows,
+    selectedGroupId,
+    currentSectionIndex,
+  }), [
+    packIndex,
+    bpm,
+    subdiv,
+    isPlaying,
+    tracks,
+    patternGroups,
+    songRows,
+    selectedGroupId,
+    currentSectionIndex,
+  ]);
+
+  const refreshProjectList = useCallback(() => {
+    setProjectList(listProjects());
+  }, []);
+
+  useEffect(() => {
+    if (!projectModalMode) return;
+    refreshProjectList();
+  }, [projectModalMode, refreshProjectList]);
+
+  const openSaveProjectModal = () => {
+    setProjectModalMode("save");
+    setProjectNameInput("");
+    setProjectModalError(null);
+  };
+
+  const openLoadProjectModal = () => {
+    setProjectModalMode("load");
+    setProjectNameInput("");
+    setProjectModalError(null);
+  };
+
+  const closeProjectModal = () => {
+    setProjectModalMode(null);
+    setProjectNameInput("");
+    setProjectModalError(null);
+  };
+
+  const handleConfirmSaveProject = () => {
+    const trimmed = projectNameInput.trim();
+    if (!trimmed) {
+      setProjectModalError("Enter a project name");
+      return;
+    }
+    try {
+      const snapshot = buildProjectSnapshot();
+      saveStoredProject(trimmed, snapshot);
+      setProjectModalError(null);
+      refreshProjectList();
+      setProjectModalMode(null);
+    } catch (error) {
+      console.error(error);
+      setProjectModalError("Failed to save project");
+    }
+  };
+
+  const applyTransportState = useCallback((shouldPlay: boolean) => {
+    if (!started) {
+      pendingTransportStateRef.current = shouldPlay;
+      setIsPlaying(false);
+      return;
+    }
+    Tone.Transport.stop();
+    setIsPlaying(false);
+    if (shouldPlay) {
+      Tone.Transport.start();
+      setIsPlaying(true);
+    }
+  }, [started]);
+
+  const applyLoadedProject = useCallback(
+    (project: StoredProjectData) => {
+      restorationRef.current = true;
+      const packCount = packs.length;
+      const nextPackIndex =
+        project.packIndex >= 0 && project.packIndex < packCount
+          ? project.packIndex
+          : 0;
+      setPackIndex(nextPackIndex);
+      setBpm(project.bpm ?? 120);
+      if (project.subdivision && ["16n", "8n", "4n"].includes(project.subdivision)) {
+        setSubdiv(project.subdivision as Subdivision);
+      }
+      setTracks(project.tracks);
+      setPatternGroups(
+        project.patternGroups.length > 0
+          ? project.patternGroups
+          : [createInitialPatternGroup()]
+      );
+      setSongRows(
+        project.songRows.length > 0
+          ? project.songRows
+          : [createSongRow()]
+      );
+      setSelectedGroupId(project.selectedGroupId ?? null);
+      setCurrentSectionIndex(project.currentSectionIndex ?? 0);
+      setEditing(null);
+      setIsRecording(false);
+      applyTransportState(project.isPlaying ?? false);
+      setToneGraphVersion((value) => value + 1);
+    },
+    [applyTransportState]
+  );
+
+  const handleLoadProjectByName = useCallback(
+    (name: string) => {
+      const project = loadStoredProject(name);
+      if (!project) {
+        setProjectModalError("Project not found");
+        return;
+      }
+      applyLoadedProject(project);
+      setProjectModalMode(null);
+      setProjectModalError(null);
+    },
+    [applyLoadedProject]
+  );
+
+  const handleDeleteProject = useCallback(
+    (name: string) => {
+      deleteProject(name);
+      refreshProjectList();
+    },
+    [refreshProjectList]
+  );
+
   const initAudioGraph = async () => {
     await Tone.start(); // iOS unlock
     Tone.Transport.bpm.value = bpm;
@@ -771,6 +930,11 @@ export default function App() {
     setStarted(true);
     setIsPlaying(true);
     setCurrentSectionIndex(0);
+    if (pendingTransportStateRef.current === false) {
+      Tone.Transport.stop();
+      setIsPlaying(false);
+      pendingTransportStateRef.current = null;
+    }
   };
 
   const handlePlayStop = () => {
@@ -786,6 +950,19 @@ export default function App() {
     Tone.Transport.start();
     setIsPlaying(true);
   };
+
+  useEffect(() => {
+    if (!started) return;
+    if (pendingTransportStateRef.current === null) return;
+    const shouldPlay = pendingTransportStateRef.current;
+    pendingTransportStateRef.current = null;
+    Tone.Transport.stop();
+    setIsPlaying(false);
+    if (shouldPlay) {
+      Tone.Transport.start();
+      setIsPlaying(true);
+    }
+  }, [started]);
 
   const handleOpenSequenceLibrary = () => {
     if (viewMode !== "track") {
@@ -880,21 +1057,246 @@ export default function App() {
             : undefined
         }
       />
-      {!started ? (
-        <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
-          <button
-            onClick={initAudioGraph}
+      {projectModalMode && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(9, 12, 20, 0.8)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 20,
+          }}
+        >
+          <div
             style={{
-              padding: "16px 24px",
-              fontSize: "1.25rem",
-              borderRadius: 9999,
-              border: "1px solid #333",
-              background: "#27E0B0",
-              color: "#1F2532"
+              background: "#111827",
+              borderRadius: 16,
+              padding: 24,
+              width: "min(420px, 100%)",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
             }}
           >
-            Start Jam
-          </button>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ fontSize: "1.1rem", fontWeight: 600 }}>
+                {projectModalMode === "save" ? "Save Project" : "Load Project"}
+              </div>
+              <button
+                onClick={closeProjectModal}
+                aria-label="Close"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94a3b8",
+                  fontSize: 24,
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+            {projectModalMode === "save" ? (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <label style={{ fontSize: 14, color: "#cbd5f5" }} htmlFor="project-name">
+                    Project name
+                  </label>
+                  <input
+                    id="project-name"
+                    value={projectNameInput}
+                    onChange={(event) => setProjectNameInput(event.target.value)}
+                    placeholder="My Jam"
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #2a3344",
+                      background: "#0f172a",
+                      color: "#e6f2ff",
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    maxHeight: "40vh",
+                    overflowY: "auto",
+                  }}
+                >
+                  {projectList.length === 0 ? (
+                    <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                      No saved projects yet.
+                    </div>
+                  ) : (
+                    projectList.map((name) => (
+                      <button
+                        key={name}
+                        onClick={() => setProjectNameInput(name)}
+                        style={{
+                          textAlign: "left",
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #1f2937",
+                          background:
+                            projectNameInput.trim() === name ? "#1f2937" : "#0f172a",
+                          color: "#e6f2ff",
+                        }}
+                      >
+                        {name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  maxHeight: "50vh",
+                  overflowY: "auto",
+                }}
+              >
+                {projectList.length === 0 ? (
+                  <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                    No saved projects found.
+                  </div>
+                ) : (
+                  projectList.map((name) => (
+                    <div
+                      key={name}
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                      }}
+                    >
+                      <button
+                        onClick={() => handleLoadProjectByName(name)}
+                        style={{
+                          flex: 1,
+                          textAlign: "left",
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #1f2937",
+                          background: "#0f172a",
+                          color: "#e6f2ff",
+                        }}
+                      >
+                        {name}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProject(name)}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          border: "1px solid #3f4a61",
+                          background: "#1f2532",
+                          color: "#f87171",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+            {projectModalError && (
+              <div style={{ color: "#f87171", fontSize: 13 }}>
+                {projectModalError}
+              </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 12,
+              }}
+            >
+              <button
+                onClick={closeProjectModal}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #2a3344",
+                  background: "#1f2532",
+                  color: "#e6f2ff",
+                }}
+              >
+                Cancel
+              </button>
+              {projectModalMode === "save" ? (
+                <button
+                  onClick={handleConfirmSaveProject}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: 8,
+                    border: "1px solid #27E0B0",
+                    background: "#27E0B0",
+                    color: "#1F2532",
+                    fontWeight: 600,
+                  }}
+                >
+                  Save
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+      {!started ? (
+        <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              alignItems: "center",
+            }}
+          >
+            <button
+              onClick={initAudioGraph}
+              style={{
+                padding: "16px 24px",
+                fontSize: "1.25rem",
+                borderRadius: 9999,
+                border: "1px solid #333",
+                background: "#27E0B0",
+                color: "#1F2532"
+              }}
+            >
+              Start Jam
+            </button>
+            <button
+              onClick={openLoadProjectModal}
+              style={{
+                padding: "12px 18px",
+                borderRadius: 9999,
+                border: "1px solid #333",
+                background: "#1f2532",
+                color: "#e6f2ff",
+              }}
+            >
+              Load Project
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -937,6 +1339,40 @@ export default function App() {
                 }}
               >
                 Song
+              </button>
+            </div>
+            <div
+              style={{
+                marginTop: 12,
+                display: "flex",
+                gap: 8,
+              }}
+            >
+              <button
+                onClick={openSaveProjectModal}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: "#1f2532",
+                  color: "#e6f2ff",
+                }}
+              >
+                Save Project
+              </button>
+              <button
+                onClick={openLoadProjectModal}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background: "#1f2532",
+                  color: "#e6f2ff",
+                }}
+              >
+                Load Project
               </button>
             </div>
           </div>
