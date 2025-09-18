@@ -42,6 +42,7 @@ const modalStyle: CSSProperties = {
   flexDirection: "column",
   gap: 20,
   maxHeight: "90vh",
+  minHeight: 0,
 };
 
 export const Modal: FC<ModalProps> = ({
@@ -97,12 +98,23 @@ export const Modal: FC<ModalProps> = ({
         border: "none",
         maxWidth: "100%",
         width: "100%",
-        height: "100%",
-        maxHeight: "100%",
+        height: "100dvh",
+        maxHeight: "100dvh",
         padding: "20px 20px calc(24px + env(safe-area-inset-bottom))",
         boxSizing: "border-box",
+        overflow: "hidden",
       }
     : { ...modalStyle, maxWidth };
+
+  const contentStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    overflowY: "auto",
+    minHeight: 0,
+    flex: "1 1 auto",
+    WebkitOverflowScrolling: "touch",
+  };
 
   return (
     <div
@@ -159,16 +171,7 @@ export const Modal: FC<ModalProps> = ({
             style={{ alignSelf: "flex-start" }}
           />
         </div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            overflowY: "auto",
-            minHeight: 0,
-            flex: fullScreen ? "1 1 auto" : undefined,
-          }}
-        >
+        <div style={contentStyle}>
           {children}
         </div>
         {footer ? (
