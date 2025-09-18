@@ -1,6 +1,8 @@
 import {
   useEffect,
   useId,
+  useRef,
+  useState,
   type CSSProperties,
   type FC,
   type ReactNode,
@@ -58,6 +60,8 @@ export const Modal: FC<ModalProps> = ({
   const labelId = useId();
   const descriptionId = useId();
   const hasSubtitle = Boolean(subtitle);
+  const footerRef = useRef<HTMLDivElement | null>(null);
+  const [footerHeight, setFooterHeight] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -79,6 +83,38 @@ export const Modal: FC<ModalProps> = ({
       body.style.overflow = previousOverflow;
     };
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen || !footer) {
+      setFooterHeight(0);
+      return;
+    }
+    const element = footerRef.current;
+    if (!element) return;
+
+    const updateHeight = () => {
+      setFooterHeight(element.getBoundingClientRect().height);
+    };
+
+    updateHeight();
+
+    if (typeof window !== "undefined" && "ResizeObserver" in window) {
+      const observer = new ResizeObserver(() => updateHeight());
+      observer.observe(element);
+      return () => {
+        observer.disconnect();
+      };
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", updateHeight);
+      return () => {
+        window.removeEventListener("resize", updateHeight);
+      };
+    }
+
+    return undefined;
+  }, [footer, isOpen]);
 
   if (!isOpen) return null;
 
@@ -120,6 +156,7 @@ export const Modal: FC<ModalProps> = ({
         minHeight: 0,
         WebkitOverflowScrolling: "touch",
         overscrollBehavior: "contain",
+        paddingBottom: footer ? footerHeight + 16 : 0,
       }
     : {
         display: "flex",
@@ -194,6 +231,7 @@ export const Modal: FC<ModalProps> = ({
         </div>
         {footer ? (
           <div
+            ref={footerRef}
             style={{
               display: "flex",
               justifyContent: "flex-end",
