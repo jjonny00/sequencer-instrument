@@ -16,7 +16,7 @@ export interface StoredProjectData {
   currentSectionIndex?: number;
 }
 
-interface StoredProjectPayload {
+export interface StoredProjectPayload {
   version: number;
   updatedAt: number;
   data: StoredProjectData;
@@ -24,7 +24,7 @@ interface StoredProjectPayload {
 
 type StoredProjectMap = Record<string, StoredProjectPayload>;
 
-const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 1;
 
 const cloneChunk = (chunk: Chunk): Chunk => ({
   ...chunk,
@@ -54,11 +54,22 @@ const cloneSongRow = (row: SongRow): SongRow => ({
   slots: row.slots.slice(),
 });
 
-const cloneProjectData = (project: StoredProjectData): StoredProjectData => ({
+export const cloneProjectData = (
+  project: StoredProjectData
+): StoredProjectData => ({
   ...project,
   tracks: project.tracks.map((track) => cloneTrack(track)),
   patternGroups: project.patternGroups.map((group) => clonePatternGroup(group)),
   songRows: project.songRows.map((row) => cloneSongRow(row)),
+});
+
+export const createStoredProjectPayload = (
+  project: StoredProjectData,
+  timestamp = Date.now()
+): StoredProjectPayload => ({
+  version: PROJECT_VERSION,
+  updatedAt: timestamp,
+  data: cloneProjectData(project),
 });
 
 const getStorage = (): Storage | null => {
@@ -113,11 +124,7 @@ export const saveProject = (
   const trimmedName = name.trim();
   if (!trimmedName) return;
   const projects = readAllProjects();
-  projects[trimmedName] = {
-    version: PROJECT_VERSION,
-    updatedAt: Date.now(),
-    data: cloneProjectData(project),
-  };
+  projects[trimmedName] = createStoredProjectPayload(project);
   writeAllProjects(projects);
 };
 
