@@ -622,42 +622,46 @@ export const exportProjectAudio = async (
 
   onProgress?.({ step: "rendering", message: "Rendering audio…" });
 
+  const previousContext = Tone.getContext();
   let cleanup: (() => void) | undefined;
-  const toneBuffer = await Tone.Offline(async ({ transport }) => {
-    transport.cancel(0);
-    transport.bpm.value = project.bpm ?? 120;
-    const { triggerMap, dispose } = createOfflineTriggerMap(pack);
-    const disposables: Array<{ dispose: () => void }> = [];
+  let toneBuffer: Tone.ToneAudioBuffer;
+  try {
+    toneBuffer = await Tone.Offline(async (offlineContext) => {
+      Tone.setContext(offlineContext);
+      const { transport } = offlineContext;
+      transport.cancel(0);
+      transport.bpm.value = project.bpm ?? 120;
+      const { triggerMap, dispose } = createOfflineTriggerMap(pack);
+      const disposables: Array<{ dispose: () => void }> = [];
 
-    schedules.forEach((schedule) => {
-      const trigger = triggerMap[schedule.instrumentId];
-      if (!trigger) return;
-      const sequence = schedulePattern({
-        pattern: schedule.pattern,
-        startTime: schedule.startTime,
-        stopTime: schedule.stopTime,
-        velocityScale: schedule.velocityScale,
-        onTrigger: (time, velocity, pitch, note, sustain, chunk) => {
-          trigger(time, velocity, pitch, note, sustain, chunk, schedule.characterId);
-        },
+      schedules.forEach((schedule) => {
+        const trigger = triggerMap[schedule.instrumentId];
+        if (!trigger) return;
+        const sequence = schedulePattern({
+          pattern: schedule.pattern,
+          startTime: schedule.startTime,
+          stopTime: schedule.stopTime,
+          velocityScale: schedule.velocityScale,
+          onTrigger: (time, velocity, pitch, note, sustain, chunk) => {
+            trigger(time, velocity, pitch, note, sustain, chunk, schedule.characterId);
+          },
+        });
+        if (sequence) {
+          disposables.push(sequence);
+        }
       });
-      if (sequence) {
-        disposables.push(sequence);
-      }
-    });
 
-    cleanup = () => {
-      disposables.forEach((item) => item.dispose());
-      dispose();
-    };
+      cleanup = () => {
+        disposables.forEach((item) => item.dispose());
+        dispose();
+      };
 
-    transport.start(0);
-    transport.stop(duration);
-  }, totalRenderDuration);
-
-  const cleanupFn = cleanup;
-  if (cleanupFn) {
-    cleanupFn();
+      transport.start(0);
+      transport.stop(totalRenderDuration);
+    }, totalRenderDuration);
+  } finally {
+    Tone.setContext(previousContext);
+    cleanup?.();
   }
 
   onProgress?.({ step: "encoding", message: "Encoding WAV…" });
