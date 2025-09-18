@@ -98,7 +98,9 @@ export const Modal: FC<ModalProps> = ({
 
     updateHeight();
 
-    if (typeof window !== "undefined" && "ResizeObserver" in window) {
+    const win = typeof window !== "undefined" ? window : undefined;
+
+    if (win && "ResizeObserver" in win) {
       const observer = new ResizeObserver(() => updateHeight());
       observer.observe(element);
       return () => {
@@ -106,10 +108,10 @@ export const Modal: FC<ModalProps> = ({
       };
     }
 
-    if (typeof window !== "undefined") {
-      window.addEventListener("resize", updateHeight);
+    if (win) {
+      win.addEventListener("resize", updateHeight);
       return () => {
-        window.removeEventListener("resize", updateHeight);
+        win.removeEventListener("resize", updateHeight);
       };
     }
 
