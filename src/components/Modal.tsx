@@ -100,24 +100,39 @@ export const Modal: FC<ModalProps> = ({
         width: "100%",
         height: "100dvh",
         maxHeight: "100dvh",
+        minHeight: "100dvh",
         padding: "20px 20px calc(24px + env(safe-area-inset-bottom))",
         boxSizing: "border-box",
+        display: "grid",
+        gridTemplateRows: footer
+          ? "auto minmax(0, 1fr) auto"
+          : "auto minmax(0, 1fr)",
         overflow: "hidden",
       }
     : { ...modalStyle, maxWidth };
 
-  const contentStyle: CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-    overflowY: "auto",
-    minHeight: 0,
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: "0%",
-    WebkitOverflowScrolling: "touch",
-    overscrollBehavior: "contain",
-  };
+  const contentStyle: CSSProperties = fullScreen
+    ? {
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+        overflowY: "auto",
+        minHeight: 0,
+        WebkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
+      }
+    : {
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+        overflowY: "auto",
+        minHeight: 0,
+        flexGrow: 1,
+        flexShrink: 1,
+        flexBasis: "0%",
+        WebkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
+      };
 
   return (
     <div
