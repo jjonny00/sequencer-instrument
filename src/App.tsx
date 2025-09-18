@@ -1035,8 +1035,11 @@ export default function App() {
 
   const handleDeleteProject = useCallback(
     (name: string) => {
+      const confirmed = window.confirm(`Delete project "${name}"? This can't be undone.`);
+      if (!confirmed) return;
       deleteProject(name);
       refreshProjectList();
+      setActiveProjectName((current) => (current === name ? "untitled" : current));
     },
     [refreshProjectList]
   );
@@ -1135,6 +1138,10 @@ export default function App() {
       addTrackModalState.targetTrackId === null
     ) {
       closeAddTrackModal();
+      return;
+    }
+    const confirmed = window.confirm("Delete this track? This action cannot be undone.");
+    if (!confirmed) {
       return;
     }
     loopStripRef.current?.removeTrack(addTrackModalState.targetTrackId);
@@ -1361,51 +1368,47 @@ export default function App() {
               flexWrap: "wrap",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <IconButton
-                icon="file_download"
-                label="Export project JSON"
-                tone="accent"
-                onClick={handleExportJson}
-                disabled={isAudioExporting}
-              />
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>Project JSON</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <IconButton
-                icon="file_download"
-                label="Export audio"
-                tone="accent"
-                onClick={handleExportAudio}
-                disabled={isAudioExporting}
-              />
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>Audio (WAV)</span>
-            </div>
+            <IconButton
+              icon="file_download"
+              label="Export project JSON"
+              tone="accent"
+              onClick={handleExportJson}
+              disabled={isAudioExporting}
+            />
+            <IconButton
+              icon="file_download"
+              label="Export audio"
+              tone="accent"
+              onClick={handleExportAudio}
+              disabled={isAudioExporting}
+            />
           </div>
-          <div
-            style={{
-              marginTop: 16,
-              padding: 16,
-              borderRadius: 14,
-              border: "1px solid #1f2937",
-              background: "#0b1624",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 8,
-              textAlign: "center",
-              color: "#cbd5f5",
-              fontSize: 13,
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 28, color: isAudioExporting ? "#27E0B0" : "#94a3b8" }}
+          {isAudioExporting ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 16,
+                borderRadius: 14,
+                border: "1px solid #1f2937",
+                background: "#0b1624",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
+                textAlign: "center",
+                color: "#cbd5f5",
+                fontSize: 13,
+              }}
             >
-              {isAudioExporting ? "hourglass_top" : "music_note"}
-            </span>
-            <span>{isAudioExporting ? audioExportMessage : "Ready to export your mix."}</span>
-          </div>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 28, color: "#27E0B0" }}
+              >
+                hourglass_top
+              </span>
+              <span>{audioExportMessage}</span>
+            </div>
+          ) : null}
         </Modal>
       )}
       {!started ? (
@@ -1444,7 +1447,6 @@ export default function App() {
                 label="Load project"
                 onClick={openLoadProjectModal}
               />
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>Load Project</span>
             </div>
           </div>
         </div>
@@ -1491,20 +1493,14 @@ export default function App() {
                 Song
               </button>
             </div>
-            <div
-              style={{
-                marginTop: 12,
-                display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: 12,
-              }}
-            >
+            {viewMode === "song" ? (
               <div
                 style={{
+                  marginTop: 12,
                   display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 6,
+                  justifyContent: "flex-end",
+                  gap: 12,
+                  flexWrap: "wrap",
                 }}
               >
                 <IconButton
@@ -1512,31 +1508,11 @@ export default function App() {
                   label="Save project"
                   onClick={openSaveProjectModal}
                 />
-                <span style={{ fontSize: 11, color: "#94a3b8" }}>Save</span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
                 <IconButton
                   icon="folder_open"
                   label="Load project"
                   onClick={openLoadProjectModal}
                 />
-                <span style={{ fontSize: 11, color: "#94a3b8" }}>Load</span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
                 <IconButton
                   icon="file_download"
                   label="Open export options"
@@ -1546,9 +1522,8 @@ export default function App() {
                   }}
                   disabled={isAudioExporting}
                 />
-                <span style={{ fontSize: 11, color: "#94a3b8" }}>Export</span>
               </div>
-            </div>
+            ) : null}
           </div>
           {viewMode === "track" && (
             <LoopStrip

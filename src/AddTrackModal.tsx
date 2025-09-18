@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FC } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FC,
+  type KeyboardEvent,
+} from "react";
 
 import type { Pack } from "./packs";
 import { getCharacterOptions } from "./addTrackOptions";
@@ -200,58 +207,91 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Adjust the sound pack, instrument, character, and preset pattern for this track."
     : "Choose a sound pack, instrument, character, and optional preset pattern to start a new groove.";
   const confirmLabel = isEditMode ? "Update Track" : "Add Track";
+  const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
 
-  if (!isOpen) return null;
+  const handleTogglePresetSelection = useCallback(
+    (presetId: string | null) => {
+      if (presetId === null) {
+        onSelectPreset(null);
+        return;
+      }
+      if (selectedPresetId === presetId) {
+        onSelectPreset(null);
+        return;
+      }
+      onSelectPreset(presetId);
+    },
+    [onSelectPreset, selectedPresetId]
+  );
 
   const renderPresetRow = (
     item: { id: string; name: string; characterId: string | null },
     source: "user" | "pack"
   ) => {
     const isSelected = selectedPresetId === item.id;
-    const characterLabel = item.characterId
-      ? characterLabelMap.get(item.characterId) ?? "Custom character"
-      : null;
+    const characterLabel =
+      source === "user" && item.characterId
+        ? characterLabelMap.get(item.characterId) ?? undefined
+        : undefined;
+
+    const handleClick = () => handleTogglePresetSelection(item.id);
+
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleClick();
+      }
+    };
 
     return (
       <div
         key={`${source}-${item.id}`}
+        role="button"
+        tabIndex={0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          padding: "10px 12px",
+          padding: "12px 14px",
           borderRadius: 12,
           border: isSelected ? "1px solid #27E0B0" : "1px solid #1f2937",
-          background: isSelected ? "rgba(39, 224, 176, 0.08)" : "#0f172a",
+          background: isSelected ? "rgba(39, 224, 176, 0.12)" : "#0f172a",
+          cursor: "pointer",
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</span>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>
-            {source === "user" ? "Saved preset" : "Pack preset"}
-            {characterLabel ? ` · ${characterLabel}` : ""}
-          </span>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <IconButton
-            icon="folder_open"
-            label={`Load preset ${item.name}`}
-            tone={isSelected ? "accent" : "default"}
-            onClick={() => onSelectPreset(item.id)}
-          />
-          {source === "user" ? (
-            <IconButton
-              icon="delete"
-              label={`Delete preset ${item.name}`}
-              tone="danger"
-              onClick={() => handleDeletePreset(item.id)}
-            />
+          {characterLabel ? (
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>{characterLabel}</span>
           ) : null}
         </div>
+        {source === "user" ? (
+          <IconButton
+            icon="delete"
+            label={`Delete preset ${item.name}`}
+            tone="danger"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDeletePreset(item.id);
+            }}
+          />
+        ) : null}
       </div>
     );
   };
+
+  const handleNoneKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleTogglePresetSelection(null);
+      }
+    },
+    [handleTogglePresetSelection]
+  );
 
   const currentPresetLabel = selectedPresetId
     ? combinedPresetItems.find((preset) => preset.id === selectedPresetId)?.name ?? "Custom"
@@ -263,7 +303,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       onClose={onCancel}
       title={title}
       subtitle={description}
-      maxWidth={520}
+      fullScreen
       footer={
         <div
           style={{
@@ -398,13 +438,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               Save the current pattern or load one of your favorites.
             </span>
           </div>
-          <IconButton
-            icon="save"
-            label="Save current pattern as preset"
-            tone="accent"
-            onClick={handleSavePresetPattern}
-            disabled={!isEditMode || !editingTrackPattern}
-          />
+          {showSavePresetAction ? (
+            <IconButton
+              icon="save"
+              label="Save current pattern as preset"
+              tone="accent"
+              onClick={handleSavePresetPattern}
+            />
+          ) : null}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -412,26 +453,55 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
               Your Presets
             </span>
-            {userPresetItems.length > 0 ? (
-              userPresetItems.map((preset) => renderPresetRow(preset, "user"))
-            ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div
+                role="button"
+                tabIndex={0}
+                onClick={() => handleTogglePresetSelection(null)}
+                onKeyDown={handleNoneKeyDown}
                 style={{
-                  fontSize: 12,
-                  color: "#64748b",
-                  padding: "12px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border:
+                    selectedPresetId === null
+                      ? "1px solid #27E0B0"
+                      : "1px solid #1f2937",
+                  background:
+                    selectedPresetId === null
+                      ? "rgba(39, 224, 176, 0.12)"
+                      : "#0f172a",
+                  cursor: "pointer",
                 }}
               >
-                No presets saved yet
+                <span style={{ fontWeight: 600, fontSize: 14 }}>None</span>
               </div>
-            )}
+              {userPresetItems.length > 0 ? (
+                userPresetItems.map((preset) => renderPresetRow(preset, "user"))
+              ) : (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#64748b",
+                    padding: "12px 0",
+                  }}
+                >
+                  No presets saved yet
+                </div>
+              )}
+            </div>
           </div>
           {packPresets.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
                 Pack Presets
               </span>
-              {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
+              </div>
             </div>
           ) : null}
         </div>
@@ -447,14 +517,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         }}
       >
         <span>Current preset: {currentPresetLabel}</span>
-        {selectedPresetId ? (
-          <IconButton
-            icon="backspace"
-            label="Clear preset selection"
-            tone="ghost"
-            onClick={() => onSelectPreset(null)}
-          />
-        ) : null}
       </div>
     </Modal>
   );

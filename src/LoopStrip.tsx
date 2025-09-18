@@ -649,6 +649,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const handleDeleteGroup = () => {
     if (!selectedGroupId) return;
     if (patternGroups.length <= 1) return;
+    const confirmed = window.confirm("Delete this sequence? This action cannot be undone.");
+    if (!confirmed) return;
     setPatternGroups((groups) => {
       const filtered = groups.filter((group) => group.id !== selectedGroupId);
       if (filtered.length === 0) {

@@ -16,6 +16,7 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   maxWidth?: number | string;
+  fullScreen?: boolean;
 }
 
 const overlayStyle: CSSProperties = {
@@ -51,6 +52,7 @@ export const Modal: FC<ModalProps> = ({
   children,
   footer,
   maxWidth = 420,
+  fullScreen = false,
 }) => {
   const labelId = useId();
   const descriptionId = useId();
@@ -79,17 +81,40 @@ export const Modal: FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
+  const resolvedOverlayStyle: CSSProperties = fullScreen
+    ? {
+        ...overlayStyle,
+        padding: 0,
+        alignItems: "stretch",
+        justifyContent: "stretch",
+      }
+    : overlayStyle;
+
+  const resolvedModalStyle: CSSProperties = fullScreen
+    ? {
+        ...modalStyle,
+        borderRadius: 0,
+        border: "none",
+        maxWidth: "100%",
+        width: "100%",
+        height: "100%",
+        maxHeight: "100%",
+        padding: "20px 20px calc(24px + env(safe-area-inset-bottom))",
+        boxSizing: "border-box",
+      }
+    : { ...modalStyle, maxWidth };
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelId}
       aria-describedby={hasSubtitle ? descriptionId : undefined}
-      style={overlayStyle}
+      style={resolvedOverlayStyle}
       onClick={onClose}
     >
       <div
-        style={{ ...modalStyle, maxWidth }}
+        style={resolvedModalStyle}
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -140,11 +165,21 @@ export const Modal: FC<ModalProps> = ({
             flexDirection: "column",
             gap: 16,
             overflowY: "auto",
+            flex: fullScreen ? "1 1 auto" : undefined,
           }}
         >
           {children}
         </div>
-        {footer ? <div style={{ display: "flex", justifyContent: "flex-end" }}>{footer}</div> : null}
+        {footer ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );
