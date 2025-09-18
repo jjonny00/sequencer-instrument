@@ -1044,7 +1044,7 @@ export default function App() {
     [refreshProjectList]
   );
 
-  const initAudioGraph = async () => {
+  const initAudioGraph = useCallback(async () => {
     await Tone.start(); // iOS unlock
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.start(); // start clock; we’ll schedule to it
@@ -1056,7 +1056,21 @@ export default function App() {
       setIsPlaying(false);
       pendingTransportStateRef.current = null;
     }
-  };
+  }, [bpm]);
+
+  useEffect(() => {
+    refreshProjectList();
+  }, [refreshProjectList]);
+
+  const handleLaunchProject = useCallback(
+    async (name: string) => {
+      if (!started) {
+        await initAudioGraph();
+      }
+      handleLoadProjectByName(name);
+    },
+    [handleLoadProjectByName, initAudioGraph, started]
+  );
 
   const handlePlayStop = () => {
     if (isPlaying) {
@@ -1412,41 +1426,94 @@ export default function App() {
         </Modal>
       )}
       {!started ? (
-        <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
+        <div
+          style={{
+            display: "flex",
+            flex: 1,
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
           <div
             style={{
+              width: "min(440px, 100%)",
               display: "flex",
               flexDirection: "column",
-              gap: 16,
-              alignItems: "center",
+              gap: 24,
             }}
           >
             <button
-              onClick={initAudioGraph}
+              onClick={async () => {
+                setActiveProjectName("untitled");
+                await initAudioGraph();
+              }}
               style={{
-                padding: "16px 24px",
+                padding: "18px 24px",
                 fontSize: "1.25rem",
-                borderRadius: 9999,
+                borderRadius: 16,
                 border: "1px solid #333",
                 background: "#27E0B0",
-                color: "#1F2532"
+                color: "#1F2532",
+                fontWeight: 600,
               }}
             >
-              Start Jam
+              New Project
             </button>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "center",
-                gap: 6,
+                gap: 12,
               }}
             >
-              <IconButton
-                icon="folder_open"
-                label="Load project"
-                onClick={openLoadProjectModal}
-              />
+              <div style={{ fontSize: 16, fontWeight: 600, color: "#e6f2ff" }}>
+                Saved Projects
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  maxHeight: "60vh",
+                  overflowY: "auto",
+                }}
+              >
+                {projectList.length === 0 ? (
+                  <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                    No projects saved yet
+                  </div>
+                ) : (
+                  projectList.map((name) => (
+                    <button
+                      key={name}
+                      onClick={() => handleLaunchProject(name)}
+                      style={{
+                        padding: "12px 16px",
+                        borderRadius: 14,
+                        border: "1px solid #1f2937",
+                        background: "#0f172a",
+                        color: "#e6f2ff",
+                        textAlign: "left",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
+                      <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
+                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                        Tap to load project
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <IconButton
+                  icon="folder_open"
+                  label="Browse projects"
+                  onClick={openLoadProjectModal}
+                />
+              </div>
             </div>
           </div>
         </div>
