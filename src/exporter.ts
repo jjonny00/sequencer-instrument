@@ -444,18 +444,33 @@ const buildSongSchedules = (
   };
 };
 
-const schedulePattern = (options: SchedulePatternOptions) => {
+const schedulePattern = (options: SchedulePatternOptions): number[] => {
   const { pattern, startTime, stopTime, velocityScale, onTrigger } = options;
-  if (stopTime <= startTime) return null;
+  if (stopTime <= startTime) return [];
   const timingMode = pattern.timingMode === "free" ? "free" : "sync";
   const baseVelocityFactor = pattern.velocityFactor ?? 1;
-  const overallVelocityFactor = Math.max(0, baseVelocityFactor * Math.max(velocityScale, 0));
+  const overallVelocityFactor = clamp(
+    baseVelocityFactor * Math.max(velocityScale, 0),
+    0,
+    1
+  );
+  if (overallVelocityFactor <= 0) return [];
   const pitchOffset = pattern.pitchOffset ?? 0;
   const swingAmount = pattern.swing ?? 0;
   const swingOffsetSeconds = swingAmount
     ? Tone.Time("16n").toSeconds() * 0.5 * swingAmount
     : 0;
   const humanizeAmount = pattern.humanize ?? 0;
+  const humanizeRange = humanizeAmount
+    ? Tone.Time("32n").toSeconds() * humanizeAmount
+    : 0;
+
+  const clampHumanizedTime = (baseTime: number) =>
+    humanizeRange
+      ? Math.max(startTime, baseTime + (Math.random() * 2 - 1) * humanizeRange)
+      : baseTime;
+
+  const scheduledIds: number[] = [];
 
   if (timingMode === "free" && pattern.noteEvents && pattern.noteEvents.length) {
     const events = pattern.noteEvents.slice().sort((a, b) => a.time - b.time);
@@ -464,32 +479,34 @@ const schedulePattern = (options: SchedulePatternOptions) => {
       loopLength > 0
         ? loopLength
         : events[events.length - 1].time + events[events.length - 1].duration;
-    if (computedLoop <= 0) return null;
-    type PartEvent = {
-      time: number;
-      note: string;
-      duration: number;
-      velocity: number;
-    };
-    const partEvents: PartEvent[] = events.map((event) => ({
-      time: event.time,
-      note: event.note,
-      duration: event.duration,
-      velocity: event.velocity,
-    }));
-    const part = new Tone.Part(
-      (time, event: PartEvent) => {
+    if (computedLoop <= 0) return [];
+
+    for (
+      let loopStart = startTime;
+      loopStart < stopTime;
+      loopStart += computedLoop
+    ) {
+      events.forEach((event) => {
+        const eventTime = loopStart + event.time;
+        if (eventTime >= stopTime) return;
         const scaledVelocity = clamp(event.velocity * overallVelocityFactor, 0, 1);
         if (scaledVelocity <= 0) return;
-        onTrigger(time, scaledVelocity, undefined, event.note, event.duration, pattern);
-      },
-      partEvents
-    );
-    part.loop = true;
-    part.loopEnd = computedLoop;
-    part.start(startTime);
-    part.stop(stopTime);
-    return part;
+        const scheduledTime = clampHumanizedTime(eventTime);
+        const id = Tone.Transport.schedule((transportTime) => {
+          onTrigger(
+            transportTime,
+            scaledVelocity,
+            undefined,
+            event.note,
+            event.duration,
+            pattern
+          );
+        }, scheduledTime);
+        scheduledIds.push(id);
+      });
+    }
+
+    return scheduledIds;
   }
 
   const stepsArray =
@@ -498,17 +515,10 @@ const schedulePattern = (options: SchedulePatternOptions) => {
       : Array(16).fill(0);
   const stepCount = stepsArray.length || 16;
   const stepDurationSeconds = Tone.Time("16n").toSeconds();
-  const indices = Array.from({ length: stepCount }, (_, index) => index);
-  const sequence = new Tone.Sequence<number>((time, index) => {
-    const active = stepsArray[index] ?? 0;
-    if (!active) return;
-    const baseVelocity = pattern.velocities?.[index] ?? 1;
-    const velocity = clamp(baseVelocity * overallVelocityFactor, 0, 1);
-    if (velocity <= 0) return;
-    const basePitch = pattern.pitches?.[index] ?? 0;
-    const combinedPitch = basePitch + pitchOffset;
-    const scheduledTime =
-      swingOffsetSeconds && index % 2 === 1 ? time + swingOffsetSeconds : time;
+  const loopDuration = stepCount * stepDurationSeconds;
+  const releaseControl = pattern.sustain;
+
+  const computeSustainSeconds = (index: number) => {
     let holdSteps = 0;
     for (let offset = 1; offset < stepCount; offset += 1) {
       const nextIndex = (index + offset) % stepCount;
@@ -518,26 +528,47 @@ const schedulePattern = (options: SchedulePatternOptions) => {
       holdSteps += 1;
     }
     const holdDurationSeconds = (holdSteps + 1) * stepDurationSeconds;
-    const releaseControl = pattern.sustain;
-    const sustainSeconds =
-      releaseControl === undefined
-        ? holdDurationSeconds
-        : Math.min(Math.max(releaseControl, 0), holdDurationSeconds);
-    onTrigger(
-      scheduledTime,
-      velocity,
-      combinedPitch,
-      pattern.note,
-      sustainSeconds,
-      pattern
-    );
-  }, indices, "16n");
-  sequence.start(startTime);
-  sequence.stop(stopTime);
-  sequence.humanize = humanizeAmount
-    ? Tone.Time("32n").toSeconds() * humanizeAmount
-    : false;
-  return sequence;
+    if (releaseControl === undefined) {
+      return holdDurationSeconds;
+    }
+    return Math.min(Math.max(releaseControl, 0), holdDurationSeconds);
+  };
+
+  for (let loopIndex = 0; ; loopIndex += 1) {
+    const loopStart = startTime + loopIndex * loopDuration;
+    if (loopStart >= stopTime) break;
+
+    for (let stepIndex = 0; stepIndex < stepCount; stepIndex += 1) {
+      const active = stepsArray[stepIndex] ?? 0;
+      if (!active) continue;
+      const baseVelocity = pattern.velocities?.[stepIndex] ?? 1;
+      const velocity = clamp(baseVelocity * overallVelocityFactor, 0, 1);
+      if (velocity <= 0) continue;
+      const basePitch = pattern.pitches?.[stepIndex] ?? 0;
+      const combinedPitch = basePitch + pitchOffset;
+      const rawTime = loopStart + stepIndex * stepDurationSeconds;
+      if (rawTime >= stopTime) continue;
+      const swungTime =
+        swingOffsetSeconds && stepIndex % 2 === 1
+          ? rawTime + swingOffsetSeconds
+          : rawTime;
+      const scheduledTime = clampHumanizedTime(swungTime);
+      const sustainSeconds = computeSustainSeconds(stepIndex);
+      const id = Tone.Transport.schedule((transportTime) => {
+        onTrigger(
+          transportTime,
+          velocity,
+          combinedPitch,
+          pattern.note,
+          sustainSeconds,
+          pattern
+        );
+      }, scheduledTime);
+      scheduledIds.push(id);
+    }
+  }
+
+  return scheduledIds;
 };
 
 const encodeToneBufferToWav = (buffer: Tone.ToneAudioBuffer): ArrayBuffer => {
@@ -634,12 +665,12 @@ export const exportProjectAudio = async (
       transport.seconds = 0;
       transport.bpm.value = project.bpm ?? 120;
       const { triggerMap, dispose } = createOfflineTriggerMap(pack);
-      const disposables: Array<{ dispose: () => void }> = [];
+      const scheduledEventIds: number[] = [];
 
       schedules.forEach((schedule) => {
         const trigger = triggerMap[schedule.instrumentId];
         if (!trigger) return;
-        const sequence = schedulePattern({
+        const ids = schedulePattern({
           pattern: schedule.pattern,
           startTime: schedule.startTime,
           stopTime: schedule.stopTime,
@@ -648,13 +679,13 @@ export const exportProjectAudio = async (
             trigger(time, velocity, pitch, note, sustain, chunk, schedule.characterId);
           },
         });
-        if (sequence) {
-          disposables.push(sequence);
-        }
+        scheduledEventIds.push(...ids);
       });
 
       cleanup = () => {
-        disposables.forEach((item) => item.dispose());
+        scheduledEventIds.forEach((id) => {
+          Tone.Transport.clear(id);
+        });
         dispose();
       };
 
