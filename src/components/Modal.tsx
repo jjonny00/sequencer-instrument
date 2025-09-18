@@ -65,8 +65,10 @@ export const Modal: FC<ModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    const win = typeof window !== "undefined" ? window : undefined;
-    const doc = typeof document !== "undefined" ? document : undefined;
+    const win: (Window & typeof globalThis) | null =
+      typeof window !== "undefined" ? window : null;
+    const doc: Document | null =
+      typeof document !== "undefined" ? document : null;
     if (!win || !doc) {
       return;
     }
@@ -81,8 +83,12 @@ export const Modal: FC<ModalProps> = ({
     const previousOverflow = body.style.overflow;
     body.style.overflow = "hidden";
     return () => {
-      win.removeEventListener("keydown", handleKeyDown);
-      body.style.overflow = previousOverflow;
+      if (win) {
+        win.removeEventListener("keydown", handleKeyDown);
+      }
+      if (body) {
+        body.style.overflow = previousOverflow;
+      }
     };
   }, [isOpen, onClose]);
 
