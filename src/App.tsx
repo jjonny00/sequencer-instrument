@@ -14,6 +14,7 @@ import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
+import { exportProjectAudio, exportProjectJson } from "./exporter";
 import {
   deleteProject,
   listProjects,
@@ -150,6 +151,13 @@ export default function App() {
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
+  const [activeProjectName, setActiveProjectName] = useState("untitled");
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isAudioExporting, setIsAudioExporting] = useState(false);
+  const [audioExportMessage, setAudioExportMessage] = useState(
+    "Preparing export…"
+  );
   const selectedTrack = useMemo(
     () => (editing !== null ? tracks.find((track) => track.id === editing) ?? null : null),
     [editing, tracks]
@@ -160,6 +168,21 @@ export default function App() {
   useEffect(() => {
     setIsRecording(false);
   }, [editing]);
+
+  useEffect(() => {
+    if (!isExportMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!exportMenuRef.current) return;
+      const target = event.target as Node | null;
+      if (target && !exportMenuRef.current.contains(target)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isExportMenuOpen]);
 
   const canRecordSelectedTrack = useMemo(() => {
     if (!selectedTrack || !selectedTrack.instrument) return false;
@@ -808,6 +831,56 @@ export default function App() {
     currentSectionIndex,
   ]);
 
+  const handleExportJson = useCallback(() => {
+    setIsExportMenuOpen(false);
+    try {
+      const snapshot = buildProjectSnapshot();
+      exportProjectJson({
+        project: snapshot,
+        projectName: activeProjectName,
+      });
+    } catch (error) {
+      console.error(error);
+      window.alert("Failed to export project JSON");
+    }
+  }, [buildProjectSnapshot, activeProjectName]);
+
+  const handleExportAudio = useCallback(async () => {
+    setIsExportMenuOpen(false);
+    if (isAudioExporting) return;
+    const pack = packs[packIndex];
+    if (!pack) {
+      window.alert("Unable to export audio: pack not found");
+      return;
+    }
+    try {
+      const snapshot = buildProjectSnapshot();
+      setIsAudioExporting(true);
+      setAudioExportMessage("Preparing export…");
+      await exportProjectAudio({
+        project: snapshot,
+        projectName: activeProjectName,
+        pack,
+        viewMode,
+        onProgress: (update) => {
+          setAudioExportMessage(update.message);
+        },
+      });
+    } catch (error) {
+      console.error(error);
+      window.alert("Failed to export audio");
+    } finally {
+      setIsAudioExporting(false);
+      setAudioExportMessage("Preparing export…");
+    }
+  }, [
+    buildProjectSnapshot,
+    activeProjectName,
+    packIndex,
+    viewMode,
+    isAudioExporting,
+  ]);
+
   const refreshProjectList = useCallback(() => {
     setProjectList(listProjects());
   }, []);
@@ -819,7 +892,7 @@ export default function App() {
 
   const openSaveProjectModal = () => {
     setProjectModalMode("save");
-    setProjectNameInput("");
+    setProjectNameInput(activeProjectName);
     setProjectModalError(null);
   };
 
@@ -844,6 +917,7 @@ export default function App() {
     try {
       const snapshot = buildProjectSnapshot();
       saveStoredProject(trimmed, snapshot);
+      setActiveProjectName(trimmed);
       setProjectModalError(null);
       refreshProjectList();
       setProjectModalMode(null);
@@ -909,10 +983,11 @@ export default function App() {
         return;
       }
       applyLoadedProject(project);
+      setActiveProjectName(name);
       setProjectModalMode(null);
       setProjectModalError(null);
     },
-    [applyLoadedProject]
+    [applyLoadedProject, setActiveProjectName]
   );
 
   const handleDeleteProject = useCallback(
@@ -1261,6 +1336,53 @@ export default function App() {
           </div>
         </div>
       )}
+      {isAudioExporting && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(9, 12, 20, 0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            zIndex: 30,
+          }}
+        >
+          <div
+            style={{
+              background: "#111827",
+              borderRadius: 16,
+              padding: 24,
+              width: "min(320px, 90%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+              boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 32, color: "#27E0B0" }}
+            >
+              hourglass_top
+            </span>
+            <div
+              style={{ fontSize: "1.05rem", fontWeight: 600, color: "#e2e8f0" }}
+            >
+              Exporting Audio
+            </div>
+            <div
+              style={{ fontSize: 14, color: "#cbd5f5", textAlign: "center" }}
+            >
+              {audioExportMessage}
+            </div>
+          </div>
+        </div>
+      )}
       {!started ? (
         <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
           <div
@@ -1374,6 +1496,89 @@ export default function App() {
               >
                 Load Project
               </button>
+              <div
+                ref={exportMenuRef}
+                style={{
+                  flex: 1,
+                  position: "relative",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isAudioExporting) return;
+                    setIsExportMenuOpen((open) => !open);
+                  }}
+                  disabled={isAudioExporting}
+                  aria-haspopup="menu"
+                  aria-expanded={isExportMenuOpen}
+                  style={{
+                    width: "100%",
+                    padding: "8px 0",
+                    borderRadius: 8,
+                    border: "1px solid #333",
+                    background: "#1f2532",
+                    color: isAudioExporting ? "#475569" : "#e6f2ff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    cursor: isAudioExporting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <span>Export</span>
+                  <span aria-hidden="true" style={{ fontSize: 16 }}>
+                    ▾
+                  </span>
+                </button>
+                {isExportMenuOpen && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0,
+                      right: 0,
+                      background: "#0f172a",
+                      border: "1px solid #1f2937",
+                      borderRadius: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      overflow: "hidden",
+                      boxShadow: "0 12px 24px rgba(0,0,0,0.35)",
+                      zIndex: 30,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={handleExportJson}
+                      style={{
+                        padding: "10px 12px",
+                        background: "transparent",
+                        border: "none",
+                        color: "#e6f2ff",
+                        textAlign: "left",
+                      }}
+                    >
+                      Export JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportAudio}
+                      disabled={isAudioExporting}
+                      style={{
+                        padding: "10px 12px",
+                        background: "transparent",
+                        border: "none",
+                        color: isAudioExporting ? "#475569" : "#e6f2ff",
+                        textAlign: "left",
+                        cursor: isAudioExporting ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      Export Audio
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           {viewMode === "track" && (
