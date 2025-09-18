@@ -15,12 +15,7 @@ import { packs } from "./packs";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
-import {
-  isUserPresetId,
-  loadInstrumentPreset,
-  saveInstrumentPreset,
-  stripUserPresetPrefix,
-} from "./presets";
+import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -651,51 +646,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     );
   };
 
-  const eligiblePresetCount = useMemo(
-    () =>
-      tracks.filter(
-        (track) =>
-          Boolean(
-            track.pattern &&
-              track.source?.packId &&
-              track.source?.instrumentId &&
-              track.instrument
-          )
-      ).length,
-    [tracks]
-  );
-
-  const handleSaveGroupAsPresets = useCallback(() => {
-    if (!selectedGroup) return;
-    if (eligiblePresetCount === 0) {
-      window.alert("No patterns available to save as presets.");
-      return;
-    }
-    let saved = 0;
-    tracks.forEach((track) => {
-      if (!track.pattern) return;
-      const packId = track.source?.packId;
-      const instrumentId = track.source?.instrumentId ?? track.instrument;
-      if (!packId || !instrumentId) return;
-      const characterId =
-        track.pattern.characterId ?? track.source?.characterId ?? null;
-      const name = `${selectedGroup.name} • ${track.name}`;
-      const record = saveInstrumentPreset({
-        name,
-        packId,
-        instrumentId,
-        characterId,
-        pattern: track.pattern,
-      });
-      if (record) saved += 1;
-    });
-    if (saved > 0) {
-      window.alert(`Saved ${saved} preset${saved === 1 ? "" : "s"}.`);
-    } else {
-      window.alert("Failed to save presets for this sequence.");
-    }
-  }, [eligiblePresetCount, selectedGroup, tracks]);
-
   const handleDeleteGroup = () => {
     if (!selectedGroupId) return;
     if (patternGroups.length <= 1) return;
@@ -1208,36 +1158,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               >
                 <span className="material-symbols-outlined">save</span>
                 Save
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveGroupAsPresets}
-                disabled={eligiblePresetCount === 0 || !selectedGroup}
-                aria-label="Save sequence as presets"
-                title="Save sequence as presets"
-                style={{
-                  flex: "1 1 140px",
-                  minWidth: 0,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background:
-                    eligiblePresetCount > 0 && selectedGroup ? "#1f2532" : "#161b27",
-                  color:
-                    eligiblePresetCount > 0 && selectedGroup
-                      ? "#e6f2ff"
-                      : "#475569",
-                  cursor:
-                    eligiblePresetCount > 0 && selectedGroup ? "pointer" : "default",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  fontWeight: 600,
-                }}
-              >
-                <span className="material-symbols-outlined">bookmark_add</span>
-                Save Presets
               </button>
               <button
                 type="button"

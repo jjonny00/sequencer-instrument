@@ -1140,6 +1140,14 @@ export default function App() {
     closeAddTrackModal();
   }, [addTrackModalState, closeAddTrackModal]);
 
+  const editingTrack = useMemo(
+    () =>
+      addTrackModalState.mode === "edit" && addTrackModalState.targetTrackId !== null
+        ? tracks.find((track) => track.id === addTrackModalState.targetTrackId) ?? null
+        : null,
+    [tracks, addTrackModalState.mode, addTrackModalState.targetTrackId]
+  );
+
   return (
     <div
       style={{
@@ -1162,6 +1170,8 @@ export default function App() {
         selectedInstrumentId={addTrackModalState.instrumentId}
         selectedCharacterId={addTrackModalState.characterId}
         selectedPresetId={addTrackModalState.presetId}
+        editingTrackName={editingTrack?.name}
+        editingTrackPattern={editingTrack?.pattern ?? null}
         onSelectPack={handleSelectAddTrackPack}
         onSelectInstrument={handleSelectAddTrackInstrument}
         onSelectCharacter={handleSelectAddTrackCharacter}

@@ -600,7 +600,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const handleDeleteUserPreset = useCallback(() => {
     if (!packId || !sourceInstrumentId || !userPresetId) return;
-    const confirmed = window.confirm("Delete this saved preset?");
+    const confirmed = window.confirm("Delete this saved preset pattern?");
     if (!confirmed) return;
     const removed = deleteInstrumentPreset(packId, sourceInstrumentId, userPresetId);
     if (removed) {
@@ -614,7 +614,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8" }}>
-            Load Saved Preset
+            Load Saved Preset Pattern
           </span>
           <select
             value={userPresetId}
@@ -629,8 +629,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           >
             <option value="">
               {userPresets.length > 0
-                ? "Select a preset"
-                : "No saved presets for this instrument"}
+                ? "Select a preset pattern"
+                : "No saved preset patterns for this instrument"}
             </option>
             {userPresets.map((preset) => (
               <option key={preset.id} value={preset.id}>
@@ -656,7 +656,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               cursor: userPresetId ? "pointer" : "not-allowed",
             }}
           >
-            Load Preset
+            Load Preset Pattern
           </button>
           <button
             type="button"
@@ -674,7 +674,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               cursor: userPresetId ? "pointer" : "not-allowed",
             }}
           >
-            Delete Preset
+            Delete Preset Pattern
           </button>
         </div>
       </div>
@@ -1724,11 +1724,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 ) : null}
               </div>
             </CollapsibleSection>
-            <CollapsibleSection title="Presets & FX" defaultOpen>
+            <CollapsibleSection title="Preset Patterns & FX" defaultOpen>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8" }}>
-                    Preset
+                    Preset Pattern
                   </span>
                   <select
                     value={presetSelection}

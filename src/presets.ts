@@ -104,7 +104,7 @@ export const saveInstrumentPreset = (
   const now = Date.now();
   const record: InstrumentPreset = {
     id: createId(),
-    name: name.trim() || pattern.name || "Untitled Preset",
+    name: name.trim() || pattern.name || "Untitled Preset Pattern",
     packId,
     instrumentId,
     characterId: characterId ?? null,
