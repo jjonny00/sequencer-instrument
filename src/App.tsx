@@ -12,6 +12,8 @@ import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
+import { Modal } from "./components/Modal";
+import { IconButton } from "./components/IconButton";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
@@ -153,8 +155,7 @@ export default function App() {
     null
   );
   const [activeProjectName, setActiveProjectName] = useState("untitled");
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isAudioExporting, setIsAudioExporting] = useState(false);
   const [audioExportMessage, setAudioExportMessage] = useState(
     "Preparing export…"
@@ -169,21 +170,6 @@ export default function App() {
   useEffect(() => {
     setIsRecording(false);
   }, [editing]);
-
-  useEffect(() => {
-    if (!isExportMenuOpen) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!exportMenuRef.current) return;
-      const target = event.target as Node | null;
-      if (target && !exportMenuRef.current.contains(target)) {
-        setIsExportMenuOpen(false);
-      }
-    };
-    window.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [isExportMenuOpen]);
 
   const canRecordSelectedTrack = useMemo(() => {
     if (!selectedTrack || !selectedTrack.instrument) return false;
@@ -881,7 +867,8 @@ export default function App() {
   ]);
 
   const handleExportJson = useCallback(() => {
-    setIsExportMenuOpen(false);
+    setIsExportModalOpen(false);
+    setAudioExportMessage("Preparing export…");
     try {
       const snapshot = buildProjectSnapshot();
       exportProjectJson({
@@ -895,7 +882,9 @@ export default function App() {
   }, [buildProjectSnapshot, activeProjectName]);
 
   const handleExportAudio = useCallback(async () => {
-    setIsExportMenuOpen(false);
+    if (!isExportModalOpen) {
+      setIsExportModalOpen(true);
+    }
     if (isAudioExporting) return;
     const pack = packs[packIndex];
     if (!pack) {
@@ -920,7 +909,6 @@ export default function App() {
       window.alert("Failed to export audio");
     } finally {
       setIsAudioExporting(false);
-      setAudioExportMessage("Preparing export…");
     }
   }, [
     buildProjectSnapshot,
@@ -928,7 +916,13 @@ export default function App() {
     packIndex,
     viewMode,
     isAudioExporting,
+    isExportModalOpen,
   ]);
+
+  const handleCloseExportModal = useCallback(() => {
+    setIsExportModalOpen(false);
+    setAudioExportMessage("Preparing export…");
+  }, []);
 
   const refreshProjectList = useCallback(() => {
     setProjectList(listProjects());
@@ -1191,256 +1185,228 @@ export default function App() {
             : undefined
         }
       />
+
       {projectModalMode && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(9, 12, 20, 0.8)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 20,
-          }}
+        <Modal
+          isOpen={projectModalMode !== null}
+          onClose={closeProjectModal}
+          title={projectModalMode === "save" ? "Save Project" : "Load Project"}
+          subtitle={
+            projectModalMode === "save"
+              ? "Name your jam to store it locally on this device."
+              : "Open a saved project from local storage."
+          }
+          maxWidth={460}
+          footer={
+            projectModalMode === "save" ? (
+              <IconButton
+                icon="save"
+                label="Save project"
+                tone="accent"
+                onClick={handleConfirmSaveProject}
+                disabled={!projectNameInput.trim()}
+              />
+            ) : null
+          }
         >
-          <div
-            style={{
-              background: "#111827",
-              borderRadius: 16,
-              padding: 24,
-              width: "min(420px, 100%)",
-              maxHeight: "90vh",
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-              boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div style={{ fontSize: "1.1rem", fontWeight: 600 }}>
-                {projectModalMode === "save" ? "Save Project" : "Load Project"}
-              </div>
-              <button
-                onClick={closeProjectModal}
-                aria-label="Close"
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#94a3b8",
-                  fontSize: 24,
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
-            </div>
-            {projectModalMode === "save" ? (
-              <>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <label style={{ fontSize: 14, color: "#cbd5f5" }} htmlFor="project-name">
-                    Project name
-                  </label>
-                  <input
-                    id="project-name"
-                    value={projectNameInput}
-                    onChange={(event) => setProjectNameInput(event.target.value)}
-                    placeholder="My Jam"
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #2a3344",
-                      background: "#0f172a",
-                      color: "#e6f2ff",
-                    }}
-                  />
-                </div>
-                <div
+          {projectModalMode === "save" ? (
+            <>
+              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <span style={{ fontSize: 13, color: "#cbd5f5" }}>Project name</span>
+                <input
+                  id="project-name"
+                  value={projectNameInput}
+                  onChange={(event) => setProjectNameInput(event.target.value)}
+                  placeholder="My Jam"
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                    maxHeight: "40vh",
-                    overflowY: "auto",
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid #2f384a",
+                    background: "#0f172a",
+                    color: "#e6f2ff",
                   }}
-                >
-                  {projectList.length === 0 ? (
-                    <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                      No saved projects yet.
-                    </div>
-                  ) : (
-                    projectList.map((name) => (
-                      <button
-                        key={name}
-                        onClick={() => setProjectNameInput(name)}
-                        style={{
-                          textAlign: "left",
-                          padding: "10px 12px",
-                          borderRadius: 8,
-                          border: "1px solid #1f2937",
-                          background:
-                            projectNameInput.trim() === name ? "#1f2937" : "#0f172a",
-                          color: "#e6f2ff",
-                        }}
-                      >
-                        {name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </>
-            ) : (
+                />
+              </label>
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 8,
-                  maxHeight: "50vh",
+                  gap: 10,
+                  maxHeight: "40vh",
                   overflowY: "auto",
                 }}
               >
                 {projectList.length === 0 ? (
                   <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                    No saved projects found.
+                    No projects saved yet
                   </div>
                 ) : (
-                  projectList.map((name) => (
-                    <div
-                      key={name}
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        alignItems: "center",
-                      }}
-                    >
-                      <button
-                        onClick={() => handleLoadProjectByName(name)}
+                  projectList.map((name) => {
+                    const isActive = projectNameInput.trim() === name;
+                    return (
+                      <div
+                        key={name}
                         style={{
-                          flex: 1,
-                          textAlign: "left",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
                           padding: "10px 12px",
-                          borderRadius: 8,
-                          border: "1px solid #1f2937",
-                          background: "#0f172a",
-                          color: "#e6f2ff",
+                          borderRadius: 12,
+                          border: isActive ? "1px solid #27E0B0" : "1px solid #1f2937",
+                          background: isActive ? "rgba(39,224,176,0.08)" : "#0f172a",
                         }}
                       >
-                        {name}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteProject(name)}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 8,
-                          border: "1px solid #3f4a61",
-                          background: "#1f2532",
-                          color: "#f87171",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ))
+                        <button
+                          type="button"
+                          onClick={() => setProjectNameInput(name)}
+                          style={{
+                            flex: 1,
+                            textAlign: "left",
+                            background: "transparent",
+                            border: "none",
+                            color: "#e6f2ff",
+                            fontSize: 14,
+                            cursor: "pointer",
+                          }}
+                          title={`Use project name ${name}`}
+                        >
+                          {name}
+                        </button>
+                        <IconButton
+                          icon="delete"
+                          label={`Delete project ${name}`}
+                          tone="danger"
+                          onClick={() => handleDeleteProject(name)}
+                        />
+                      </div>
+                    );
+                  })
                 )}
               </div>
-            )}
-            {projectModalError && (
-              <div style={{ color: "#f87171", fontSize: 13 }}>
-                {projectModalError}
-              </div>
-            )}
+            </>
+          ) : (
             <div
               style={{
                 display: "flex",
-                justifyContent: "flex-end",
-                gap: 12,
+                flexDirection: "column",
+                gap: 10,
+                maxHeight: "50vh",
+                overflowY: "auto",
               }}
             >
-              <button
-                onClick={closeProjectModal}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: 8,
-                  border: "1px solid #2a3344",
-                  background: "#1f2532",
-                  color: "#e6f2ff",
-                }}
-              >
-                Cancel
-              </button>
-              {projectModalMode === "save" ? (
-                <button
-                  onClick={handleConfirmSaveProject}
-                  style={{
-                    padding: "10px 16px",
-                    borderRadius: 8,
-                    border: "1px solid #27E0B0",
-                    background: "#27E0B0",
-                    color: "#1F2532",
-                    fontWeight: 600,
-                  }}
-                >
-                  Save
-                </button>
-              ) : null}
+              {projectList.length === 0 ? (
+                <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                  No projects saved yet
+                </div>
+              ) : (
+                projectList.map((name) => (
+                  <div
+                    key={name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: "1px solid #1f2937",
+                      background: "#0f172a",
+                    }}
+                  >
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{name}</span>
+                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                        Saved locally
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <IconButton
+                        icon="folder_open"
+                        label={`Load project ${name}`}
+                        tone="accent"
+                        onClick={() => handleLoadProjectByName(name)}
+                      />
+                      <IconButton
+                        icon="delete"
+                        label={`Delete project ${name}`}
+                        tone="danger"
+                        onClick={() => handleDeleteProject(name)}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          </div>
-        </div>
+          )}
+          {projectModalError ? (
+            <div style={{ color: "#f87171", fontSize: 13 }}>{projectModalError}</div>
+          ) : null}
+        </Modal>
       )}
-      {isAudioExporting && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(9, 12, 20, 0.7)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-            zIndex: 30,
-          }}
+
+      {(isExportModalOpen || isAudioExporting) && (
+        <Modal
+          isOpen={isExportModalOpen || isAudioExporting}
+          onClose={handleCloseExportModal}
+          title="Export Project"
+          subtitle="Download your jam as JSON or render audio offline."
+          maxWidth={420}
         >
           <div
             style={{
-              background: "#111827",
-              borderRadius: 16,
-              padding: 24,
-              width: "min(320px, 90%)",
+              display: "flex",
+              justifyContent: "center",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+              <IconButton
+                icon="file_download"
+                label="Export project JSON"
+                tone="accent"
+                onClick={handleExportJson}
+                disabled={isAudioExporting}
+              />
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>Project JSON</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+              <IconButton
+                icon="file_download"
+                label="Export audio"
+                tone="accent"
+                onClick={handleExportAudio}
+                disabled={isAudioExporting}
+              />
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>Audio (WAV)</span>
+            </div>
+          </div>
+          <div
+            style={{
+              marginTop: 16,
+              padding: 16,
+              borderRadius: 14,
+              border: "1px solid #1f2937",
+              background: "#0b1624",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 12,
-              boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+              gap: 8,
+              textAlign: "center",
+              color: "#cbd5f5",
+              fontSize: 13,
             }}
           >
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: 32, color: "#27E0B0" }}
+              style={{ fontSize: 28, color: isAudioExporting ? "#27E0B0" : "#94a3b8" }}
             >
-              hourglass_top
+              {isAudioExporting ? "hourglass_top" : "music_note"}
             </span>
-            <div
-              style={{ fontSize: "1.05rem", fontWeight: 600, color: "#e2e8f0" }}
-            >
-              Exporting Audio
-            </div>
-            <div
-              style={{ fontSize: 14, color: "#cbd5f5", textAlign: "center" }}
-            >
-              {audioExportMessage}
-            </div>
+            <span>{isAudioExporting ? audioExportMessage : "Ready to export your mix."}</span>
           </div>
-        </div>
+        </Modal>
       )}
       {!started ? (
         <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
@@ -1465,18 +1431,21 @@ export default function App() {
             >
               Start Jam
             </button>
-            <button
-              onClick={openLoadProjectModal}
+            <div
               style={{
-                padding: "12px 18px",
-                borderRadius: 9999,
-                border: "1px solid #333",
-                background: "#1f2532",
-                color: "#e6f2ff",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              Load Project
-            </button>
+              <IconButton
+                icon="folder_open"
+                label="Load project"
+                onClick={openLoadProjectModal}
+              />
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>Load Project</span>
+            </div>
           </div>
         </div>
       ) : (
@@ -1525,118 +1494,59 @@ export default function App() {
             <div
               style={{
                 marginTop: 12,
-                display: "flex",
-                gap: 8,
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 12,
               }}
             >
-              <button
-                onClick={openSaveProjectModal}
-                style={{
-                  flex: 1,
-                  padding: "8px 0",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#1f2532",
-                  color: "#e6f2ff",
-                }}
-              >
-                Save Project
-              </button>
-              <button
-                onClick={openLoadProjectModal}
-                style={{
-                  flex: 1,
-                  padding: "8px 0",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#1f2532",
-                  color: "#e6f2ff",
-                }}
-              >
-                Load Project
-              </button>
               <div
-                ref={exportMenuRef}
                 style={{
-                  flex: 1,
-                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 6,
                 }}
               >
-                <button
-                  type="button"
+                <IconButton
+                  icon="save"
+                  label="Save project"
+                  onClick={openSaveProjectModal}
+                />
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>Save</span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <IconButton
+                  icon="folder_open"
+                  label="Load project"
+                  onClick={openLoadProjectModal}
+                />
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>Load</span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <IconButton
+                  icon="file_download"
+                  label="Open export options"
                   onClick={() => {
-                    if (isAudioExporting) return;
-                    setIsExportMenuOpen((open) => !open);
+                    setAudioExportMessage("Preparing export…");
+                    setIsExportModalOpen(true);
                   }}
                   disabled={isAudioExporting}
-                  aria-haspopup="menu"
-                  aria-expanded={isExportMenuOpen}
-                  style={{
-                    width: "100%",
-                    padding: "8px 0",
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: "#1f2532",
-                    color: isAudioExporting ? "#475569" : "#e6f2ff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    cursor: isAudioExporting ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <span>Export</span>
-                  <span aria-hidden="true" style={{ fontSize: 16 }}>
-                    ▾
-                  </span>
-                </button>
-                {isExportMenuOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 4px)",
-                      left: 0,
-                      right: 0,
-                      background: "#0f172a",
-                      border: "1px solid #1f2937",
-                      borderRadius: 8,
-                      display: "flex",
-                      flexDirection: "column",
-                      overflow: "hidden",
-                      boxShadow: "0 12px 24px rgba(0,0,0,0.35)",
-                      zIndex: 30,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={handleExportJson}
-                      style={{
-                        padding: "10px 12px",
-                        background: "transparent",
-                        border: "none",
-                        color: "#e6f2ff",
-                        textAlign: "left",
-                      }}
-                    >
-                      Export JSON
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleExportAudio}
-                      disabled={isAudioExporting}
-                      style={{
-                        padding: "10px 12px",
-                        background: "transparent",
-                        border: "none",
-                        color: isAudioExporting ? "#475569" : "#e6f2ff",
-                        textAlign: "left",
-                        cursor: isAudioExporting ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      Export Audio
-                    </button>
-                  </div>
-                )}
+                />
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>Export</span>
               </div>
             </div>
           </div>
