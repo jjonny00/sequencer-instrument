@@ -15,6 +15,7 @@ import { packs } from "./packs";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
+import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -311,20 +312,48 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       if (!activePack || activePack.id !== pack.id) {
         return;
       }
+      const resolvePreset = () => {
+        if (!presetId) return null;
+        if (isUserPresetId(presetId)) {
+          const stored = loadInstrumentPreset(
+            packId,
+            instrumentId,
+            stripUserPresetPrefix(presetId)
+          );
+          if (!stored) return null;
+          const cloned = cloneChunk(stored.pattern);
+          return {
+            pattern: {
+              ...cloned,
+              id: `${stored.id}-${Date.now()}`,
+              instrument: instrumentId,
+              name: stored.name || cloned.name,
+            },
+            name: stored.name || cloned.name,
+            characterId: stored.characterId,
+          };
+        }
+        const preset = activePack.chunks.find((chunk) => chunk.id === presetId);
+        if (!preset) return null;
+        const cloned = cloneChunk(preset);
+        return {
+          pattern: {
+            ...cloned,
+            id: `${preset.id}-${Date.now()}`,
+            instrument: instrumentId,
+            name: preset.name,
+          },
+          name: preset.name,
+          characterId: preset.characterId ?? null,
+        };
+      };
       let createdId: number | null = null;
       setTracks((ts) => {
         const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
         const label = (ts.length + 1).toString().padStart(2, "0");
-        const preset = presetId
-          ? activePack.chunks.find((chunk) => chunk.id === presetId)
-          : null;
-        const basePattern: Chunk = preset
-          ? {
-              ...cloneChunk(preset),
-              id: `${preset.id}-${Date.now()}`,
-              instrument: instrumentId,
-              name: preset.name,
-            }
+        const presetPayload = resolvePreset();
+        const basePattern: Chunk = presetPayload
+          ? presetPayload.pattern
           : {
               id: `track-${nextId}-${Date.now()}`,
               name: `Track ${label} Pattern`,
@@ -335,18 +364,22 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             };
         const instrumentDefinition = activePack.instruments[instrumentId];
         const resolvedCharacterId =
+          presetPayload?.characterId ||
           characterId ||
           basePattern.characterId ||
           instrumentDefinition?.defaultCharacterId ||
           instrumentDefinition?.characters?.[0]?.id ||
           "";
-        const pattern: Chunk = { ...basePattern, characterId: resolvedCharacterId };
+        const pattern: Chunk = {
+          ...basePattern,
+          characterId: resolvedCharacterId,
+        };
         createdId = nextId;
         return [
           ...ts,
           {
             id: nextId,
-            name: label,
+            name: presetPayload?.name ?? label,
             instrument: instrumentId as keyof TriggerMap,
             pattern,
             muted: false,
@@ -381,19 +414,49 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       if (!activePack || activePack.id !== pack.id) {
         return;
       }
+      const resolvePreset = () => {
+        if (!presetId) return null;
+        if (isUserPresetId(presetId)) {
+          const stored = loadInstrumentPreset(
+            packId,
+            instrumentId,
+            stripUserPresetPrefix(presetId)
+          );
+          if (!stored) return null;
+          const cloned = cloneChunk(stored.pattern);
+          return {
+            pattern: {
+              ...cloned,
+              id: `${stored.id}-${Date.now()}`,
+              instrument: instrumentId,
+              name: stored.name || cloned.name,
+            },
+            name: stored.name || cloned.name,
+            characterId: stored.characterId,
+          };
+        }
+        const preset = presetId
+          ? activePack.chunks.find((chunk) => chunk.id === presetId)
+          : null;
+        if (!preset) return null;
+        const cloned = cloneChunk(preset);
+        return {
+          pattern: {
+            ...cloned,
+            id: `${preset.id}-${Date.now()}`,
+            instrument: instrumentId,
+            name: preset.name,
+          },
+          name: preset.name,
+          characterId: preset.characterId ?? null,
+        };
+      };
       setTracks((ts) =>
         ts.map((t) => {
           if (t.id !== trackId) return t;
-          const preset = presetId
-            ? activePack.chunks.find((chunk) => chunk.id === presetId)
-            : null;
-          const basePattern: Chunk | null = preset
-            ? {
-                ...cloneChunk(preset),
-                id: `${preset.id}-${Date.now()}`,
-                instrument: instrumentId,
-                name: preset.name,
-              }
+          const presetPayload = resolvePreset();
+          const basePattern: Chunk | null = presetPayload
+            ? presetPayload.pattern
             : t.pattern
             ? { ...cloneChunk(t.pattern), instrument: instrumentId }
             : {
@@ -406,6 +469,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               };
           const instrumentDefinition = activePack.instruments[instrumentId];
           const resolvedCharacterId =
+            presetPayload?.characterId ||
             characterId ||
             basePattern?.characterId ||
             instrumentDefinition?.defaultCharacterId ||
@@ -414,7 +478,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const nextPattern = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
-          const nextName = preset ? preset.name : t.name;
+          const nextName = presetPayload ? presetPayload.name : t.name;
           return {
             ...t,
             name: nextName,

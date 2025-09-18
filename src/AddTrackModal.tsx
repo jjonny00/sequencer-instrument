@@ -1,8 +1,17 @@
-import type { FC } from "react";
+import { useCallback, useEffect, useMemo, useState, type FC } from "react";
 
 import type { Pack } from "./packs";
 import { getCharacterOptions } from "./addTrackOptions";
 import { formatInstrumentLabel } from "./utils/instrument";
+import {
+  deleteInstrumentPreset,
+  listInstrumentPresets,
+  saveInstrumentPreset,
+  PRESETS_UPDATED_EVENT,
+  stripUserPresetPrefix,
+  USER_PRESET_PREFIX,
+} from "./presets";
+import type { Chunk } from "./chunks";
 
 interface AddTrackModalProps {
   isOpen: boolean;
@@ -12,6 +21,8 @@ interface AddTrackModalProps {
   selectedInstrumentId: string;
   selectedCharacterId: string;
   selectedPresetId: string | null;
+  editingTrackName?: string;
+  editingTrackPattern?: Chunk | null;
   onSelectPack: (packId: string) => void;
   onSelectInstrument: (instrumentId: string) => void;
   onSelectCharacter: (characterId: string) => void;
@@ -29,6 +40,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   selectedInstrumentId,
   selectedCharacterId,
   selectedPresetId,
+  editingTrackName,
+  editingTrackPattern,
   onSelectPack,
   onSelectInstrument,
   onSelectCharacter,
@@ -37,8 +50,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   onConfirm,
   onDelete,
 }) => {
-  if (!isOpen) return null;
-
   const pack = packs.find((p) => p.id === selectedPackId) ?? packs[0] ?? null;
   const instrumentOptions = pack
     ? Object.keys(pack.instruments)
@@ -46,17 +57,110 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const characterOptions = selectedInstrumentId
     ? getCharacterOptions(pack?.id ?? "", selectedInstrumentId)
     : [];
-  const presetOptions = pack
-    ? pack.chunks.filter((chunk) => chunk.instrument === selectedInstrumentId)
-    : [];
+  const presetOptions = useMemo(
+    () =>
+      pack
+        ? pack.chunks.filter((chunk) => chunk.instrument === selectedInstrumentId)
+        : [],
+    [pack, selectedInstrumentId]
+  );
+
+  const [userPresets, setUserPresets] = useState<
+    { id: string; name: string; characterId: string | null }[]
+  >([]);
+
+  const refreshUserPresets = useCallback(() => {
+    if (!pack || !selectedInstrumentId) {
+      setUserPresets([]);
+      return;
+    }
+    const presets = listInstrumentPresets(pack.id, selectedInstrumentId).map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      characterId: preset.characterId,
+    }));
+    setUserPresets(presets);
+  }, [pack, selectedInstrumentId]);
+
+  useEffect(() => {
+    refreshUserPresets();
+  }, [refreshUserPresets]);
+
+  useEffect(() => {
+    const handleUpdate = () => refreshUserPresets();
+    if (typeof window !== "undefined") {
+      window.addEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
+      }
+    };
+  }, [refreshUserPresets]);
+
+  const handleDeletePreset = () => {
+    if (!pack || !selectedInstrumentId) return;
+    if (!selectedPresetId || !selectedPresetId.startsWith(USER_PRESET_PREFIX)) return;
+    const actualId = stripUserPresetPrefix(selectedPresetId);
+    const confirmed = window.confirm("Delete this saved preset pattern?");
+    if (!confirmed) return;
+    const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
+    if (removed) {
+      onSelectPreset(null);
+      refreshUserPresets();
+    }
+  };
+
+  const handleSavePresetPattern = () => {
+    if (!pack || !selectedInstrumentId || !editingTrackPattern) {
+      window.alert("No pattern data available to save as a preset pattern.");
+      return;
+    }
+    const suggestedName =
+      editingTrackName?.trim() || formatInstrumentLabel(selectedInstrumentId);
+    const defaultName = `${suggestedName} Pattern`;
+    const name = window.prompt(
+      "Name your preset pattern",
+      defaultName
+    );
+    if (!name) return;
+    const pattern: Chunk = {
+      ...editingTrackPattern,
+      instrument: selectedInstrumentId,
+      characterId:
+        editingTrackPattern.characterId ?? selectedCharacterId ?? undefined,
+    };
+    const record = saveInstrumentPreset({
+      name,
+      packId: pack.id,
+      instrumentId: selectedInstrumentId,
+      characterId: pattern.characterId ?? null,
+      pattern,
+    });
+    if (!record) {
+      window.alert("Unable to save this preset pattern.");
+      return;
+    }
+    onSelectPreset(`${USER_PRESET_PREFIX}${record.id}`);
+    refreshUserPresets();
+    window.alert("Preset pattern saved.");
+  };
+
+  const hasAnyPresets =
+    presetOptions.length > 0 || userPresets.length > 0 || Boolean(selectedPresetId);
+  const isUserPresetSelected = Boolean(
+    selectedPresetId && selectedPresetId.startsWith(USER_PRESET_PREFIX)
+  );
 
   const confirmDisabled = !pack || !selectedInstrumentId;
   const isEditMode = mode === "edit";
   const title = isEditMode ? "Edit Track" : "Add Track";
   const description = isEditMode
-    ? "Adjust the sound pack, instrument, character, and preset for this track."
-    : "Choose a sound pack, instrument, character, and optional preset to start a new groove.";
+    ? "Adjust the sound pack, instrument, character, and preset pattern for this track."
+    : "Choose a sound pack, instrument, character, and optional preset pattern to start a new groove.";
   const confirmLabel = isEditMode ? "Update Track" : "Add Track";
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -170,7 +274,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>
-            Pattern Preset (optional)
+            Preset Pattern (optional)
           </span>
           <select
             value={selectedPresetId ?? ""}
@@ -182,20 +286,78 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               borderRadius: 10,
               border: "1px solid #334155",
               background: "#111827",
-              color:
-                selectedPresetId || presetOptions.length > 0
-                  ? "#e6f2ff"
-                  : "#64748b",
+              color: hasAnyPresets ? "#e6f2ff" : "#64748b",
             }}
           >
             <option value="">None</option>
-            {presetOptions.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {preset.name}
-              </option>
-            ))}
+            {userPresets.length > 0 ? (
+              <optgroup label="Your Preset Patterns">
+                {userPresets.map((preset) => (
+                  <option
+                    key={preset.id}
+                    value={`${USER_PRESET_PREFIX}${preset.id}`}
+                  >
+                    {preset.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {presetOptions.length > 0 ? (
+              <optgroup label="Pack Preset Patterns">
+                {presetOptions.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </select>
         </label>
+        {isEditMode || isUserPresetSelected ? (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {isEditMode ? (
+              <button
+                type="button"
+                onClick={handleSavePresetPattern}
+                disabled={!editingTrackPattern}
+                style={{
+                  flex: "1 1 160px",
+                  minWidth: 0,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #1d3a2c",
+                  background: editingTrackPattern ? "#1f2532" : "#161b27",
+                  color: editingTrackPattern ? "#e6f2ff" : "#475569",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: editingTrackPattern ? "pointer" : "not-allowed",
+                }}
+              >
+                Save Preset Pattern
+              </button>
+            ) : null}
+            {isUserPresetSelected ? (
+              <button
+                type="button"
+                onClick={handleDeletePreset}
+                style={{
+                  flex: "1 1 160px",
+                  minWidth: 0,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #4c1d24",
+                  background: "#1f2532",
+                  color: "#fca5a5",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Delete Selected Preset Pattern
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div
           style={{

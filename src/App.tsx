@@ -22,6 +22,7 @@ import {
   saveProject as saveStoredProject,
   type StoredProjectData,
 } from "./storage";
+import { isUserPresetId } from "./presets";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -247,6 +248,9 @@ export default function App() {
 
   const handleSelectAddTrackInstrument = useCallback((instrumentId: string) => {
     setAddTrackModalState((state) => {
+      if (state.instrumentId === instrumentId) {
+        return state;
+      }
       const pack = packs.find((candidate) => candidate.id === state.packId);
       const characters = instrumentId
         ? getCharacterOptions(state.packId, instrumentId)
@@ -259,9 +263,7 @@ export default function App() {
       const presetOptions = pack
         ? pack.chunks.filter((chunk) => chunk.instrument === instrumentId)
         : [];
-      const nextPresetId = state.presetId && presetOptions.some((preset) => preset.id === state.presetId)
-        ? state.presetId
-        : presetOptions[0]?.id ?? null;
+      const nextPresetId = presetOptions[0]?.id ?? null;
       return {
         ...state,
         instrumentId,
@@ -306,7 +308,11 @@ export default function App() {
         (chunk) => chunk.instrument === instrumentId
       );
       let presetId = track.source?.presetId ?? null;
-      if (presetId && !presetOptions.some((preset) => preset.id === presetId)) {
+      if (
+        presetId &&
+        !isUserPresetId(presetId) &&
+        !presetOptions.some((preset) => preset.id === presetId)
+      ) {
         presetId = presetOptions[0]?.id ?? null;
       }
       setAddTrackModalState({
@@ -378,6 +384,7 @@ export default function App() {
     );
     if (
       addTrackModalState.presetId &&
+      !isUserPresetId(addTrackModalState.presetId) &&
       !presetOptions.some((preset) => preset.id === addTrackModalState.presetId)
     ) {
       setAddTrackModalState((state) => ({
@@ -766,9 +773,51 @@ export default function App() {
           if (!track.pattern) return track;
           const nextPattern = updater(track.pattern);
           if (nextPattern === track.pattern) return track;
+          const nextSource = track.source
+            ? {
+                ...track.source,
+                characterId:
+                  nextPattern.characterId !== undefined
+                    ? nextPattern.characterId ?? track.source.characterId
+                    : track.source.characterId,
+              }
+            : track.source;
           return {
             ...track,
             pattern: nextPattern,
+            source: nextSource ?? track.source,
+          };
+        })
+      );
+    },
+    [setTracks]
+  );
+
+  const handlePresetApplied = useCallback(
+    (
+      trackId: number,
+      {
+        presetId,
+        characterId,
+        name,
+      }: { presetId: string | null; characterId?: string | null; name?: string }
+    ) => {
+      setTracks((prev) =>
+        prev.map((track) => {
+          if (track.id !== trackId) return track;
+          const nextSource = track.source
+            ? {
+                ...track.source,
+                presetId: presetId ?? null,
+                ...(characterId !== undefined
+                  ? { characterId: characterId ?? track.source.characterId }
+                  : {}),
+              }
+            : track.source;
+          return {
+            ...track,
+            name: name ?? track.name,
+            source: nextSource ?? track.source,
           };
         })
       );
@@ -1098,6 +1147,14 @@ export default function App() {
     closeAddTrackModal();
   }, [addTrackModalState, closeAddTrackModal]);
 
+  const editingTrack = useMemo(
+    () =>
+      addTrackModalState.mode === "edit" && addTrackModalState.targetTrackId !== null
+        ? tracks.find((track) => track.id === addTrackModalState.targetTrackId) ?? null
+        : null,
+    [tracks, addTrackModalState.mode, addTrackModalState.targetTrackId]
+  );
+
   return (
     <div
       style={{
@@ -1120,6 +1177,8 @@ export default function App() {
         selectedInstrumentId={addTrackModalState.instrumentId}
         selectedCharacterId={addTrackModalState.characterId}
         selectedPresetId={addTrackModalState.presetId}
+        editingTrackName={editingTrack?.name}
+        editingTrackPattern={editingTrack?.pattern ?? null}
         onSelectPack={handleSelectAddTrackPack}
         onSelectInstrument={handleSelectAddTrackInstrument}
         onSelectCharacter={handleSelectAddTrackCharacter}
@@ -1815,6 +1874,7 @@ export default function App() {
                       }
                       isRecording={isRecording}
                       onRecordingChange={setIsRecording}
+                      onPresetApplied={handlePresetApplied}
                     />
                   ) : (
                     <div
