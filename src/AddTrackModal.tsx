@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type CSSProperties,
   type FC,
   type KeyboardEvent,
 } from "react";
@@ -209,6 +210,33 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const confirmLabel = isEditMode ? "Update Track" : "Add Track";
   const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
 
+  const footerButtonBaseStyle: CSSProperties = {
+    padding: "10px 20px",
+    borderRadius: 999,
+    border: "1px solid #333",
+    fontSize: 14,
+    fontWeight: 600,
+    letterSpacing: 0.3,
+    minWidth: 120,
+    cursor: "pointer",
+    transition: "background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+  };
+
+  const cancelButtonStyle: CSSProperties = {
+    ...footerButtonBaseStyle,
+    background: "#1f2532",
+    color: "#e6f2ff",
+  };
+
+  const confirmButtonStyle: CSSProperties = {
+    ...footerButtonBaseStyle,
+    background: confirmDisabled ? "#1b2130" : "#27E0B0",
+    color: confirmDisabled ? "#475569" : "#1F2532",
+    border: `1px solid ${confirmDisabled ? "#1f2937" : "#27E0B0"}`,
+    cursor: confirmDisabled ? "not-allowed" : "pointer",
+    opacity: confirmDisabled ? 0.7 : 1,
+  };
+
   const handleTogglePresetSelection = useCallback(
     (presetId: string | null) => {
       if (presetId === null) {
@@ -325,14 +353,21 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <div />
           )}
           <div style={{ display: "flex", gap: 12 }}>
-            <IconButton icon="close" label="Cancel" tone="ghost" onClick={onCancel} />
-            <IconButton
-              icon={isEditMode ? "check" : "add"}
-              label={confirmLabel}
-              tone="accent"
+            <button
+              type="button"
+              onClick={onCancel}
+              style={cancelButtonStyle}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
               onClick={onConfirm}
               disabled={confirmDisabled}
-            />
+              style={confirmButtonStyle}
+            >
+              {confirmLabel}
+            </button>
           </div>
         </div>
       }

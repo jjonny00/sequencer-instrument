@@ -165,6 +165,7 @@ export const Modal: FC<ModalProps> = ({
             flexDirection: "column",
             gap: 16,
             overflowY: "auto",
+            minHeight: 0,
             flex: fullScreen ? "1 1 auto" : undefined,
           }}
         >

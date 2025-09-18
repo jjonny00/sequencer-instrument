@@ -141,7 +141,7 @@ export default function App() {
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
   const [pendingLoopStripAction, setPendingLoopStripAction] = useState<
-    "openLibrary" | "addTrack" | null
+    "openLibrary" | null
   >(null);
   const [addTrackModalState, setAddTrackModalState] = useState<AddTrackModalState>(
     () => createDefaultAddTrackState(packIndex)
@@ -742,14 +742,12 @@ export default function App() {
       }
       if (pendingLoopStripAction === "openLibrary") {
         handle.openSequenceLibrary();
-      } else if (pendingLoopStripAction === "addTrack") {
-        openAddTrackModal();
       }
       setPendingLoopStripAction(null);
     };
     frame = window.requestAnimationFrame(run);
     return () => window.cancelAnimationFrame(frame);
-  }, [pendingLoopStripAction, viewMode, openAddTrackModal]);
+  }, [pendingLoopStripAction, viewMode]);
 
   const updateTrackPattern = useCallback(
     (trackId: number, updater: (pattern: Chunk) => Chunk) => {
@@ -1108,14 +1106,17 @@ export default function App() {
     loopStripRef.current?.openSequenceLibrary();
   };
 
-  const handleAddTrackRequest = () => {
-    if (viewMode !== "track") {
-      setViewMode("track");
-      setPendingLoopStripAction("addTrack");
-      return;
-    }
-    openAddTrackModal();
-  };
+  const handleSelectSequenceFromSongView = useCallback(
+    (groupId: string) => {
+      setSelectedGroupId(groupId);
+      setEditing(null);
+      if (viewMode !== "track") {
+        setViewMode("track");
+        setPendingLoopStripAction(null);
+      }
+    },
+    [setSelectedGroupId, setEditing, viewMode, setPendingLoopStripAction]
+  );
 
   const handleConfirmAddTrack = useCallback(() => {
     if (!addTrackModalState.instrumentId) {
@@ -1507,13 +1508,6 @@ export default function App() {
                   ))
                 )}
               </div>
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <IconButton
-                  icon="folder_open"
-                  label="Browse projects"
-                  onClick={openLoadProjectModal}
-                />
-              </div>
             </div>
           </div>
         </div>
@@ -1856,7 +1850,7 @@ export default function App() {
                 onToggleTransport={handlePlayStop}
                 selectedGroupId={selectedGroupId}
                 onOpenSequenceLibrary={handleOpenSequenceLibrary}
-                onAddTrack={handleAddTrackRequest}
+                onSelectSequence={handleSelectSequenceFromSongView}
               />
             )}
           </div>
