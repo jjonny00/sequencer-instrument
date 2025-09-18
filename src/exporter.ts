@@ -465,21 +465,26 @@ const schedulePattern = (options: SchedulePatternOptions) => {
         ? loopLength
         : events[events.length - 1].time + events[events.length - 1].duration;
     if (computedLoop <= 0) return null;
-    const partEvents = events.map((event) => ({
+    type PartEvent = {
+      time: number;
+      note: string;
+      duration: number;
+      velocity: number;
+    };
+    const partEvents: PartEvent[] = events.map((event) => ({
       time: event.time,
       note: event.note,
       duration: event.duration,
       velocity: event.velocity,
     }));
-    const part = new Tone.Part<{
-      note: string;
-      duration: number;
-      velocity: number;
-    }>((time, event) => {
-      const scaledVelocity = clamp(event.velocity * overallVelocityFactor, 0, 1);
-      if (scaledVelocity <= 0) return;
-      onTrigger(time, scaledVelocity, undefined, event.note, event.duration, pattern);
-    }, partEvents);
+    const part = new Tone.Part(
+      (time, event: PartEvent) => {
+        const scaledVelocity = clamp(event.velocity * overallVelocityFactor, 0, 1);
+        if (scaledVelocity <= 0) return;
+        onTrigger(time, scaledVelocity, undefined, event.note, event.duration, pattern);
+      },
+      partEvents
+    );
     part.loop = true;
     part.loopEnd = computedLoop;
     part.start(startTime);
@@ -538,8 +543,13 @@ const schedulePattern = (options: SchedulePatternOptions) => {
 const encodeToneBufferToWav = (buffer: Tone.ToneAudioBuffer): ArrayBuffer => {
   const channelData = buffer.toArray();
   const sampleRate = buffer.sampleRate;
-  const safeChannelData =
-    channelData.length > 0 ? channelData : [new Float32Array(buffer.length)];
+  const channelArrays = Array.isArray(channelData)
+    ? channelData
+    : [channelData];
+  const safeChannelData: Float32Array[] =
+    channelArrays.length > 0
+      ? channelArrays
+      : [new Float32Array(buffer.length)];
   const channelCount = safeChannelData.length;
   const frameCount = safeChannelData[0]?.length ?? 0;
   const bytesPerSample = 2;
@@ -572,7 +582,8 @@ const encodeToneBufferToWav = (buffer: Tone.ToneAudioBuffer): ArrayBuffer => {
   let offset = 44;
   for (let i = 0; i < frameCount; i += 1) {
     for (let channel = 0; channel < channelCount; channel += 1) {
-      const sample = safeChannelData[channel]?.[i] ?? 0;
+      const channelSamples = safeChannelData[channel];
+      const sample = channelSamples ? channelSamples[i] ?? 0 : 0;
       const clamped = clamp(sample, -1, 1);
       const intSample = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
       view.setInt16(offset, Math.round(intSample), true);
@@ -611,7 +622,7 @@ export const exportProjectAudio = async (
 
   onProgress?.({ step: "rendering", message: "Rendering audio…" });
 
-  let cleanup: (() => void) | null = null;
+  let cleanup: (() => void) | undefined;
   const toneBuffer = await Tone.Offline(async ({ transport }) => {
     transport.cancel(0);
     transport.bpm.value = project.bpm ?? 120;
@@ -644,7 +655,10 @@ export const exportProjectAudio = async (
     transport.stop(duration);
   }, totalRenderDuration);
 
-  cleanup?.();
+  const cleanupFn = cleanup;
+  if (cleanupFn) {
+    cleanupFn();
+  }
 
   onProgress?.({ step: "encoding", message: "Encoding WAV…" });
   const wavBuffer = encodeToneBufferToWav(toneBuffer);
