@@ -771,7 +771,7 @@ export default function App() {
                 ...track.source,
                 characterId:
                   nextPattern.characterId !== undefined
-                    ? nextPattern.characterId ?? null
+                    ? nextPattern.characterId ?? track.source.characterId
                     : track.source.characterId,
               }
             : track.source;
@@ -802,10 +802,9 @@ export default function App() {
             ? {
                 ...track.source,
                 presetId: presetId ?? null,
-                characterId:
-                  characterId !== undefined
-                    ? characterId ?? null
-                    : track.source.characterId ?? null,
+                ...(characterId !== undefined
+                  ? { characterId: characterId ?? track.source.characterId }
+                  : {}),
               }
             : track.source;
           return {

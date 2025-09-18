@@ -526,7 +526,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const sourceInstrumentId = track.source?.instrumentId ?? track.instrument ?? "";
   const [userPresetId, setUserPresetId] = useState<string>("");
   const [userPresets, setUserPresets] = useState<
-    { id: string; name: string; characterId: string | null }
+    { id: string; name: string; characterId: string | null }[]
   >([]);
 
   const refreshUserPresets = useCallback(() => {

@@ -60,7 +60,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   );
 
   const [userPresets, setUserPresets] = useState<
-    { id: string; name: string; characterId: string | null }
+    { id: string; name: string; characterId: string | null }[]
   >([]);
 
   const refreshUserPresets = useCallback(() => {
