@@ -1,4 +1,6 @@
 import * as Tone from "tone";
+import { fromContext } from "tone/build/esm/fromContext";
+import type { TransportClass } from "tone/build/esm/core/clock/Transport";
 
 import type { Chunk } from "./chunks";
 import type { InstrumentCharacter, Pack } from "./packs";
@@ -137,12 +139,15 @@ const resolveCharacter = (
   return definition.characters[0];
 };
 
+type BoundTone = ReturnType<typeof fromContext>;
+
 const createInstrumentInstance = (
+  tone: BoundTone,
   instrumentId: string,
   character: InstrumentCharacter
 ): { instrument: ToneInstrument; keyboardFx?: KeyboardFxNodes } => {
   const ctor = (
-    Tone as unknown as Record<
+    tone as unknown as Record<
       string,
       new (opts?: Record<string, unknown>) => ToneInstrument
     >
@@ -158,11 +163,14 @@ const createInstrumentInstance = (
       voiceOptions?: Record<string, unknown>;
     } & Record<string, unknown>;
     const { voice, voiceOptions, ...polyOptions } = options;
-    if (voice && voice in Tone) {
+    if (voice && voice in tone) {
       const VoiceCtor = (
-        Tone as unknown as Record<string, new (opts?: Record<string, unknown>) => Tone.Synth>
+        tone as unknown as Record<
+          string,
+          new (opts?: Record<string, unknown>) => Tone.Synth
+        >
       )[voice];
-      const PolyCtor = Tone.PolySynth as unknown as new (
+      const PolyCtor = tone.PolySynth as unknown as new (
         voice?: new (opts?: Record<string, unknown>) => Tone.Synth,
         options?: Record<string, unknown>
       ) => ToneInstrument;
@@ -182,7 +190,7 @@ const createInstrumentInstance = (
   let node: Tone.ToneAudioNode = instrument;
   (character.effects ?? []).forEach((effect) => {
     const EffectCtor = (
-      Tone as unknown as Record<
+      tone as unknown as Record<
         string,
         new (opts?: Record<string, unknown>) => Tone.ToneAudioNode
       >
@@ -194,19 +202,19 @@ const createInstrumentInstance = (
   });
 
   if (instrumentId === "keyboard") {
-    const distortion = new Tone.Distortion(0);
-    const bitCrusher = new Tone.BitCrusher(4);
+    const distortion = new tone.Distortion(0);
+    const bitCrusher = new tone.BitCrusher(4);
     bitCrusher.wet.value = 0;
-    const chorus = new Tone.Chorus(4, 2.5, 0.5).start();
+    const chorus = new tone.Chorus(4, 2.5, 0.5).start();
     chorus.wet.value = 0;
-    const tremolo = new Tone.Tremolo(9, 0.75).start();
+    const tremolo = new tone.Tremolo(9, 0.75).start();
     tremolo.wet.value = 0;
-    const filter = new Tone.Filter({ type: "lowpass", frequency: 20000 });
-    const reverb = new Tone.Reverb(2.8);
+    const filter = new tone.Filter({ type: "lowpass", frequency: 20000 });
+    const reverb = new tone.Reverb(2.8);
     reverb.wet.value = 0;
-    const delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.2 });
+    const delay = new tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.2 });
     delay.wet.value = 0;
-    const panner = new Tone.Panner(0);
+    const panner = new tone.Panner(0);
     node.connect(distortion);
     distortion.connect(bitCrusher);
     bitCrusher.connect(chorus);
@@ -215,7 +223,7 @@ const createInstrumentInstance = (
     filter.connect(reverb);
     reverb.connect(delay);
     delay.connect(panner);
-    panner.connect(Tone.Destination);
+    panner.connect(tone.Destination);
     return {
       instrument,
       keyboardFx: {
@@ -231,11 +239,12 @@ const createInstrumentInstance = (
     };
   }
 
-  node.toDestination();
+  node.connect(tone.Destination);
   return { instrument };
 };
 
 const createOfflineTriggerMap = (
+  tone: BoundTone,
   pack: Pack
 ): { triggerMap: TriggerMap; dispose: () => void } => {
   const instrumentRefs: Record<string, ToneInstrument> = {};
@@ -262,7 +271,7 @@ const createOfflineTriggerMap = (
       const key = `${instrumentId}:${character.id}`;
       let inst = instrumentRefs[key];
       if (!inst) {
-        const created = createInstrumentInstance(instrumentId, character);
+        const created = createInstrumentInstance(tone, instrumentId, character);
         inst = created.instrument;
         instrumentRefs[key] = inst;
         if (created.keyboardFx) {
@@ -444,7 +453,10 @@ const buildSongSchedules = (
   };
 };
 
-const schedulePattern = (options: SchedulePatternOptions): number[] => {
+const schedulePattern = (
+  transport: TransportClass,
+  options: SchedulePatternOptions
+): number[] => {
   const { pattern, startTime, stopTime, velocityScale, onTrigger } = options;
   if (stopTime <= startTime) return [];
   const timingMode = pattern.timingMode === "free" ? "free" : "sync";
@@ -492,7 +504,7 @@ const schedulePattern = (options: SchedulePatternOptions): number[] => {
         const scaledVelocity = clamp(event.velocity * overallVelocityFactor, 0, 1);
         if (scaledVelocity <= 0) return;
         const scheduledTime = clampHumanizedTime(eventTime);
-        const id = Tone.Transport.schedule((transportTime) => {
+        const id = transport.schedule((transportTime) => {
           onTrigger(
             transportTime,
             scaledVelocity,
@@ -554,7 +566,7 @@ const schedulePattern = (options: SchedulePatternOptions): number[] => {
           : rawTime;
       const scheduledTime = clampHumanizedTime(swungTime);
       const sustainSeconds = computeSustainSeconds(stepIndex);
-      const id = Tone.Transport.schedule((transportTime) => {
+      const id = transport.schedule((transportTime) => {
         onTrigger(
           transportTime,
           velocity,
@@ -653,24 +665,23 @@ export const exportProjectAudio = async (
 
   onProgress?.({ step: "rendering", message: "Rendering audio…" });
 
-  const previousContext = Tone.getContext();
   let cleanup: (() => void) | undefined;
   let toneBuffer: Tone.ToneAudioBuffer;
   try {
     toneBuffer = await Tone.Offline(async (offlineContext) => {
-      Tone.setContext(offlineContext);
-      const transport = Tone.Transport;
+      const tone = fromContext(offlineContext);
+      const transport = offlineContext.transport;
       transport.cancel(0);
       transport.position = 0;
       transport.seconds = 0;
       transport.bpm.value = project.bpm ?? 120;
-      const { triggerMap, dispose } = createOfflineTriggerMap(pack);
+      const { triggerMap, dispose } = createOfflineTriggerMap(tone, pack);
       const scheduledEventIds: number[] = [];
 
       schedules.forEach((schedule) => {
         const trigger = triggerMap[schedule.instrumentId];
         if (!trigger) return;
-        const ids = schedulePattern({
+        const ids = schedulePattern(transport, {
           pattern: schedule.pattern,
           startTime: schedule.startTime,
           stopTime: schedule.stopTime,
@@ -684,7 +695,7 @@ export const exportProjectAudio = async (
 
       cleanup = () => {
         scheduledEventIds.forEach((id) => {
-          Tone.Transport.clear(id);
+          transport.clear(id);
         });
         dispose();
       };
@@ -693,10 +704,7 @@ export const exportProjectAudio = async (
       transport.stop(totalRenderDuration);
     }, totalRenderDuration);
   } finally {
-    const transport = Tone.Transport;
-    transport.cancel(0);
     cleanup?.();
-    Tone.setContext(previousContext);
   }
 
   onProgress?.({ step: "encoding", message: "Encoding WAV…" });
