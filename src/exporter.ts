@@ -628,8 +628,10 @@ export const exportProjectAudio = async (
   try {
     toneBuffer = await Tone.Offline(async (offlineContext) => {
       Tone.setContext(offlineContext);
-      const { transport } = offlineContext;
+      const transport = Tone.Transport;
       transport.cancel(0);
+      transport.position = 0;
+      transport.seconds = 0;
       transport.bpm.value = project.bpm ?? 120;
       const { triggerMap, dispose } = createOfflineTriggerMap(pack);
       const disposables: Array<{ dispose: () => void }> = [];
@@ -660,8 +662,10 @@ export const exportProjectAudio = async (
       transport.stop(totalRenderDuration);
     }, totalRenderDuration);
   } finally {
-    Tone.setContext(previousContext);
+    const transport = Tone.Transport;
+    transport.cancel(0);
     cleanup?.();
+    Tone.setContext(previousContext);
   }
 
   onProgress?.({ step: "encoding", message: "Encoding WAV…" });
