@@ -65,7 +65,9 @@ export const Modal: FC<ModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    if (typeof window === "undefined" || typeof document === "undefined") {
+    const win = typeof window !== "undefined" ? window : undefined;
+    const doc = typeof document !== "undefined" ? document : undefined;
+    if (!win || !doc) {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -74,12 +76,12 @@ export const Modal: FC<ModalProps> = ({
         onClose();
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    const { body } = document;
+    win.addEventListener("keydown", handleKeyDown);
+    const { body } = doc;
     const previousOverflow = body.style.overflow;
     body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      win.removeEventListener("keydown", handleKeyDown);
       body.style.overflow = previousOverflow;
     };
   }, [isOpen, onClose]);
