@@ -22,6 +22,7 @@ import {
   saveProject as saveStoredProject,
   type StoredProjectData,
 } from "./storage";
+import { isUserPresetId } from "./presets";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -247,6 +248,9 @@ export default function App() {
 
   const handleSelectAddTrackInstrument = useCallback((instrumentId: string) => {
     setAddTrackModalState((state) => {
+      if (state.instrumentId === instrumentId) {
+        return state;
+      }
       const pack = packs.find((candidate) => candidate.id === state.packId);
       const characters = instrumentId
         ? getCharacterOptions(state.packId, instrumentId)
@@ -259,9 +263,7 @@ export default function App() {
       const presetOptions = pack
         ? pack.chunks.filter((chunk) => chunk.instrument === instrumentId)
         : [];
-      const nextPresetId = state.presetId && presetOptions.some((preset) => preset.id === state.presetId)
-        ? state.presetId
-        : presetOptions[0]?.id ?? null;
+      const nextPresetId = presetOptions[0]?.id ?? null;
       return {
         ...state,
         instrumentId,
@@ -306,7 +308,11 @@ export default function App() {
         (chunk) => chunk.instrument === instrumentId
       );
       let presetId = track.source?.presetId ?? null;
-      if (presetId && !presetOptions.some((preset) => preset.id === presetId)) {
+      if (
+        presetId &&
+        !isUserPresetId(presetId) &&
+        !presetOptions.some((preset) => preset.id === presetId)
+      ) {
         presetId = presetOptions[0]?.id ?? null;
       }
       setAddTrackModalState({
@@ -378,6 +384,7 @@ export default function App() {
     );
     if (
       addTrackModalState.presetId &&
+      !isUserPresetId(addTrackModalState.presetId) &&
       !presetOptions.some((preset) => preset.id === addTrackModalState.presetId)
     ) {
       setAddTrackModalState((state) => ({
