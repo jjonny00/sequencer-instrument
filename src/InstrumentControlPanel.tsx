@@ -13,6 +13,13 @@ import type { Track } from "./tracks";
 import { formatInstrumentLabel } from "./utils/instrument";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
 import { ARP_PRESETS } from "./arpPresets";
+import {
+  deleteInstrumentPreset,
+  listInstrumentPresets,
+  loadInstrumentPreset,
+  PRESETS_UPDATED_EVENT,
+  USER_PRESET_PREFIX,
+} from "./presets";
 
 interface InstrumentControlPanelProps {
   track: Track;
@@ -29,6 +36,10 @@ interface InstrumentControlPanelProps {
   ) => void;
   isRecording?: boolean;
   onRecordingChange?: Dispatch<SetStateAction<boolean>>;
+  onPresetApplied?: (
+    trackId: number,
+    payload: { presetId: string | null; characterId?: string | null; name?: string }
+  ) => void;
 }
 
 interface SliderProps {
@@ -278,6 +289,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   trigger,
   isRecording = false,
   onRecordingChange,
+  onPresetApplied,
 }) => {
   const pattern = track.pattern;
   const instrumentLabel = formatInstrumentLabel(track.instrument ?? "");
@@ -509,6 +521,165 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     }
     return next;
   };
+
+  const packId = track.source?.packId ?? "";
+  const sourceInstrumentId = track.source?.instrumentId ?? track.instrument ?? "";
+  const [userPresetId, setUserPresetId] = useState<string>("");
+  const [userPresets, setUserPresets] = useState<
+    { id: string; name: string; characterId: string | null }
+  >([]);
+
+  const refreshUserPresets = useCallback(() => {
+    if (!packId || !sourceInstrumentId) {
+      setUserPresets([]);
+      return;
+    }
+    const presets = listInstrumentPresets(packId, sourceInstrumentId).map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      characterId: preset.characterId,
+    }));
+    setUserPresets(presets);
+  }, [packId, sourceInstrumentId]);
+
+  useEffect(() => {
+    refreshUserPresets();
+  }, [refreshUserPresets]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => refreshUserPresets();
+    window.addEventListener(PRESETS_UPDATED_EVENT, handler);
+    return () => {
+      window.removeEventListener(PRESETS_UPDATED_EVENT, handler);
+    };
+  }, [refreshUserPresets]);
+
+  useEffect(() => {
+    setUserPresetId("");
+  }, [packId, sourceInstrumentId]);
+
+  useEffect(() => {
+    if (!userPresetId) return;
+    const exists = userPresets.some((preset) => preset.id === userPresetId);
+    if (!exists) {
+      setUserPresetId("");
+    }
+  }, [userPresetId, userPresets]);
+
+  const handleLoadUserPreset = useCallback(() => {
+    if (!onUpdatePattern || !pattern) return;
+    if (!packId || !sourceInstrumentId || !userPresetId) return;
+    const preset = loadInstrumentPreset(packId, sourceInstrumentId, userPresetId);
+    if (!preset) return;
+    onUpdatePattern((current) => {
+      const next: Chunk = {
+        ...current,
+        ...preset.pattern,
+        id: current.id,
+        instrument: current.instrument,
+        name: preset.name || current.name,
+        characterId: preset.characterId ?? preset.pattern.characterId ?? current.characterId,
+      };
+      return next;
+    });
+    onPresetApplied?.(track.id, {
+      presetId: `${USER_PRESET_PREFIX}${preset.id}`,
+      characterId: preset.characterId ?? null,
+      name: preset.name,
+    });
+  }, [
+    onUpdatePattern,
+    pattern,
+    packId,
+    sourceInstrumentId,
+    userPresetId,
+    onPresetApplied,
+    track.id,
+  ]);
+
+  const handleDeleteUserPreset = useCallback(() => {
+    if (!packId || !sourceInstrumentId || !userPresetId) return;
+    const confirmed = window.confirm("Delete this saved preset?");
+    if (!confirmed) return;
+    const removed = deleteInstrumentPreset(packId, sourceInstrumentId, userPresetId);
+    if (removed) {
+      setUserPresetId("");
+      refreshUserPresets();
+    }
+  }, [packId, sourceInstrumentId, userPresetId, refreshUserPresets]);
+
+  const presetControls = packId && sourceInstrumentId ? (
+    <Section>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8" }}>
+            Load Saved Preset
+          </span>
+          <select
+            value={userPresetId}
+            onChange={(event) => setUserPresetId(event.target.value)}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #1d2636",
+              background: "#0f172a",
+              color: userPresets.length > 0 ? "#f1f5f9" : "#475569",
+            }}
+          >
+            <option value="">
+              {userPresets.length > 0
+                ? "Select a preset"
+                : "No saved presets for this instrument"}
+            </option>
+            {userPresets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={handleLoadUserPreset}
+            disabled={!userPresetId}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #1d2636",
+              background: userPresetId ? "#27E0B0" : "#162032",
+              color: userPresetId ? "#0f172a" : "#475569",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: userPresetId ? "pointer" : "not-allowed",
+            }}
+          >
+            Load Preset
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteUserPreset}
+            disabled={!userPresetId}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #442127",
+              background: userPresetId ? "#1f2532" : "#161b27",
+              color: userPresetId ? "#fca5a5" : "#475569",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: userPresetId ? "pointer" : "not-allowed",
+            }}
+          >
+            Delete Preset
+          </button>
+        </div>
+      </div>
+    </Section>
+  ) : null;
 
   const recordNoteToPattern = useCallback(
     ({
@@ -1146,6 +1317,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        {presetControls}
         <div
           style={{
             position: "sticky",
@@ -1766,6 +1938,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {presetControls}
       {stickySections.length ? (
         <div
           style={{

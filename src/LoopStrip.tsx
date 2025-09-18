@@ -15,6 +15,12 @@ import { packs } from "./packs";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
+import {
+  isUserPresetId,
+  loadInstrumentPreset,
+  saveInstrumentPreset,
+  stripUserPresetPrefix,
+} from "./presets";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -311,20 +317,48 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       if (!activePack || activePack.id !== pack.id) {
         return;
       }
+      const resolvePreset = () => {
+        if (!presetId) return null;
+        if (isUserPresetId(presetId)) {
+          const stored = loadInstrumentPreset(
+            packId,
+            instrumentId,
+            stripUserPresetPrefix(presetId)
+          );
+          if (!stored) return null;
+          const cloned = cloneChunk(stored.pattern);
+          return {
+            pattern: {
+              ...cloned,
+              id: `${stored.id}-${Date.now()}`,
+              instrument: instrumentId,
+              name: stored.name || cloned.name,
+            },
+            name: stored.name || cloned.name,
+            characterId: stored.characterId,
+          };
+        }
+        const preset = activePack.chunks.find((chunk) => chunk.id === presetId);
+        if (!preset) return null;
+        const cloned = cloneChunk(preset);
+        return {
+          pattern: {
+            ...cloned,
+            id: `${preset.id}-${Date.now()}`,
+            instrument: instrumentId,
+            name: preset.name,
+          },
+          name: preset.name,
+          characterId: preset.characterId ?? null,
+        };
+      };
       let createdId: number | null = null;
       setTracks((ts) => {
         const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
         const label = (ts.length + 1).toString().padStart(2, "0");
-        const preset = presetId
-          ? activePack.chunks.find((chunk) => chunk.id === presetId)
-          : null;
-        const basePattern: Chunk = preset
-          ? {
-              ...cloneChunk(preset),
-              id: `${preset.id}-${Date.now()}`,
-              instrument: instrumentId,
-              name: preset.name,
-            }
+        const presetPayload = resolvePreset();
+        const basePattern: Chunk = presetPayload
+          ? presetPayload.pattern
           : {
               id: `track-${nextId}-${Date.now()}`,
               name: `Track ${label} Pattern`,
@@ -335,18 +369,22 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             };
         const instrumentDefinition = activePack.instruments[instrumentId];
         const resolvedCharacterId =
+          presetPayload?.characterId ||
           characterId ||
           basePattern.characterId ||
           instrumentDefinition?.defaultCharacterId ||
           instrumentDefinition?.characters?.[0]?.id ||
           "";
-        const pattern: Chunk = { ...basePattern, characterId: resolvedCharacterId };
+        const pattern: Chunk = {
+          ...basePattern,
+          characterId: resolvedCharacterId,
+        };
         createdId = nextId;
         return [
           ...ts,
           {
             id: nextId,
-            name: label,
+            name: presetPayload?.name ?? label,
             instrument: instrumentId as keyof TriggerMap,
             pattern,
             muted: false,
@@ -381,19 +419,49 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       if (!activePack || activePack.id !== pack.id) {
         return;
       }
+      const resolvePreset = () => {
+        if (!presetId) return null;
+        if (isUserPresetId(presetId)) {
+          const stored = loadInstrumentPreset(
+            packId,
+            instrumentId,
+            stripUserPresetPrefix(presetId)
+          );
+          if (!stored) return null;
+          const cloned = cloneChunk(stored.pattern);
+          return {
+            pattern: {
+              ...cloned,
+              id: `${stored.id}-${Date.now()}`,
+              instrument: instrumentId,
+              name: stored.name || cloned.name,
+            },
+            name: stored.name || cloned.name,
+            characterId: stored.characterId,
+          };
+        }
+        const preset = presetId
+          ? activePack.chunks.find((chunk) => chunk.id === presetId)
+          : null;
+        if (!preset) return null;
+        const cloned = cloneChunk(preset);
+        return {
+          pattern: {
+            ...cloned,
+            id: `${preset.id}-${Date.now()}`,
+            instrument: instrumentId,
+            name: preset.name,
+          },
+          name: preset.name,
+          characterId: preset.characterId ?? null,
+        };
+      };
       setTracks((ts) =>
         ts.map((t) => {
           if (t.id !== trackId) return t;
-          const preset = presetId
-            ? activePack.chunks.find((chunk) => chunk.id === presetId)
-            : null;
-          const basePattern: Chunk | null = preset
-            ? {
-                ...cloneChunk(preset),
-                id: `${preset.id}-${Date.now()}`,
-                instrument: instrumentId,
-                name: preset.name,
-              }
+          const presetPayload = resolvePreset();
+          const basePattern: Chunk | null = presetPayload
+            ? presetPayload.pattern
             : t.pattern
             ? { ...cloneChunk(t.pattern), instrument: instrumentId }
             : {
@@ -406,6 +474,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               };
           const instrumentDefinition = activePack.instruments[instrumentId];
           const resolvedCharacterId =
+            presetPayload?.characterId ||
             characterId ||
             basePattern?.characterId ||
             instrumentDefinition?.defaultCharacterId ||
@@ -414,7 +483,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const nextPattern = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
-          const nextName = preset ? preset.name : t.name;
+          const nextName = presetPayload ? presetPayload.name : t.name;
           return {
             ...t,
             name: nextName,
@@ -581,6 +650,51 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       })
     );
   };
+
+  const eligiblePresetCount = useMemo(
+    () =>
+      tracks.filter(
+        (track) =>
+          Boolean(
+            track.pattern &&
+              track.source?.packId &&
+              track.source?.instrumentId &&
+              track.instrument
+          )
+      ).length,
+    [tracks]
+  );
+
+  const handleSaveGroupAsPresets = useCallback(() => {
+    if (!selectedGroup) return;
+    if (eligiblePresetCount === 0) {
+      window.alert("No patterns available to save as presets.");
+      return;
+    }
+    let saved = 0;
+    tracks.forEach((track) => {
+      if (!track.pattern) return;
+      const packId = track.source?.packId;
+      const instrumentId = track.source?.instrumentId ?? track.instrument;
+      if (!packId || !instrumentId) return;
+      const characterId =
+        track.pattern.characterId ?? track.source?.characterId ?? null;
+      const name = `${selectedGroup.name} • ${track.name}`;
+      const record = saveInstrumentPreset({
+        name,
+        packId,
+        instrumentId,
+        characterId,
+        pattern: track.pattern,
+      });
+      if (record) saved += 1;
+    });
+    if (saved > 0) {
+      window.alert(`Saved ${saved} preset${saved === 1 ? "" : "s"}.`);
+    } else {
+      window.alert("Failed to save presets for this sequence.");
+    }
+  }, [eligiblePresetCount, selectedGroup, tracks]);
 
   const handleDeleteGroup = () => {
     if (!selectedGroupId) return;
@@ -1094,6 +1208,36 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               >
                 <span className="material-symbols-outlined">save</span>
                 Save
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveGroupAsPresets}
+                disabled={eligiblePresetCount === 0 || !selectedGroup}
+                aria-label="Save sequence as presets"
+                title="Save sequence as presets"
+                style={{
+                  flex: "1 1 140px",
+                  minWidth: 0,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #333",
+                  background:
+                    eligiblePresetCount > 0 && selectedGroup ? "#1f2532" : "#161b27",
+                  color:
+                    eligiblePresetCount > 0 && selectedGroup
+                      ? "#e6f2ff"
+                      : "#475569",
+                  cursor:
+                    eligiblePresetCount > 0 && selectedGroup ? "pointer" : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  fontWeight: 600,
+                }}
+              >
+                <span className="material-symbols-outlined">bookmark_add</span>
+                Save Presets
               </button>
               <button
                 type="button"

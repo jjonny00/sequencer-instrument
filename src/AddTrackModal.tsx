@@ -1,8 +1,15 @@
-import type { FC } from "react";
+import { useCallback, useEffect, useMemo, useState, type FC } from "react";
 
 import type { Pack } from "./packs";
 import { getCharacterOptions } from "./addTrackOptions";
 import { formatInstrumentLabel } from "./utils/instrument";
+import {
+  deleteInstrumentPreset,
+  listInstrumentPresets,
+  PRESETS_UPDATED_EVENT,
+  stripUserPresetPrefix,
+  USER_PRESET_PREFIX,
+} from "./presets";
 
 interface AddTrackModalProps {
   isOpen: boolean;
@@ -37,8 +44,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   onConfirm,
   onDelete,
 }) => {
-  if (!isOpen) return null;
-
   const pack = packs.find((p) => p.id === selectedPackId) ?? packs[0] ?? null;
   const instrumentOptions = pack
     ? Object.keys(pack.instruments)
@@ -46,9 +51,65 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const characterOptions = selectedInstrumentId
     ? getCharacterOptions(pack?.id ?? "", selectedInstrumentId)
     : [];
-  const presetOptions = pack
-    ? pack.chunks.filter((chunk) => chunk.instrument === selectedInstrumentId)
-    : [];
+  const presetOptions = useMemo(
+    () =>
+      pack
+        ? pack.chunks.filter((chunk) => chunk.instrument === selectedInstrumentId)
+        : [],
+    [pack, selectedInstrumentId]
+  );
+
+  const [userPresets, setUserPresets] = useState<
+    { id: string; name: string; characterId: string | null }
+  >([]);
+
+  const refreshUserPresets = useCallback(() => {
+    if (!pack || !selectedInstrumentId) {
+      setUserPresets([]);
+      return;
+    }
+    const presets = listInstrumentPresets(pack.id, selectedInstrumentId).map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      characterId: preset.characterId,
+    }));
+    setUserPresets(presets);
+  }, [pack, selectedInstrumentId]);
+
+  useEffect(() => {
+    refreshUserPresets();
+  }, [refreshUserPresets]);
+
+  useEffect(() => {
+    const handleUpdate = () => refreshUserPresets();
+    if (typeof window !== "undefined") {
+      window.addEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
+      }
+    };
+  }, [refreshUserPresets]);
+
+  const handleDeletePreset = () => {
+    if (!pack || !selectedInstrumentId) return;
+    if (!selectedPresetId || !selectedPresetId.startsWith(USER_PRESET_PREFIX)) return;
+    const actualId = stripUserPresetPrefix(selectedPresetId);
+    const confirmed = window.confirm("Delete this saved preset?");
+    if (!confirmed) return;
+    const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
+    if (removed) {
+      onSelectPreset(null);
+      refreshUserPresets();
+    }
+  };
+
+  const hasAnyPresets =
+    presetOptions.length > 0 || userPresets.length > 0 || Boolean(selectedPresetId);
+  const isUserPresetSelected = Boolean(
+    selectedPresetId && selectedPresetId.startsWith(USER_PRESET_PREFIX)
+  );
 
   const confirmDisabled = !pack || !selectedInstrumentId;
   const isEditMode = mode === "edit";
@@ -57,6 +118,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Adjust the sound pack, instrument, character, and preset for this track."
     : "Choose a sound pack, instrument, character, and optional preset to start a new groove.";
   const confirmLabel = isEditMode ? "Update Track" : "Add Track";
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -182,20 +245,51 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               borderRadius: 10,
               border: "1px solid #334155",
               background: "#111827",
-              color:
-                selectedPresetId || presetOptions.length > 0
-                  ? "#e6f2ff"
-                  : "#64748b",
+              color: hasAnyPresets ? "#e6f2ff" : "#64748b",
             }}
           >
             <option value="">None</option>
-            {presetOptions.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {preset.name}
-              </option>
-            ))}
+            {userPresets.length > 0 ? (
+              <optgroup label="Your Presets">
+                {userPresets.map((preset) => (
+                  <option
+                    key={preset.id}
+                    value={`${USER_PRESET_PREFIX}${preset.id}`}
+                  >
+                    {preset.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {presetOptions.length > 0 ? (
+              <optgroup label="Pack Presets">
+                {presetOptions.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </select>
         </label>
+        {isUserPresetSelected ? (
+          <button
+            type="button"
+            onClick={handleDeletePreset}
+            style={{
+              alignSelf: "flex-end",
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #4c1d24",
+              background: "#1f2532",
+              color: "#fca5a5",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            Delete Selected Preset
+          </button>
+        ) : null}
 
         <div
           style={{

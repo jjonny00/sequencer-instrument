@@ -766,9 +766,52 @@ export default function App() {
           if (!track.pattern) return track;
           const nextPattern = updater(track.pattern);
           if (nextPattern === track.pattern) return track;
+          const nextSource = track.source
+            ? {
+                ...track.source,
+                characterId:
+                  nextPattern.characterId !== undefined
+                    ? nextPattern.characterId ?? null
+                    : track.source.characterId,
+              }
+            : track.source;
           return {
             ...track,
             pattern: nextPattern,
+            source: nextSource ?? track.source,
+          };
+        })
+      );
+    },
+    [setTracks]
+  );
+
+  const handlePresetApplied = useCallback(
+    (
+      trackId: number,
+      {
+        presetId,
+        characterId,
+        name,
+      }: { presetId: string | null; characterId?: string | null; name?: string }
+    ) => {
+      setTracks((prev) =>
+        prev.map((track) => {
+          if (track.id !== trackId) return track;
+          const nextSource = track.source
+            ? {
+                ...track.source,
+                presetId: presetId ?? null,
+                characterId:
+                  characterId !== undefined
+                    ? characterId ?? null
+                    : track.source.characterId ?? null,
+              }
+            : track.source;
+          return {
+            ...track,
+            name: name ?? track.name,
+            source: nextSource ?? track.source,
           };
         })
       );
@@ -1815,6 +1858,7 @@ export default function App() {
                       }
                       isRecording={isRecording}
                       onRecordingChange={setIsRecording}
+                      onPresetApplied={handlePresetApplied}
                     />
                   ) : (
                     <div
