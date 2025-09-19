@@ -211,15 +211,21 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
 
   const footerButtonBaseStyle: CSSProperties = {
-    padding: "10px 20px",
+    padding: "8px 18px",
     borderRadius: 999,
     border: "1px solid #333",
     fontSize: 14,
     fontWeight: 600,
     letterSpacing: 0.3,
-    minWidth: 120,
+    minWidth: 0,
     cursor: "pointer",
     transition: "background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+  };
+
+  const compactIconButtonStyle: CSSProperties = {
+    minHeight: 36,
+    minWidth: 36,
+    borderRadius: 10,
   };
 
   const cancelButtonStyle: CSSProperties = {
@@ -325,24 +331,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? combinedPresetItems.find((preset) => preset.id === selectedPresetId)?.name ?? "Custom"
     : "None";
 
-  const contentWrapperStyle: CSSProperties = {
+  const sectionListStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
     gap: 16,
     flex: "1 1 auto",
     minHeight: 0,
-  };
-
-  const scrollContainerStyle: CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-    flex: "1 1 auto",
-    minHeight: 0,
-    overflowY: "auto",
     paddingRight: 4,
-    paddingBottom: 24,
-    WebkitOverflowScrolling: "touch",
+    paddingBottom: 16,
   };
 
   return (
@@ -358,8 +354,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
+            gap: 12,
             width: "100%",
+            padding: "4px 0",
           }}
         >
           {isEditMode && onDelete ? (
@@ -367,6 +364,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               icon="delete"
               label="Remove track"
               tone="danger"
+              iconSize={20}
+              style={compactIconButtonStyle}
               onClick={onDelete}
             />
           ) : (
@@ -392,95 +391,94 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </div>
       }
     >
-      <div style={contentWrapperStyle}>
-        <div style={scrollContainerStyle}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-            <select
-              value={pack?.id ?? ""}
-              onChange={(event) => onSelectPack(event.target.value)}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
-                color: "#e6f2ff",
-              }}
-            >
-              {packs.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-            <select
-              value={selectedInstrumentId}
-              onChange={(event) => onSelectInstrument(event.target.value)}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
-                color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
-              }}
-            >
-              {instrumentOptions.length === 0 ? (
-                <option value="" disabled>
-                  No instruments available
-                </option>
-              ) : (
-                instrumentOptions.map((instrument) => (
-                  <option key={instrument} value={instrument}>
-                    {formatInstrumentLabel(instrument)}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Character</span>
-            <select
-              value={selectedCharacterId}
-              onChange={(event) => onSelectCharacter(event.target.value)}
-              disabled={characterOptions.length === 0}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
-                color: characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
-              }}
-            >
-              {characterOptions.length === 0 ? (
-                <option value="" disabled>
-                  No characters
-                </option>
-              ) : (
-                characterOptions.map((character) => (
-                  <option key={character.id} value={character.id}>
-                    {character.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-
-          <div
+      <div style={sectionListStyle}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
+          <select
+            value={pack?.id ?? ""}
+            onChange={(event) => onSelectPack(event.target.value)}
             style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              padding: 16,
-              borderRadius: 16,
-              background: "#0b1624",
-              border: "1px solid #1f2937",
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #2f384a",
+              background: "#0f172a",
+              color: "#e6f2ff",
             }}
           >
+            {packs.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
+          <select
+            value={selectedInstrumentId}
+            onChange={(event) => onSelectInstrument(event.target.value)}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #2f384a",
+              background: "#0f172a",
+              color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
+            }}
+          >
+            {instrumentOptions.length === 0 ? (
+              <option value="" disabled>
+                No instruments available
+              </option>
+            ) : (
+              instrumentOptions.map((instrument) => (
+                <option key={instrument} value={instrument}>
+                  {formatInstrumentLabel(instrument)}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Character</span>
+          <select
+            value={selectedCharacterId}
+            onChange={(event) => onSelectCharacter(event.target.value)}
+            disabled={characterOptions.length === 0}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #2f384a",
+              background: "#0f172a",
+              color: characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
+            }}
+          >
+            {characterOptions.length === 0 ? (
+              <option value="" disabled>
+                No characters
+              </option>
+            ) : (
+              characterOptions.map((character) => (
+                <option key={character.id} value={character.id}>
+                  {character.name}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            padding: 16,
+            borderRadius: 16,
+            background: "#0b1624",
+            border: "1px solid #1f2937",
+          }}
+        >
             <div
               style={{
                 display: "flex",
@@ -500,6 +498,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                   icon="save"
                   label="Save current pattern as preset"
                   tone="accent"
+                  iconSize={20}
+                  style={compactIconButtonStyle}
                   onClick={handleSavePresetPattern}
                 />
               ) : null}
@@ -564,17 +564,16 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontSize: 12,
-              color: "#94a3b8",
-            }}
-          >
-            <span>Current preset: {currentPresetLabel}</span>
-          </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: 12,
+            color: "#94a3b8",
+          }}
+        >
+          <span>Current preset: {currentPresetLabel}</span>
         </div>
       </div>
     </Modal>
