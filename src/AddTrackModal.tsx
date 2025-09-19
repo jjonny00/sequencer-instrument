@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type FC } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FC,
+  type KeyboardEvent,
+} from "react";
 
 import type { Pack } from "./packs";
 import { getCharacterOptions } from "./addTrackOptions";
@@ -10,8 +18,11 @@ import {
   PRESETS_UPDATED_EVENT,
   stripUserPresetPrefix,
   USER_PRESET_PREFIX,
+  isUserPresetId,
 } from "./presets";
 import type { Chunk } from "./chunks";
+import { Modal } from "./components/Modal";
+import { IconButton } from "./components/IconButton";
 
 interface AddTrackModalProps {
   isOpen: boolean;
@@ -50,13 +61,15 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   onConfirm,
   onDelete,
 }) => {
-  const pack = packs.find((p) => p.id === selectedPackId) ?? packs[0] ?? null;
-  const instrumentOptions = pack
-    ? Object.keys(pack.instruments)
-    : [];
-  const characterOptions = selectedInstrumentId
-    ? getCharacterOptions(pack?.id ?? "", selectedInstrumentId)
-    : [];
+  const pack = packs.find((candidate) => candidate.id === selectedPackId) ?? packs[0] ?? null;
+  const instrumentOptions = pack ? Object.keys(pack.instruments) : [];
+  const characterOptions = useMemo(
+    () =>
+      selectedInstrumentId && pack?.id
+        ? getCharacterOptions(pack.id, selectedInstrumentId)
+        : [],
+    [pack?.id, selectedInstrumentId]
+  );
   const presetOptions = useMemo(
     () =>
       pack
@@ -98,20 +111,25 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     };
   }, [refreshUserPresets]);
 
-  const handleDeletePreset = () => {
-    if (!pack || !selectedInstrumentId) return;
-    if (!selectedPresetId || !selectedPresetId.startsWith(USER_PRESET_PREFIX)) return;
-    const actualId = stripUserPresetPrefix(selectedPresetId);
-    const confirmed = window.confirm("Delete this saved preset pattern?");
-    if (!confirmed) return;
-    const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
-    if (removed) {
-      onSelectPreset(null);
-      refreshUserPresets();
-    }
-  };
+  const handleDeletePreset = useCallback(
+    (presetId: string) => {
+      if (!pack || !selectedInstrumentId) return;
+      if (!isUserPresetId(presetId)) return;
+      const actualId = stripUserPresetPrefix(presetId);
+      const confirmed = window.confirm("Delete this saved preset pattern?");
+      if (!confirmed) return;
+      const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
+      if (removed) {
+        if (selectedPresetId === presetId) {
+          onSelectPreset(null);
+        }
+        refreshUserPresets();
+      }
+    },
+    [pack, selectedInstrumentId, selectedPresetId, onSelectPreset, refreshUserPresets]
+  );
 
-  const handleSavePresetPattern = () => {
+  const handleSavePresetPattern = useCallback(() => {
     if (!pack || !selectedInstrumentId || !editingTrackPattern) {
       window.alert("No pattern data available to save as a preset pattern.");
       return;
@@ -119,16 +137,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     const suggestedName =
       editingTrackName?.trim() || formatInstrumentLabel(selectedInstrumentId);
     const defaultName = `${suggestedName} Pattern`;
-    const name = window.prompt(
-      "Name your preset pattern",
-      defaultName
-    );
+    const name = window.prompt("Name your preset pattern", defaultName);
     if (!name) return;
     const pattern: Chunk = {
       ...editingTrackPattern,
       instrument: selectedInstrumentId,
-      characterId:
-        editingTrackPattern.characterId ?? selectedCharacterId ?? undefined,
+      characterId: editingTrackPattern.characterId ?? selectedCharacterId ?? undefined,
     };
     const record = saveInstrumentPreset({
       name,
@@ -144,12 +158,47 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     onSelectPreset(`${USER_PRESET_PREFIX}${record.id}`);
     refreshUserPresets();
     window.alert("Preset pattern saved.");
-  };
+  }, [
+    pack,
+    selectedInstrumentId,
+    editingTrackPattern,
+    editingTrackName,
+    selectedCharacterId,
+    onSelectPreset,
+    refreshUserPresets,
+  ]);
 
-  const hasAnyPresets =
-    presetOptions.length > 0 || userPresets.length > 0 || Boolean(selectedPresetId);
-  const isUserPresetSelected = Boolean(
-    selectedPresetId && selectedPresetId.startsWith(USER_PRESET_PREFIX)
+  const characterLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    characterOptions.forEach((character) => {
+      map.set(character.id, character.name);
+    });
+    return map;
+  }, [characterOptions]);
+
+  const packPresets = useMemo(
+    () =>
+      presetOptions.map((preset) => ({
+        id: preset.id,
+        name: preset.name,
+        characterId: preset.characterId ?? null,
+      })),
+    [presetOptions]
+  );
+
+  const userPresetItems = useMemo(
+    () =>
+      userPresets.map((preset) => ({
+        id: `${USER_PRESET_PREFIX}${preset.id}`,
+        name: preset.name,
+        characterId: preset.characterId,
+      })),
+    [userPresets]
+  );
+
+  const combinedPresetItems = useMemo(
+    () => [...userPresetItems, ...packPresets],
+    [userPresetItems, packPresets]
   );
 
   const confirmDisabled = !pack || !selectedInstrumentId;
@@ -159,246 +208,175 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Adjust the sound pack, instrument, character, and preset pattern for this track."
     : "Choose a sound pack, instrument, character, and optional preset pattern to start a new groove.";
   const confirmLabel = isEditMode ? "Update Track" : "Add Track";
+  const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
 
-  if (!isOpen) return null;
+  const footerButtonBaseStyle: CSSProperties = {
+    padding: "10px 20px",
+    borderRadius: 999,
+    border: "1px solid #333",
+    fontSize: 14,
+    fontWeight: 600,
+    letterSpacing: 0.3,
+    minWidth: 120,
+    cursor: "pointer",
+    transition: "background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+  };
 
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(12, 18, 30, 0.75)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 30,
-      }}
-    >
+  const cancelButtonStyle: CSSProperties = {
+    ...footerButtonBaseStyle,
+    background: "#1f2532",
+    color: "#e6f2ff",
+  };
+
+  const confirmButtonStyle: CSSProperties = {
+    ...footerButtonBaseStyle,
+    background: confirmDisabled ? "#1b2130" : "#27E0B0",
+    color: confirmDisabled ? "#475569" : "#1F2532",
+    border: `1px solid ${confirmDisabled ? "#1f2937" : "#27E0B0"}`,
+    cursor: confirmDisabled ? "not-allowed" : "pointer",
+    opacity: confirmDisabled ? 0.7 : 1,
+  };
+
+  const handleTogglePresetSelection = useCallback(
+    (presetId: string | null) => {
+      if (presetId === null) {
+        onSelectPreset(null);
+        return;
+      }
+      if (selectedPresetId === presetId) {
+        onSelectPreset(null);
+        return;
+      }
+      onSelectPreset(presetId);
+    },
+    [onSelectPreset, selectedPresetId]
+  );
+
+  const renderPresetRow = (
+    item: { id: string; name: string; characterId: string | null },
+    source: "user" | "pack"
+  ) => {
+    const isSelected = selectedPresetId === item.id;
+    const characterLabel =
+      source === "user" && item.characterId
+        ? characterLabelMap.get(item.characterId) ?? undefined
+        : undefined;
+
+    const handleClick = () => handleTogglePresetSelection(item.id);
+
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleClick();
+      }
+    };
+
+    return (
       <div
+        key={`${source}-${item.id}`}
+        role="button"
+        tabIndex={0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
         style={{
-          width: "100%",
-          maxWidth: 420,
-          background: "#1b2231",
-          borderRadius: 16,
-          border: "1px solid #2f384a",
-          boxShadow: "0 24px 48px rgba(5, 9, 18, 0.65)",
-          padding: 24,
           display: "flex",
-          flexDirection: "column",
-          gap: 16,
-          color: "#e6f2ff",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "12px 14px",
+          borderRadius: 12,
+          border: isSelected ? "1px solid #27E0B0" : "1px solid #1f2937",
+          background: isSelected ? "rgba(39, 224, 176, 0.12)" : "#0f172a",
+          cursor: "pointer",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 20, fontWeight: 700 }}>{title}</span>
-          <span style={{ fontSize: 13, color: "#94a3b8" }}>{description}</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</span>
+          {characterLabel ? (
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>{characterLabel}</span>
+          ) : null}
         </div>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-          <select
-            value={pack?.id ?? ""}
-            onChange={(event) => onSelectPack(event.target.value)}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 10,
-              border: "1px solid #334155",
-              background: "#111827",
-              color: "#e6f2ff",
+        {source === "user" ? (
+          <IconButton
+            icon="delete"
+            label={`Delete preset ${item.name}`}
+            tone="danger"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDeletePreset(item.id);
             }}
-          >
-            {packs.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-          <select
-            value={selectedInstrumentId}
-            onChange={(event) => onSelectInstrument(event.target.value)}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 10,
-              border: "1px solid #334155",
-              background: "#111827",
-              color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
-            }}
-          >
-            {instrumentOptions.length === 0 ? (
-              <option value="" disabled>
-                No instruments available
-              </option>
-            ) : (
-              instrumentOptions.map((instrument) => (
-                <option key={instrument} value={instrument}>
-                  {formatInstrumentLabel(instrument)}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Character</span>
-          <select
-            value={selectedCharacterId}
-            onChange={(event) => onSelectCharacter(event.target.value)}
-            disabled={characterOptions.length === 0}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 10,
-              border: "1px solid #334155",
-              background: "#111827",
-              color:
-                characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
-            }}
-          >
-            {characterOptions.length === 0 ? (
-              <option value="" disabled>
-                No characters
-              </option>
-            ) : (
-              characterOptions.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>
-            Preset Pattern (optional)
-          </span>
-          <select
-            value={selectedPresetId ?? ""}
-            onChange={(event) =>
-              onSelectPreset(event.target.value ? event.target.value : null)
-            }
-            style={{
-              padding: "8px 10px",
-              borderRadius: 10,
-              border: "1px solid #334155",
-              background: "#111827",
-              color: hasAnyPresets ? "#e6f2ff" : "#64748b",
-            }}
-          >
-            <option value="">None</option>
-            {userPresets.length > 0 ? (
-              <optgroup label="Your Preset Patterns">
-                {userPresets.map((preset) => (
-                  <option
-                    key={preset.id}
-                    value={`${USER_PRESET_PREFIX}${preset.id}`}
-                  >
-                    {preset.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {presetOptions.length > 0 ? (
-              <optgroup label="Pack Preset Patterns">
-                {presetOptions.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-        </label>
-        {isEditMode || isUserPresetSelected ? (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {isEditMode ? (
-              <button
-                type="button"
-                onClick={handleSavePresetPattern}
-                disabled={!editingTrackPattern}
-                style={{
-                  flex: "1 1 160px",
-                  minWidth: 0,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #1d3a2c",
-                  background: editingTrackPattern ? "#1f2532" : "#161b27",
-                  color: editingTrackPattern ? "#e6f2ff" : "#475569",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: editingTrackPattern ? "pointer" : "not-allowed",
-                }}
-              >
-                Save Preset Pattern
-              </button>
-            ) : null}
-            {isUserPresetSelected ? (
-              <button
-                type="button"
-                onClick={handleDeletePreset}
-                style={{
-                  flex: "1 1 160px",
-                  minWidth: 0,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #4c1d24",
-                  background: "#1f2532",
-                  color: "#fca5a5",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Delete Selected Preset Pattern
-              </button>
-            ) : null}
-          </div>
+          />
         ) : null}
+      </div>
+    );
+  };
 
+  const handleNoneKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleTogglePresetSelection(null);
+      }
+    },
+    [handleTogglePresetSelection]
+  );
+
+  const currentPresetLabel = selectedPresetId
+    ? combinedPresetItems.find((preset) => preset.id === selectedPresetId)?.name ?? "Custom"
+    : "None";
+
+  const contentWrapperStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    flex: "1 1 auto",
+    minHeight: 0,
+  };
+
+  const scrollContainerStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    flex: "1 1 auto",
+    minHeight: 0,
+    overflowY: "auto",
+    paddingRight: 4,
+    paddingBottom: 24,
+    WebkitOverflowScrolling: "touch",
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      title={title}
+      subtitle={description}
+      fullScreen
+      footer={
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            marginTop: 8,
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            width: "100%",
           }}
         >
-          {isEditMode && onDelete && (
-            <button
-              type="button"
+          {isEditMode && onDelete ? (
+            <IconButton
+              icon="delete"
+              label="Remove track"
+              tone="danger"
               onClick={onDelete}
-              style={{
-                width: "100%",
-                padding: "10px 14px",
-                borderRadius: 999,
-                border: "1px solid #4c1d24",
-                background: "#E02749",
-                color: "#e6f2ff",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Remove Track
-            </button>
+            />
+          ) : (
+            <div />
           )}
           <div style={{ display: "flex", gap: 12 }}>
             <button
               type="button"
               onClick={onCancel}
-              style={{
-                flex: 1,
-                padding: "10px 14px",
-                borderRadius: 999,
-                border: "1px solid #334155",
-                background: "#111827",
-                color: "#cbd5f5",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              style={cancelButtonStyle}
             >
               Cancel
             </button>
@@ -406,26 +384,199 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               type="button"
               onClick={onConfirm}
               disabled={confirmDisabled}
-              style={{
-                flex: 1,
-                padding: "10px 14px",
-                borderRadius: 999,
-                border: "1px solid #1b4332",
-                background: confirmDisabled ? "#1f2532" : "#27E0B0",
-                color: confirmDisabled ? "#475569" : "#0f1420",
-                fontWeight: 700,
-                cursor: confirmDisabled ? "not-allowed" : "pointer",
-                boxShadow: confirmDisabled
-                  ? "none"
-                  : "0 8px 18px rgba(15, 32, 38, 0.45)",
-              }}
+              style={confirmButtonStyle}
             >
               {confirmLabel}
             </button>
           </div>
         </div>
+      }
+    >
+      <div style={contentWrapperStyle}>
+        <div style={scrollContainerStyle}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
+            <select
+              value={pack?.id ?? ""}
+              onChange={(event) => onSelectPack(event.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color: "#e6f2ff",
+              }}
+            >
+              {packs.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
+            <select
+              value={selectedInstrumentId}
+              onChange={(event) => onSelectInstrument(event.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
+              }}
+            >
+              {instrumentOptions.length === 0 ? (
+                <option value="" disabled>
+                  No instruments available
+                </option>
+              ) : (
+                instrumentOptions.map((instrument) => (
+                  <option key={instrument} value={instrument}>
+                    {formatInstrumentLabel(instrument)}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Character</span>
+            <select
+              value={selectedCharacterId}
+              onChange={(event) => onSelectCharacter(event.target.value)}
+              disabled={characterOptions.length === 0}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color: characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
+              }}
+            >
+              {characterOptions.length === 0 ? (
+                <option value="" disabled>
+                  No characters
+                </option>
+              ) : (
+                characterOptions.map((character) => (
+                  <option key={character.id} value={character.id}>
+                    {character.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              padding: 16,
+              borderRadius: 16,
+              background: "#0b1624",
+              border: "1px solid #1f2937",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontWeight: 600 }}>Preset Patterns</span>
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                  Save the current pattern or load one of your favorites.
+                </span>
+              </div>
+              {showSavePresetAction ? (
+                <IconButton
+                  icon="save"
+                  label="Save current pattern as preset"
+                  tone="accent"
+                  onClick={handleSavePresetPattern}
+                />
+              ) : null}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
+                  Your Presets
+                </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleTogglePresetSelection(null)}
+                    onKeyDown={handleNoneKeyDown}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border:
+                        selectedPresetId === null
+                          ? "1px solid #27E0B0"
+                          : "1px solid #1f2937",
+                      background:
+                        selectedPresetId === null
+                          ? "rgba(39, 224, 176, 0.12)"
+                          : "#0f172a",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>None</span>
+                  </div>
+                  {userPresetItems.length > 0 ? (
+                    userPresetItems.map((preset) => renderPresetRow(preset, "user"))
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#64748b",
+                        padding: "12px 0",
+                      }}
+                    >
+                      No presets saved yet
+                    </div>
+                  )}
+                </div>
+              </div>
+              {packPresets.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
+                    Pack Presets
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: 12,
+              color: "#94a3b8",
+            }}
+          >
+            <span>Current preset: {currentPresetLabel}</span>
+          </div>
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
-

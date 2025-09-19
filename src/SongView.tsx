@@ -19,7 +19,7 @@ interface SongViewProps {
   onToggleTransport: () => void;
   selectedGroupId: string | null;
   onOpenSequenceLibrary: () => void;
-  onAddTrack: () => void;
+  onSelectSequence: (groupId: string) => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -40,7 +40,7 @@ export function SongView({
   onToggleTransport,
   selectedGroupId,
   onOpenSequenceLibrary,
-  onAddTrack,
+  onSelectSequence,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -193,24 +193,6 @@ export function SongView({
           <span aria-hidden="true" style={{ fontSize: 10 }}>
             ▴
           </span>
-        </button>
-        <button
-          type="button"
-          onClick={onAddTrack}
-          style={{
-            padding: "6px 16px",
-            borderRadius: 999,
-            border: "1px solid #333",
-            background: "#27E0B0",
-            color: "#1F2532",
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-            cursor: "pointer",
-            boxShadow: "0 2px 6px rgba(15, 20, 32, 0.3)",
-          }}
-        >
-          + Track
         </button>
       </div>
       <div
@@ -678,7 +660,7 @@ export function SongView({
               color: "#e6f2ff",
             }}
           >
-            Sequences
+            Sequence Library
           </h3>
           <span
             style={{
@@ -715,18 +697,27 @@ export function SongView({
               const trackLabels = group.tracks
                 .map((track) => track.name)
                 .filter((name): name is string => Boolean(name));
+              const isActive = selectedGroupId === group.id;
               return (
-                <div
+                <button
                   key={group.id}
+                  type="button"
+                  onClick={() => onSelectSequence(group.id)}
                   style={{
                     borderRadius: 10,
-                    border: "1px solid #333",
-                    background: "#121827",
+                    border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
+                    background: isActive
+                      ? "rgba(39, 224, 176, 0.12)"
+                      : "#121827",
                     padding: 12,
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    color: "#e6f2ff",
                   }}
+                  title={`Open ${group.name} in Track view`}
                 >
                   <div
                     style={{
@@ -774,7 +765,7 @@ export function SongView({
                       ))}
                     </div>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
