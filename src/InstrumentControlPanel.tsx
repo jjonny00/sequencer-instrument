@@ -733,6 +733,219 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     ]
   );
 
+  const tonalCenter = pattern?.tonalCenter ?? pattern?.note ?? "C4";
+  const scaleName = isScaleName(pattern?.scale)
+    ? (pattern?.scale as ScaleName)
+    : "Major";
+  const selectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0));
+  const extensionsEnabled = pattern?.useExtensions ?? false;
+  const timingMode = pattern?.timingMode === "free" ? "free" : "sync";
+  const autopilotEnabled = pattern?.autopilot ?? false;
+  const arpStyle = pattern?.style ?? "up";
+  const arpRate = normalizeArpRate(pattern?.arpRate);
+  const arpFreeRate = pattern?.arpFreeRate ?? DEFAULT_FREE_RATE;
+  const arpGate = pattern?.arpGate ?? 0.6;
+  const arpOctaves = pattern?.arpOctaves ?? 1;
+  const latchEnabled = pattern?.arpLatch ?? false;
+  const reverbAmount = pattern?.reverb ?? 0;
+  const distortionAmount = pattern?.distortion ?? 0;
+  const bitcrusherAmount = pattern?.bitcrusher ?? 0;
+
+  const chordDefinition = useMemo(
+    () =>
+      buildChordForDegree(
+        tonalCenter,
+        scaleName,
+        selectedDegree,
+        extensionsEnabled
+      ),
+    [tonalCenter, scaleName, selectedDegree, extensionsEnabled]
+  );
+
+  const recordNoteToPattern = useCallback(
+    ({
+      noteName,
+      eventTime,
+      baseNote,
+      velocity,
+      duration,
+      includeChordMeta,
+      mode,
+      chunkOverrides,
+    }: {
+      noteName: string;
+      eventTime: number;
+      baseNote: string;
+      velocity: number;
+      duration?: number;
+      includeChordMeta?: boolean;
+      mode: "sync" | "free";
+      chunkOverrides?: Partial<Chunk>;
+    }) => {
+      if (!onUpdatePattern) return;
+
+      if (mode === "sync") {
+        recordingAnchorRef.current = null;
+        const ticksPerStep = Tone.Transport.PPQ / 4;
+        const ticks = Tone.Transport.getTicksAtTime(eventTime);
+        onUpdatePattern((chunk) => {
+          const length = chunk.steps.length || 16;
+          const stepIndex = length
+            ? Math.floor(ticks / ticksPerStep) % length
+            : 0;
+          const steps = chunk.steps.length
+            ? chunk.steps.slice()
+            : Array(16).fill(0);
+          const velocities = ensureArrayLength(
+            chunk.velocities,
+            steps.length,
+            1
+          );
+          const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+          const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
+          const midi = Tone.Frequency(noteName).toMidi();
+          steps[stepIndex] = 1;
+          velocities[stepIndex] = clamp(velocity, 0, 1);
+          pitches[stepIndex] = midi - baseMidi;
+
+          const nextChunk: Chunk = {
+            ...chunk,
+            note: pattern?.note ?? baseNote,
+            sustain: pattern?.sustain ?? chunk.sustain,
+            attack: pattern?.attack ?? chunk.attack,
+            glide: pattern?.glide ?? chunk.glide,
+            pan: pattern?.pan ?? chunk.pan,
+            reverb: pattern?.reverb ?? chunk.reverb,
+            delay: pattern?.delay ?? chunk.delay,
+            distortion: pattern?.distortion ?? chunk.distortion,
+            bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+            filter: pattern?.filter ?? chunk.filter,
+            chorus: pattern?.chorus ?? chunk.chorus,
+            pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+            style: pattern?.style ?? chunk.style,
+            mode: pattern?.mode ?? chunk.mode,
+            arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
+            arpGate: pattern?.arpGate ?? chunk.arpGate,
+            arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+            arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+            arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+            timingMode: "sync",
+            tonalCenter,
+            scale: scaleName,
+            degree: selectedDegree,
+            useExtensions: extensionsEnabled,
+            autopilot: autopilotEnabled,
+            steps,
+            velocities,
+            pitches,
+            noteEvents: undefined,
+            noteLoopLength: undefined,
+          };
+
+          if (includeChordMeta) {
+            nextChunk.note = chordDefinition.root;
+            nextChunk.notes = chordDefinition.notes.slice();
+            nextChunk.degrees = chordDefinition.degrees.slice();
+          }
+
+          if (chunkOverrides) {
+            Object.assign(nextChunk, chunkOverrides);
+          }
+
+          return nextChunk;
+        });
+        return;
+      }
+
+      const anchor = recordingAnchorRef.current ?? eventTime;
+      recordingAnchorRef.current = anchor;
+      const relativeTime = Math.max(0, eventTime - anchor);
+      const durationSeconds = Math.max(0.02, duration ?? 0.02);
+      const event: NoteEvent = {
+        time: relativeTime,
+        duration: durationSeconds,
+        note: noteName,
+        velocity: clamp(velocity, 0, 1),
+      };
+
+      onUpdatePattern((chunk) => {
+        const length = chunk.steps.length || 16;
+        const steps = chunk.steps.length
+          ? chunk.steps.slice()
+          : Array(length).fill(0);
+        steps.fill(0);
+        const velocities = ensureArrayLength(chunk.velocities, steps.length, 0);
+        velocities.fill(0);
+        const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+        pitches.fill(0);
+
+        const events = chunk.noteEvents ? chunk.noteEvents.slice() : [];
+        events.push(event);
+        events.sort((a, b) => a.time - b.time);
+        const loopLength = Math.max(
+          chunk.noteLoopLength ?? 0,
+          event.time + event.duration
+        );
+
+        const nextChunk: Chunk = {
+          ...chunk,
+          note: pattern?.note ?? baseNote,
+          sustain: pattern?.sustain ?? chunk.sustain,
+          attack: pattern?.attack ?? chunk.attack,
+          glide: pattern?.glide ?? chunk.glide,
+          pan: pattern?.pan ?? chunk.pan,
+          reverb: pattern?.reverb ?? chunk.reverb,
+          delay: pattern?.delay ?? chunk.delay,
+          distortion: pattern?.distortion ?? chunk.distortion,
+          bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+          filter: pattern?.filter ?? chunk.filter,
+          chorus: pattern?.chorus ?? chunk.chorus,
+          pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+          style: pattern?.style ?? chunk.style,
+          mode: pattern?.mode ?? chunk.mode,
+          arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
+          arpGate: pattern?.arpGate ?? chunk.arpGate,
+          arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+          arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+          arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+          timingMode: "free",
+          tonalCenter,
+          scale: scaleName,
+          degree: selectedDegree,
+          useExtensions: extensionsEnabled,
+          autopilot: autopilotEnabled,
+          steps,
+          velocities,
+          pitches,
+          noteEvents: events,
+          noteLoopLength: loopLength,
+        };
+
+        if (includeChordMeta) {
+          nextChunk.note = chordDefinition.root;
+          nextChunk.notes = chordDefinition.notes.slice();
+          nextChunk.degrees = chordDefinition.degrees.slice();
+        }
+
+        if (chunkOverrides) {
+          Object.assign(nextChunk, chunkOverrides);
+        }
+
+        return nextChunk;
+      });
+    },
+    [
+      onUpdatePattern,
+      pattern,
+      tonalCenter,
+      scaleName,
+      selectedDegree,
+      extensionsEnabled,
+      autopilotEnabled,
+      chordDefinition,
+    ]
+  );
+
   const handleHarmoniaPadPress = useCallback(
     (degree: HarmoniaScaleDegree) => {
       const { tone, dynamics } = harmoniaPadStateRef.current;
@@ -867,29 +1080,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       applyHarmoniaResolution(harmoniaSelectedDegree, { scale: nextScale });
     },
     [applyHarmoniaResolution, harmoniaSelectedDegree]
-  );
-
-  const tonalCenter = pattern?.tonalCenter ?? pattern?.note ?? "C4";
-  const scaleName = isScaleName(pattern?.scale)
-    ? (pattern?.scale as ScaleName)
-    : "Major";
-  const selectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0));
-  const extensionsEnabled = pattern?.useExtensions ?? false;
-  const timingMode = pattern?.timingMode === "free" ? "free" : "sync";
-  const autopilotEnabled = pattern?.autopilot ?? false;
-  const arpStyle = pattern?.style ?? "up";
-  const arpRate = normalizeArpRate(pattern?.arpRate);
-  const arpFreeRate = pattern?.arpFreeRate ?? DEFAULT_FREE_RATE;
-  const arpGate = pattern?.arpGate ?? 0.6;
-  const arpOctaves = pattern?.arpOctaves ?? 1;
-  const latchEnabled = pattern?.arpLatch ?? false;
-  const reverbAmount = pattern?.reverb ?? 0;
-  const distortionAmount = pattern?.distortion ?? 0;
-  const bitcrusherAmount = pattern?.bitcrusher ?? 0;
-
-  const chordDefinition = useMemo(
-    () => buildChordForDegree(tonalCenter, scaleName, selectedDegree, extensionsEnabled),
-    [tonalCenter, scaleName, selectedDegree, extensionsEnabled]
   );
 
   const degreeLabel = DEGREE_LABELS[selectedDegree] ?? "I";
@@ -1160,190 +1350,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       </div>
     </Section>
   ) : null;
-
-  const recordNoteToPattern = useCallback(
-    ({
-      noteName,
-      eventTime,
-      baseNote,
-      velocity,
-      duration,
-      includeChordMeta,
-      mode,
-      chunkOverrides,
-    }: {
-      noteName: string;
-      eventTime: number;
-      baseNote: string;
-      velocity: number;
-      duration?: number;
-      includeChordMeta?: boolean;
-      mode: "sync" | "free";
-      chunkOverrides?: Partial<Chunk>;
-    }) => {
-      if (!onUpdatePattern) return;
-
-      if (mode === "sync") {
-        recordingAnchorRef.current = null;
-        const ticksPerStep = Tone.Transport.PPQ / 4;
-        const ticks = Tone.Transport.getTicksAtTime(eventTime);
-        onUpdatePattern((chunk) => {
-          const length = chunk.steps.length || 16;
-          const stepIndex = length
-            ? Math.floor(ticks / ticksPerStep) % length
-            : 0;
-          const steps = chunk.steps.length
-            ? chunk.steps.slice()
-            : Array(16).fill(0);
-          const velocities = ensureArrayLength(
-            chunk.velocities,
-            steps.length,
-            1
-          );
-          const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
-          const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
-          const midi = Tone.Frequency(noteName).toMidi();
-          steps[stepIndex] = 1;
-          velocities[stepIndex] = clamp(velocity, 0, 1);
-          pitches[stepIndex] = midi - baseMidi;
-
-          const nextChunk: Chunk = {
-            ...chunk,
-            note: pattern?.note ?? baseNote,
-            sustain: pattern?.sustain ?? chunk.sustain,
-            attack: pattern?.attack ?? chunk.attack,
-            glide: pattern?.glide ?? chunk.glide,
-            pan: pattern?.pan ?? chunk.pan,
-            reverb: pattern?.reverb ?? chunk.reverb,
-            delay: pattern?.delay ?? chunk.delay,
-            distortion: pattern?.distortion ?? chunk.distortion,
-            bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
-            filter: pattern?.filter ?? chunk.filter,
-            chorus: pattern?.chorus ?? chunk.chorus,
-            pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
-            style: pattern?.style ?? chunk.style,
-            mode: pattern?.mode ?? chunk.mode,
-            arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
-            arpGate: pattern?.arpGate ?? chunk.arpGate,
-            arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
-            arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
-            arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
-            timingMode: "sync",
-            tonalCenter,
-            scale: scaleName,
-            degree: selectedDegree,
-            useExtensions: extensionsEnabled,
-            autopilot: autopilotEnabled,
-            steps,
-            velocities,
-            pitches,
-            noteEvents: undefined,
-            noteLoopLength: undefined,
-          };
-
-          if (includeChordMeta) {
-            nextChunk.note = chordDefinition.root;
-            nextChunk.notes = chordDefinition.notes.slice();
-            nextChunk.degrees = chordDefinition.degrees.slice();
-          }
-
-          if (chunkOverrides) {
-            Object.assign(nextChunk, chunkOverrides);
-          }
-
-          return nextChunk;
-        });
-        return;
-      }
-
-      const anchor = recordingAnchorRef.current ?? eventTime;
-      recordingAnchorRef.current = anchor;
-      const relativeTime = Math.max(0, eventTime - anchor);
-      const durationSeconds = Math.max(0.02, duration ?? 0.02);
-      const event: NoteEvent = {
-        time: relativeTime,
-        duration: durationSeconds,
-        note: noteName,
-        velocity: clamp(velocity, 0, 1),
-      };
-
-      onUpdatePattern((chunk) => {
-        const length = chunk.steps.length || 16;
-        const steps = chunk.steps.length
-          ? chunk.steps.slice()
-          : Array(length).fill(0);
-        steps.fill(0);
-        const velocities = ensureArrayLength(chunk.velocities, steps.length, 0);
-        velocities.fill(0);
-        const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
-        pitches.fill(0);
-
-        const events = chunk.noteEvents ? chunk.noteEvents.slice() : [];
-        events.push(event);
-        events.sort((a, b) => a.time - b.time);
-        const loopLength = Math.max(
-          chunk.noteLoopLength ?? 0,
-          event.time + event.duration
-        );
-
-        const nextChunk: Chunk = {
-          ...chunk,
-          note: pattern?.note ?? baseNote,
-          sustain: pattern?.sustain ?? chunk.sustain,
-          attack: pattern?.attack ?? chunk.attack,
-          glide: pattern?.glide ?? chunk.glide,
-          pan: pattern?.pan ?? chunk.pan,
-          reverb: pattern?.reverb ?? chunk.reverb,
-          delay: pattern?.delay ?? chunk.delay,
-          distortion: pattern?.distortion ?? chunk.distortion,
-          bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
-          filter: pattern?.filter ?? chunk.filter,
-          chorus: pattern?.chorus ?? chunk.chorus,
-          pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
-          style: pattern?.style ?? chunk.style,
-          mode: pattern?.mode ?? chunk.mode,
-          arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
-          arpGate: pattern?.arpGate ?? chunk.arpGate,
-          arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
-          arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
-          arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
-          timingMode: "free",
-          tonalCenter,
-          scale: scaleName,
-          degree: selectedDegree,
-          useExtensions: extensionsEnabled,
-          autopilot: autopilotEnabled,
-          steps,
-          velocities,
-          pitches,
-          noteEvents: events,
-          noteLoopLength: loopLength,
-        };
-
-        if (includeChordMeta) {
-          nextChunk.note = chordDefinition.root;
-          nextChunk.notes = chordDefinition.notes.slice();
-          nextChunk.degrees = chordDefinition.degrees.slice();
-        }
-
-        if (chunkOverrides) {
-          Object.assign(nextChunk, chunkOverrides);
-        }
-
-        return nextChunk;
-      });
-    },
-    [
-      onUpdatePattern,
-      pattern,
-      tonalCenter,
-      scaleName,
-      selectedDegree,
-      extensionsEnabled,
-      autopilotEnabled,
-      chordDefinition,
-    ]
-  );
 
   const stopArpPlayback = useCallback((options?: { preserveState?: boolean }) => {
     if (arpScheduleIdRef.current !== null) {
