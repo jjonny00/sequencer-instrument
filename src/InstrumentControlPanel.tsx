@@ -657,19 +657,18 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               harmoniaBorrowedLabel: resolution.borrowed
                 ? resolution.voicingLabel
                 : undefined,
+              filter: harmoniaControls.tone,
             }
           : undefined;
-        resolution.notes.forEach((note) => {
-          trigger(
-            now,
-            harmoniaControls.dynamics,
-            0,
-            note,
-            pattern?.sustain ?? undefined,
-            chunkPayload,
-            sourceCharacterId ?? patternCharacterId ?? undefined
-          );
-        });
+        trigger(
+          now,
+          harmoniaControls.dynamics,
+          0,
+          resolution.root,
+          pattern?.sustain ?? undefined,
+          chunkPayload,
+          sourceCharacterId ?? patternCharacterId ?? undefined
+        );
       }
     },
     [

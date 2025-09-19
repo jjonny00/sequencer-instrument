@@ -6,6 +6,12 @@ import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs, type InstrumentCharacter } from "./packs";
+import {
+  createHarmoniaNodes,
+  disposeHarmoniaNodes,
+  triggerHarmoniaChord,
+  type HarmoniaNodes,
+} from "./instruments/harmonia";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
@@ -125,6 +131,7 @@ export default function App() {
       }
     >
   >({});
+  const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -438,6 +445,10 @@ export default function App() {
         fx.filter.dispose();
       });
       keyboardFxRefs.current = {};
+      Object.values(harmoniaNodesRef.current).forEach((nodes) => {
+        disposeHarmoniaNodes(nodes);
+      });
+      harmoniaNodesRef.current = {};
     };
 
     if (!started) {
@@ -477,6 +488,11 @@ export default function App() {
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
+      if (character.type === "Harmonia") {
+        const nodes = createHarmoniaNodes(Tone);
+        nodes.volume.connect(Tone.Destination);
+        return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+      }
       const ctor = (
         Tone as unknown as Record<
           string,
@@ -586,9 +602,35 @@ export default function App() {
           if (created.keyboardFx) {
             keyboardFxRefs.current[key] = created.keyboardFx;
           }
+          if (created.harmoniaNodes) {
+            harmoniaNodesRef.current[key] = created.harmoniaNodes;
+          }
         }
         const sustainOverride =
           sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+        if (instrumentId === "harmonia") {
+          const nodes = harmoniaNodesRef.current[key];
+          if (!nodes) return;
+          if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+            const envelope: Record<string, unknown> = {};
+            if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+            if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+            if (Object.keys(envelope).length > 0) {
+              (inst as unknown as { set?: (values: Record<string, unknown>) => void }).set?.({
+                envelope,
+              });
+            }
+          }
+          triggerHarmoniaChord({
+            nodes,
+            time,
+            velocity,
+            sustain: sustainOverride,
+            chunk,
+            characterId: character.id,
+          });
+          return;
+        }
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };

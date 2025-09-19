@@ -1,3 +1,4 @@
 export * from "./types";
 export * from "./constants";
 export * from "./harmony";
+export * from "./audio";
