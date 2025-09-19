@@ -10,6 +10,7 @@ import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
   triggerHarmoniaChord,
+  HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { SongView } from "./SongView";
@@ -173,6 +174,65 @@ export default function App() {
   );
   const restorationRef = useRef(false);
   const pendingTransportStateRef = useRef<boolean | null>(null);
+
+  const resolveInstrumentCharacter = useCallback(
+    (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
+      const pack = packs[packIndex];
+      const definition = pack?.instruments?.[instrumentId];
+      if (!definition) return undefined;
+      if (requestedId) {
+        const specific = definition.characters.find(
+          (character) => character.id === requestedId
+        );
+        if (specific) {
+          return specific;
+        }
+      }
+      if (definition.defaultCharacterId) {
+        const preferred = definition.characters.find(
+          (character) => character.id === definition.defaultCharacterId
+        );
+        if (preferred) {
+          return preferred;
+        }
+      }
+      return definition.characters[0];
+    },
+    [packIndex]
+  );
+
+  const resolveHarmoniaNodeKey = useCallback(
+    (requestedId?: string | null) => {
+      const character = resolveInstrumentCharacter("harmonia", requestedId);
+      if (!character) return undefined;
+      return `harmonia:${character.id}`;
+    },
+    [resolveInstrumentCharacter]
+  );
+
+  const handleHarmoniaRealtimeChange = useCallback(
+    ({
+      tone,
+      dynamics,
+      characterId,
+    }: {
+      tone: number;
+      dynamics: number;
+      characterId?: string | null;
+    }) => {
+      const key = resolveHarmoniaNodeKey(characterId);
+      if (!key) return;
+      const nodes = harmoniaNodesRef.current[key];
+      if (!nodes) return;
+      const frequency = filterValueToFrequency(tone);
+      nodes.filter.frequency.rampTo(frequency, 0.05);
+      const clampedDynamics = Math.max(0, Math.min(1, dynamics));
+      const gain = Math.max(clampedDynamics, 0.001);
+      const gainDb = Tone.gainToDb(gain);
+      nodes.volume.volume.rampTo(HARMONIA_BASE_VOLUME_DB + gainDb, 0.05);
+    },
+    [resolveHarmoniaNodeKey]
+  );
 
   useEffect(() => {
     const updateAppHeight = () => {
@@ -459,31 +519,6 @@ export default function App() {
 
     disposeAll();
 
-    const resolveCharacter = (
-      instrumentId: string,
-      requestedId?: string
-    ): InstrumentCharacter | undefined => {
-      const definition = pack.instruments[instrumentId];
-      if (!definition) return undefined;
-      if (requestedId) {
-        const specific = definition.characters.find(
-          (character) => character.id === requestedId
-        );
-        if (specific) {
-          return specific;
-        }
-      }
-      if (definition.defaultCharacterId) {
-        const preferred = definition.characters.find(
-          (character) => character.id === definition.defaultCharacterId
-        );
-        if (preferred) {
-          return preferred;
-        }
-      }
-      return definition.characters[0];
-    };
-
     const createInstrumentInstance = (
       instrumentId: string,
       character: InstrumentCharacter
@@ -591,7 +626,7 @@ export default function App() {
         characterId?: string
       ) => {
         void ensureAudioContextRunning();
-        const character = resolveCharacter(instrumentId, characterId);
+        const character = resolveInstrumentCharacter(instrumentId, characterId);
         if (!character) return;
         const key = `${instrumentId}:${character.id}`;
         let inst = instrumentRefs.current[key];
@@ -698,7 +733,13 @@ export default function App() {
     return () => {
       disposeAll();
     };
-  }, [packIndex, started, restorationRef, toneGraphVersion]);
+  }, [
+    packIndex,
+    started,
+    restorationRef,
+    toneGraphVersion,
+    resolveInstrumentCharacter,
+  ]);
 
   useEffect(() => {
     if (patternGroups.length === 0) {
@@ -1877,6 +1918,13 @@ export default function App() {
                         selectedTrack.pattern
                           ? (updater) =>
                               updateTrackPattern(selectedTrack.id, updater)
+                          : undefined
+                      }
+                      onHarmoniaRealtimeChange={
+                        selectedTrack.instrument === "harmonia"
+                          ? (payload) => {
+                              handleHarmoniaRealtimeChange(payload);
+                            }
                           : undefined
                       }
                       isRecording={isRecording}

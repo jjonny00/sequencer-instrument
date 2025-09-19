@@ -104,6 +104,8 @@ const deriveResolution = (
   });
 };
 
+export const HARMONIA_BASE_VOLUME_DB = -8;
+
 export const createHarmoniaNodes = (
   tone: ToneLike = Tone as ToneLike
 ): HarmoniaNodes => {
@@ -121,7 +123,7 @@ export const createHarmoniaNodes = (
     frequency: filterValueToFrequency(HARMONIA_DEFAULT_CONTROLS.tone),
     Q: 0.8,
   });
-  const volume = new tone.Volume(-8);
+  const volume = new tone.Volume(HARMONIA_BASE_VOLUME_DB);
   synth.connect(filter);
   filter.connect(volume);
   return { synth, filter, volume };

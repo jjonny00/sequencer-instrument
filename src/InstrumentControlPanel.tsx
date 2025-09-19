@@ -62,6 +62,11 @@ interface InstrumentControlPanelProps {
     trackId: number,
     payload: { presetId: string | null; characterId?: string | null; name?: string }
   ) => void;
+  onHarmoniaRealtimeChange?: (payload: {
+    tone: number;
+    dynamics: number;
+    characterId?: string | null;
+  }) => void;
 }
 
 interface SliderProps {
@@ -284,6 +289,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   isRecording = false,
   onRecordingChange,
   onPresetApplied,
+  onHarmoniaRealtimeChange,
 }) => {
   const pattern = track.pattern;
   const patternCharacterId = pattern?.characterId ?? null;
@@ -520,8 +526,19 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         filter: tone,
         velocityFactor: dynamics,
       });
+      onHarmoniaRealtimeChange?.({
+        tone,
+        dynamics,
+        characterId: sourceCharacterId ?? patternCharacterId,
+      });
     },
-    [isHarmonia, updatePattern]
+    [
+      isHarmonia,
+      updatePattern,
+      onHarmoniaRealtimeChange,
+      sourceCharacterId,
+      patternCharacterId,
+    ]
   );
 
   const handleHarmoniaPadPointerDown = useCallback(
