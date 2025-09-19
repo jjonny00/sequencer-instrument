@@ -239,7 +239,7 @@ export const Modal: FC<ModalProps> = ({
             style={{ alignSelf: "flex-start" }}
           />
         </div>
-        <div style={contentStyle}>
+        <div className="scrollable" style={contentStyle}>
           {children}
         </div>
         {footer ? (
