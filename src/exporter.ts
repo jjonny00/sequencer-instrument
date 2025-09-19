@@ -8,6 +8,12 @@ import type { StoredProjectData } from "./storage";
 import { createStoredProjectPayload } from "./storage";
 import type { TriggerMap } from "./tracks";
 import { filterValueToFrequency } from "./utils/audio";
+import {
+  createHarmoniaNodes,
+  disposeHarmoniaNodes,
+  triggerHarmoniaChord,
+  type HarmoniaNodes,
+} from "./instruments/harmonia";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -145,7 +151,17 @@ const createInstrumentInstance = (
   tone: BoundTone,
   instrumentId: string,
   character: InstrumentCharacter
-): { instrument: ToneInstrument; keyboardFx?: KeyboardFxNodes } => {
+): {
+  instrument: ToneInstrument;
+  keyboardFx?: KeyboardFxNodes;
+  harmoniaNodes?: HarmoniaNodes;
+} => {
+  if (character.type === "Harmonia") {
+    const nodes = createHarmoniaNodes(tone);
+    nodes.volume.connect(tone.Destination);
+    return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+  }
+
   const ctor = (
     tone as unknown as Record<
       string,
@@ -249,6 +265,7 @@ const createOfflineTriggerMap = (
 ): { triggerMap: TriggerMap; dispose: () => void } => {
   const instrumentRefs: Record<string, ToneInstrument> = {};
   const keyboardFxRefs: Record<string, KeyboardFxNodes> = {};
+  const harmoniaFxRefs: Record<string, HarmoniaNodes> = {};
 
   const triggerMap: TriggerMap = {};
 
@@ -277,10 +294,38 @@ const createOfflineTriggerMap = (
         if (created.keyboardFx) {
           keyboardFxRefs[key] = created.keyboardFx;
         }
+        if (created.harmoniaNodes) {
+          harmoniaFxRefs[key] = created.harmoniaNodes;
+        }
       }
 
       const sustainOverride =
         sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+
+      if (instrumentId === "harmonia") {
+        const nodes = harmoniaFxRefs[key];
+        if (!nodes) return;
+        if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+          const envelope: Record<string, unknown> = {};
+          if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+          if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+          if (Object.keys(envelope).length > 0) {
+            (inst as unknown as { set?: (values: Record<string, unknown>) => void }).set?.({
+              envelope,
+            });
+          }
+        }
+        triggerHarmoniaChord({
+          nodes,
+          time,
+          velocity,
+          sustain: sustainOverride,
+          chunk,
+          characterId: character.id,
+        });
+        return;
+      }
+
       const settable = inst as unknown as {
         set?: (values: Record<string, unknown>) => void;
       };
@@ -355,6 +400,9 @@ const createOfflineTriggerMap = (
       fx.chorus.dispose();
       fx.tremolo.dispose();
       fx.filter.dispose();
+    });
+    Object.values(harmoniaFxRefs).forEach((nodes) => {
+      disposeHarmoniaNodes(nodes);
     });
   };
 

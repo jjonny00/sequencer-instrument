@@ -1,6 +1,7 @@
 import type {
   Dispatch,
   FC,
+  PointerEvent as ReactPointerEvent,
   PropsWithChildren,
   ReactNode,
   SetStateAction,
@@ -13,6 +14,27 @@ import type { Track } from "./tracks";
 import { formatInstrumentLabel } from "./utils/instrument";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
 import { ARP_PRESETS } from "./arpPresets";
+import {
+  getScaleDegreeOffset,
+  isScaleName,
+  SCALE_INTERVALS,
+  SCALE_OPTIONS,
+  type ScaleName,
+} from "./music/scales";
+import {
+  describeHarmoniaChord,
+  HARMONIA_CHARACTER_PRESETS,
+  HARMONIA_COMPLEXITY_ORDER,
+  HARMONIA_DEFAULT_CONTROLS,
+  listHarmoniaDegreeLabels,
+  normalizeControlState as normalizeHarmoniaControlState,
+  resolveHarmoniaChord,
+} from "./instruments/harmonia";
+import type {
+  HarmoniaComplexity,
+  HarmoniaPatternId,
+  HarmoniaScaleDegree,
+} from "./instruments/harmonia";
 import {
   deleteInstrumentPreset,
   listInstrumentPresets,
@@ -40,6 +62,11 @@ interface InstrumentControlPanelProps {
     trackId: number,
     payload: { presetId: string | null; characterId?: string | null; name?: string }
   ) => void;
+  onHarmoniaRealtimeChange?: (payload: {
+    tone: number;
+    dynamics: number;
+    characterId?: string | null;
+  }) => void;
 }
 
 interface SliderProps {
@@ -189,25 +216,6 @@ const createChordNotes = (rootNote: string, degrees: number[]) => {
 
 const DEGREE_LABELS = ["I", "II", "III", "IV", "V", "VI", "VII"] as const;
 
-const SCALE_INTERVALS = {
-  Major: [0, 2, 4, 5, 7, 9, 11],
-  Minor: [0, 2, 3, 5, 7, 8, 10],
-  Dorian: [0, 2, 3, 5, 7, 9, 10],
-  Phrygian: [0, 1, 3, 5, 7, 8, 10],
-  Lydian: [0, 2, 4, 6, 7, 9, 11],
-  Mixolydian: [0, 2, 4, 5, 7, 9, 10],
-  Locrian: [0, 1, 3, 5, 6, 8, 10],
-  HarmonicMinor: [0, 2, 3, 5, 7, 8, 11],
-  MelodicMinor: [0, 2, 3, 5, 7, 9, 11],
-} as const;
-
-type ScaleName = keyof typeof SCALE_INTERVALS;
-
-const SCALE_OPTIONS = Object.keys(SCALE_INTERVALS) as ScaleName[];
-
-const isScaleName = (value: string | undefined | null): value is ScaleName =>
-  value !== undefined && value !== null && SCALE_OPTIONS.includes(value as ScaleName);
-
 const SYNC_RATE_OPTIONS = [
   { value: "4n", label: "1/4" },
   { value: "8n", label: "1/8" },
@@ -250,15 +258,6 @@ const arraysEqual = <T,>(a?: T[] | null, b?: T[] | null) => {
   return true;
 };
 
-const getScaleDegreeOffset = (intervals: readonly number[], degreeIndex: number) => {
-  if (!intervals.length) return 0;
-  const length = intervals.length;
-  const normalizedIndex = ((degreeIndex % length) + length) % length;
-  const base = intervals[normalizedIndex];
-  const octaves = Math.floor((degreeIndex - normalizedIndex) / length);
-  return base + octaves * 12;
-};
-
 const buildChordForDegree = (
   tonalCenter: string,
   scale: ScaleName,
@@ -290,13 +289,17 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   isRecording = false,
   onRecordingChange,
   onPresetApplied,
+  onHarmoniaRealtimeChange,
 }) => {
   const pattern = track.pattern;
+  const patternCharacterId = pattern?.characterId ?? null;
   const instrumentLabel = formatInstrumentLabel(track.instrument ?? "");
   const isPercussive = isPercussiveInstrument(track.instrument ?? "");
   const isBass = track.instrument === "bass";
   const isArp = track.instrument === "arp";
   const isKeyboard = track.instrument === "keyboard";
+  const isHarmonia = track.instrument === "harmonia";
+  const sourceCharacterId = track.source?.characterId ?? null;
   const [activeDegree, setActiveDegree] = useState<number | null>(null);
   const [pressedKeyboardNotes, setPressedKeyboardNotes] = useState<
     Set<string>
@@ -325,6 +328,110 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       }));
     };
   }, [onUpdatePattern, pattern]);
+
+  const harmoniaCharacterPreset = useMemo(() => {
+    if (!isHarmonia) return null;
+    const characterId = patternCharacterId ?? sourceCharacterId;
+    if (!characterId) return null;
+    return (
+      HARMONIA_CHARACTER_PRESETS.find((preset) => preset.id === characterId) ?? null
+    );
+  }, [isHarmonia, patternCharacterId, sourceCharacterId]);
+
+  const harmoniaControls = useMemo(
+    () =>
+      normalizeHarmoniaControlState({
+        complexity:
+          (pattern?.harmoniaComplexity as HarmoniaComplexity | undefined) ??
+          harmoniaCharacterPreset?.complexity,
+        tone: pattern?.harmoniaTone,
+        dynamics: pattern?.harmoniaDynamics,
+        bassEnabled: pattern?.harmoniaBass,
+        arpEnabled: pattern?.harmoniaArp,
+        patternId: pattern?.harmoniaPatternId as HarmoniaPatternId | undefined,
+      }),
+    [pattern, harmoniaCharacterPreset]
+  );
+
+  const harmoniaDegreeLabels = useMemo(() => listHarmoniaDegreeLabels(), []);
+  const harmoniaSelectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0)) as HarmoniaScaleDegree;
+  const harmoniaBorrowedLabel = pattern?.harmoniaBorrowedLabel ?? undefined;
+  const harmoniaAllowBorrowed =
+    harmoniaCharacterPreset?.allowBorrowed ?? Boolean(harmoniaBorrowedLabel);
+  const harmoniaTonalCenter = pattern?.tonalCenter ?? pattern?.note ?? "C4";
+  const harmoniaScaleName = isScaleName(pattern?.scale)
+    ? (pattern?.scale as ScaleName)
+    : "Major";
+  const harmoniaBassEnabled = harmoniaControls.bassEnabled;
+  const harmoniaArpEnabled = harmoniaControls.arpEnabled;
+  const harmoniaPatternId = harmoniaControls.patternId;
+
+  useEffect(() => {
+    if (!isHarmonia || !pattern || !updatePattern) return;
+    const defaults: Partial<Chunk> = {};
+    const defaultComplexity =
+      harmoniaCharacterPreset?.complexity ?? HARMONIA_DEFAULT_CONTROLS.complexity;
+    if (pattern.harmoniaComplexity === undefined) {
+      defaults.harmoniaComplexity = defaultComplexity;
+      defaults.useExtensions = defaultComplexity !== "simple";
+    }
+    if (pattern.harmoniaTone === undefined) {
+      defaults.harmoniaTone = HARMONIA_DEFAULT_CONTROLS.tone;
+    }
+    if (pattern.harmoniaDynamics === undefined) {
+      defaults.harmoniaDynamics = HARMONIA_DEFAULT_CONTROLS.dynamics;
+      if (pattern.velocityFactor === undefined) {
+        defaults.velocityFactor = HARMONIA_DEFAULT_CONTROLS.dynamics;
+      }
+    }
+    if (pattern.harmoniaBass === undefined) {
+      defaults.harmoniaBass = HARMONIA_DEFAULT_CONTROLS.bassEnabled;
+    }
+    if (pattern.harmoniaArp === undefined) {
+      defaults.harmoniaArp = HARMONIA_DEFAULT_CONTROLS.arpEnabled;
+    }
+    const scaleValue = isScaleName(pattern.scale)
+      ? (pattern.scale as ScaleName)
+      : "Major";
+    if (!isScaleName(pattern.scale)) {
+      defaults.scale = scaleValue;
+    }
+    const tonalCenter = pattern.tonalCenter ?? pattern.note ?? "C4";
+    if (pattern.tonalCenter === undefined) {
+      defaults.tonalCenter = tonalCenter;
+    }
+    const degree = Math.min(6, Math.max(0, pattern.degree ?? 0)) as HarmoniaScaleDegree;
+    if (pattern.degree === undefined) {
+      defaults.degree = degree;
+    }
+    if (!pattern.notes?.length) {
+      const resolution = resolveHarmoniaChord({
+        tonalCenter,
+        scale: scaleValue,
+        degree,
+        complexity: defaults.harmoniaComplexity ?? defaultComplexity,
+        allowBorrowed:
+          harmoniaCharacterPreset?.allowBorrowed ?? Boolean(pattern.harmoniaBorrowedLabel),
+        preferredVoicingLabel: pattern.harmoniaBorrowedLabel ?? undefined,
+      });
+      defaults.note = resolution.root;
+      defaults.notes = resolution.notes.slice();
+      defaults.degrees = resolution.intervals.slice();
+      if (resolution.borrowed) {
+        defaults.harmoniaBorrowedLabel = resolution.voicingLabel;
+      } else if (pattern.harmoniaBorrowedLabel && !harmoniaCharacterPreset?.allowBorrowed) {
+        defaults.harmoniaBorrowedLabel = undefined;
+      }
+    }
+    if (Object.keys(defaults).length > 0) {
+      updatePattern(defaults);
+    }
+  }, [
+    isHarmonia,
+    pattern,
+    updatePattern,
+    harmoniaCharacterPreset,
+  ]);
 
   useEffect(() => {
     if (!pattern || !updatePattern) return;
@@ -389,6 +496,243 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     );
   }, []);
 
+  const harmoniaPadRef = useRef<HTMLDivElement | null>(null);
+  const harmoniaPadActiveRef = useRef(false);
+  const harmoniaPadStateRef = useRef({
+    tone: 0,
+    dynamics: 0,
+  });
+  const harmoniaPadPointerIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    harmoniaPadStateRef.current = {
+      tone: harmoniaControls.tone,
+      dynamics: harmoniaControls.dynamics,
+    };
+  }, [harmoniaControls.tone, harmoniaControls.dynamics]);
+
+  const updateHarmoniaPadPosition = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isHarmonia) return;
+      const rect = harmoniaPadRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const normalizedX = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const normalizedY = clamp((clientY - rect.top) / rect.height, 0, 1);
+      const tone = normalizedX;
+      const dynamics = 1 - normalizedY;
+      harmoniaPadStateRef.current = { tone, dynamics };
+      updatePattern?.({
+        harmoniaTone: tone,
+        harmoniaDynamics: dynamics,
+        filter: tone,
+        velocityFactor: dynamics,
+      });
+      onHarmoniaRealtimeChange?.({
+        tone,
+        dynamics,
+        characterId: sourceCharacterId ?? patternCharacterId,
+      });
+    },
+    [
+      isHarmonia,
+      updatePattern,
+      onHarmoniaRealtimeChange,
+      sourceCharacterId,
+      patternCharacterId,
+    ]
+  );
+
+  const handleHarmoniaPadPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isHarmonia) return;
+      harmoniaPadActiveRef.current = true;
+      harmoniaPadPointerIdRef.current = event.pointerId;
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
+    },
+    [isHarmonia, updateHarmoniaPadPosition]
+  );
+
+  const handleHarmoniaPadPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!harmoniaPadActiveRef.current) return;
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
+    },
+    [updateHarmoniaPadPosition]
+  );
+
+  const handleHarmoniaPadPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!harmoniaPadActiveRef.current) return;
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      harmoniaPadActiveRef.current = false;
+      harmoniaPadPointerIdRef.current = null;
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
+    },
+    [updateHarmoniaPadPosition]
+  );
+
+  const handleHarmoniaPadPointerCancel = useCallback(() => {
+    harmoniaPadActiveRef.current = false;
+    harmoniaPadPointerIdRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!harmoniaPadActiveRef.current) return;
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!harmoniaPadActiveRef.current) return;
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      harmoniaPadActiveRef.current = false;
+      harmoniaPadPointerIdRef.current = null;
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      harmoniaPadActiveRef.current = false;
+      harmoniaPadPointerIdRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
+    };
+  }, [updateHarmoniaPadPosition]);
+
+  useEffect(() => {
+    if (!isHarmonia) {
+      harmoniaPadActiveRef.current = false;
+      harmoniaPadPointerIdRef.current = null;
+    }
+  }, [isHarmonia]);
+
+  const computeHarmoniaResolution = useCallback(
+    (
+      degree: HarmoniaScaleDegree,
+      overrides?: {
+        tonalCenter?: string;
+        scale?: ScaleName;
+        complexity?: HarmoniaComplexity;
+        allowBorrowed?: boolean;
+        preferredVoicingLabel?: string | null;
+      }
+    ) => {
+      const tonalCenter = overrides?.tonalCenter ?? harmoniaTonalCenter;
+      const scale = overrides?.scale ?? harmoniaScaleName;
+      const complexity = overrides?.complexity ?? harmoniaControls.complexity;
+      const allowBorrowed = overrides?.allowBorrowed ?? harmoniaAllowBorrowed;
+      const preferredVoicingLabel = overrides?.preferredVoicingLabel ??
+        (degree === harmoniaSelectedDegree ? harmoniaBorrowedLabel ?? undefined : undefined);
+      return resolveHarmoniaChord({
+        tonalCenter,
+        scale,
+        degree,
+        complexity,
+        allowBorrowed,
+        preferredVoicingLabel,
+      });
+    },
+    [
+      harmoniaTonalCenter,
+      harmoniaScaleName,
+      harmoniaControls.complexity,
+      harmoniaAllowBorrowed,
+      harmoniaSelectedDegree,
+      harmoniaBorrowedLabel,
+    ]
+  );
+
+  const applyHarmoniaResolution = useCallback(
+    (
+      degree: HarmoniaScaleDegree,
+      overrides?: {
+        tonalCenter?: string;
+        scale?: ScaleName;
+        complexity?: HarmoniaComplexity;
+        allowBorrowed?: boolean;
+        preferredVoicingLabel?: string | null;
+      }
+    ) => {
+      const tonalCenter = overrides?.tonalCenter ?? harmoniaTonalCenter;
+      const scale = overrides?.scale ?? harmoniaScaleName;
+      const complexity = overrides?.complexity ?? harmoniaControls.complexity;
+      const allowBorrowed = overrides?.allowBorrowed ?? harmoniaAllowBorrowed;
+      const preferredVoicingLabel = overrides?.preferredVoicingLabel ??
+        (degree === harmoniaSelectedDegree ? harmoniaBorrowedLabel ?? undefined : undefined);
+      const resolution = resolveHarmoniaChord({
+        tonalCenter,
+        scale,
+        degree,
+        complexity,
+        allowBorrowed,
+        preferredVoicingLabel,
+      });
+      if (updatePattern) {
+        const payload: Partial<Chunk> = {
+          tonalCenter,
+          scale,
+          degree,
+          note: resolution.root,
+          notes: resolution.notes.slice(),
+          degrees: resolution.intervals.slice(),
+          harmoniaComplexity: complexity,
+          harmoniaBorrowedLabel: resolution.borrowed
+            ? resolution.voicingLabel
+            : undefined,
+        };
+        payload.useExtensions = complexity !== "simple";
+        updatePattern(payload);
+      }
+      return { resolution, tonalCenter, scale, complexity };
+    },
+    [
+      updatePattern,
+      harmoniaTonalCenter,
+      harmoniaScaleName,
+      harmoniaControls.complexity,
+      harmoniaAllowBorrowed,
+      harmoniaSelectedDegree,
+      harmoniaBorrowedLabel,
+    ]
+  );
+
   const tonalCenter = pattern?.tonalCenter ?? pattern?.note ?? "C4";
   const scaleName = isScaleName(pattern?.scale)
     ? (pattern?.scale as ScaleName)
@@ -408,8 +752,335 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const bitcrusherAmount = pattern?.bitcrusher ?? 0;
 
   const chordDefinition = useMemo(
-    () => buildChordForDegree(tonalCenter, scaleName, selectedDegree, extensionsEnabled),
+    () =>
+      buildChordForDegree(
+        tonalCenter,
+        scaleName,
+        selectedDegree,
+        extensionsEnabled
+      ),
     [tonalCenter, scaleName, selectedDegree, extensionsEnabled]
+  );
+
+  const recordNoteToPattern = useCallback(
+    ({
+      noteName,
+      eventTime,
+      baseNote,
+      velocity,
+      duration,
+      includeChordMeta,
+      mode,
+      chunkOverrides,
+    }: {
+      noteName: string;
+      eventTime: number;
+      baseNote: string;
+      velocity: number;
+      duration?: number;
+      includeChordMeta?: boolean;
+      mode: "sync" | "free";
+      chunkOverrides?: Partial<Chunk>;
+    }) => {
+      if (!onUpdatePattern) return;
+
+      if (mode === "sync") {
+        recordingAnchorRef.current = null;
+        const ticksPerStep = Tone.Transport.PPQ / 4;
+        const ticks = Tone.Transport.getTicksAtTime(eventTime);
+        onUpdatePattern((chunk) => {
+          const length = chunk.steps.length || 16;
+          const stepIndex = length
+            ? Math.floor(ticks / ticksPerStep) % length
+            : 0;
+          const steps = chunk.steps.length
+            ? chunk.steps.slice()
+            : Array(16).fill(0);
+          const velocities = ensureArrayLength(
+            chunk.velocities,
+            steps.length,
+            1
+          );
+          const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+          const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
+          const midi = Tone.Frequency(noteName).toMidi();
+          steps[stepIndex] = 1;
+          velocities[stepIndex] = clamp(velocity, 0, 1);
+          pitches[stepIndex] = midi - baseMidi;
+
+          const nextChunk: Chunk = {
+            ...chunk,
+            note: pattern?.note ?? baseNote,
+            sustain: pattern?.sustain ?? chunk.sustain,
+            attack: pattern?.attack ?? chunk.attack,
+            glide: pattern?.glide ?? chunk.glide,
+            pan: pattern?.pan ?? chunk.pan,
+            reverb: pattern?.reverb ?? chunk.reverb,
+            delay: pattern?.delay ?? chunk.delay,
+            distortion: pattern?.distortion ?? chunk.distortion,
+            bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+            filter: pattern?.filter ?? chunk.filter,
+            chorus: pattern?.chorus ?? chunk.chorus,
+            pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+            style: pattern?.style ?? chunk.style,
+            mode: pattern?.mode ?? chunk.mode,
+            arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
+            arpGate: pattern?.arpGate ?? chunk.arpGate,
+            arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+            arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+            arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+            timingMode: "sync",
+            tonalCenter,
+            scale: scaleName,
+            degree: selectedDegree,
+            useExtensions: extensionsEnabled,
+            autopilot: autopilotEnabled,
+            steps,
+            velocities,
+            pitches,
+            noteEvents: undefined,
+            noteLoopLength: undefined,
+          };
+
+          if (includeChordMeta) {
+            nextChunk.note = chordDefinition.root;
+            nextChunk.notes = chordDefinition.notes.slice();
+            nextChunk.degrees = chordDefinition.degrees.slice();
+          }
+
+          if (chunkOverrides) {
+            Object.assign(nextChunk, chunkOverrides);
+          }
+
+          return nextChunk;
+        });
+        return;
+      }
+
+      const anchor = recordingAnchorRef.current ?? eventTime;
+      recordingAnchorRef.current = anchor;
+      const relativeTime = Math.max(0, eventTime - anchor);
+      const durationSeconds = Math.max(0.02, duration ?? 0.02);
+      const event: NoteEvent = {
+        time: relativeTime,
+        duration: durationSeconds,
+        note: noteName,
+        velocity: clamp(velocity, 0, 1),
+      };
+
+      onUpdatePattern((chunk) => {
+        const length = chunk.steps.length || 16;
+        const steps = chunk.steps.length
+          ? chunk.steps.slice()
+          : Array(length).fill(0);
+        steps.fill(0);
+        const velocities = ensureArrayLength(chunk.velocities, steps.length, 0);
+        velocities.fill(0);
+        const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+        pitches.fill(0);
+
+        const events = chunk.noteEvents ? chunk.noteEvents.slice() : [];
+        events.push(event);
+        events.sort((a, b) => a.time - b.time);
+        const loopLength = Math.max(
+          chunk.noteLoopLength ?? 0,
+          event.time + event.duration
+        );
+
+        const nextChunk: Chunk = {
+          ...chunk,
+          note: pattern?.note ?? baseNote,
+          sustain: pattern?.sustain ?? chunk.sustain,
+          attack: pattern?.attack ?? chunk.attack,
+          glide: pattern?.glide ?? chunk.glide,
+          pan: pattern?.pan ?? chunk.pan,
+          reverb: pattern?.reverb ?? chunk.reverb,
+          delay: pattern?.delay ?? chunk.delay,
+          distortion: pattern?.distortion ?? chunk.distortion,
+          bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+          filter: pattern?.filter ?? chunk.filter,
+          chorus: pattern?.chorus ?? chunk.chorus,
+          pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+          style: pattern?.style ?? chunk.style,
+          mode: pattern?.mode ?? chunk.mode,
+          arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
+          arpGate: pattern?.arpGate ?? chunk.arpGate,
+          arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+          arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+          arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+          timingMode: "free",
+          tonalCenter,
+          scale: scaleName,
+          degree: selectedDegree,
+          useExtensions: extensionsEnabled,
+          autopilot: autopilotEnabled,
+          steps,
+          velocities,
+          pitches,
+          noteEvents: events,
+          noteLoopLength: loopLength,
+        };
+
+        if (includeChordMeta) {
+          nextChunk.note = chordDefinition.root;
+          nextChunk.notes = chordDefinition.notes.slice();
+          nextChunk.degrees = chordDefinition.degrees.slice();
+        }
+
+        if (chunkOverrides) {
+          Object.assign(nextChunk, chunkOverrides);
+        }
+
+        return nextChunk;
+      });
+    },
+    [
+      onUpdatePattern,
+      pattern,
+      tonalCenter,
+      scaleName,
+      selectedDegree,
+      extensionsEnabled,
+      autopilotEnabled,
+      chordDefinition,
+    ]
+  );
+
+  const handleHarmoniaPadPress = useCallback(
+    (degree: HarmoniaScaleDegree) => {
+      const { tone, dynamics } = harmoniaPadStateRef.current;
+      const { resolution, tonalCenter: center, scale, complexity } =
+        applyHarmoniaResolution(degree);
+      if (!resolution) return;
+      if (trigger) {
+        void ensureAudioContextRunning();
+        const now = Tone.now();
+        const chunkPayload = pattern
+          ? {
+              ...pattern,
+              tonalCenter: center,
+              scale,
+              degree,
+              note: resolution.root,
+              notes: resolution.notes.slice(),
+              degrees: resolution.intervals.slice(),
+              harmoniaComplexity: complexity,
+              harmoniaTone: tone,
+              harmoniaDynamics: dynamics,
+              harmoniaBass: harmoniaBassEnabled,
+              harmoniaArp: harmoniaArpEnabled,
+              harmoniaPatternId,
+              harmoniaBorrowedLabel: resolution.borrowed
+                ? resolution.voicingLabel
+                : undefined,
+              filter: tone,
+            }
+          : undefined;
+        trigger(
+          now,
+          dynamics,
+          0,
+          resolution.root,
+          pattern?.sustain ?? undefined,
+          chunkPayload,
+          sourceCharacterId ?? patternCharacterId ?? undefined
+        );
+
+        if (isRecording && onUpdatePattern) {
+          const baseNote = pattern?.note ?? resolution.root;
+          const overrides: Partial<Chunk> = {
+            tonalCenter: center,
+            scale,
+            degree,
+            note: resolution.root,
+            notes: resolution.notes.slice(),
+            degrees: resolution.intervals.slice(),
+            harmoniaComplexity: complexity,
+            harmoniaBorrowedLabel: resolution.borrowed
+              ? resolution.voicingLabel
+              : undefined,
+            harmoniaTone: tone,
+            harmoniaDynamics: dynamics,
+            harmoniaBass: harmoniaBassEnabled,
+            harmoniaArp: harmoniaArpEnabled,
+            harmoniaPatternId: harmoniaPatternId ?? undefined,
+            velocityFactor: dynamics,
+            filter: tone,
+          };
+          Tone.Draw.schedule(() => {
+            recordNoteToPattern({
+              noteName: resolution.root,
+              eventTime: now,
+              baseNote,
+              velocity: dynamics,
+              duration: pattern?.sustain ?? undefined,
+              includeChordMeta: true,
+              mode: timingMode,
+              chunkOverrides: overrides,
+            });
+          }, now);
+        }
+      }
+    },
+    [
+      applyHarmoniaResolution,
+      trigger,
+      pattern,
+      harmoniaBassEnabled,
+      harmoniaArpEnabled,
+      harmoniaPatternId,
+      sourceCharacterId,
+      patternCharacterId,
+      isRecording,
+      onUpdatePattern,
+      recordNoteToPattern,
+      timingMode,
+    ]
+  );
+
+  const harmoniaComplexityIndex = Math.max(
+    0,
+    HARMONIA_COMPLEXITY_ORDER.indexOf(harmoniaControls.complexity)
+  );
+
+  const handleHarmoniaComplexityChange = useCallback(
+    (value: number) => {
+      const index = clamp(
+        Math.round(value),
+        0,
+        HARMONIA_COMPLEXITY_ORDER.length - 1
+      );
+      const nextComplexity = HARMONIA_COMPLEXITY_ORDER[index];
+      applyHarmoniaResolution(harmoniaSelectedDegree, {
+        complexity: nextComplexity,
+      });
+    },
+    [applyHarmoniaResolution, harmoniaSelectedDegree]
+  );
+
+  const toggleHarmoniaBass = useCallback(() => {
+    if (!updatePattern) return;
+    updatePattern({ harmoniaBass: !harmoniaControls.bassEnabled });
+  }, [updatePattern, harmoniaControls.bassEnabled]);
+
+  const toggleHarmoniaArp = useCallback(() => {
+    if (!updatePattern) return;
+    updatePattern({ harmoniaArp: !harmoniaControls.arpEnabled });
+  }, [updatePattern, harmoniaControls.arpEnabled]);
+
+  const handleHarmoniaKeyChange = useCallback(
+    (value: string) => {
+      applyHarmoniaResolution(harmoniaSelectedDegree, { tonalCenter: value });
+    },
+    [applyHarmoniaResolution, harmoniaSelectedDegree]
+  );
+
+  const handleHarmoniaScaleChange = useCallback(
+    (value: string) => {
+      const nextScale = isScaleName(value) ? (value as ScaleName) : "Major";
+      applyHarmoniaResolution(harmoniaSelectedDegree, { scale: nextScale });
+    },
+    [applyHarmoniaResolution, harmoniaSelectedDegree]
   );
 
   const degreeLabel = DEGREE_LABELS[selectedDegree] ?? "I";
@@ -680,180 +1351,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       </div>
     </Section>
   ) : null;
-
-  const recordNoteToPattern = useCallback(
-    ({
-      noteName,
-      eventTime,
-      baseNote,
-      velocity,
-      duration,
-      includeChordMeta,
-      mode,
-    }: {
-      noteName: string;
-      eventTime: number;
-      baseNote: string;
-      velocity: number;
-      duration?: number;
-      includeChordMeta?: boolean;
-      mode: "sync" | "free";
-    }) => {
-      if (!onUpdatePattern) return;
-
-      if (mode === "sync") {
-        recordingAnchorRef.current = null;
-        const ticksPerStep = Tone.Transport.PPQ / 4;
-        const ticks = Tone.Transport.getTicksAtTime(eventTime);
-        onUpdatePattern((chunk) => {
-          const length = chunk.steps.length || 16;
-          const stepIndex = length
-            ? Math.floor(ticks / ticksPerStep) % length
-            : 0;
-          const steps = chunk.steps.length
-            ? chunk.steps.slice()
-            : Array(16).fill(0);
-          const velocities = ensureArrayLength(
-            chunk.velocities,
-            steps.length,
-            1
-          );
-          const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
-          const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
-          const midi = Tone.Frequency(noteName).toMidi();
-          steps[stepIndex] = 1;
-          velocities[stepIndex] = clamp(velocity, 0, 1);
-          pitches[stepIndex] = midi - baseMidi;
-
-          const nextChunk: Chunk = {
-            ...chunk,
-            note: pattern?.note ?? baseNote,
-            sustain: pattern?.sustain ?? chunk.sustain,
-            attack: pattern?.attack ?? chunk.attack,
-            glide: pattern?.glide ?? chunk.glide,
-            pan: pattern?.pan ?? chunk.pan,
-            reverb: pattern?.reverb ?? chunk.reverb,
-            delay: pattern?.delay ?? chunk.delay,
-            distortion: pattern?.distortion ?? chunk.distortion,
-            bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
-            filter: pattern?.filter ?? chunk.filter,
-            chorus: pattern?.chorus ?? chunk.chorus,
-            pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
-            style: pattern?.style ?? chunk.style,
-            mode: pattern?.mode ?? chunk.mode,
-            arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
-            arpGate: pattern?.arpGate ?? chunk.arpGate,
-            arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
-            arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
-            arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
-            timingMode: "sync",
-            tonalCenter,
-            scale: scaleName,
-            degree: selectedDegree,
-            useExtensions: extensionsEnabled,
-            autopilot: autopilotEnabled,
-            steps,
-            velocities,
-            pitches,
-            noteEvents: undefined,
-            noteLoopLength: undefined,
-          };
-
-          if (includeChordMeta) {
-            nextChunk.note = chordDefinition.root;
-            nextChunk.notes = chordDefinition.notes.slice();
-            nextChunk.degrees = chordDefinition.degrees.slice();
-          }
-
-          return nextChunk;
-        });
-        return;
-      }
-
-      const anchor = recordingAnchorRef.current ?? eventTime;
-      recordingAnchorRef.current = anchor;
-      const relativeTime = Math.max(0, eventTime - anchor);
-      const durationSeconds = Math.max(0.02, duration ?? 0.02);
-      const event: NoteEvent = {
-        time: relativeTime,
-        duration: durationSeconds,
-        note: noteName,
-        velocity: clamp(velocity, 0, 1),
-      };
-
-      onUpdatePattern((chunk) => {
-        const length = chunk.steps.length || 16;
-        const steps = chunk.steps.length
-          ? chunk.steps.slice()
-          : Array(length).fill(0);
-        steps.fill(0);
-        const velocities = ensureArrayLength(chunk.velocities, steps.length, 0);
-        velocities.fill(0);
-        const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
-        pitches.fill(0);
-
-        const events = chunk.noteEvents ? chunk.noteEvents.slice() : [];
-        events.push(event);
-        events.sort((a, b) => a.time - b.time);
-        const loopLength = Math.max(
-          chunk.noteLoopLength ?? 0,
-          event.time + event.duration
-        );
-
-        const nextChunk: Chunk = {
-          ...chunk,
-          note: pattern?.note ?? baseNote,
-          sustain: pattern?.sustain ?? chunk.sustain,
-          attack: pattern?.attack ?? chunk.attack,
-          glide: pattern?.glide ?? chunk.glide,
-          pan: pattern?.pan ?? chunk.pan,
-          reverb: pattern?.reverb ?? chunk.reverb,
-          delay: pattern?.delay ?? chunk.delay,
-          distortion: pattern?.distortion ?? chunk.distortion,
-          bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
-          filter: pattern?.filter ?? chunk.filter,
-          chorus: pattern?.chorus ?? chunk.chorus,
-          pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
-          style: pattern?.style ?? chunk.style,
-          mode: pattern?.mode ?? chunk.mode,
-          arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
-          arpGate: pattern?.arpGate ?? chunk.arpGate,
-          arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
-          arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
-          arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
-          timingMode: "free",
-          tonalCenter,
-          scale: scaleName,
-          degree: selectedDegree,
-          useExtensions: extensionsEnabled,
-          autopilot: autopilotEnabled,
-          steps,
-          velocities,
-          pitches,
-          noteEvents: events,
-          noteLoopLength: loopLength,
-        };
-
-        if (includeChordMeta) {
-          nextChunk.note = chordDefinition.root;
-          nextChunk.notes = chordDefinition.notes.slice();
-          nextChunk.degrees = chordDefinition.degrees.slice();
-        }
-
-        return nextChunk;
-      });
-    },
-    [
-      onUpdatePattern,
-      pattern,
-      tonalCenter,
-      scaleName,
-      selectedDegree,
-      extensionsEnabled,
-      autopilotEnabled,
-      chordDefinition,
-    ]
-  );
 
   const stopArpPlayback = useCallback((options?: { preserveState?: boolean }) => {
     if (arpScheduleIdRef.current !== null) {
@@ -1801,6 +2298,194 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const stickySections: ReactNode[] = [];
 
+  const HARMONIA_PAD_HEIGHT = 140;
+
+  if (isHarmonia) {
+    stickySections.push(
+      <Section key="harmonia" padding={14}>
+        <div
+          style={{
+            display: "flex",
+            gap: 16,
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              flex: "0 0 calc(50% - 8px)",
+              maxWidth: "calc(50% - 8px)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              justifyContent: "center",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: 11,
+                color: "#94a3b8",
+                fontWeight: 600,
+                fontVariantNumeric: "tabular-nums",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span>XY Pad</span>
+              <span>
+                Tone {Math.round(harmoniaControls.tone * 100)}% · Dynamics {Math.round(harmoniaControls.dynamics * 100)}%
+              </span>
+            </div>
+            <div
+              ref={harmoniaPadRef}
+              onPointerDown={handleHarmoniaPadPointerDown}
+              onPointerMove={handleHarmoniaPadPointerMove}
+              onPointerUp={handleHarmoniaPadPointerUp}
+              onPointerCancel={handleHarmoniaPadPointerCancel}
+              style={{
+                position: "relative",
+                width: "100%",
+                height: HARMONIA_PAD_HEIGHT,
+                borderRadius: 14,
+                border: "1px solid #1f2a3d",
+                background: "linear-gradient(135deg, #17253a 0%, #0c1524 100%)",
+                cursor: updatePattern ? "pointer" : "default",
+                touchAction: "none",
+                overflow: "hidden",
+                userSelect: "none",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: `${(1 - harmoniaControls.dynamics) * 100}%`,
+                  left: 0,
+                  right: 0,
+                  height: 1,
+                  background: "rgba(148, 163, 184, 0.25)",
+                  pointerEvents: "none",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${harmoniaControls.tone * 100}%`,
+                  top: 0,
+                  bottom: 0,
+                  width: 1,
+                  background: "rgba(148, 163, 184, 0.25)",
+                  pointerEvents: "none",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${harmoniaControls.tone * 100}%`,
+                  top: `${(1 - harmoniaControls.dynamics) * 100}%`,
+                  transform: "translate(-50%, -50%)",
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  border: "2px solid #27E0B0",
+                  background: "rgba(39, 224, 176, 0.25)",
+                  boxShadow: "0 0 16px rgba(39, 224, 176, 0.4)",
+                  pointerEvents: "none",
+                }}
+              />
+            </div>
+          </div>
+          <div
+            style={{
+              flex: "0 0 calc(50% - 8px)",
+              maxWidth: "calc(50% - 8px)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              justifyContent: "center",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#94a3b8",
+                display: "flex",
+                alignItems: "center",
+                minHeight: 18,
+              }}
+            >
+              Chord Pads
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gridTemplateRows: "repeat(3, 1fr)",
+                height: HARMONIA_PAD_HEIGHT,
+                gap: 4,
+              }}
+            >
+              {harmoniaDegreeLabels.map((label, index) => {
+                const degree = index as HarmoniaScaleDegree;
+                const preview = computeHarmoniaResolution(degree);
+                const isActive = harmoniaSelectedDegree === degree;
+                const summary = describeHarmoniaChord(preview);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onPointerDown={(event) => {
+                      if (event.pointerType !== "mouse") {
+                        event.preventDefault();
+                        handleHarmoniaPadPress(degree);
+                      }
+                    }}
+                    onClick={() => handleHarmoniaPadPress(degree)}
+                    aria-label={summary}
+                    style={{
+                      padding: 0,
+                      borderRadius: 12,
+                      border: `1px solid ${isActive ? "#27E0B0" : "#1f2a3d"}`,
+                      background: isActive
+                        ? "rgba(39, 224, 176, 0.16)"
+                        : "#10192c",
+                      color: "#e2e8f0",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      boxShadow: isActive
+                        ? "0 0 16px rgba(39, 224, 176, 0.2)"
+                        : "none",
+                      transition: "background 0.15s ease",
+                      height: "100%",
+                      gridColumn: index === 0 ? "1 / -1" : undefined,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    title={summary}
+                  >
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: isActive ? "#27E0B0" : "#1f2a3d",
+                        boxShadow: isActive
+                          ? "0 0 12px rgba(39, 224, 176, 0.45)"
+                          : "none",
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </Section>
+    );
+  }
+
   if (isKeyboard) {
     stickySections.push(
       <Section key="keyboard" padding={10}>
@@ -1988,15 +2673,151 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         </div>
       </Section>
 
+      {isHarmonia ? (
+        <Section>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            <label style={{ flex: "1 1 180px", fontSize: 12 }}>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: 4,
+                  color: "#94a3b8",
+                  fontWeight: 600,
+                }}
+              >
+                Key / Tonal Center
+              </span>
+              <select
+                value={harmoniaTonalCenter}
+                onChange={(event) => handleHarmoniaKeyChange(event.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #273144",
+                  background: "#111a2c",
+                  color: "#f8fafc",
+                }}
+              >
+                {availableNotes.map((note) => (
+                  <option key={note} value={note}>
+                    {note}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ flex: "1 1 200px", fontSize: 12 }}>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: 4,
+                  color: "#94a3b8",
+                  fontWeight: 600,
+                }}
+              >
+                Scale / Mode
+              </span>
+              <select
+                value={harmoniaScaleName}
+                onChange={(event) => handleHarmoniaScaleChange(event.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #273144",
+                  background: "#111a2c",
+                  color: "#f8fafc",
+                }}
+              >
+                {SCALE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option.replace(/([a-z])([A-Z])/g, "$1 $2")}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <Slider
+            label="Complexity"
+            min={0}
+            max={HARMONIA_COMPLEXITY_ORDER.length - 1}
+            step={1}
+            value={harmoniaComplexityIndex}
+            formatValue={(value) => {
+              const index = clamp(
+                Math.round(value),
+                0,
+                HARMONIA_COMPLEXITY_ORDER.length - 1
+              );
+              const name = HARMONIA_COMPLEXITY_ORDER[index];
+              return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+            }}
+            onChange={handleHarmoniaComplexityChange}
+          />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={toggleHarmoniaBass}
+              aria-pressed={harmoniaControls.bassEnabled}
+              style={{
+                flex: "1 1 140px",
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: `1px solid ${harmoniaControls.bassEnabled ? "#27E0B0" : "#1f2a3d"}`,
+                background: harmoniaControls.bassEnabled
+                  ? "rgba(39, 224, 176, 0.16)"
+                  : "#10192c",
+                color: "#e2e8f0",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Bass {harmoniaControls.bassEnabled ? "On" : "Off"}
+            </button>
+            <button
+              type="button"
+              onClick={toggleHarmoniaArp}
+              aria-pressed={harmoniaControls.arpEnabled}
+              style={{
+                flex: "1 1 140px",
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: `1px solid ${harmoniaControls.arpEnabled ? "#27E0B0" : "#1f2a3d"}`,
+                background: harmoniaControls.arpEnabled
+                  ? "rgba(39, 224, 176, 0.16)"
+                  : "#10192c",
+                color: "#e2e8f0",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Arp {harmoniaControls.arpEnabled ? "On" : "Off"}
+            </button>
+          </div>
+        </Section>
+      ) : null}
+
       <Section>
         <Slider
-          label="Velocity"
+          label={isHarmonia ? "Dynamics" : "Velocity"}
           min={0}
-          max={2}
+          max={isHarmonia ? 1 : 2}
           step={0.01}
-          value={activeVelocity}
+          value={isHarmonia ? harmoniaControls.dynamics : activeVelocity}
           formatValue={(value) => `${Math.round(value * 100)}%`}
-          onChange={updatePattern ? (value) => updatePattern({ velocityFactor: value }) : undefined}
+          onChange={
+            updatePattern
+              ? (value) => {
+                  const payload: Partial<Chunk> = { velocityFactor: value };
+                  if (isHarmonia) {
+                    payload.harmoniaDynamics = value;
+                  }
+                  updatePattern(payload);
+                }
+              : undefined
+          }
         />
       </Section>
 
