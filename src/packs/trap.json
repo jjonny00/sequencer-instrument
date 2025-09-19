@@ -236,6 +236,56 @@
           ]
         }
       ]
+    },
+    "harmonia": {
+      "defaultCharacterId": "simple",
+      "defaultPatternId": "basic-progression",
+      "characters": [
+        {
+          "id": "simple",
+          "name": "Simple",
+          "description": "Triads only for easy pads.",
+          "type": "Harmonia"
+        },
+        {
+          "id": "extended",
+          "name": "Extended",
+          "description": "Adds seventh chords for richer harmony.",
+          "type": "Harmonia"
+        },
+        {
+          "id": "lush",
+          "name": "Lush",
+          "description": "Expansive 9th, 11th, and 13th chords.",
+          "type": "Harmonia"
+        },
+        {
+          "id": "borrowed",
+          "name": "Borrowed",
+          "description": "Modal interchange colors for surprise turns.",
+          "type": "Harmonia"
+        }
+      ],
+      "patterns": [
+        {
+          "id": "basic-progression",
+          "name": "Basic Progression",
+          "description": "Classic I–V–vi–IV pop cadence.",
+          "degrees": [0, 4, 5, 3]
+        },
+        {
+          "id": "descending-line",
+          "name": "Descending Line",
+          "description": "Falling motion: vi–V–IV–iii.",
+          "degrees": [5, 4, 3, 2]
+        },
+        {
+          "id": "circle-of-fifths",
+          "name": "Circle of Fifths",
+          "description": "Extended dominant cycle back to tonic.",
+          "degrees": [0, 3, 6, 2, 5, 1, 4, 0]
+        }
+      ]
     }
   },
   "chunks": [
