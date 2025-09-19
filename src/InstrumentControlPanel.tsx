@@ -356,6 +356,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const harmoniaScaleName = isScaleName(pattern?.scale)
     ? (pattern?.scale as ScaleName)
     : "Major";
+  const harmoniaBassEnabled = harmoniaControls.bassEnabled;
+  const harmoniaArpEnabled = harmoniaControls.arpEnabled;
+  const harmoniaPatternId = harmoniaControls.patternId;
 
   useEffect(() => {
     if (!isHarmonia || !pattern || !updatePattern) return;
@@ -489,17 +492,29 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const harmoniaPadRef = useRef<HTMLDivElement | null>(null);
   const harmoniaPadActiveRef = useRef(false);
+  const harmoniaPadStateRef = useRef({
+    tone: 0,
+    dynamics: 0,
+  });
+
+  useEffect(() => {
+    harmoniaPadStateRef.current = {
+      tone: harmoniaControls.tone,
+      dynamics: harmoniaControls.dynamics,
+    };
+  }, [harmoniaControls.tone, harmoniaControls.dynamics]);
 
   const updateHarmoniaPadPosition = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!isHarmonia || !updatePattern) return;
+      if (!isHarmonia) return;
       const rect = harmoniaPadRef.current?.getBoundingClientRect();
       if (!rect) return;
       const normalizedX = clamp((event.clientX - rect.left) / rect.width, 0, 1);
       const normalizedY = clamp((event.clientY - rect.top) / rect.height, 0, 1);
       const tone = normalizedX;
       const dynamics = 1 - normalizedY;
-      updatePattern({
+      harmoniaPadStateRef.current = { tone, dynamics };
+      updatePattern?.({
         harmoniaTone: tone,
         harmoniaDynamics: dynamics,
         filter: tone,
@@ -633,6 +648,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const handleHarmoniaPadPress = useCallback(
     (degree: HarmoniaScaleDegree) => {
+      const { tone, dynamics } = harmoniaPadStateRef.current;
       const { resolution, tonalCenter: center, scale, complexity } =
         applyHarmoniaResolution(degree);
       if (!resolution) return;
@@ -649,20 +665,20 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               notes: resolution.notes.slice(),
               degrees: resolution.intervals.slice(),
               harmoniaComplexity: complexity,
-              harmoniaTone: harmoniaControls.tone,
-              harmoniaDynamics: harmoniaControls.dynamics,
-              harmoniaBass: harmoniaControls.bassEnabled,
-              harmoniaArp: harmoniaControls.arpEnabled,
-              harmoniaPatternId: harmoniaControls.patternId,
+              harmoniaTone: tone,
+              harmoniaDynamics: dynamics,
+              harmoniaBass: harmoniaBassEnabled,
+              harmoniaArp: harmoniaArpEnabled,
+              harmoniaPatternId,
               harmoniaBorrowedLabel: resolution.borrowed
                 ? resolution.voicingLabel
                 : undefined,
-              filter: harmoniaControls.tone,
+              filter: tone,
             }
           : undefined;
         trigger(
           now,
-          harmoniaControls.dynamics,
+          dynamics,
           0,
           resolution.root,
           pattern?.sustain ?? undefined,
@@ -675,11 +691,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       applyHarmoniaResolution,
       trigger,
       pattern,
-      harmoniaControls.dynamics,
-      harmoniaControls.tone,
-      harmoniaControls.bassEnabled,
-      harmoniaControls.arpEnabled,
-      harmoniaControls.patternId,
+      harmoniaBassEnabled,
+      harmoniaArpEnabled,
+      harmoniaPatternId,
       sourceCharacterId,
       patternCharacterId,
     ]
