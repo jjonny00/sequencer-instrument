@@ -89,8 +89,11 @@ const initializeHarmoniaPattern = (
   if (pattern.instrument !== "harmonia") return pattern;
 
   const availablePatterns = instrumentDefinition?.patterns ?? [];
-  const presetId =
-    instrumentDefinition?.defaultPatternId ?? availablePatterns[0]?.id ?? null;
+  const providedPresetId = pattern.harmoniaPatternId ?? null;
+  const presetId = providedPresetId &&
+    availablePatterns.some((candidate) => candidate.id === providedPresetId)
+      ? providedPresetId
+      : instrumentDefinition?.defaultPatternId ?? availablePatterns[0]?.id ?? null;
   const preset = presetId
     ? availablePatterns.find((candidate) => candidate.id === presetId) ?? null
     : null;
