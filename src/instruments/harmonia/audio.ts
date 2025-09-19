@@ -6,6 +6,7 @@ import { isScaleName, type ScaleName } from "../../music/scales";
 import {
   HARMONIA_CHARACTER_PRESETS,
   HARMONIA_DEFAULT_CONTROLS,
+  HARMONIA_PATTERN_IDS,
 } from "./constants";
 import {
   clampControlValue,
@@ -16,8 +17,22 @@ import type {
   HarmoniaCharacterId,
   HarmoniaComplexity,
   HarmoniaControlState,
+  HarmoniaPatternId,
   HarmoniaScaleDegree,
 } from "./types";
+
+type ToneLike = Pick<
+  typeof Tone,
+  "PolySynth" | "Filter" | "Volume" | "Frequency" | "Time"
+>;
+
+const isHarmoniaPatternId = (
+  value: unknown
+): value is HarmoniaPatternId =>
+  typeof value === "string" &&
+  (HARMONIA_PATTERN_IDS as readonly string[]).includes(
+    value as HarmoniaPatternId
+  );
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -48,7 +63,9 @@ const deriveControlState = (
     dynamics: chunk?.harmoniaDynamics ?? undefined,
     bassEnabled: chunk?.harmoniaBass ?? undefined,
     arpEnabled: chunk?.harmoniaArp ?? undefined,
-    patternId: chunk?.harmoniaPatternId,
+    patternId: isHarmoniaPatternId(chunk?.harmoniaPatternId)
+      ? chunk?.harmoniaPatternId
+      : undefined,
   });
 };
 
@@ -87,7 +104,9 @@ const deriveResolution = (
   });
 };
 
-export const createHarmoniaNodes = (tone: typeof Tone = Tone): HarmoniaNodes => {
+export const createHarmoniaNodes = (
+  tone: ToneLike = Tone as ToneLike
+): HarmoniaNodes => {
   const synth = new tone.PolySynth();
   const settable = synth as unknown as {
     set?: (values: Record<string, unknown>) => void;

@@ -83,6 +83,12 @@ export const HARMONIA_CHARACTER_PRESETS: HarmoniaCharacterPreset[] = [
   },
 ];
 
+export const HARMONIA_PATTERN_IDS = [
+  "basic-progression",
+  "descending-line",
+  "circle-of-fifths",
+] as const;
+
 export const HARMONIA_PATTERN_PRESETS: HarmoniaPatternPreset[] = [
   {
     id: "basic-progression",
