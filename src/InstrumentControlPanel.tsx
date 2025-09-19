@@ -79,6 +79,25 @@ interface SliderProps {
   onChange?: (value: number) => void;
 }
 
+interface HarmoniaRecordingMeta {
+  note: string;
+  notes: string[];
+  degrees: number[];
+  tonalCenter: string;
+  scale: string;
+  degree: number;
+  useExtensions: boolean;
+  harmoniaComplexity?: HarmoniaComplexity;
+  harmoniaBorrowedLabel?: string;
+  harmoniaTone?: number;
+  harmoniaDynamics?: number;
+  harmoniaBass?: boolean;
+  harmoniaArp?: boolean;
+  harmoniaPatternId?: string;
+  velocityFactor?: number;
+  filter?: number;
+}
+
 const Slider: FC<SliderProps> = ({
   label,
   value,
@@ -503,6 +522,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     dynamics: 0,
   });
   const harmoniaPadPointerIdRef = useRef<number | null>(null);
+  const harmoniaLastChordRef = useRef<HarmoniaRecordingMeta | null>(null);
 
   useEffect(() => {
     harmoniaPadStateRef.current = {
@@ -521,6 +541,15 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       const tone = normalizedX;
       const dynamics = 1 - normalizedY;
       harmoniaPadStateRef.current = { tone, dynamics };
+      if (harmoniaLastChordRef.current) {
+        harmoniaLastChordRef.current = {
+          ...harmoniaLastChordRef.current,
+          harmoniaTone: tone,
+          harmoniaDynamics: dynamics,
+          velocityFactor: dynamics,
+          filter: tone,
+        };
+      }
       updatePattern?.({
         harmoniaTone: tone,
         harmoniaDynamics: dynamics,
@@ -539,6 +568,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       onHarmoniaRealtimeChange,
       sourceCharacterId,
       patternCharacterId,
+      harmoniaLastChordRef,
     ]
   );
 
@@ -704,14 +734,36 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         allowBorrowed,
         preferredVoicingLabel,
       });
+      const notes = resolution.notes.slice();
+      const degrees = resolution.intervals.slice();
+      harmoniaLastChordRef.current = {
+        note: resolution.root,
+        notes,
+        degrees,
+        tonalCenter,
+        scale,
+        degree,
+        useExtensions: complexity !== "simple",
+        harmoniaComplexity: complexity,
+        harmoniaBorrowedLabel: resolution.borrowed
+          ? resolution.voicingLabel
+          : undefined,
+        harmoniaTone: harmoniaPadStateRef.current.tone,
+        harmoniaDynamics: harmoniaPadStateRef.current.dynamics,
+        harmoniaBass: harmoniaControls.bassEnabled,
+        harmoniaArp: harmoniaControls.arpEnabled,
+        harmoniaPatternId: harmoniaControls.patternId ?? undefined,
+        velocityFactor: harmoniaPadStateRef.current.dynamics,
+        filter: harmoniaPadStateRef.current.tone,
+      };
       if (updatePattern) {
         const payload: Partial<Chunk> = {
           tonalCenter,
           scale,
           degree,
           note: resolution.root,
-          notes: resolution.notes.slice(),
-          degrees: resolution.intervals.slice(),
+          notes,
+          degrees,
           harmoniaComplexity: complexity,
           harmoniaBorrowedLabel: resolution.borrowed
             ? resolution.voicingLabel
@@ -727,6 +779,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       harmoniaTonalCenter,
       harmoniaScaleName,
       harmoniaControls.complexity,
+      harmoniaControls.bassEnabled,
+      harmoniaControls.arpEnabled,
+      harmoniaControls.patternId,
       harmoniaAllowBorrowed,
       harmoniaSelectedDegree,
       harmoniaBorrowedLabel,
@@ -739,6 +794,34 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     : "Major";
   const selectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0));
   const extensionsEnabled = pattern?.useExtensions ?? false;
+
+  useEffect(() => {
+    if (!pattern || !pattern.note || !pattern.notes || !pattern.degrees) {
+      return;
+    }
+    if (!pattern.notes.length || !pattern.degrees.length) {
+      return;
+    }
+    harmoniaLastChordRef.current = {
+      note: pattern.note,
+      notes: pattern.notes.slice(),
+      degrees: pattern.degrees.slice(),
+      tonalCenter: pattern.tonalCenter ?? tonalCenter,
+      scale: isScaleName(pattern.scale) ? (pattern.scale as string) : scaleName,
+      degree: Math.min(6, Math.max(0, pattern.degree ?? selectedDegree)),
+      useExtensions: pattern.useExtensions ?? extensionsEnabled,
+      harmoniaComplexity: pattern.harmoniaComplexity,
+      harmoniaBorrowedLabel: pattern.harmoniaBorrowedLabel,
+      harmoniaTone: pattern.harmoniaTone ?? pattern.filter,
+      harmoniaDynamics: pattern.harmoniaDynamics ?? pattern.velocityFactor,
+      harmoniaBass: pattern.harmoniaBass,
+      harmoniaArp: pattern.harmoniaArp,
+      harmoniaPatternId: pattern.harmoniaPatternId ?? undefined,
+      velocityFactor: pattern.velocityFactor,
+      filter: pattern.filter,
+    };
+  }, [pattern, tonalCenter, scaleName, selectedDegree, extensionsEnabled]);
+
   const timingMode = pattern?.timingMode === "free" ? "free" : "sync";
   const autopilotEnabled = pattern?.autopilot ?? false;
   const arpStyle = pattern?.style ?? "up";
@@ -772,6 +855,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       includeChordMeta,
       mode,
       chunkOverrides,
+      chordMeta,
     }: {
       noteName: string;
       eventTime: number;
@@ -781,8 +865,42 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       includeChordMeta?: boolean;
       mode: "sync" | "free";
       chunkOverrides?: Partial<Chunk>;
+      chordMeta?: HarmoniaRecordingMeta;
     }) => {
       if (!onUpdatePattern) return;
+
+      const fallbackMeta: HarmoniaRecordingMeta = {
+        note: chordDefinition.root,
+        notes: chordDefinition.notes.slice(),
+        degrees: chordDefinition.degrees.slice(),
+        tonalCenter,
+        scale: scaleName,
+        degree: selectedDegree,
+        useExtensions: extensionsEnabled,
+        harmoniaComplexity: pattern?.harmoniaComplexity,
+        harmoniaBorrowedLabel: pattern?.harmoniaBorrowedLabel,
+        harmoniaTone: pattern?.harmoniaTone ?? harmoniaPadStateRef.current.tone,
+        harmoniaDynamics:
+          pattern?.harmoniaDynamics ?? harmoniaPadStateRef.current.dynamics,
+        harmoniaBass: pattern?.harmoniaBass,
+        harmoniaArp: pattern?.harmoniaArp,
+        harmoniaPatternId: pattern?.harmoniaPatternId,
+        velocityFactor:
+          pattern?.velocityFactor ??
+          pattern?.harmoniaDynamics ??
+          harmoniaPadStateRef.current.dynamics,
+        filter: pattern?.filter ?? harmoniaPadStateRef.current.tone,
+      };
+
+      const activeChordMeta = chordMeta ?? harmoniaLastChordRef.current ?? fallbackMeta;
+
+      if (includeChordMeta) {
+        harmoniaLastChordRef.current = {
+          ...activeChordMeta,
+          notes: activeChordMeta.notes.slice(),
+          degrees: activeChordMeta.degrees.slice(),
+        };
+      }
 
       if (mode === "sync") {
         recordingAnchorRef.current = null;
@@ -802,7 +920,12 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             1
           );
           const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
-          const baseMidi = Tone.Frequency(chunk.note ?? baseNote).toMidi();
+          const referenceNote =
+            chunkOverrides?.note ??
+            activeChordMeta.note ??
+            chunk.note ??
+            baseNote;
+          const baseMidi = Tone.Frequency(referenceNote).toMidi();
           const midi = Tone.Frequency(noteName).toMidi();
           steps[stepIndex] = 1;
           velocities[stepIndex] = clamp(velocity, 0, 1);
@@ -843,9 +966,23 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           };
 
           if (includeChordMeta) {
-            nextChunk.note = chordDefinition.root;
-            nextChunk.notes = chordDefinition.notes.slice();
-            nextChunk.degrees = chordDefinition.degrees.slice();
+            nextChunk.note = activeChordMeta.note;
+            nextChunk.notes = activeChordMeta.notes.slice();
+            nextChunk.degrees = activeChordMeta.degrees.slice();
+            nextChunk.tonalCenter = activeChordMeta.tonalCenter;
+            nextChunk.scale = activeChordMeta.scale;
+            nextChunk.degree = activeChordMeta.degree;
+            nextChunk.useExtensions = activeChordMeta.useExtensions;
+            nextChunk.harmoniaComplexity = activeChordMeta.harmoniaComplexity;
+            nextChunk.harmoniaBorrowedLabel =
+              activeChordMeta.harmoniaBorrowedLabel;
+            nextChunk.harmoniaTone = activeChordMeta.harmoniaTone;
+            nextChunk.harmoniaDynamics = activeChordMeta.harmoniaDynamics;
+            nextChunk.harmoniaBass = activeChordMeta.harmoniaBass;
+            nextChunk.harmoniaArp = activeChordMeta.harmoniaArp;
+            nextChunk.harmoniaPatternId = activeChordMeta.harmoniaPatternId;
+            nextChunk.velocityFactor = activeChordMeta.velocityFactor;
+            nextChunk.filter = activeChordMeta.filter;
           }
 
           if (chunkOverrides) {
@@ -922,9 +1059,23 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         };
 
         if (includeChordMeta) {
-          nextChunk.note = chordDefinition.root;
-          nextChunk.notes = chordDefinition.notes.slice();
-          nextChunk.degrees = chordDefinition.degrees.slice();
+          nextChunk.note = activeChordMeta.note;
+          nextChunk.notes = activeChordMeta.notes.slice();
+          nextChunk.degrees = activeChordMeta.degrees.slice();
+          nextChunk.tonalCenter = activeChordMeta.tonalCenter;
+          nextChunk.scale = activeChordMeta.scale;
+          nextChunk.degree = activeChordMeta.degree;
+          nextChunk.useExtensions = activeChordMeta.useExtensions;
+          nextChunk.harmoniaComplexity = activeChordMeta.harmoniaComplexity;
+          nextChunk.harmoniaBorrowedLabel =
+            activeChordMeta.harmoniaBorrowedLabel;
+          nextChunk.harmoniaTone = activeChordMeta.harmoniaTone;
+          nextChunk.harmoniaDynamics = activeChordMeta.harmoniaDynamics;
+          nextChunk.harmoniaBass = activeChordMeta.harmoniaBass;
+          nextChunk.harmoniaArp = activeChordMeta.harmoniaArp;
+          nextChunk.harmoniaPatternId = activeChordMeta.harmoniaPatternId;
+          nextChunk.velocityFactor = activeChordMeta.velocityFactor;
+          nextChunk.filter = activeChordMeta.filter;
         }
 
         if (chunkOverrides) {
@@ -943,6 +1094,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       extensionsEnabled,
       autopilotEnabled,
       chordDefinition,
+      harmoniaLastChordRef,
+      harmoniaPadStateRef,
     ]
   );
 
@@ -955,6 +1108,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       if (trigger) {
         void ensureAudioContextRunning();
         const now = Tone.now();
+        const notes = resolution.notes.slice();
+        const degrees = resolution.intervals.slice();
+        const useExtensions = complexity !== "simple";
         const chunkPayload = pattern
           ? {
               ...pattern,
@@ -962,8 +1118,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               scale,
               degree,
               note: resolution.root,
-              notes: resolution.notes.slice(),
-              degrees: resolution.intervals.slice(),
+              notes: notes.slice(),
+              degrees: degrees.slice(),
               harmoniaComplexity: complexity,
               harmoniaTone: tone,
               harmoniaDynamics: dynamics,
@@ -976,6 +1132,26 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               filter: tone,
             }
           : undefined;
+        const chordMeta: HarmoniaRecordingMeta = {
+          note: resolution.root,
+          notes,
+          degrees,
+          tonalCenter: center,
+          scale,
+          degree,
+          useExtensions,
+          harmoniaComplexity: complexity,
+          harmoniaBorrowedLabel: resolution.borrowed
+            ? resolution.voicingLabel
+            : undefined,
+          harmoniaTone: tone,
+          harmoniaDynamics: dynamics,
+          harmoniaBass: harmoniaBassEnabled,
+          harmoniaArp: harmoniaArpEnabled,
+          harmoniaPatternId: harmoniaPatternId ?? undefined,
+          velocityFactor: dynamics,
+          filter: tone,
+        };
         trigger(
           now,
           dynamics,
@@ -993,8 +1169,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             scale,
             degree,
             note: resolution.root,
-            notes: resolution.notes.slice(),
-            degrees: resolution.intervals.slice(),
+            notes: notes.slice(),
+            degrees: degrees.slice(),
             harmoniaComplexity: complexity,
             harmoniaBorrowedLabel: resolution.borrowed
               ? resolution.voicingLabel
@@ -1006,6 +1182,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             harmoniaPatternId: harmoniaPatternId ?? undefined,
             velocityFactor: dynamics,
             filter: tone,
+            useExtensions,
           };
           Tone.Draw.schedule(() => {
             recordNoteToPattern({
@@ -1017,6 +1194,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               includeChordMeta: true,
               mode: timingMode,
               chunkOverrides: overrides,
+              chordMeta,
             });
           }, now);
         }
