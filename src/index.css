@@ -30,6 +30,8 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --app-height: 100vh;
 }
 
 /* Disable text selection and callout menus globally */
@@ -46,6 +48,10 @@
 .scrollable,
 .scrollable * {
   touch-action: pan-x pan-y;
+}
+
+.scrollable {
+  -webkit-overflow-scrolling: touch;
 }
 
 html,
@@ -66,12 +72,14 @@ html,
 body,
 #root {
   margin: 0;
-  height: 100dvh;
   background: #0f1420;
+  min-height: var(--app-height);
+  height: var(--app-height);
 }
 
 body {
   min-width: 320px;
+  overflow: hidden;
 }
 
 h1 {

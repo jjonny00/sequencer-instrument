@@ -168,6 +168,25 @@ export default function App() {
   const pendingTransportStateRef = useRef<boolean | null>(null);
 
   useEffect(() => {
+    const updateAppHeight = () => {
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty(
+        "--app-height",
+        `${height}px`
+      );
+    };
+
+    updateAppHeight();
+    window.addEventListener("resize", updateAppHeight);
+    window.visualViewport?.addEventListener("resize", updateAppHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateAppHeight);
+      window.visualViewport?.removeEventListener("resize", updateAppHeight);
+    };
+  }, []);
+
+  useEffect(() => {
     setIsRecording(false);
   }, [editing]);
 
@@ -1174,8 +1193,8 @@ export default function App() {
   return (
     <div
       style={{
-        height: "100dvh",
-        minHeight: "100dvh",
+        height: "var(--app-height)",
+        minHeight: "var(--app-height)",
         paddingBottom: "env(safe-area-inset-bottom)",
         boxSizing: "border-box",
         background: "#0f1420",

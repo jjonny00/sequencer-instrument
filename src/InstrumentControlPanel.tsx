@@ -1316,13 +1316,21 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         : "";
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        {presetControls}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {presetControls ? (
+          <div style={{ marginBottom: 12 }}>{presetControls}</div>
+        ) : null}
         <div
           style={{
             position: "sticky",
             top: 0,
             zIndex: 20,
+            paddingTop: presetControls ? 12 : 0,
             paddingBottom: 8,
             background:
               "linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(11, 18, 32, 0.88) 65%, rgba(11, 18, 32, 0) 100%)",
@@ -1441,8 +1449,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         </div>
         <div
           style={{
-            flex: 1,
-            overflowY: "auto",
             padding: "0 6px 12px 0",
           }}
         >
