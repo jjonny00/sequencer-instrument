@@ -236,6 +236,39 @@
       "type": "number",
       "description": "Loop length in seconds for free-time note events",
       "minimum": 0
+    },
+    "harmoniaComplexity": {
+      "type": "string",
+      "description": "Selected Harmonia complexity tier",
+      "enum": ["simple", "extended", "lush"]
+    },
+    "harmoniaTone": {
+      "type": "number",
+      "description": "Normalized Harmonia filter cutoff value",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "harmoniaDynamics": {
+      "type": "number",
+      "description": "Normalized Harmonia velocity scaling",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "harmoniaBass": {
+      "type": "boolean",
+      "description": "Whether Harmonia bass reinforcement is enabled"
+    },
+    "harmoniaArp": {
+      "type": "boolean",
+      "description": "Whether Harmonia arpeggiation is enabled"
+    },
+    "harmoniaPatternId": {
+      "type": "string",
+      "description": "Active Harmonia pattern preset identifier"
+    },
+    "harmoniaBorrowedLabel": {
+      "type": "string",
+      "description": "Selected borrowed chord label for Harmonia"
     }
   }
 }
