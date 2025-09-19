@@ -2303,7 +2303,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                height: 200,
                 gap: 10,
               }}
             >
@@ -2332,7 +2333,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                         ? "0 0 16px rgba(39, 224, 176, 0.2)"
                         : "none",
                       transition: "background 0.15s ease",
-                      minHeight: 68,
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
                     }}
                     title={summary}
                   >
