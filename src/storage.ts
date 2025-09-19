@@ -36,6 +36,9 @@ const cloneChunk = (chunk: Chunk): Chunk => ({
   noteEvents: chunk.noteEvents
     ? chunk.noteEvents.map((event) => ({ ...event }))
     : undefined,
+  harmoniaStepDegrees: chunk.harmoniaStepDegrees
+    ? chunk.harmoniaStepDegrees.slice()
+    : undefined,
 });
 
 const cloneTrack = (track: Track): Track => ({

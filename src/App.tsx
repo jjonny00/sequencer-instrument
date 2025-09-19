@@ -6,6 +6,13 @@ import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs, type InstrumentCharacter } from "./packs";
+import {
+  createHarmoniaNodes,
+  disposeHarmoniaNodes,
+  triggerHarmoniaChord,
+  HARMONIA_BASE_VOLUME_DB,
+  type HarmoniaNodes,
+} from "./instruments/harmonia";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
@@ -125,6 +132,7 @@ export default function App() {
       }
     >
   >({});
+  const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -167,6 +175,65 @@ export default function App() {
   const restorationRef = useRef(false);
   const pendingTransportStateRef = useRef<boolean | null>(null);
 
+  const resolveInstrumentCharacter = useCallback(
+    (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
+      const pack = packs[packIndex];
+      const definition = pack?.instruments?.[instrumentId];
+      if (!definition) return undefined;
+      if (requestedId) {
+        const specific = definition.characters.find(
+          (character) => character.id === requestedId
+        );
+        if (specific) {
+          return specific;
+        }
+      }
+      if (definition.defaultCharacterId) {
+        const preferred = definition.characters.find(
+          (character) => character.id === definition.defaultCharacterId
+        );
+        if (preferred) {
+          return preferred;
+        }
+      }
+      return definition.characters[0];
+    },
+    [packIndex]
+  );
+
+  const resolveHarmoniaNodeKey = useCallback(
+    (requestedId?: string | null) => {
+      const character = resolveInstrumentCharacter("harmonia", requestedId);
+      if (!character) return undefined;
+      return `harmonia:${character.id}`;
+    },
+    [resolveInstrumentCharacter]
+  );
+
+  const handleHarmoniaRealtimeChange = useCallback(
+    ({
+      tone,
+      dynamics,
+      characterId,
+    }: {
+      tone: number;
+      dynamics: number;
+      characterId?: string | null;
+    }) => {
+      const key = resolveHarmoniaNodeKey(characterId);
+      if (!key) return;
+      const nodes = harmoniaNodesRef.current[key];
+      if (!nodes) return;
+      const frequency = filterValueToFrequency(tone);
+      nodes.filter.frequency.rampTo(frequency, 0.05);
+      const clampedDynamics = Math.max(0, Math.min(1, dynamics));
+      const gain = Math.max(clampedDynamics, 0.001);
+      const gainDb = Tone.gainToDb(gain);
+      nodes.volume.volume.rampTo(HARMONIA_BASE_VOLUME_DB + gainDb, 0.05);
+    },
+    [resolveHarmoniaNodeKey]
+  );
+
   useEffect(() => {
     const updateAppHeight = () => {
       const height = window.visualViewport?.height ?? window.innerHeight;
@@ -193,7 +260,7 @@ export default function App() {
   const canRecordSelectedTrack = useMemo(() => {
     if (!selectedTrack || !selectedTrack.instrument) return false;
     if (!selectedTrack.pattern) return false;
-    return ["arp", "keyboard"].includes(selectedTrack.instrument);
+    return ["arp", "keyboard", "harmonia"].includes(selectedTrack.instrument);
   }, [selectedTrack]);
 
   const canClearSelectedTrack = Boolean(selectedTrack?.pattern);
@@ -438,6 +505,10 @@ export default function App() {
         fx.filter.dispose();
       });
       keyboardFxRefs.current = {};
+      Object.values(harmoniaNodesRef.current).forEach((nodes) => {
+        disposeHarmoniaNodes(nodes);
+      });
+      harmoniaNodesRef.current = {};
     };
 
     if (!started) {
@@ -448,35 +519,15 @@ export default function App() {
 
     disposeAll();
 
-    const resolveCharacter = (
-      instrumentId: string,
-      requestedId?: string
-    ): InstrumentCharacter | undefined => {
-      const definition = pack.instruments[instrumentId];
-      if (!definition) return undefined;
-      if (requestedId) {
-        const specific = definition.characters.find(
-          (character) => character.id === requestedId
-        );
-        if (specific) {
-          return specific;
-        }
-      }
-      if (definition.defaultCharacterId) {
-        const preferred = definition.characters.find(
-          (character) => character.id === definition.defaultCharacterId
-        );
-        if (preferred) {
-          return preferred;
-        }
-      }
-      return definition.characters[0];
-    };
-
     const createInstrumentInstance = (
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
+      if (character.type === "Harmonia") {
+        const nodes = createHarmoniaNodes(Tone, character);
+        nodes.volume.connect(Tone.Destination);
+        return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+      }
       const ctor = (
         Tone as unknown as Record<
           string,
@@ -575,7 +626,7 @@ export default function App() {
         characterId?: string
       ) => {
         void ensureAudioContextRunning();
-        const character = resolveCharacter(instrumentId, characterId);
+        const character = resolveInstrumentCharacter(instrumentId, characterId);
         if (!character) return;
         const key = `${instrumentId}:${character.id}`;
         let inst = instrumentRefs.current[key];
@@ -586,9 +637,35 @@ export default function App() {
           if (created.keyboardFx) {
             keyboardFxRefs.current[key] = created.keyboardFx;
           }
+          if (created.harmoniaNodes) {
+            harmoniaNodesRef.current[key] = created.harmoniaNodes;
+          }
         }
         const sustainOverride =
           sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+        if (instrumentId === "harmonia") {
+          const nodes = harmoniaNodesRef.current[key];
+          if (!nodes) return;
+          if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+            const envelope: Record<string, unknown> = {};
+            if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+            if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+            if (Object.keys(envelope).length > 0) {
+              (inst as unknown as { set?: (values: Record<string, unknown>) => void }).set?.({
+                envelope,
+              });
+            }
+          }
+          triggerHarmoniaChord({
+            nodes,
+            time,
+            velocity,
+            sustain: sustainOverride,
+            chunk,
+            characterId: character.id,
+          });
+          return;
+        }
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
@@ -656,7 +733,13 @@ export default function App() {
     return () => {
       disposeAll();
     };
-  }, [packIndex, started, restorationRef, toneGraphVersion]);
+  }, [
+    packIndex,
+    started,
+    restorationRef,
+    toneGraphVersion,
+    resolveInstrumentCharacter,
+  ]);
 
   useEffect(() => {
     if (patternGroups.length === 0) {
@@ -1835,6 +1918,13 @@ export default function App() {
                         selectedTrack.pattern
                           ? (updater) =>
                               updateTrackPattern(selectedTrack.id, updater)
+                          : undefined
+                      }
+                      onHarmoniaRealtimeChange={
+                        selectedTrack.instrument === "harmonia"
+                          ? (payload) => {
+                              handleHarmoniaRealtimeChange(payload);
+                            }
                           : undefined
                       }
                       isRecording={isRecording}

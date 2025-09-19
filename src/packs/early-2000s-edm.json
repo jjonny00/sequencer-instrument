@@ -362,6 +362,142 @@
           ]
         }
       ]
+    },
+    "harmonia": {
+      "defaultCharacterId": "simple",
+      "defaultPatternId": "basic-progression",
+      "characters": [
+        {
+          "id": "simple",
+          "name": "Super Saw Stack",
+          "description": "Layered saw triads with a tight trance envelope.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "sawtooth" },
+              "spread": 12,
+              "envelope": {
+                "attack": 0.03,
+                "decay": 0.34,
+                "sustain": 0.72,
+                "release": 0.95
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 3600, "Q": 1.1 },
+            "volume": -9
+          },
+          "effects": [
+            {
+              "type": "Chorus",
+              "options": { "frequency": 1.2, "delayTime": 3, "depth": 0.45, "wet": 0.4 }
+            }
+          ]
+        },
+        {
+          "id": "extended",
+          "name": "Trance Lift",
+          "description": "Wide supersaw sevenths that keep the breakdown floating.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "fatsawtooth" },
+              "spread": 28,
+              "envelope": {
+                "attack": 0.04,
+                "decay": 0.4,
+                "sustain": 0.78,
+                "release": 1.4
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 3200, "Q": 1.2 },
+            "volume": -7
+          },
+          "effects": [
+            {
+              "type": "Chorus",
+              "options": { "frequency": 0.9, "delayTime": 3.8, "depth": 0.6, "wet": 0.45 }
+            },
+            { "type": "Reverb", "options": { "decay": 2.6, "wet": 0.32 } }
+          ]
+        },
+        {
+          "id": "lush",
+          "name": "Pad of Dawn",
+          "description": "Expansive FM-infused pads for sunrise drops.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "fmsawtooth", "modulationIndex": 12, "harmonicity": 1.5 },
+              "spread": 32,
+              "envelope": {
+                "attack": 0.08,
+                "decay": 0.5,
+                "sustain": 0.82,
+                "release": 2.2
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 2600, "Q": 1.5 },
+            "volume": -6
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 3.2, "wet": 0.5 } },
+            {
+              "type": "Chorus",
+              "options": { "frequency": 0.6, "delayTime": 4, "depth": 0.7, "wet": 0.5 }
+            }
+          ]
+        },
+        {
+          "id": "borrowed",
+          "name": "Rave Borrowed",
+          "description": "Modal shocks with filtered supersaw sweeps and echo throws.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "fatsquare" },
+              "spread": 24,
+              "envelope": {
+                "attack": 0.02,
+                "decay": 0.36,
+                "sustain": 0.68,
+                "release": 1.6
+              }
+            },
+            "filter": { "type": "bandpass", "frequency": 3000, "Q": 1.6 },
+            "volume": -7
+          },
+          "effects": [
+            {
+              "type": "Chorus",
+              "options": { "frequency": 1.5, "delayTime": 3.4, "depth": 0.5, "wet": 0.42 }
+            },
+            {
+              "type": "FeedbackDelay",
+              "options": { "delayTime": 0.25, "feedback": 0.35, "wet": 0.3 }
+            }
+          ]
+        }
+      ],
+      "patterns": [
+        {
+          "id": "basic-progression",
+          "name": "Hands Up Hook",
+          "description": "Signature I–vi–IV–V lift for euphoric choruses.",
+          "degrees": [0, 5, 3, 4]
+        },
+        {
+          "id": "descending-line",
+          "name": "Trance Plunge",
+          "description": "Descending vi–V–IV–ii tension builder.",
+          "degrees": [5, 4, 3, 1]
+        },
+        {
+          "id": "circle-of-fifths",
+          "name": "Club Cycle",
+          "description": "Extended build cycling dominant energy back to tonic.",
+          "degrees": [0, 4, 5, 1, 2, 6, 4, 0]
+        }
+      ]
     }
   },
   "chunks": [
@@ -533,6 +669,60 @@
       "delay": 0.24,
       "pan": 0.1,
       "note": "A3"
+    },
+    {
+      "id": "edm-harmonia-basic",
+      "name": "Hands Up Hook",
+      "instrument": "harmonia",
+      "characterId": "simple",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.9,0,0,0,0.88,0,0,0,0.86,0,0,0,0.84,0,0,0],
+      "tonalCenter": "C4",
+      "scale": "Major",
+      "degree": 0,
+      "harmoniaComplexity": "simple",
+      "harmoniaTone": 0.72,
+      "harmoniaDynamics": 0.82,
+      "harmoniaBass": true,
+      "harmoniaArp": false,
+      "harmoniaPatternId": "basic-progression",
+      "harmoniaStepDegrees": [0,null,null,null,5,null,null,null,3,null,null,null,4,null,null,null]
+    },
+    {
+      "id": "edm-harmonia-descending",
+      "name": "Trance Plunge",
+      "instrument": "harmonia",
+      "characterId": "extended",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "velocities": [0.88,0,0,0,0.86,0,0,0,0.84,0,0,0,0.82,0,0,0],
+      "tonalCenter": "C4",
+      "scale": "Major",
+      "degree": 5,
+      "harmoniaComplexity": "extended",
+      "harmoniaTone": 0.7,
+      "harmoniaDynamics": 0.8,
+      "harmoniaBass": true,
+      "harmoniaArp": false,
+      "harmoniaPatternId": "descending-line",
+      "harmoniaStepDegrees": [5,null,null,null,4,null,null,null,3,null,null,null,1,null,null,null]
+    },
+    {
+      "id": "edm-harmonia-circle",
+      "name": "Club Cycle",
+      "instrument": "harmonia",
+      "characterId": "lush",
+      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+      "velocities": [0.89,0,0.85,0,0.83,0,0.81,0,0.83,0,0.8,0,0.82,0,0.8,0],
+      "tonalCenter": "C4",
+      "scale": "Major",
+      "degree": 0,
+      "harmoniaComplexity": "lush",
+      "harmoniaTone": 0.74,
+      "harmoniaDynamics": 0.81,
+      "harmoniaBass": true,
+      "harmoniaArp": true,
+      "harmoniaPatternId": "circle-of-fifths",
+      "harmoniaStepDegrees": [0,null,4,null,5,null,1,null,2,null,6,null,4,null,0,null]
     }
   ]
 }

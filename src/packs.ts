@@ -16,6 +16,15 @@ export interface InstrumentCharacter extends InstrumentSpec {
 export interface InstrumentDefinition {
   defaultCharacterId?: string;
   characters: InstrumentCharacter[];
+  defaultPatternId?: string;
+  patterns?: InstrumentPatternPreset[];
+}
+
+export interface InstrumentPatternPreset {
+  id: string;
+  name: string;
+  description?: string;
+  degrees: number[];
 }
 
 export interface EffectSpec {

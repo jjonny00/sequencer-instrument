@@ -3,6 +3,15 @@ import type { JSX } from "react";
 import * as Tone from "tone";
 
 import type { Chunk } from "./chunks";
+import {
+  HARMONIA_DEFAULT_CONTROLS,
+  resolveHarmoniaChord,
+} from "./instruments/harmonia";
+import type {
+  HarmoniaComplexity,
+  HarmoniaScaleDegree,
+} from "./instruments/harmonia";
+import { isScaleName, type ScaleName } from "./music/scales";
 import type { Track, TriggerMap } from "./tracks";
 import type { PatternGroup, SongRow } from "./song";
 
@@ -231,13 +240,55 @@ function PatternPlayer({
                   Math.max(releaseControl, 0),
                   holdDurationSeconds
                 );
+          let noteArgument = pattern.note;
+          let chunkPayload: Chunk = pattern;
+          if (
+            pattern.instrument === "harmonia" &&
+            pattern.harmoniaStepDegrees &&
+            pattern.harmoniaStepDegrees.length
+          ) {
+            const rawDegree = pattern.harmoniaStepDegrees[index];
+            const baseDegree =
+              typeof rawDegree === "number"
+                ? rawDegree
+                : pattern.degree ?? 0;
+            const harmoniaDegree = Math.max(0, Math.min(6, Math.round(baseDegree))) as HarmoniaScaleDegree;
+            const tonalCenter = pattern.tonalCenter ?? pattern.note ?? "C4";
+            const scaleName = isScaleName(pattern.scale)
+              ? (pattern.scale as ScaleName)
+              : "Major";
+            const complexity = (
+              pattern.harmoniaComplexity ?? HARMONIA_DEFAULT_CONTROLS.complexity
+            ) as HarmoniaComplexity;
+            const allowBorrowed =
+              pattern.characterId === "borrowed" || Boolean(pattern.harmoniaBorrowedLabel);
+            const resolution = resolveHarmoniaChord({
+              tonalCenter,
+              scale: scaleName,
+              degree: harmoniaDegree,
+              complexity,
+              allowBorrowed,
+            });
+            chunkPayload = {
+              ...pattern,
+              note: resolution.root,
+              notes: resolution.notes.slice(),
+              degrees: resolution.intervals.slice(),
+              degree: harmoniaDegree,
+              harmoniaBorrowedLabel: resolution.borrowed
+                ? resolution.voicingLabel
+                : undefined,
+            };
+            noteArgument = resolution.root;
+          }
+
           trigger(
             scheduledTime,
             velocity,
             combinedPitch,
-            pattern.note,
+            noteArgument,
             sustainSeconds,
-            pattern
+            chunkPayload
           );
         }
       },
@@ -254,6 +305,7 @@ function PatternPlayer({
     pattern.steps,
     pattern.velocities,
     pattern.pitches,
+    pattern.instrument,
     pattern.note,
     pattern.sustain,
     pattern.attack,
@@ -279,6 +331,12 @@ function PatternPlayer({
     pattern.noteLoopLength,
     pattern.timingMode,
     pattern.arpFreeRate,
+    pattern.harmoniaStepDegrees,
+    pattern.tonalCenter,
+    pattern.scale,
+    pattern.harmoniaComplexity,
+    pattern.harmoniaBorrowedLabel,
+    pattern.degree,
     trigger,
     started,
     pattern,
