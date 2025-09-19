@@ -2155,11 +2155,17 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   if (isHarmonia) {
     stickySections.push(
       <Section key="harmonia" padding={14}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 16,
+            alignItems: "stretch",
+          }}
+        >
           <div
             style={{
-              flex: "1 1 240px",
-              minWidth: 220,
+              flex: "0 0 50%",
+              maxWidth: "50%",
               display: "flex",
               flexDirection: "column",
               gap: 10,
@@ -2284,8 +2290,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           </div>
           <div
             style={{
-              flex: "1 1 320px",
-              minWidth: 240,
+              flex: "0 0 50%",
+              maxWidth: "50%",
               display: "flex",
               flexDirection: "column",
               gap: 12,
