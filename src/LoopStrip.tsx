@@ -69,6 +69,13 @@ const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   return number.toString().padStart(2, "0");
 };
 
+type InstrumentDefinition = {
+  defaultPatternId?: string;
+  patterns?: { id: string; degrees: number[] }[];
+  characters?: { id: string }[];
+  defaultCharacterId?: string;
+};
+
 const getHarmoniaCharacterPreset = (id: string | null | undefined) =>
   id
     ? HARMONIA_CHARACTER_PRESETS.find(
@@ -76,15 +83,34 @@ const getHarmoniaCharacterPreset = (id: string | null | undefined) =>
       ) ?? null
     : null;
 
+const resolveInstrumentCharacterId = (
+  instrumentDefinition: InstrumentDefinition | undefined,
+  requestedCharacterId: string | null | undefined,
+  presetCharacterId: string | null | undefined,
+  patternCharacterId: string | null | undefined
+): string => {
+  const available = instrumentDefinition?.characters?.map((character) => character.id) ?? [];
+  const pickCandidate = (candidate: string | null | undefined): string | null => {
+    if (!candidate) return null;
+    if (available.length === 0) return candidate;
+    return available.includes(candidate) ? candidate : null;
+  };
+
+  return (
+    pickCandidate(requestedCharacterId) ??
+    pickCandidate(presetCharacterId) ??
+    pickCandidate(patternCharacterId) ??
+    pickCandidate(instrumentDefinition?.defaultCharacterId) ??
+    (available.length > 0
+      ? available[0]
+      : requestedCharacterId ?? presetCharacterId ?? patternCharacterId ?? "")
+  );
+};
+
 const initializeHarmoniaPattern = (
   pattern: Chunk,
   characterId: string | null,
-  instrumentDefinition?: {
-    defaultPatternId?: string;
-    patterns?: { id: string; degrees: number[] }[];
-    characters?: { id: string }[];
-    defaultCharacterId?: string;
-  }
+  instrumentDefinition?: InstrumentDefinition
 ): Chunk => {
   if (pattern.instrument !== "harmonia") return pattern;
 
@@ -98,12 +124,12 @@ const initializeHarmoniaPattern = (
     ? availablePatterns.find((candidate) => candidate.id === presetId) ?? null
     : null;
 
-  const resolvedCharacterId =
-    characterId ??
-    pattern.characterId ??
-    instrumentDefinition?.defaultCharacterId ??
-    instrumentDefinition?.characters?.[0]?.id ??
-    "";
+  const resolvedCharacterId = resolveInstrumentCharacterId(
+    instrumentDefinition,
+    characterId,
+    null,
+    pattern.characterId ?? null
+  );
 
   const tonalCenter = pattern.tonalCenter ?? pattern.note ?? "C4";
   const scaleName = isScaleName(pattern.scale)
@@ -473,14 +499,15 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               velocities: Array(16).fill(1),
               pitches: Array(16).fill(0),
             };
-        const instrumentDefinition = activePack.instruments[instrumentId];
-        const resolvedCharacterId =
-          presetPayload?.characterId ||
-          characterId ||
-          basePattern.characterId ||
-          instrumentDefinition?.defaultCharacterId ||
-          instrumentDefinition?.characters?.[0]?.id ||
-          "";
+        const instrumentDefinition = activePack.instruments[
+          instrumentId
+        ] as InstrumentDefinition | undefined;
+        const resolvedCharacterId = resolveInstrumentCharacterId(
+          instrumentDefinition,
+          characterId,
+          presetPayload?.characterId ?? null,
+          basePattern.characterId ?? null
+        );
         let pattern: Chunk = {
           ...basePattern,
           characterId: resolvedCharacterId,
@@ -585,14 +612,15 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 velocities: Array(16).fill(1),
                 pitches: Array(16).fill(0),
               };
-          const instrumentDefinition = activePack.instruments[instrumentId];
-          const resolvedCharacterId =
-            presetPayload?.characterId ||
-            characterId ||
-            basePattern?.characterId ||
-            instrumentDefinition?.defaultCharacterId ||
-            instrumentDefinition?.characters?.[0]?.id ||
-            "";
+          const instrumentDefinition = activePack.instruments[
+            instrumentId
+          ] as InstrumentDefinition | undefined;
+          const resolvedCharacterId = resolveInstrumentCharacterId(
+            instrumentDefinition,
+            characterId,
+            presetPayload?.characterId ?? null,
+            basePattern?.characterId ?? null
+          );
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
