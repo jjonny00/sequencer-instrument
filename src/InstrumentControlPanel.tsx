@@ -686,15 +686,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     ]
   );
 
-  const harmoniaChord = useMemo(() => {
-    if (!isHarmonia) return null;
-    return computeHarmoniaResolution(harmoniaSelectedDegree);
-  }, [isHarmonia, computeHarmoniaResolution, harmoniaSelectedDegree]);
-
-  const harmoniaChordSummary = harmoniaChord
-    ? describeHarmoniaChord(harmoniaChord)
-    : "";
-
   const harmoniaComplexityIndex = Math.max(
     0,
     HARMONIA_COMPLEXITY_ORDER.indexOf(harmoniaControls.complexity)
@@ -2238,54 +2229,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   boxShadow: "0 0 16px rgba(39, 224, 176, 0.4)",
                 }}
               />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 8,
-                  left: 16,
-                  fontSize: 10,
-                  color: "#64748b",
-                  letterSpacing: 0.4,
-                }}
-              >
-                Warm
-              </div>
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 8,
-                  right: 16,
-                  fontSize: 10,
-                  color: "#64748b",
-                  letterSpacing: 0.4,
-                }}
-              >
-                Bright
-              </div>
-              <div
-                style={{
-                  position: "absolute",
-                  top: 16,
-                  right: 16,
-                  fontSize: 10,
-                  color: "#64748b",
-                  letterSpacing: 0.4,
-                }}
-              >
-                Crisp
-              </div>
-              <div
-                style={{
-                  position: "absolute",
-                  top: 16,
-                  left: 16,
-                  fontSize: 10,
-                  color: "#64748b",
-                  letterSpacing: 0.4,
-                }}
-              >
-                Gentle
-              </div>
             </div>
           </div>
           <div
@@ -2294,7 +2237,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               maxWidth: "50%",
               display: "flex",
               flexDirection: "column",
-              gap: 12,
+              gap: 8,
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8" }}>
@@ -2306,22 +2249,22 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                 gridTemplateRows: "repeat(3, 1fr)",
                 height: 200,
-                gap: 10,
+                gap: 4,
               }}
             >
               {harmoniaDegreeLabels.map((label, index) => {
                 const degree = index as HarmoniaScaleDegree;
                 const preview = computeHarmoniaResolution(degree);
                 const isActive = harmoniaSelectedDegree === degree;
-                const previewNotes = preview.notes.slice(0, 3).join(" • ");
                 const summary = describeHarmoniaChord(preview);
                 return (
                   <button
                     key={label}
                     type="button"
                     onClick={() => handleHarmoniaPadPress(degree)}
+                    aria-label={summary}
                     style={{
-                      padding: "12px 14px",
+                      padding: 0,
                       borderRadius: 12,
                       border: `1px solid ${isActive ? "#27E0B0" : "#1f2a3d"}`,
                       background: isActive
@@ -2337,45 +2280,26 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                       height: "100%",
                       gridColumn: index === 0 ? "1 / -1" : undefined,
                       display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     title={summary}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{label}</div>
-                    <div
+                    <span
                       style={{
-                        fontSize: 11,
-                        color: "#94a3b8",
-                        marginTop: 2,
-                        textTransform: "uppercase",
-                        letterSpacing: 0.6,
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: isActive ? "#27E0B0" : "#1f2a3d",
+                        boxShadow: isActive
+                          ? "0 0 12px rgba(39, 224, 176, 0.45)"
+                          : "none",
                       }}
-                    >
-                      {preview.voicingLabel}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#cbd5f5",
-                        marginTop: 4,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {previewNotes}
-                      {preview.notes.length > 3 ? " …" : ""}
-                    </div>
+                    />
                   </button>
                 );
               })}
             </div>
-            {harmoniaChordSummary ? (
-              <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                {harmoniaChordSummary}
-              </div>
-            ) : null}
           </div>
         </div>
       </Section>
