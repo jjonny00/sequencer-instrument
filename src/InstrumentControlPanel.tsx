@@ -502,6 +502,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     tone: 0,
     dynamics: 0,
   });
+  const harmoniaPadPointerIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     harmoniaPadStateRef.current = {
@@ -511,12 +512,12 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   }, [harmoniaControls.tone, harmoniaControls.dynamics]);
 
   const updateHarmoniaPadPosition = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
+    (clientX: number, clientY: number) => {
       if (!isHarmonia) return;
       const rect = harmoniaPadRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const normalizedX = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      const normalizedY = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+      const normalizedX = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const normalizedY = clamp((clientY - rect.top) / rect.height, 0, 1);
       const tone = normalizedX;
       const dynamics = 1 - normalizedY;
       harmoniaPadStateRef.current = { tone, dynamics };
@@ -545,8 +546,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (!isHarmonia) return;
       harmoniaPadActiveRef.current = true;
-      event.currentTarget.setPointerCapture(event.pointerId);
-      updateHarmoniaPadPosition(event);
+      harmoniaPadPointerIdRef.current = event.pointerId;
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
     },
     [isHarmonia, updateHarmoniaPadPosition]
   );
@@ -554,7 +555,13 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const handleHarmoniaPadPointerMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (!harmoniaPadActiveRef.current) return;
-      updateHarmoniaPadPosition(event);
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
     },
     [updateHarmoniaPadPosition]
   );
@@ -562,16 +569,79 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const handleHarmoniaPadPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (!harmoniaPadActiveRef.current) return;
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
       harmoniaPadActiveRef.current = false;
-      event.currentTarget.releasePointerCapture(event.pointerId);
-      updateHarmoniaPadPosition(event);
+      harmoniaPadPointerIdRef.current = null;
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
     },
     [updateHarmoniaPadPosition]
   );
 
   const handleHarmoniaPadPointerCancel = useCallback(() => {
     harmoniaPadActiveRef.current = false;
+    harmoniaPadPointerIdRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!harmoniaPadActiveRef.current) return;
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!harmoniaPadActiveRef.current) return;
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      harmoniaPadActiveRef.current = false;
+      harmoniaPadPointerIdRef.current = null;
+      updateHarmoniaPadPosition(event.clientX, event.clientY);
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (
+        harmoniaPadPointerIdRef.current !== null &&
+        event.pointerId !== harmoniaPadPointerIdRef.current
+      ) {
+        return;
+      }
+      harmoniaPadActiveRef.current = false;
+      harmoniaPadPointerIdRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
+    };
+  }, [updateHarmoniaPadPosition]);
+
+  useEffect(() => {
+    if (!isHarmonia) {
+      harmoniaPadActiveRef.current = false;
+      harmoniaPadPointerIdRef.current = null;
+    }
+  }, [isHarmonia]);
 
   const computeHarmoniaResolution = useCallback(
     (
@@ -702,6 +772,40 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           chunkPayload,
           sourceCharacterId ?? patternCharacterId ?? undefined
         );
+
+        if (isRecording && onUpdatePattern) {
+          const baseNote = pattern?.note ?? resolution.root;
+          const overrides: Partial<Chunk> = {
+            tonalCenter: center,
+            scale,
+            degree,
+            note: resolution.root,
+            notes: resolution.notes.slice(),
+            degrees: resolution.intervals.slice(),
+            harmoniaComplexity: complexity,
+            harmoniaBorrowedLabel: resolution.borrowed
+              ? resolution.voicingLabel
+              : undefined,
+            harmoniaTone: tone,
+            harmoniaDynamics: dynamics,
+            harmoniaBass: harmoniaBassEnabled,
+            harmoniaArp: harmoniaArpEnabled,
+            harmoniaPatternId: harmoniaPatternId ?? undefined,
+            velocityFactor: dynamics,
+            filter: tone,
+          };
+          Tone.Draw.schedule(() => {
+            recordNoteToPattern({
+              noteName: resolution.root,
+              eventTime: now,
+              baseNote,
+              velocity: dynamics,
+              duration: pattern?.sustain ?? undefined,
+              mode: timingMode,
+              chunkOverrides: overrides,
+            });
+          }, now);
+        }
       }
     },
     [
@@ -713,6 +817,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       harmoniaPatternId,
       sourceCharacterId,
       patternCharacterId,
+      isRecording,
+      onUpdatePattern,
+      recordNoteToPattern,
+      timingMode,
     ]
   );
 
@@ -1062,6 +1170,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       duration,
       includeChordMeta,
       mode,
+      chunkOverrides,
     }: {
       noteName: string;
       eventTime: number;
@@ -1070,6 +1179,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       duration?: number;
       includeChordMeta?: boolean;
       mode: "sync" | "free";
+      chunkOverrides?: Partial<Chunk>;
     }) => {
       if (!onUpdatePattern) return;
 
@@ -1135,6 +1245,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             nextChunk.note = chordDefinition.root;
             nextChunk.notes = chordDefinition.notes.slice();
             nextChunk.degrees = chordDefinition.degrees.slice();
+          }
+
+          if (chunkOverrides) {
+            Object.assign(nextChunk, chunkOverrides);
           }
 
           return nextChunk;
@@ -1210,6 +1324,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           nextChunk.note = chordDefinition.root;
           nextChunk.notes = chordDefinition.notes.slice();
           nextChunk.degrees = chordDefinition.degrees.slice();
+        }
+
+        if (chunkOverrides) {
+          Object.assign(nextChunk, chunkOverrides);
         }
 
         return nextChunk;
@@ -2187,8 +2305,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         >
           <div
             style={{
-              flex: "0 0 50%",
-              maxWidth: "50%",
+              flex: "0 0 calc(50% - 8px)",
+              maxWidth: "calc(50% - 8px)",
               display: "flex",
               flexDirection: "column",
               gap: 10,
@@ -2272,8 +2390,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           </div>
           <div
             style={{
-              flex: "0 0 50%",
-              maxWidth: "50%",
+              flex: "0 0 calc(50% - 8px)",
+              maxWidth: "calc(50% - 8px)",
               display: "flex",
               flexDirection: "column",
               gap: 8,
@@ -2310,6 +2428,12 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   <button
                     key={label}
                     type="button"
+                    onPointerDown={(event) => {
+                      if (event.pointerType !== "mouse") {
+                        event.preventDefault();
+                        handleHarmoniaPadPress(degree);
+                      }
+                    }}
                     onClick={() => handleHarmoniaPadPress(degree)}
                     aria-label={summary}
                     style={{
