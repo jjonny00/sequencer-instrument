@@ -278,47 +278,117 @@
       "characters": [
         {
           "id": "simple",
-          "name": "Simple",
-          "description": "Triads only for easy pads.",
-          "type": "Harmonia"
+          "name": "Dusty Triads",
+          "description": "Warm triangle triads with mellow tape air.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "triangle" },
+              "envelope": {
+                "attack": 0.02,
+                "decay": 0.3,
+                "sustain": 0.6,
+                "release": 0.9
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 1600, "Q": 1.2 },
+            "volume": -10
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 1.4, "wet": 0.25 } }
+          ]
         },
         {
           "id": "extended",
-          "name": "Extended",
-          "description": "Adds seventh chords for richer harmony.",
-          "type": "Harmonia"
+          "name": "Tape Sevenths",
+          "description": "Lo-fi saw sevenths with slow-motion wobble.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "sawtooth" },
+              "envelope": {
+                "attack": 0.03,
+                "decay": 0.34,
+                "sustain": 0.68,
+                "release": 1.1
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 1400, "Q": 1.3 },
+            "volume": -9
+          },
+          "effects": [
+            { "type": "Chorus", "options": { "frequency": 0.5, "delayTime": 4, "depth": 0.55, "wet": 0.4 } },
+            { "type": "BitCrusher", "options": { "bits": 6, "wet": 0.22 } }
+          ]
         },
         {
           "id": "lush",
-          "name": "Lush",
-          "description": "Expansive 9th, 11th, and 13th chords.",
-          "type": "Harmonia"
+          "name": "Midnight Pads",
+          "description": "Smeared FM pads drifting behind 808s.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "fmsawtooth", "modulationIndex": 8, "harmonicity": 1.2 },
+              "envelope": {
+                "attack": 0.06,
+                "decay": 0.45,
+                "sustain": 0.78,
+                "release": 2.1
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 1200, "Q": 1.6 },
+            "volume": -8
+          },
+          "effects": [
+            { "type": "Reverb", "options": { "decay": 2.8, "wet": 0.45 } },
+            { "type": "Chorus", "options": { "frequency": 0.4, "delayTime": 3.6, "depth": 0.6, "wet": 0.5 } }
+          ]
         },
         {
           "id": "borrowed",
-          "name": "Borrowed",
-          "description": "Modal interchange colors for surprise turns.",
-          "type": "Harmonia"
+          "name": "Shadow Borrowed",
+          "description": "Borrowed chords soaked in grit and echo.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "triangle" },
+              "envelope": {
+                "attack": 0.015,
+                "decay": 0.28,
+                "sustain": 0.58,
+                "release": 1.3
+              }
+            },
+            "filter": { "type": "bandpass", "frequency": 1100, "Q": 1.9 },
+            "volume": -8
+          },
+          "effects": [
+            { "type": "BitCrusher", "options": { "bits": 5, "wet": 0.3 } },
+            {
+              "type": "FeedbackDelay",
+              "options": { "delayTime": 0.32, "feedback": 0.36, "wet": 0.26 }
+            }
+          ]
         }
       ],
       "patterns": [
         {
           "id": "basic-progression",
-          "name": "Basic Progression",
-          "description": "Classic I–V–vi–IV pop cadence.",
-          "degrees": [0, 4, 5, 3]
-        },
-        {
-          "id": "descending-line",
-          "name": "Descending Line",
-          "description": "Falling motion: vi–V–IV–iii.",
+          "name": "Midnight Cruise",
+          "description": "Lo-fi vi–V–IV–iii ride through neon streets.",
           "degrees": [5, 4, 3, 2]
         },
         {
+          "id": "descending-line",
+          "name": "Memphis Drift",
+          "description": "Gritty vi–V–ii–I drop for chopped vocals.",
+          "degrees": [5, 4, 1, 0]
+        },
+        {
           "id": "circle-of-fifths",
-          "name": "Circle of Fifths",
-          "description": "Extended dominant cycle back to tonic.",
-          "degrees": [0, 3, 6, 2, 5, 1, 4, 0]
+          "name": "Screwed Cycle",
+          "description": "Slow cycling borroweds weaving tension and release.",
+          "degrees": [5, 3, 0, 5, 2, 4, 1, 5]
         }
       ]
     }
@@ -501,7 +571,7 @@
     },
     {
       "id": "phonk-harmonia-basic",
-      "name": "Basic Progression",
+      "name": "Midnight Cruise",
       "instrument": "harmonia",
       "characterId": "simple",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
@@ -515,11 +585,11 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "basic-progression",
-      "harmoniaStepDegrees": [0,null,null,null,4,null,null,null,5,null,null,null,3,null,null,null]
+      "harmoniaStepDegrees": [5,null,null,null,4,null,null,null,3,null,null,null,2,null,null,null]
     },
     {
       "id": "phonk-harmonia-descending",
-      "name": "Descending Line",
+      "name": "Memphis Drift",
       "instrument": "harmonia",
       "characterId": "extended",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
@@ -533,11 +603,11 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "descending-line",
-      "harmoniaStepDegrees": [5,null,null,null,4,null,null,null,3,null,null,null,2,null,null,null]
+      "harmoniaStepDegrees": [5,null,null,null,4,null,null,null,1,null,null,null,0,null,null,null]
     },
     {
       "id": "phonk-harmonia-circle",
-      "name": "Circle of Fifths",
+      "name": "Screwed Cycle",
       "instrument": "harmonia",
       "characterId": "lush",
       "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
@@ -551,7 +621,7 @@
       "harmoniaBass": true,
       "harmoniaArp": true,
       "harmoniaPatternId": "circle-of-fifths",
-      "harmoniaStepDegrees": [0,null,3,null,6,null,2,null,5,null,1,null,4,null,0,null]
+      "harmoniaStepDegrees": [5,null,3,null,0,null,5,null,2,null,4,null,1,null,5,null]
     }
   ]
 }

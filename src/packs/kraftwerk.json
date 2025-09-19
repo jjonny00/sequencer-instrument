@@ -239,47 +239,125 @@
       "characters": [
         {
           "id": "simple",
-          "name": "Simple",
-          "description": "Triads only for easy pads.",
-          "type": "Harmonia"
+          "name": "Robot Triads",
+          "description": "Tight square triads with motorik pulse.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "square" },
+              "envelope": {
+                "attack": 0.01,
+                "decay": 0.22,
+                "sustain": 0.5,
+                "release": 0.4
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 2000, "Q": 1.3 },
+            "volume": -10
+          },
+          "effects": [
+            {
+              "type": "AutoFilter",
+              "options": {
+                "frequency": 0.4,
+                "depth": 0.6,
+                "baseFrequency": 200,
+                "octaves": 3,
+                "wet": 0.2
+              }
+            }
+          ]
         },
         {
           "id": "extended",
-          "name": "Extended",
-          "description": "Adds seventh chords for richer harmony.",
-          "type": "Harmonia"
+          "name": "Analog Sevenths",
+          "description": "Vintage saw sevenths with phasing movement.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "sawtooth" },
+              "envelope": {
+                "attack": 0.02,
+                "decay": 0.3,
+                "sustain": 0.64,
+                "release": 0.8
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 1600, "Q": 1.4 },
+            "volume": -9
+          },
+          "effects": [
+            { "type": "Phaser", "options": { "frequency": 0.3, "octaves": 2, "baseFrequency": 400, "wet": 0.35 } }
+          ]
         },
         {
           "id": "lush",
-          "name": "Lush",
-          "description": "Expansive 9th, 11th, and 13th chords.",
-          "type": "Harmonia"
+          "name": "Man-Machine Pad",
+          "description": "Evolving FM pads with synthetic warmth.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "fmsquare", "modulationIndex": 8 },
+              "envelope": {
+                "attack": 0.06,
+                "decay": 0.42,
+                "sustain": 0.78,
+                "release": 1.6
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 1400, "Q": 1.6 },
+            "volume": -8
+          },
+          "effects": [
+            { "type": "Chorus", "options": { "frequency": 0.7, "delayTime": 3.5, "depth": 0.55, "wet": 0.42 } },
+            { "type": "Reverb", "options": { "decay": 2.1, "wet": 0.3 } }
+          ]
         },
         {
           "id": "borrowed",
-          "name": "Borrowed",
-          "description": "Modal interchange colors for surprise turns.",
-          "type": "Harmonia"
+          "name": "Circuit Borrowed",
+          "description": "Borrowed modal chords with glitchy echoes.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "pulse", "width": 0.25 },
+              "envelope": {
+                "attack": 0.015,
+                "decay": 0.28,
+                "sustain": 0.55,
+                "release": 1.1
+              }
+            },
+            "filter": { "type": "bandpass", "frequency": 1700, "Q": 1.8 },
+            "volume": -8
+          },
+          "effects": [
+            { "type": "BitCrusher", "options": { "bits": 5, "wet": 0.3 } },
+            {
+              "type": "FeedbackDelay",
+              "options": { "delayTime": 0.22, "feedback": 0.28, "wet": 0.26 }
+            }
+          ]
         }
       ],
       "patterns": [
         {
           "id": "basic-progression",
-          "name": "Basic Progression",
-          "description": "Classic I–V–vi–IV pop cadence.",
-          "degrees": [0, 4, 5, 3]
+          "name": "Autobahn Cadence",
+          "description": "Motorik I–IV–V–I motion for endless highways.",
+          "degrees": [0, 3, 4, 0]
         },
         {
           "id": "descending-line",
-          "name": "Descending Line",
-          "description": "Falling motion: vi–V–IV–iii.",
-          "degrees": [5, 4, 3, 2]
+          "name": "Neon Descent",
+          "description": "Minimal iii–ii–I–vi fall for coldwave verses.",
+          "degrees": [2, 1, 0, 5]
         },
         {
           "id": "circle-of-fifths",
-          "name": "Circle of Fifths",
-          "description": "Extended dominant cycle back to tonic.",
-          "degrees": [0, 3, 6, 2, 5, 1, 4, 0]
+          "name": "Elektron Cycle",
+          "description": "Clockwork dominant turns that resolve with precision.",
+          "degrees": [0, 6, 4, 1, 5, 2, 3, 0]
         }
       ]
     }
@@ -430,7 +508,7 @@
     },
     {
       "id": "kw-harmonia-basic",
-      "name": "Basic Progression",
+      "name": "Autobahn Cadence",
       "instrument": "harmonia",
       "characterId": "simple",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
@@ -444,11 +522,11 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "basic-progression",
-      "harmoniaStepDegrees": [0,null,null,null,4,null,null,null,5,null,null,null,3,null,null,null]
+      "harmoniaStepDegrees": [0,null,null,null,3,null,null,null,4,null,null,null,0,null,null,null]
     },
     {
       "id": "kw-harmonia-descending",
-      "name": "Descending Line",
+      "name": "Neon Descent",
       "instrument": "harmonia",
       "characterId": "extended",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
@@ -462,11 +540,11 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "descending-line",
-      "harmoniaStepDegrees": [5,null,null,null,4,null,null,null,3,null,null,null,2,null,null,null]
+      "harmoniaStepDegrees": [2,null,null,null,1,null,null,null,0,null,null,null,5,null,null,null]
     },
     {
       "id": "kw-harmonia-circle",
-      "name": "Circle of Fifths",
+      "name": "Elektron Cycle",
       "instrument": "harmonia",
       "characterId": "borrowed",
       "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
@@ -480,7 +558,7 @@
       "harmoniaBass": true,
       "harmoniaArp": true,
       "harmoniaPatternId": "circle-of-fifths",
-      "harmoniaStepDegrees": [0,null,3,null,6,null,2,null,5,null,1,null,4,null,0,null]
+      "harmoniaStepDegrees": [0,null,6,null,4,null,1,null,5,null,2,null,3,null,0,null]
     }
   ]
 }

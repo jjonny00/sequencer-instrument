@@ -235,47 +235,120 @@
       "characters": [
         {
           "id": "simple",
-          "name": "Simple",
-          "description": "Triads only for easy pads.",
-          "type": "Harmonia"
+          "name": "Pixel Pulse",
+          "description": "Bright pulse triads built for catchy hooks.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "pulse", "width": 0.35 },
+              "envelope": {
+                "attack": 0.01,
+                "decay": 0.22,
+                "sustain": 0.58,
+                "release": 0.45
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 2800, "Q": 1.1 },
+            "volume": -9
+          }
         },
         {
           "id": "extended",
-          "name": "Extended",
-          "description": "Adds seventh chords for richer harmony.",
-          "type": "Harmonia"
+          "name": "Square Seventh",
+          "description": "Stacked squares with crunchy sevenths and shimmering chorus.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "square" },
+              "spread": 6,
+              "envelope": {
+                "attack": 0.02,
+                "decay": 0.32,
+                "sustain": 0.7,
+                "release": 0.9
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 2400, "Q": 1.4 },
+            "volume": -8
+          },
+          "effects": [
+            {
+              "type": "Chorus",
+              "options": { "frequency": 1.6, "delayTime": 2.5, "depth": 0.45, "wet": 0.35 }
+            }
+          ]
         },
         {
           "id": "lush",
-          "name": "Lush",
-          "description": "Expansive 9th, 11th, and 13th chords.",
-          "type": "Harmonia"
+          "name": "Detuned Dreamwave",
+          "description": "Detuned chip pads with long sustain and chorus shimmer.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "square" },
+              "spread": 18,
+              "detune": 14,
+              "envelope": {
+                "attack": 0.05,
+                "decay": 0.4,
+                "sustain": 0.82,
+                "release": 1.6
+              }
+            },
+            "filter": { "type": "lowpass", "frequency": 2000, "Q": 1.6 },
+            "volume": -7
+          },
+          "effects": [
+            { "type": "BitCrusher", "options": { "bits": 4, "wet": 0.28 } },
+            { "type": "Chorus", "options": { "frequency": 0.8, "delayTime": 3.2, "depth": 0.6, "wet": 0.38 } }
+          ]
         },
         {
           "id": "borrowed",
-          "name": "Borrowed",
-          "description": "Modal interchange colors for surprise turns.",
-          "type": "Harmonia"
+          "name": "Glitch Borrowed",
+          "description": "Lo-fi borrowed chords with crushed edges and feedback echoes.",
+          "type": "Harmonia",
+          "options": {
+            "synth": {
+              "oscillator": { "type": "pulse", "width": 0.22 },
+              "spread": 12,
+              "envelope": {
+                "attack": 0.015,
+                "decay": 0.3,
+                "sustain": 0.6,
+                "release": 1.2
+              }
+            },
+            "filter": { "type": "bandpass", "frequency": 2200, "Q": 1.8 },
+            "volume": -8
+          },
+          "effects": [
+            { "type": "BitCrusher", "options": { "bits": 3, "wet": 0.35 } },
+            {
+              "type": "FeedbackDelay",
+              "options": { "delayTime": 0.18, "feedback": 0.32, "wet": 0.28 }
+            }
+          ]
         }
       ],
       "patterns": [
         {
           "id": "basic-progression",
-          "name": "Basic Progression",
-          "description": "Classic I–V–vi–IV pop cadence.",
-          "degrees": [0, 4, 5, 3]
+          "name": "Pixel Hook",
+          "description": "Triumphant I–V–vi–iii arcade anthem.",
+          "degrees": [0, 4, 5, 2]
         },
         {
           "id": "descending-line",
-          "name": "Descending Line",
-          "description": "Falling motion: vi–V–IV–iii.",
-          "degrees": [5, 4, 3, 2]
+          "name": "Retro Runner",
+          "description": "Driving vi–IV–V–I chase loop.",
+          "degrees": [5, 3, 4, 0]
         },
         {
           "id": "circle-of-fifths",
-          "name": "Circle of Fifths",
-          "description": "Extended dominant cycle back to tonic.",
-          "degrees": [0, 3, 6, 2, 5, 1, 4, 0]
+          "name": "Boss Cycle",
+          "description": "Eight-bit showdown through borrowed dominants.",
+          "degrees": [0, 5, 3, 4, 6, 2, 4, 0]
         }
       ]
     }
@@ -446,7 +519,7 @@
     },
     {
       "id": "chip-harmonia-basic",
-      "name": "Basic Progression",
+      "name": "Pixel Hook",
       "instrument": "harmonia",
       "characterId": "simple",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
@@ -460,11 +533,11 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "basic-progression",
-      "harmoniaStepDegrees": [0,null,null,null,4,null,null,null,5,null,null,null,3,null,null,null]
+      "harmoniaStepDegrees": [0,null,null,null,4,null,null,null,5,null,null,null,2,null,null,null]
     },
     {
       "id": "chip-harmonia-descending",
-      "name": "Descending Line",
+      "name": "Retro Runner",
       "instrument": "harmonia",
       "characterId": "extended",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
@@ -478,11 +551,11 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "descending-line",
-      "harmoniaStepDegrees": [5,null,null,null,4,null,null,null,3,null,null,null,2,null,null,null]
+      "harmoniaStepDegrees": [5,null,null,null,3,null,null,null,4,null,null,null,0,null,null,null]
     },
     {
       "id": "chip-harmonia-circle",
-      "name": "Circle of Fifths",
+      "name": "Boss Cycle",
       "instrument": "harmonia",
       "characterId": "borrowed",
       "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
@@ -496,7 +569,7 @@
       "harmoniaBass": true,
       "harmoniaArp": true,
       "harmoniaPatternId": "circle-of-fifths",
-      "harmoniaStepDegrees": [0,null,3,null,6,null,2,null,5,null,1,null,4,null,0,null]
+      "harmoniaStepDegrees": [0,null,5,null,3,null,4,null,6,null,2,null,4,null,0,null]
     }
   ]
 }

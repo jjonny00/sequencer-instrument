@@ -1,6 +1,7 @@
 import * as Tone from "tone";
 
 import type { Chunk } from "../../chunks";
+import type { EffectSpec, InstrumentCharacter } from "../../packs";
 import { filterValueToFrequency } from "../../utils/audio";
 import { isScaleName, type ScaleName } from "../../music/scales";
 import {
@@ -24,7 +25,8 @@ import type {
 type ToneLike = Pick<
   typeof Tone,
   "PolySynth" | "Filter" | "Volume" | "Frequency" | "Time"
->;
+> &
+  Record<string, unknown>;
 
 const isHarmoniaPatternId = (
   value: unknown
@@ -41,6 +43,7 @@ export interface HarmoniaNodes {
   synth: Tone.PolySynth;
   filter: Tone.Filter;
   volume: Tone.Volume;
+  effects: Tone.ToneAudioNode[];
 }
 
 const resolveCharacterPreset = (characterId?: HarmoniaCharacterId | null) => {
@@ -106,27 +109,93 @@ const deriveResolution = (
 
 export const HARMONIA_BASE_VOLUME_DB = -8;
 
+const resolveHarmoniaOptions = (
+  character?: InstrumentCharacter
+): {
+  synth: Record<string, unknown>;
+  filter: Record<string, unknown>;
+  volume: number;
+  effects: EffectSpec[];
+} => {
+  const rawOptions = (character?.options ?? {}) as Record<string, unknown>;
+  const synthOptions =
+    (rawOptions.synth as Record<string, unknown> | undefined) ?? rawOptions;
+  const filterOptions =
+    (rawOptions.filter as Record<string, unknown> | undefined) ?? {};
+  const volumeOption =
+    typeof rawOptions.volume === "number" ? rawOptions.volume : undefined;
+  const effectSpecs = Array.isArray(character?.effects)
+    ? (character?.effects as EffectSpec[])
+    : [];
+  return {
+    synth: synthOptions,
+    filter: filterOptions,
+    volume: volumeOption ?? HARMONIA_BASE_VOLUME_DB,
+    effects: effectSpecs,
+  };
+};
+
+const buildEffectChain = (
+  tone: ToneLike,
+  source: Tone.ToneAudioNode,
+  effects: EffectSpec[]
+): { tail: Tone.ToneAudioNode; nodes: Tone.ToneAudioNode[] } => {
+  if (!effects.length) {
+    return { tail: source, nodes: [] };
+  }
+  const nodes: Tone.ToneAudioNode[] = [];
+  let current: Tone.ToneAudioNode = source;
+  effects.forEach((effect) => {
+    const EffectCtor = (
+      tone as unknown as Record<
+        string,
+        new (opts?: Record<string, unknown>) => Tone.ToneAudioNode
+      >
+    )[effect.type];
+    if (!EffectCtor) {
+      return;
+    }
+    const effectNode = new EffectCtor(effect.options ?? {});
+    const maybeStart = effectNode as unknown as { start?: () => void };
+    maybeStart.start?.();
+    current.connect(effectNode);
+    nodes.push(effectNode);
+    current = effectNode;
+  });
+  return { tail: current, nodes };
+};
+
 export const createHarmoniaNodes = (
-  tone: ToneLike = Tone as ToneLike
+  tone: ToneLike = Tone as ToneLike,
+  character?: InstrumentCharacter
 ): HarmoniaNodes => {
   const synth = new tone.PolySynth();
   const settable = synth as unknown as {
     set?: (values: Record<string, unknown>) => void;
   };
+
+  const options = resolveHarmoniaOptions(character);
+
   settable.set?.({
     maxPolyphony: 16,
     oscillator: { type: "triangle" },
     envelope: { attack: 0.15, decay: 0.4, sustain: 0.75, release: 1.8 },
+    ...options.synth,
   });
+
   const filter = new tone.Filter({
     type: "lowpass",
     frequency: filterValueToFrequency(HARMONIA_DEFAULT_CONTROLS.tone),
     Q: 0.8,
+    ...options.filter,
   });
-  const volume = new tone.Volume(HARMONIA_BASE_VOLUME_DB);
+  const volume = new tone.Volume(options.volume);
   synth.connect(filter);
-  filter.connect(volume);
-  return { synth, filter, volume };
+
+  const { tail, nodes } = buildEffectChain(tone, filter, options.effects);
+  tail.connect(volume);
+
+  return { synth, filter, volume, effects: nodes };
 };
 
 export interface HarmoniaTriggerOptions {
@@ -191,5 +260,6 @@ export const triggerHarmoniaChord = ({
 export const disposeHarmoniaNodes = (nodes: HarmoniaNodes) => {
   nodes.synth.dispose();
   nodes.filter.dispose();
+  nodes.effects.forEach((effect) => effect.dispose());
   nodes.volume.dispose();
 };

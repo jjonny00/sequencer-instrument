@@ -524,7 +524,7 @@ export default function App() {
       character: InstrumentCharacter
     ) => {
       if (character.type === "Harmonia") {
-        const nodes = createHarmoniaNodes(Tone);
+        const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
         return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
       }

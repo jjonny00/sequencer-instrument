@@ -157,7 +157,7 @@ const createInstrumentInstance = (
   harmoniaNodes?: HarmoniaNodes;
 } => {
   if (character.type === "Harmonia") {
-    const nodes = createHarmoniaNodes(tone);
+    const nodes = createHarmoniaNodes(tone, character);
     nodes.volume.connect(tone.Destination);
     return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
   }

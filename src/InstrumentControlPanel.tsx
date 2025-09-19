@@ -44,6 +44,7 @@ import {
   PRESETS_UPDATED_EVENT,
   USER_PRESET_PREFIX,
 } from "./presets";
+import { packs } from "./packs";
 
 interface InstrumentControlPanelProps {
   track: Track;
@@ -374,6 +375,27 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     [pattern, harmoniaCharacterPreset]
   );
 
+  const packId = track.source?.packId ?? "";
+
+  const harmoniaPatternPresets = useMemo(() => {
+    if (!packId) {
+      return HARMONIA_PATTERN_PRESETS;
+    }
+    const pack = packs.find((candidate) => candidate.id === packId);
+    const patternDefinitions = pack?.instruments?.harmonia?.patterns;
+    if (!patternDefinitions?.length) {
+      return HARMONIA_PATTERN_PRESETS;
+    }
+    return patternDefinitions.map((preset) => ({
+      id: preset.id as HarmoniaPatternId,
+      name: preset.name,
+      description: preset.description ?? "",
+      degrees: preset.degrees.map((value) =>
+        Math.min(6, Math.max(0, Math.round(value)))
+      ) as HarmoniaScaleDegree[],
+    }));
+  }, [packId]);
+
   const harmoniaDegreeLabels = useMemo(() => listHarmoniaDegreeLabels(), []);
   const harmoniaSelectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0)) as HarmoniaScaleDegree;
   const harmoniaBorrowedLabel = pattern?.harmoniaBorrowedLabel ?? undefined;
@@ -389,9 +411,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const harmoniaActivePattern = useMemo(
     () =>
       harmoniaPatternId
-        ? HARMONIA_PATTERN_PRESETS.find((preset) => preset.id === harmoniaPatternId) ?? null
+        ? harmoniaPatternPresets.find((preset) => preset.id === harmoniaPatternId) ?? null
         : null,
-    [harmoniaPatternId]
+    [harmoniaPatternId, harmoniaPatternPresets]
   );
 
   useEffect(() => {
@@ -1297,7 +1319,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         return;
       }
 
-      const preset = HARMONIA_PATTERN_PRESETS.find((candidate) => candidate.id === presetId);
+      const preset = harmoniaPatternPresets.find(
+        (candidate) => candidate.id === presetId
+      );
       if (!preset) return;
 
       const stepCount = pattern?.steps?.length ?? 16;
@@ -1390,6 +1414,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       harmoniaControls.bassEnabled,
       harmoniaControls.arpEnabled,
       harmoniaAllowBorrowed,
+      harmoniaPatternPresets,
       harmoniaLastChordRef,
     ]
   );
@@ -1504,7 +1529,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     return next;
   };
 
-  const packId = track.source?.packId ?? "";
   const sourceInstrumentId = track.source?.instrumentId ?? track.instrument ?? "";
   const [userPresetId, setUserPresetId] = useState<string>("");
   const [userPresets, setUserPresets] = useState<
@@ -3144,7 +3168,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               >
                 Custom
               </button>
-              {HARMONIA_PATTERN_PRESETS.map((preset) => {
+              {harmoniaPatternPresets.map((preset) => {
                 const isSelected = harmoniaPatternId === preset.id;
                 const sequence = preset.degrees
                   .map((degree) => harmoniaDegreeLabels[degree] ?? "")
