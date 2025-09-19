@@ -325,6 +325,26 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? combinedPresetItems.find((preset) => preset.id === selectedPresetId)?.name ?? "Custom"
     : "None";
 
+  const contentWrapperStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    flex: "1 1 auto",
+    minHeight: 0,
+  };
+
+  const scrollContainerStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    flex: "1 1 auto",
+    minHeight: 0,
+    overflowY: "auto",
+    paddingRight: 4,
+    paddingBottom: 24,
+    WebkitOverflowScrolling: "touch",
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -372,186 +392,190 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </div>
       }
     >
-      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-        <select
-          value={pack?.id ?? ""}
-          onChange={(event) => onSelectPack(event.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: "1px solid #2f384a",
-            background: "#0f172a",
-            color: "#e6f2ff",
-          }}
-        >
-          {packs.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div style={contentWrapperStyle}>
+        <div style={scrollContainerStyle}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
+            <select
+              value={pack?.id ?? ""}
+              onChange={(event) => onSelectPack(event.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color: "#e6f2ff",
+              }}
+            >
+              {packs.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-        <select
-          value={selectedInstrumentId}
-          onChange={(event) => onSelectInstrument(event.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: "1px solid #2f384a",
-            background: "#0f172a",
-            color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
-          }}
-        >
-          {instrumentOptions.length === 0 ? (
-            <option value="" disabled>
-              No instruments available
-            </option>
-          ) : (
-            instrumentOptions.map((instrument) => (
-              <option key={instrument} value={instrument}>
-                {formatInstrumentLabel(instrument)}
-              </option>
-            ))
-          )}
-        </select>
-      </label>
-
-      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: 13, color: "#cbd5f5" }}>Character</span>
-        <select
-          value={selectedCharacterId}
-          onChange={(event) => onSelectCharacter(event.target.value)}
-          disabled={characterOptions.length === 0}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: "1px solid #2f384a",
-            background: "#0f172a",
-            color: characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
-          }}
-        >
-          {characterOptions.length === 0 ? (
-            <option value="" disabled>
-              No characters
-            </option>
-          ) : (
-            characterOptions.map((character) => (
-              <option key={character.id} value={character.id}>
-                {character.name}
-              </option>
-            ))
-          )}
-        </select>
-      </label>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          padding: 16,
-          borderRadius: 16,
-          background: "#0b1624",
-          border: "1px solid #1f2937",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontWeight: 600 }}>Preset Patterns</span>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Save the current pattern or load one of your favorites.
-            </span>
-          </div>
-          {showSavePresetAction ? (
-            <IconButton
-              icon="save"
-              label="Save current pattern as preset"
-              tone="accent"
-              onClick={handleSavePresetPattern}
-            />
-          ) : null}
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
-              Your Presets
-            </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => handleTogglePresetSelection(null)}
-                onKeyDown={handleNoneKeyDown}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border:
-                    selectedPresetId === null
-                      ? "1px solid #27E0B0"
-                      : "1px solid #1f2937",
-                  background:
-                    selectedPresetId === null
-                      ? "rgba(39, 224, 176, 0.12)"
-                      : "#0f172a",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ fontWeight: 600, fontSize: 14 }}>None</span>
-              </div>
-              {userPresetItems.length > 0 ? (
-                userPresetItems.map((preset) => renderPresetRow(preset, "user"))
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
+            <select
+              value={selectedInstrumentId}
+              onChange={(event) => onSelectInstrument(event.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
+              }}
+            >
+              {instrumentOptions.length === 0 ? (
+                <option value="" disabled>
+                  No instruments available
+                </option>
               ) : (
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#64748b",
-                    padding: "12px 0",
-                  }}
-                >
-                  No presets saved yet
-                </div>
+                instrumentOptions.map((instrument) => (
+                  <option key={instrument} value={instrument}>
+                    {formatInstrumentLabel(instrument)}
+                  </option>
+                ))
               )}
+            </select>
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Character</span>
+            <select
+              value={selectedCharacterId}
+              onChange={(event) => onSelectCharacter(event.target.value)}
+              disabled={characterOptions.length === 0}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color: characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
+              }}
+            >
+              {characterOptions.length === 0 ? (
+                <option value="" disabled>
+                  No characters
+                </option>
+              ) : (
+                characterOptions.map((character) => (
+                  <option key={character.id} value={character.id}>
+                    {character.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              padding: 16,
+              borderRadius: 16,
+              background: "#0b1624",
+              border: "1px solid #1f2937",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontWeight: 600 }}>Preset Patterns</span>
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                  Save the current pattern or load one of your favorites.
+                </span>
+              </div>
+              {showSavePresetAction ? (
+                <IconButton
+                  icon="save"
+                  label="Save current pattern as preset"
+                  tone="accent"
+                  onClick={handleSavePresetPattern}
+                />
+              ) : null}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
+                  Your Presets
+                </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleTogglePresetSelection(null)}
+                    onKeyDown={handleNoneKeyDown}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border:
+                        selectedPresetId === null
+                          ? "1px solid #27E0B0"
+                          : "1px solid #1f2937",
+                      background:
+                        selectedPresetId === null
+                          ? "rgba(39, 224, 176, 0.12)"
+                          : "#0f172a",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>None</span>
+                  </div>
+                  {userPresetItems.length > 0 ? (
+                    userPresetItems.map((preset) => renderPresetRow(preset, "user"))
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#64748b",
+                        padding: "12px 0",
+                      }}
+                    >
+                      No presets saved yet
+                    </div>
+                  )}
+                </div>
+              </div>
+              {packPresets.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
+                    Pack Presets
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
-          {packPresets.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
-                Pack Presets
-              </span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          fontSize: 12,
-          color: "#94a3b8",
-        }}
-      >
-        <span>Current preset: {currentPresetLabel}</span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: 12,
+              color: "#94a3b8",
+            }}
+          >
+            <span>Current preset: {currentPresetLabel}</span>
+          </div>
+        </div>
       </div>
     </Modal>
   );
