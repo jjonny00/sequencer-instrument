@@ -108,3 +108,39 @@ export const describeHarmoniaChord = (resolution: HarmoniaChordResolution) =>
     " • "
   )}`;
 
+export const distributeHarmoniaPatternDegrees = (
+  degrees: readonly HarmoniaScaleDegree[],
+  stepCount = 16
+): {
+  steps: number[];
+  stepDegrees: (HarmoniaScaleDegree | null)[];
+} => {
+  const clampedStepCount = Math.max(0, Math.floor(stepCount));
+  const steps = Array(clampedStepCount).fill(0);
+  const stepDegrees = Array(clampedStepCount).fill(null) as (
+    HarmoniaScaleDegree | null
+  )[];
+
+  if (!degrees.length || clampedStepCount === 0) {
+    return { steps, stepDegrees };
+  }
+
+  degrees.forEach((degree, index) => {
+    let position = Math.floor((index * clampedStepCount) / degrees.length);
+    position = Math.max(0, Math.min(clampedStepCount - 1, position));
+
+    if (steps[position]) {
+      let offset = 1;
+      while (position + offset < clampedStepCount && steps[position + offset]) {
+        offset += 1;
+      }
+      position = Math.min(clampedStepCount - 1, position + offset);
+    }
+
+    steps[position] = 1;
+    stepDegrees[position] = degree;
+  });
+
+  return { steps, stepDegrees };
+};
+

@@ -23,9 +23,11 @@ import {
 } from "./music/scales";
 import {
   describeHarmoniaChord,
+  distributeHarmoniaPatternDegrees,
   HARMONIA_CHARACTER_PRESETS,
   HARMONIA_COMPLEXITY_ORDER,
   HARMONIA_DEFAULT_CONTROLS,
+  HARMONIA_PATTERN_PRESETS,
   listHarmoniaDegreeLabels,
   normalizeControlState as normalizeHarmoniaControlState,
   resolveHarmoniaChord,
@@ -384,6 +386,13 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const harmoniaBassEnabled = harmoniaControls.bassEnabled;
   const harmoniaArpEnabled = harmoniaControls.arpEnabled;
   const harmoniaPatternId = harmoniaControls.patternId;
+  const harmoniaActivePattern = useMemo(
+    () =>
+      harmoniaPatternId
+        ? HARMONIA_PATTERN_PRESETS.find((preset) => preset.id === harmoniaPatternId) ?? null
+        : null,
+    [harmoniaPatternId]
+  );
 
   useEffect(() => {
     if (!isHarmonia || !pattern || !updatePattern) return;
@@ -920,6 +929,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             1
           );
           const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+          const harmoniaStepDegrees = ensureArrayLength<(number | null)>(
+            chunk.harmoniaStepDegrees,
+            steps.length,
+            null
+          );
           const referenceNote =
             chunkOverrides?.note ??
             activeChordMeta.note ??
@@ -930,6 +944,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           steps[stepIndex] = 1;
           velocities[stepIndex] = clamp(velocity, 0, 1);
           pitches[stepIndex] = midi - baseMidi;
+          if (includeChordMeta && chordMeta) {
+            harmoniaStepDegrees[stepIndex] = chordMeta.degree;
+          }
 
           const nextChunk: Chunk = {
             ...chunk,
@@ -963,6 +980,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             pitches,
             noteEvents: undefined,
             noteLoopLength: undefined,
+            harmoniaStepDegrees,
           };
 
           if (includeChordMeta) {
@@ -1056,6 +1074,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           pitches,
           noteEvents: events,
           noteLoopLength: loopLength,
+          harmoniaStepDegrees: undefined,
         };
 
         if (includeChordMeta) {
@@ -1261,6 +1280,120 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     [applyHarmoniaResolution, harmoniaSelectedDegree]
   );
 
+  const applyHarmoniaPatternPreset = useCallback(
+    (presetId: HarmoniaPatternId | null) => {
+      if (!isHarmonia || !updatePattern) return;
+      if (!presetId) {
+        updatePattern({
+          harmoniaPatternId: undefined,
+          harmoniaStepDegrees: undefined,
+        });
+        if (harmoniaLastChordRef.current) {
+          harmoniaLastChordRef.current = {
+            ...harmoniaLastChordRef.current,
+            harmoniaPatternId: undefined,
+          };
+        }
+        return;
+      }
+
+      const preset = HARMONIA_PATTERN_PRESETS.find((candidate) => candidate.id === presetId);
+      if (!preset) return;
+
+      const stepCount = pattern?.steps?.length ?? 16;
+      const { steps, stepDegrees } = distributeHarmoniaPatternDegrees(
+        preset.degrees,
+        stepCount
+      );
+      const velocities = Array(stepCount)
+        .fill(0)
+        .map((_, index) => (steps[index] ? 1 : 0));
+
+      const firstDegreeIndex = stepDegrees.findIndex((value) => value !== null);
+      const fallbackDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0)) as HarmoniaScaleDegree;
+      const firstDegree =
+        firstDegreeIndex >= 0
+          ? (stepDegrees[firstDegreeIndex] as HarmoniaScaleDegree)
+          : fallbackDegree;
+
+      const resolution = resolveHarmoniaChord({
+        tonalCenter: harmoniaTonalCenter,
+        scale: harmoniaScaleName,
+        degree: firstDegree,
+        complexity: harmoniaControls.complexity,
+        allowBorrowed: harmoniaAllowBorrowed,
+      });
+
+      const payload: Partial<Chunk> = {
+        steps,
+        velocities,
+        harmoniaStepDegrees: stepDegrees.map((value) => value as number | null),
+        harmoniaPatternId: presetId,
+        tonalCenter: harmoniaTonalCenter,
+        scale: harmoniaScaleName,
+        degree: firstDegree,
+        note: resolution.root,
+        notes: resolution.notes.slice(),
+        degrees: resolution.intervals.slice(),
+        harmoniaComplexity: harmoniaControls.complexity,
+        harmoniaBorrowedLabel: resolution.borrowed ? resolution.voicingLabel : undefined,
+        useExtensions: harmoniaControls.complexity !== "simple",
+        timingMode: "sync",
+        noteEvents: undefined,
+        noteLoopLength: undefined,
+      };
+
+      if (pattern?.harmoniaDynamics === undefined) {
+        payload.harmoniaDynamics = harmoniaControls.dynamics;
+      }
+      if (pattern?.harmoniaTone === undefined) {
+        payload.harmoniaTone = harmoniaControls.tone;
+      }
+      if (pattern?.velocityFactor === undefined) {
+        payload.velocityFactor = harmoniaControls.dynamics;
+      }
+
+      updatePattern(payload);
+
+      harmoniaLastChordRef.current = {
+        note: resolution.root,
+        notes: resolution.notes.slice(),
+        degrees: resolution.intervals.slice(),
+        tonalCenter: harmoniaTonalCenter,
+        scale: harmoniaScaleName,
+        degree: firstDegree,
+        useExtensions: harmoniaControls.complexity !== "simple",
+        harmoniaComplexity: harmoniaControls.complexity,
+        harmoniaBorrowedLabel: resolution.borrowed ? resolution.voicingLabel : undefined,
+        harmoniaTone: harmoniaControls.tone,
+        harmoniaDynamics: harmoniaControls.dynamics,
+        harmoniaBass: harmoniaControls.bassEnabled,
+        harmoniaArp: harmoniaControls.arpEnabled,
+        harmoniaPatternId: presetId,
+        velocityFactor: harmoniaControls.dynamics,
+        filter: harmoniaControls.tone,
+      };
+    },
+    [
+      isHarmonia,
+      updatePattern,
+      pattern?.steps?.length,
+      pattern?.harmoniaDynamics,
+      pattern?.harmoniaTone,
+      pattern?.velocityFactor,
+      pattern?.degree,
+      harmoniaTonalCenter,
+      harmoniaScaleName,
+      harmoniaControls.complexity,
+      harmoniaControls.dynamics,
+      harmoniaControls.tone,
+      harmoniaControls.bassEnabled,
+      harmoniaControls.arpEnabled,
+      harmoniaAllowBorrowed,
+      harmoniaLastChordRef,
+    ]
+  );
+
   const degreeLabel = DEGREE_LABELS[selectedDegree] ?? "I";
   const chordSummary = chordDefinition.notes.join(" • ");
 
@@ -1363,7 +1496,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     return pattern.degrees.every((value, index) => value === degrees[index]);
   };
 
-  const ensureArrayLength = (values: number[] | undefined, length: number, fill: number) => {
+  const ensureArrayLength = <T,>(values: T[] | undefined, length: number, fill: T) => {
     const next = values ? values.slice(0, length) : Array(length).fill(fill);
     if (next.length < length) {
       next.push(...Array(length - next.length).fill(fill));
@@ -2973,6 +3106,87 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             >
               Arp {harmoniaControls.arpEnabled ? "On" : "Off"}
             </button>
+          </div>
+      </Section>
+    ) : null}
+
+      {isHarmonia ? (
+        <Section>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#94a3b8",
+              }}
+            >
+              Progression Patterns
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => applyHarmoniaPatternPreset(null)}
+                style={{
+                  flex: "1 1 140px",
+                  minWidth: 120,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: `1px solid ${harmoniaPatternId ? "#1f2a3d" : "#27E0B0"}`,
+                  background: harmoniaPatternId
+                    ? "#10192c"
+                    : "rgba(39, 224, 176, 0.16)",
+                  color: "#e2e8f0",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.15s ease",
+                }}
+              >
+                Custom
+              </button>
+              {HARMONIA_PATTERN_PRESETS.map((preset) => {
+                const isSelected = harmoniaPatternId === preset.id;
+                const sequence = preset.degrees
+                  .map((degree) => harmoniaDegreeLabels[degree] ?? "")
+                  .join(" – ");
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyHarmoniaPatternPreset(preset.id)}
+                    style={{
+                      flex: "1 1 180px",
+                      minWidth: 160,
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: `1px solid ${isSelected ? "#27E0B0" : "#1f2a3d"}`,
+                      background: isSelected
+                        ? "rgba(39, 224, 176, 0.16)"
+                        : "#10192c",
+                      color: "#e2e8f0",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                      fontSize: 11,
+                      boxShadow: isSelected
+                        ? "0 0 16px rgba(39, 224, 176, 0.18)"
+                        : "none",
+                      transition: "background 0.15s ease",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{preset.name}</span>
+                    <span style={{ color: "#94a3b8", fontSize: 10 }}>{sequence}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <span style={{ fontSize: 11, color: "#64748b" }}>
+              {harmoniaActivePattern
+                ? harmoniaActivePattern.description
+                : "Record chords or edit steps to create your own progression."}
+            </span>
           </div>
         </Section>
       ) : null}

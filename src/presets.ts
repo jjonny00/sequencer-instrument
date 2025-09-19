@@ -29,6 +29,9 @@ const cloneChunk = (chunk: Chunk): Chunk => ({
   notes: chunk.notes ? chunk.notes.slice() : undefined,
   degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
   noteEvents: chunk.noteEvents ? chunk.noteEvents.map((event) => ({ ...event })) : undefined,
+  harmoniaStepDegrees: chunk.harmoniaStepDegrees
+    ? chunk.harmoniaStepDegrees.slice()
+    : undefined,
 });
 
 const getStorage = (): Storage | null => {

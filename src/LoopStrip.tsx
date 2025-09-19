@@ -11,6 +11,18 @@ import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
+import {
+  distributeHarmoniaPatternDegrees,
+  HARMONIA_CHARACTER_PRESETS,
+  HARMONIA_DEFAULT_CONTROLS,
+  resolveHarmoniaChord,
+} from "./instruments/harmonia";
+import type {
+  HarmoniaCharacterId,
+  HarmoniaScaleDegree,
+  HarmoniaComplexity,
+} from "./instruments/harmonia";
+import { isScaleName, type ScaleName } from "./music/scales";
 import { packs } from "./packs";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
@@ -57,6 +69,88 @@ const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   return number.toString().padStart(2, "0");
 };
 
+const getHarmoniaCharacterPreset = (id: string | null | undefined) =>
+  id
+    ? HARMONIA_CHARACTER_PRESETS.find(
+        (preset) => preset.id === (id as HarmoniaCharacterId)
+      ) ?? null
+    : null;
+
+const initializeHarmoniaPattern = (
+  pattern: Chunk,
+  characterId: string | null,
+  instrumentDefinition?: {
+    defaultPatternId?: string;
+    patterns?: { id: string; degrees: number[] }[];
+  }
+): Chunk => {
+  if (pattern.instrument !== "harmonia") return pattern;
+
+  const availablePatterns = instrumentDefinition?.patterns ?? [];
+  const presetId =
+    instrumentDefinition?.defaultPatternId ?? availablePatterns[0]?.id ?? null;
+  const preset = presetId
+    ? availablePatterns.find((candidate) => candidate.id === presetId) ?? null
+    : null;
+
+  const tonalCenter = pattern.tonalCenter ?? pattern.note ?? "C4";
+  const scaleName = isScaleName(pattern.scale)
+    ? (pattern.scale as ScaleName)
+    : "Major";
+
+  if (!preset) {
+    return {
+      ...pattern,
+      tonalCenter,
+      scale: scaleName,
+    };
+  }
+
+  const stepCount = pattern.steps.length || 16;
+  const { steps, stepDegrees } = distributeHarmoniaPatternDegrees(
+    preset.degrees.map((degree) =>
+      Math.max(0, Math.min(6, Math.round(degree))) as HarmoniaScaleDegree
+    ),
+    stepCount
+  );
+  const velocities = steps.map((value) => (value ? 1 : 0));
+  const firstDegreeIndex = stepDegrees.findIndex((value) => value !== null);
+  const fallbackDegree = Math.min(6, Math.max(0, pattern.degree ?? 0)) as HarmoniaScaleDegree;
+  const firstDegree =
+    firstDegreeIndex >= 0
+      ? (stepDegrees[firstDegreeIndex] as HarmoniaScaleDegree)
+      : fallbackDegree;
+
+  const characterPreset = getHarmoniaCharacterPreset(characterId);
+  const complexity = (characterPreset?.complexity ??
+    HARMONIA_DEFAULT_CONTROLS.complexity) as HarmoniaComplexity;
+  const allowBorrowed = characterPreset?.allowBorrowed ?? false;
+  const resolution = resolveHarmoniaChord({
+    tonalCenter,
+    scale: scaleName,
+    degree: firstDegree,
+    complexity,
+    allowBorrowed,
+  });
+
+  return {
+    ...pattern,
+    steps,
+    velocities,
+    harmoniaStepDegrees: stepDegrees.map((value) => value as number | null),
+    harmoniaPatternId: preset.id,
+    tonalCenter,
+    scale: scaleName,
+    degree: firstDegree,
+    note: resolution.root,
+    notes: resolution.notes.slice(),
+    degrees: resolution.intervals.slice(),
+    harmoniaComplexity: complexity,
+    harmoniaBorrowedLabel: resolution.borrowed ? resolution.voicingLabel : undefined,
+    useExtensions: complexity !== "simple",
+  };
+};
+
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
 
@@ -68,6 +162,9 @@ const cloneChunk = (chunk: Chunk): Chunk => ({
   notes: chunk.notes ? chunk.notes.slice() : undefined,
   degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
   noteEvents: chunk.noteEvents ? chunk.noteEvents.map((event) => ({ ...event })) : undefined,
+  harmoniaStepDegrees: chunk.harmoniaStepDegrees
+    ? chunk.harmoniaStepDegrees.slice()
+    : undefined,
 });
 
 const cloneTrack = (track: Track): Track => ({
@@ -370,10 +467,17 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           instrumentDefinition?.defaultCharacterId ||
           instrumentDefinition?.characters?.[0]?.id ||
           "";
-        const pattern: Chunk = {
+        let pattern: Chunk = {
           ...basePattern,
           characterId: resolvedCharacterId,
         };
+        if (instrumentId === "harmonia") {
+          pattern = initializeHarmoniaPattern(
+            pattern,
+            resolvedCharacterId,
+            instrumentDefinition
+          );
+        }
         createdId = nextId;
         return [
           ...ts,
@@ -475,9 +579,16 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             instrumentDefinition?.defaultCharacterId ||
             instrumentDefinition?.characters?.[0]?.id ||
             "";
-          const nextPattern = basePattern
+          let nextPattern = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
+          if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
+            nextPattern = initializeHarmoniaPattern(
+              nextPattern,
+              resolvedCharacterId,
+              instrumentDefinition
+            );
+          }
           const nextName = presetPayload ? presetPayload.name : t.name;
           return {
             ...t,
