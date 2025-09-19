@@ -82,6 +82,8 @@ const initializeHarmoniaPattern = (
   instrumentDefinition?: {
     defaultPatternId?: string;
     patterns?: { id: string; degrees: number[] }[];
+    characters?: { id: string }[];
+    defaultCharacterId?: string;
   }
 ): Chunk => {
   if (pattern.instrument !== "harmonia") return pattern;
@@ -93,6 +95,13 @@ const initializeHarmoniaPattern = (
     ? availablePatterns.find((candidate) => candidate.id === presetId) ?? null
     : null;
 
+  const resolvedCharacterId =
+    characterId ??
+    pattern.characterId ??
+    instrumentDefinition?.defaultCharacterId ??
+    instrumentDefinition?.characters?.[0]?.id ??
+    "";
+
   const tonalCenter = pattern.tonalCenter ?? pattern.note ?? "C4";
   const scaleName = isScaleName(pattern.scale)
     ? (pattern.scale as ScaleName)
@@ -103,6 +112,7 @@ const initializeHarmoniaPattern = (
       ...pattern,
       tonalCenter,
       scale: scaleName,
+      characterId: resolvedCharacterId,
     };
   }
 
@@ -121,7 +131,7 @@ const initializeHarmoniaPattern = (
       ? (stepDegrees[firstDegreeIndex] as HarmoniaScaleDegree)
       : fallbackDegree;
 
-  const characterPreset = getHarmoniaCharacterPreset(characterId);
+  const characterPreset = getHarmoniaCharacterPreset(resolvedCharacterId);
   const complexity = (characterPreset?.complexity ??
     HARMONIA_DEFAULT_CONTROLS.complexity) as HarmoniaComplexity;
   const allowBorrowed = characterPreset?.allowBorrowed ?? false;
@@ -148,6 +158,7 @@ const initializeHarmoniaPattern = (
     harmoniaComplexity: complexity,
     harmoniaBorrowedLabel: resolution.borrowed ? resolution.voicingLabel : undefined,
     useExtensions: complexity !== "simple",
+    characterId: resolvedCharacterId,
   };
 };
 
@@ -579,7 +590,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             instrumentDefinition?.defaultCharacterId ||
             instrumentDefinition?.characters?.[0]?.id ||
             "";
-          let nextPattern = basePattern
+          let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
