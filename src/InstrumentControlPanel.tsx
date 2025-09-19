@@ -2143,6 +2143,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const stickySections: ReactNode[] = [];
 
+  const HARMONIA_PAD_HEIGHT = 140;
+
   if (isHarmonia) {
     stickySections.push(
       <Section key="harmonia" padding={14}>
@@ -2150,7 +2152,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           style={{
             display: "flex",
             gap: 16,
-            alignItems: "stretch",
+            alignItems: "center",
           }}
         >
           <div
@@ -2160,6 +2162,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               display: "flex",
               flexDirection: "column",
               gap: 10,
+              justifyContent: "center",
             }}
           >
             <div
@@ -2170,6 +2173,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 fontSize: 11,
                 color: "#94a3b8",
                 fontWeight: 600,
+                fontVariantNumeric: "tabular-nums",
+                whiteSpace: "nowrap",
               }}
             >
               <span>XY Pad</span>
@@ -2186,13 +2191,14 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               style={{
                 position: "relative",
                 width: "100%",
-                height: 200,
+                height: HARMONIA_PAD_HEIGHT,
                 borderRadius: 14,
                 border: "1px solid #1f2a3d",
                 background: "linear-gradient(135deg, #17253a 0%, #0c1524 100%)",
                 cursor: updatePattern ? "pointer" : "default",
                 touchAction: "none",
                 overflow: "hidden",
+                userSelect: "none",
               }}
             >
               <div
@@ -2203,6 +2209,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   right: 0,
                   height: 1,
                   background: "rgba(148, 163, 184, 0.25)",
+                  pointerEvents: "none",
                 }}
               />
               <div
@@ -2213,6 +2220,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   bottom: 0,
                   width: 1,
                   background: "rgba(148, 163, 184, 0.25)",
+                  pointerEvents: "none",
                 }}
               />
               <div
@@ -2227,6 +2235,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   border: "2px solid #27E0B0",
                   background: "rgba(39, 224, 176, 0.25)",
                   boxShadow: "0 0 16px rgba(39, 224, 176, 0.4)",
+                  pointerEvents: "none",
                 }}
               />
             </div>
@@ -2238,9 +2247,19 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               display: "flex",
               flexDirection: "column",
               gap: 8,
+              justifyContent: "center",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8" }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#94a3b8",
+                display: "flex",
+                alignItems: "center",
+                minHeight: 18,
+              }}
+            >
               Chord Pads
             </div>
             <div
@@ -2248,7 +2267,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 display: "grid",
                 gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                 gridTemplateRows: "repeat(3, 1fr)",
-                height: 200,
+                height: HARMONIA_PAD_HEIGHT,
                 gap: 4,
               }}
             >
