@@ -46,5 +46,12 @@ export interface Chunk {
   autopilot?: boolean;
   noteEvents?: NoteEvent[];
   noteLoopLength?: number;
+  harmoniaComplexity?: "simple" | "extended" | "lush";
+  harmoniaTone?: number;
+  harmoniaDynamics?: number;
+  harmoniaBass?: boolean;
+  harmoniaArp?: boolean;
+  harmoniaPatternId?: string;
+  harmoniaBorrowedLabel?: string;
 }
 

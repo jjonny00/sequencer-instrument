@@ -14,6 +14,13 @@ import { formatInstrumentLabel } from "./utils/instrument";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
 import { ARP_PRESETS } from "./arpPresets";
 import {
+  getScaleDegreeOffset,
+  isScaleName,
+  SCALE_INTERVALS,
+  SCALE_OPTIONS,
+  type ScaleName,
+} from "./music/scales";
+import {
   deleteInstrumentPreset,
   listInstrumentPresets,
   loadInstrumentPreset,
@@ -189,25 +196,6 @@ const createChordNotes = (rootNote: string, degrees: number[]) => {
 
 const DEGREE_LABELS = ["I", "II", "III", "IV", "V", "VI", "VII"] as const;
 
-const SCALE_INTERVALS = {
-  Major: [0, 2, 4, 5, 7, 9, 11],
-  Minor: [0, 2, 3, 5, 7, 8, 10],
-  Dorian: [0, 2, 3, 5, 7, 9, 10],
-  Phrygian: [0, 1, 3, 5, 7, 8, 10],
-  Lydian: [0, 2, 4, 6, 7, 9, 11],
-  Mixolydian: [0, 2, 4, 5, 7, 9, 10],
-  Locrian: [0, 1, 3, 5, 6, 8, 10],
-  HarmonicMinor: [0, 2, 3, 5, 7, 8, 11],
-  MelodicMinor: [0, 2, 3, 5, 7, 9, 11],
-} as const;
-
-type ScaleName = keyof typeof SCALE_INTERVALS;
-
-const SCALE_OPTIONS = Object.keys(SCALE_INTERVALS) as ScaleName[];
-
-const isScaleName = (value: string | undefined | null): value is ScaleName =>
-  value !== undefined && value !== null && SCALE_OPTIONS.includes(value as ScaleName);
-
 const SYNC_RATE_OPTIONS = [
   { value: "4n", label: "1/4" },
   { value: "8n", label: "1/8" },
@@ -248,15 +236,6 @@ const arraysEqual = <T,>(a?: T[] | null, b?: T[] | null) => {
     if (a[i] !== b[i]) return false;
   }
   return true;
-};
-
-const getScaleDegreeOffset = (intervals: readonly number[], degreeIndex: number) => {
-  if (!intervals.length) return 0;
-  const length = intervals.length;
-  const normalizedIndex = ((degreeIndex % length) + length) % length;
-  const base = intervals[normalizedIndex];
-  const octaves = Math.floor((degreeIndex - normalizedIndex) / length);
-  return base + octaves * 12;
 };
 
 const buildChordForDegree = (
