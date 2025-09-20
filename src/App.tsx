@@ -13,6 +13,12 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
+import {
+  createKickDesigner,
+  mergeKickDesignerState,
+  normalizeKickDesignerState,
+  type KickDesignerInstrument,
+} from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
@@ -523,10 +529,20 @@ export default function App() {
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
+      if (instrumentId === "kick") {
+        const defaults = normalizeKickDesignerState(character.defaults);
+        const instrument = createKickDesigner(defaults);
+        instrument.toDestination();
+        return { instrument: instrument as ToneInstrument };
+      }
+
       if (character.type === "Harmonia") {
         const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
         return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+      }
+      if (!character.type) {
+        throw new Error(`Unknown instrument type for character ${character.id}`);
       }
       const ctor = (
         Tone as unknown as Record<
@@ -669,6 +685,19 @@ export default function App() {
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
+        if (instrumentId === "kick") {
+          const kick = inst as unknown as KickDesignerInstrument;
+          if (kick.setMacroState) {
+            const defaults = normalizeKickDesignerState(character.defaults);
+            const merged = mergeKickDesignerState(defaults, {
+              punch: chunk?.punch,
+              clean: chunk?.clean,
+              tight: chunk?.tight,
+            });
+            kick.setMacroState(merged);
+          }
+        }
+
         if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
           const envelope: Record<string, unknown> = {};
           if (chunk.attack !== undefined) envelope.attack = chunk.attack;

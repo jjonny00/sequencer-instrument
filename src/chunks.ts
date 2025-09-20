@@ -54,5 +54,8 @@ export interface Chunk {
   harmoniaPatternId?: string;
   harmoniaBorrowedLabel?: string;
   harmoniaStepDegrees?: (number | null)[];
+  punch?: number;
+  clean?: number;
+  tight?: number;
 }
 

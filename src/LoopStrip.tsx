@@ -23,11 +23,16 @@ import type {
   HarmoniaComplexity,
 } from "./instruments/harmonia";
 import { isScaleName, type ScaleName } from "./music/scales";
-import { packs } from "./packs";
+import { packs, type InstrumentDefinition } from "./packs";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
 import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
+import {
+  DEFAULT_KICK_STATE,
+  mergeKickDesignerState,
+  normalizeKickDesignerState,
+} from "./instruments/kickDesigner";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -69,11 +74,52 @@ const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   return number.toString().padStart(2, "0");
 };
 
-type InstrumentDefinition = {
-  defaultPatternId?: string;
-  patterns?: { id: string; degrees: number[] }[];
-  characters?: { id: string }[];
-  defaultCharacterId?: string;
+const resolveKickDefaults = (
+  instrument: InstrumentDefinition | undefined,
+  characterId: string | null | undefined
+) => {
+  if (!instrument) return DEFAULT_KICK_STATE;
+  const activeId =
+    characterId ??
+    instrument.defaultCharacterId ??
+    instrument.characters[0]?.id ??
+    null;
+  const character = activeId
+    ? instrument.characters.find((candidate) => candidate.id === activeId) ?? null
+    : instrument.characters[0] ?? null;
+  return character
+    ? normalizeKickDesignerState(character.defaults)
+    : DEFAULT_KICK_STATE;
+};
+
+const applyKickMacrosToChunk = (
+  chunk: Chunk,
+  instrument: InstrumentDefinition | undefined,
+  characterId: string | null | undefined
+): Chunk => {
+  if (chunk.instrument !== "kick") return chunk;
+  const defaults = resolveKickDefaults(
+    instrument,
+    characterId ?? chunk.characterId ?? null
+  );
+  const merged = mergeKickDesignerState(defaults, {
+    punch: chunk.punch,
+    clean: chunk.clean,
+    tight: chunk.tight,
+  });
+  if (
+    chunk.punch === merged.punch &&
+    chunk.clean === merged.clean &&
+    chunk.tight === merged.tight
+  ) {
+    return chunk;
+  }
+  return {
+    ...chunk,
+    punch: merged.punch,
+    clean: merged.clean,
+    tight: merged.tight,
+  };
 };
 
 const getHarmoniaCharacterPreset = (id: string | null | undefined) =>
@@ -512,6 +558,13 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           ...basePattern,
           characterId: resolvedCharacterId,
         };
+        if (instrumentId === "kick") {
+          pattern = applyKickMacrosToChunk(
+            pattern,
+            instrumentDefinition,
+            resolvedCharacterId
+          );
+        }
         if (instrumentId === "harmonia") {
           pattern = initializeHarmoniaPattern(
             pattern,
@@ -624,6 +677,13 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
+          if (instrumentId === "kick" && nextPattern) {
+            nextPattern = applyKickMacrosToChunk(
+              nextPattern,
+              instrumentDefinition,
+              resolvedCharacterId
+            );
+          }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
             nextPattern = initializeHarmoniaPattern(
               nextPattern,

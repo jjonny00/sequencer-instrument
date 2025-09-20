@@ -3,39 +3,39 @@
   "name": "Trap",
   "instruments": {
     "kick": {
-      "defaultCharacterId": "808-boom",
+      "id": "kick",
+      "name": "Kick Designer",
+      "defaultCharacterId": "trap_808_boom",
       "characters": [
         {
-          "id": "808-boom",
+          "id": "trap_808_boom",
           "name": "808 Boom",
-          "type": "MembraneSynth",
-          "note": "C1",
-          "options": {
-            "pitchDecay": 0.05,
-            "octaves": 4,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 1.2,
-              "sustain": 0.01,
-              "release": 1.8
-            }
-          }
+          "defaults": { "punch": 0.2, "clean": 0.6, "tight": 0.7 }
         },
         {
-          "id": "punch-kick",
-          "name": "Punch Kick",
-          "type": "MembraneSynth",
-          "note": "C2",
-          "options": {
-            "pitchDecay": 0.02,
-            "octaves": 3,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.4,
-              "sustain": 0.01,
-              "release": 0.8
-            }
-          }
+          "id": "trap_hard_clip",
+          "name": "Hard Clip",
+          "defaults": { "punch": 0.4, "clean": 0.2, "tight": 0.6 }
+        }
+      ],
+      "patterns": [
+        {
+          "id": "trap_basic_808",
+          "name": "Basic 808",
+          "steps": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+          "velocities": [1, 0, 0, 0, 0.9, 0, 0, 0, 0.95, 0, 0, 0, 0.88, 0, 0, 0]
+        },
+        {
+          "id": "trap_offbeat_sync",
+          "name": "Off-Beat Sync",
+          "steps": [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+          "velocities": [1, 0, 0, 0, 0, 0, 0, 0, 0.85, 0, 0, 0, 0.8, 0, 0, 0]
+        },
+        {
+          "id": "trap_triplet_roll",
+          "name": "Triplet Roll",
+          "steps": [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0],
+          "velocities": [1, 0, 0, 0, 0, 0, 0, 0, 0.9, 0, 0.75, 0, 0.7, 0, 0, 0]
         }
       ]
     },
@@ -362,27 +362,36 @@
       "id": "trap-kick-four",
       "name": "Club Stomp",
       "instrument": "kick",
-      "characterId": "808-boom",
+      "characterId": "trap_808_boom",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [1,0,0,0,0.9,0,0,0,0.95,0,0,0,0.9,0,0,0]
+      "velocities": [1,0,0,0,0.9,0,0,0,0.95,0,0,0,0.9,0,0,0],
+      "punch": 0.2,
+      "clean": 0.6,
+      "tight": 0.7
     },
     {
       "id": "trap-kick-sparse",
       "name": "Sparse Trap",
       "instrument": "kick",
-      "characterId": "punch-kick",
+      "characterId": "trap_hard_clip",
       "steps": [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],
       "velocities": [1,0,0,0,0,0,0.85,0,0,0,0,0,0.9,0,0,0],
-      "humanize": 0.03
+      "humanize": 0.03,
+      "punch": 0.45,
+      "clean": 0.25,
+      "tight": 0.58
     },
     {
       "id": "trap-kick-sync",
       "name": "Syncopated 808s",
       "instrument": "kick",
-      "characterId": "808-boom",
+      "characterId": "trap_808_boom",
       "steps": [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0],
       "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0.8,0,0,0],
-      "swing": 0.06
+      "swing": 0.06,
+      "punch": 0.25,
+      "clean": 0.55,
+      "tight": 0.68
     },
     {
       "id": "trap-snare-backbeat",
