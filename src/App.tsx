@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, TouchEvent as ReactTouchEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -181,6 +181,7 @@ export default function App() {
   );
   const restorationRef = useRef(false);
   const pendingTransportStateRef = useRef<boolean | null>(null);
+  const isLaunchingNewProjectRef = useRef(false);
 
   const resolveInstrumentCharacter = useCallback(
     (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
@@ -1249,6 +1250,25 @@ export default function App() {
     }
   }, [bpm]);
 
+  const handleCreateNewProject = useCallback(async () => {
+    if (isLaunchingNewProjectRef.current) return;
+    isLaunchingNewProjectRef.current = true;
+    try {
+      setActiveProjectName("untitled");
+      await initAudioGraph();
+    } finally {
+      isLaunchingNewProjectRef.current = false;
+    }
+  }, [initAudioGraph]);
+
+  const handleCreateNewProjectTouch = useCallback(
+    (event: ReactTouchEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      void handleCreateNewProject();
+    },
+    [handleCreateNewProject]
+  );
+
   useEffect(() => {
     refreshProjectList();
   }, [refreshProjectList]);
@@ -1637,10 +1657,9 @@ export default function App() {
             }}
           >
             <button
-              onClick={async () => {
-                setActiveProjectName("untitled");
-                await initAudioGraph();
-              }}
+              type="button"
+              onClick={handleCreateNewProject}
+              onTouchStart={handleCreateNewProjectTouch}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
