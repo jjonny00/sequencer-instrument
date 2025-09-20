@@ -3,39 +3,39 @@
   "name": "Kraftwerk",
   "instruments": {
     "kick": {
-      "defaultCharacterId": "motor-kick",
+      "id": "kick",
+      "name": "Kick Designer",
+      "defaultCharacterId": "kraftwerk_motor_drive",
       "characters": [
         {
-          "id": "motor-kick",
-          "name": "Motor Kick",
-          "type": "MembraneSynth",
-          "note": "C2",
-          "options": {
-            "pitchDecay": 0.03,
-            "octaves": 3,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.7,
-              "sustain": 0.02,
-              "release": 0.8
-            }
-          }
+          "id": "kraftwerk_motor_drive",
+          "name": "Motor Drive",
+          "defaults": { "punch": 0.5, "clean": 0.8, "tight": 0.55 }
         },
         {
-          "id": "analog-punch",
-          "name": "Analog Punch",
-          "type": "MembraneSynth",
-          "note": "C2",
-          "options": {
-            "pitchDecay": 0.025,
-            "octaves": 2.5,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.5,
-              "sustain": 0.02,
-              "release": 0.6
-            }
-          }
+          "id": "kraftwerk_robotic_snap",
+          "name": "Robotic Snap",
+          "defaults": { "punch": 0.35, "clean": 0.6, "tight": 0.45 }
+        }
+      ],
+      "patterns": [
+        {
+          "id": "kraftwerk_motorik",
+          "name": "Motorik Pulse",
+          "steps": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+          "velocities": [1, 0, 0, 0, 0.9, 0, 0, 0, 0.92, 0, 0, 0, 0.88, 0, 0, 0]
+        },
+        {
+          "id": "kraftwerk_sequencer",
+          "name": "Sequencer Sync",
+          "steps": [1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0],
+          "velocities": [1, 0, 0.7, 0, 0, 0.85, 0, 0, 0.9, 0, 0.75, 0, 0, 0.82, 0, 0]
+        },
+        {
+          "id": "kraftwerk_fill",
+          "name": "Robot Fill",
+          "steps": [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1],
+          "velocities": [1, 0, 0, 0, 0.88, 0, 0.72, 0, 0.9, 0, 0.8, 0, 0.82, 0.9, 0, 0.85]
         }
       ]
     },
@@ -367,23 +367,32 @@
       "id": "kw-kick-motor",
       "name": "Motor Kick",
       "instrument": "kick",
-      "characterId": "motor-kick",
-      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]
+      "characterId": "kraftwerk_motor_drive",
+      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+      "punch": 0.5,
+      "clean": 0.8,
+      "tight": 0.55
     },
     {
       "id": "kw-kick-stutter",
       "name": "Stutter Kick",
       "instrument": "kick",
-      "characterId": "analog-punch",
+      "characterId": "kraftwerk_robotic_snap",
       "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
-      "velocities": [0.95,0,0,0,0.9,0,0.8,0,0.88,0,0,0,0.86,0,0.78,0]
+      "velocities": [0.95,0,0,0,0.9,0,0.8,0,0.88,0,0,0,0.86,0,0.78,0],
+      "punch": 0.38,
+      "clean": 0.62,
+      "tight": 0.46
     },
     {
       "id": "kw-kick-break",
       "name": "Break Kick",
       "instrument": "kick",
-      "characterId": "motor-kick",
-      "steps": [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0]
+      "characterId": "kraftwerk_motor_drive",
+      "steps": [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
+      "punch": 0.46,
+      "clean": 0.75,
+      "tight": 0.52
     },
     {
       "id": "kw-snare-backbeat",

@@ -3,37 +3,39 @@
   "name": "Chip Tune",
   "instruments": {
     "kick": {
-      "defaultCharacterId": "tri-kick",
+      "id": "kick",
+      "name": "Kick Designer",
+      "defaultCharacterId": "chip_square_thump",
       "characters": [
         {
-          "id": "tri-kick",
-          "name": "Tri Kick",
-          "type": "MonoSynth",
-          "note": "C2",
-          "options": {
-            "oscillator": { "type": "triangle" },
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.1,
-              "sustain": 0.01,
-              "release": 0.15
-            }
-          }
+          "id": "chip_square_thump",
+          "name": "Square Thump",
+          "defaults": { "punch": 0.6, "clean": 0.8, "tight": 0.5 }
         },
         {
-          "id": "square-thump",
-          "name": "Square Thump",
-          "type": "MonoSynth",
-          "note": "C1",
-          "options": {
-            "oscillator": { "type": "square" },
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.2,
-              "sustain": 0.01,
-              "release": 0.25
-            }
-          }
+          "id": "chip_noise_pop",
+          "name": "Noise Pop",
+          "defaults": { "punch": 0.7, "clean": 0.9, "tight": 0.4 }
+        }
+      ],
+      "patterns": [
+        {
+          "id": "chip_steady_march",
+          "name": "Steady March",
+          "steps": [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],
+          "velocities": [1, 0, 0, 0, 0, 0.85, 0, 0, 0.9, 0, 0, 0, 0, 0.82, 0, 0]
+        },
+        {
+          "id": "chip_syncopate",
+          "name": "Syncopated Beat",
+          "steps": [1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1],
+          "velocities": [1, 0, 0.75, 0, 0, 0.8, 0, 0.7, 0.9, 0, 0.78, 0, 0, 0.82, 0, 0.75]
+        },
+        {
+          "id": "chip_arcade_fill",
+          "name": "Arcade Fill",
+          "steps": [1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0],
+          "velocities": [1, 0, 0, 0, 0.85, 0.7, 0, 0, 0.9, 0, 0.78, 0, 0.82, 0.75, 0.7, 0]
         }
       ]
     },
@@ -358,25 +360,34 @@
       "id": "chip-kick-sparse",
       "name": "Sparse Kick",
       "instrument": "kick",
-      "characterId": "tri-kick",
+      "characterId": "chip_square_thump",
       "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-      "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0]
+      "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
+      "punch": 0.6,
+      "clean": 0.8,
+      "tight": 0.5
     },
     {
       "id": "chip-kick-drive",
       "name": "Drive Kick",
       "instrument": "kick",
-      "characterId": "square-thump",
+      "characterId": "chip_noise_pop",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [0.95,0,0,0,0.9,0,0,0,0.92,0,0,0,0.88,0,0,0]
+      "velocities": [0.95,0,0,0,0.9,0,0,0,0.92,0,0,0,0.88,0,0,0],
+      "punch": 0.72,
+      "clean": 0.9,
+      "tight": 0.42
     },
     {
       "id": "chip-kick-sync",
       "name": "Pulse Kick",
       "instrument": "kick",
-      "characterId": "tri-kick",
+      "characterId": "chip_square_thump",
       "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
-      "velocities": [0.95,0,0,0,0.9,0,0.82,0,0.9,0,0,0,0.88,0,0.8,0]
+      "velocities": [0.95,0,0,0,0.9,0,0.82,0,0.9,0,0,0,0.88,0,0.8,0],
+      "punch": 0.62,
+      "clean": 0.82,
+      "tight": 0.48
     },
     {
       "id": "chip-snare-backbeat",

@@ -3,43 +3,39 @@
   "name": "Phonk",
   "instruments": {
     "kick": {
-      "defaultCharacterId": "classic-808",
+      "id": "kick",
+      "name": "Kick Designer",
+      "defaultCharacterId": "phonk_memphis_distorted",
       "characters": [
         {
-          "id": "classic-808",
-          "name": "Classic 808",
-          "type": "MembraneSynth",
-          "note": "C1",
-          "options": {
-            "pitchDecay": 0.05,
-            "octaves": 4,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 1.2,
-              "sustain": 0.01,
-              "release": 1.6
-            }
-          }
+          "id": "phonk_memphis_distorted",
+          "name": "Memphis Distorted",
+          "defaults": { "punch": 0.5, "clean": 0.1, "tight": 0.6 }
         },
         {
-          "id": "distorted-808",
-          "name": "Distorted 808",
-          "type": "MembraneSynth",
-          "note": "C1",
-          "options": {
-            "pitchDecay": 0.04,
-            "octaves": 4,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 1.0,
-              "sustain": 0.02,
-              "release": 1.4
-            }
-          },
-          "effects": [
-            { "type": "Distortion", "options": { "distortion": 0.4, "wet": 0.4 } },
-            { "type": "EQ3", "options": { "low": 4, "high": -6 } }
-          ]
+          "id": "phonk_tape_slam",
+          "name": "Tape Slam",
+          "defaults": { "punch": 0.4, "clean": 0.3, "tight": 0.7 }
+        }
+      ],
+      "patterns": [
+        {
+          "id": "phonk_lofi_boom",
+          "name": "Lo-Fi Boom",
+          "steps": [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0],
+          "velocities": [1, 0, 0, 0, 0, 0, 0.8, 0, 0.75, 0, 0, 0, 0, 0, 0.85, 0]
+        },
+        {
+          "id": "phonk_half_time",
+          "name": "Half-Time Stomp",
+          "steps": [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+          "velocities": [0.95, 0, 0, 0, 0, 0, 0, 0, 0.88, 0, 0, 0, 0, 0, 0, 0]
+        },
+        {
+          "id": "phonk_tape_roll",
+          "name": "Tape Machine Roll",
+          "steps": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0],
+          "velocities": [1, 0, 0, 0, 0.85, 0, 0, 0, 0.82, 0, 0.7, 0, 0.65, 0, 0, 0]
         }
       ]
     },
@@ -398,27 +394,36 @@
       "id": "phonk-kick-deep",
       "name": "Deep Pulse",
       "instrument": "kick",
-      "characterId": "classic-808",
+      "characterId": "phonk_memphis_distorted",
       "steps": [1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,0],
-      "velocities": [1,0,0,0,0,0.85,0,0,0.95,0,0,0.9,0,0,0,0.8]
+      "velocities": [1,0,0,0,0,0.85,0,0,0.95,0,0,0.9,0,0,0,0.8],
+      "punch": 0.48,
+      "clean": 0.12,
+      "tight": 0.62
     },
     {
       "id": "phonk-kick-stutter",
       "name": "Stuttered Boom",
       "instrument": "kick",
-      "characterId": "distorted-808",
+      "characterId": "phonk_memphis_distorted",
       "steps": [1,0,0,1,0,0,0,0,1,0,1,0,0,0,1,0],
       "velocities": [1,0,0,0.7,0,0,0,0,0.95,0,0.75,0,0,0,0.85,0],
-      "swing": 0.08
+      "swing": 0.08,
+      "punch": 0.52,
+      "clean": 0.1,
+      "tight": 0.6
     },
     {
       "id": "phonk-kick-spill",
       "name": "Slide Accents",
       "instrument": "kick",
-      "characterId": "classic-808",
+      "characterId": "phonk_tape_slam",
       "steps": [1,0,0,0,0,0,1,1,0,0,0,1,0,1,0,0],
       "velocities": [1,0,0,0,0,0,0.9,0.6,0,0,0,0.85,0,0.7,0,0.6],
-      "humanize": 0.03
+      "humanize": 0.03,
+      "punch": 0.42,
+      "clean": 0.28,
+      "tight": 0.7
     },
     {
       "id": "phonk-snare-backbeat",

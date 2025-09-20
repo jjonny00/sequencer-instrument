@@ -23,11 +23,15 @@ import type {
   HarmoniaComplexity,
 } from "./instruments/harmonia";
 import { isScaleName, type ScaleName } from "./music/scales";
-import { packs } from "./packs";
+import { packs, type InstrumentDefinition } from "./packs";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
 import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
+import {
+  applyKickMacrosToChunk,
+  resolveInstrumentCharacterId,
+} from "./instrumentCharacters";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -69,43 +73,12 @@ const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   return number.toString().padStart(2, "0");
 };
 
-type InstrumentDefinition = {
-  defaultPatternId?: string;
-  patterns?: { id: string; degrees: number[] }[];
-  characters?: { id: string }[];
-  defaultCharacterId?: string;
-};
-
 const getHarmoniaCharacterPreset = (id: string | null | undefined) =>
   id
     ? HARMONIA_CHARACTER_PRESETS.find(
         (preset) => preset.id === (id as HarmoniaCharacterId)
       ) ?? null
     : null;
-
-const resolveInstrumentCharacterId = (
-  instrumentDefinition: InstrumentDefinition | undefined,
-  requestedCharacterId: string | null | undefined,
-  presetCharacterId: string | null | undefined,
-  patternCharacterId: string | null | undefined
-): string => {
-  const available = instrumentDefinition?.characters?.map((character) => character.id) ?? [];
-  const pickCandidate = (candidate: string | null | undefined): string | null => {
-    if (!candidate) return null;
-    if (available.length === 0) return candidate;
-    return available.includes(candidate) ? candidate : null;
-  };
-
-  return (
-    pickCandidate(requestedCharacterId) ??
-    pickCandidate(presetCharacterId) ??
-    pickCandidate(patternCharacterId) ??
-    pickCandidate(instrumentDefinition?.defaultCharacterId) ??
-    (available.length > 0
-      ? available[0]
-      : requestedCharacterId ?? presetCharacterId ?? patternCharacterId ?? "")
-  );
-};
 
 const initializeHarmoniaPattern = (
   pattern: Chunk,
@@ -146,10 +119,11 @@ const initializeHarmoniaPattern = (
   }
 
   const stepCount = pattern.steps.length || 16;
-  const { steps, stepDegrees } = distributeHarmoniaPatternDegrees(
-    preset.degrees.map((degree) =>
+  const patternDegrees = (preset.degrees ?? []).map((degree) =>
       Math.max(0, Math.min(6, Math.round(degree))) as HarmoniaScaleDegree
-    ),
+  );
+  const { steps, stepDegrees } = distributeHarmoniaPatternDegrees(
+    patternDegrees,
     stepCount
   );
   const velocities = steps.map((value) => (value ? 1 : 0));
@@ -508,10 +482,19 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           presetPayload?.characterId ?? null,
           basePattern.characterId ?? null
         );
+        const previousCharacterId = basePattern.characterId ?? null;
         let pattern: Chunk = {
           ...basePattern,
           characterId: resolvedCharacterId,
         };
+        if (instrumentId === "kick") {
+          pattern = applyKickMacrosToChunk(
+            pattern,
+            instrumentDefinition,
+            resolvedCharacterId,
+            previousCharacterId
+          );
+        }
         if (instrumentId === "harmonia") {
           pattern = initializeHarmoniaPattern(
             pattern,
@@ -615,15 +598,24 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const instrumentDefinition = activePack.instruments[
             instrumentId
           ] as InstrumentDefinition | undefined;
+          const previousCharacterId = basePattern?.characterId ?? null;
           const resolvedCharacterId = resolveInstrumentCharacterId(
             instrumentDefinition,
             characterId,
             presetPayload?.characterId ?? null,
-            basePattern?.characterId ?? null
+            previousCharacterId
           );
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
+          if (instrumentId === "kick" && nextPattern) {
+            nextPattern = applyKickMacrosToChunk(
+              nextPattern,
+              instrumentDefinition,
+              resolvedCharacterId,
+              previousCharacterId
+            );
+          }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
             nextPattern = initializeHarmoniaPattern(
               nextPattern,

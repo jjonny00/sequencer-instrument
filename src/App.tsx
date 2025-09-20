@@ -5,7 +5,7 @@ import * as Tone from "tone";
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
-import { packs, type InstrumentCharacter } from "./packs";
+import { packs, type InstrumentCharacter, type InstrumentDefinition } from "./packs";
 import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
@@ -13,6 +13,12 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
+import {
+  createKickDesigner,
+  mergeKickDesignerState,
+  normalizeKickDesignerState,
+  type KickDesignerInstrument,
+} from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
@@ -32,6 +38,7 @@ import {
   type StoredProjectData,
 } from "./storage";
 import { isUserPresetId } from "./presets";
+import { applyKickMacrosToChunk, resolveInstrumentCharacterId } from "./instrumentCharacters";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -474,11 +481,72 @@ export default function App() {
     const pack = packs[packIndex];
     setTracks((prev) => {
       const allowed = new Set(Object.keys(pack.instruments));
-      const filtered = prev.filter((track) => {
-        if (!track.instrument) return true;
-        return allowed.has(track.instrument);
+      let changed = false;
+      const nextTracks: Track[] = [];
+      prev.forEach((track) => {
+        if (track.instrument && !allowed.has(track.instrument)) {
+          changed = true;
+          return;
+        }
+        if (!track.instrument) {
+          nextTracks.push(track);
+          return;
+        }
+        const instrumentDefinition = pack.instruments[
+          track.instrument
+        ] as InstrumentDefinition | undefined;
+        if (!instrumentDefinition) {
+          nextTracks.push(track);
+          return;
+        }
+        const previousPatternCharacterId = track.pattern?.characterId ?? null;
+        const resolvedCharacterId = resolveInstrumentCharacterId(
+          instrumentDefinition,
+          track.source?.characterId ?? null,
+          null,
+          previousPatternCharacterId
+        );
+        const nextSource = {
+          packId: pack.id,
+          instrumentId: track.instrument,
+          characterId: resolvedCharacterId,
+          presetId: track.source?.presetId ?? null,
+        };
+        let nextPattern = track.pattern;
+        if (track.pattern) {
+          const patternWithCharacter =
+            track.pattern.characterId === resolvedCharacterId
+              ? track.pattern
+              : { ...track.pattern, characterId: resolvedCharacterId };
+          nextPattern =
+            track.instrument === "kick"
+              ? applyKickMacrosToChunk(
+                  patternWithCharacter,
+                  instrumentDefinition,
+                  resolvedCharacterId,
+                  previousPatternCharacterId
+                )
+              : patternWithCharacter;
+        }
+        const sourceChanged =
+          !track.source ||
+          track.source.packId !== nextSource.packId ||
+          track.source.instrumentId !== nextSource.instrumentId ||
+          track.source.characterId !== nextSource.characterId ||
+          (track.source.presetId ?? null) !== nextSource.presetId;
+        const patternChanged = nextPattern !== track.pattern;
+        if (sourceChanged || patternChanged) {
+          changed = true;
+          nextTracks.push({
+            ...track,
+            source: nextSource,
+            pattern: nextPattern,
+          });
+        } else {
+          nextTracks.push(track);
+        }
       });
-      return filtered.length === prev.length ? prev : filtered;
+      return changed ? nextTracks : prev;
     });
     setEditing(null);
     if (!restorationRef.current) {
@@ -523,10 +591,20 @@ export default function App() {
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
+      if (instrumentId === "kick") {
+        const defaults = normalizeKickDesignerState(character.defaults);
+        const instrument = createKickDesigner(defaults);
+        instrument.toDestination();
+        return { instrument: instrument as ToneInstrument };
+      }
+
       if (character.type === "Harmonia") {
         const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
         return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+      }
+      if (!character.type) {
+        throw new Error(`Unknown instrument type for character ${character.id}`);
       }
       const ctor = (
         Tone as unknown as Record<
@@ -669,6 +747,19 @@ export default function App() {
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
+        if (instrumentId === "kick") {
+          const kick = inst as unknown as KickDesignerInstrument;
+          if (kick.setMacroState) {
+            const defaults = normalizeKickDesignerState(character.defaults);
+            const merged = mergeKickDesignerState(defaults, {
+              punch: chunk?.punch,
+              clean: chunk?.clean,
+              tight: chunk?.tight,
+            });
+            kick.setMacroState(merged);
+          }
+        }
+
         if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
           const envelope: Record<string, unknown> = {};
           if (chunk.attack !== undefined) envelope.attack = chunk.attack;

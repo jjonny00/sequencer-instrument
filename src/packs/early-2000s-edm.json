@@ -3,61 +3,39 @@
   "name": "EDM 2000s",
   "instruments": {
     "kick": {
-      "defaultCharacterId": "trance-thump",
+      "id": "kick",
+      "name": "Kick Designer",
+      "defaultCharacterId": "edm_club_punch",
       "characters": [
         {
-          "id": "trance-thump",
-          "name": "Trance Thump",
-          "type": "MembraneSynth",
-          "note": "C2",
-          "options": {
-            "pitchDecay": 0.03,
-            "octaves": 3,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.55,
-              "sustain": 0.01,
-              "release": 0.6
-            }
-          }
+          "id": "edm_club_punch",
+          "name": "Club Punch",
+          "defaults": { "punch": 0.7, "clean": 0.9, "tight": 0.4 }
         },
         {
-          "id": "sidechain-pump",
-          "name": "Sidechain Pump",
-          "type": "MembraneSynth",
-          "note": "C2",
-          "options": {
-            "pitchDecay": 0.025,
-            "octaves": 3,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.45,
-              "sustain": 0.01,
-              "release": 0.5
-            }
-          },
-          "effects": [
-            { "type": "Compressor", "options": { "threshold": -22, "ratio": 6 } }
-          ]
+          "id": "edm_trance_boom",
+          "name": "Trance Boom",
+          "defaults": { "punch": 0.5, "clean": 0.7, "tight": 0.5 }
+        }
+      ],
+      "patterns": [
+        {
+          "id": "edm_four_floor",
+          "name": "Four on the Floor",
+          "steps": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+          "velocities": [1, 0, 0, 0, 0.95, 0, 0, 0, 0.98, 0, 0, 0, 0.94, 0, 0, 0]
         },
         {
-          "id": "hardstyle-kick",
-          "name": "Hardstyle Kick",
-          "type": "MembraneSynth",
-          "note": "C2",
-          "options": {
-            "pitchDecay": 0.05,
-            "octaves": 4,
-            "envelope": {
-              "attack": 0.001,
-              "decay": 0.8,
-              "sustain": 0.02,
-              "release": 0.9
-            }
-          },
-          "effects": [
-            { "type": "Distortion", "options": { "distortion": 0.3, "wet": 0.3 } }
-          ]
+          "id": "edm_offbeat_drive",
+          "name": "Offbeat Drive",
+          "steps": [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0],
+          "velocities": [1, 0, 0, 0, 0.85, 0, 0.7, 0, 0.9, 0, 0, 0, 0.88, 0, 0.72, 0]
+        },
+        {
+          "id": "edm_build_roll",
+          "name": "Build-Up Roll",
+          "steps": [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1],
+          "velocities": [1, 0, 0, 0, 0.9, 0, 0.75, 0, 0.85, 0, 0.8, 0, 0.78, 0.85, 0.9, 1]
         }
       ]
     },
@@ -505,25 +483,34 @@
       "id": "edm-kick-4onfloor",
       "name": "Four on the Floor",
       "instrument": "kick",
-      "characterId": "trance-thump",
+      "characterId": "edm_club_punch",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [1,0,0,0,0.95,0,0,0,0.98,0,0,0,0.95,0,0,0]
+      "velocities": [1,0,0,0,0.95,0,0,0,0.98,0,0,0,0.95,0,0,0],
+      "punch": 0.7,
+      "clean": 0.9,
+      "tight": 0.4
     },
     {
       "id": "edm-kick-drop",
       "name": "Festival Drop",
       "instrument": "kick",
-      "characterId": "hardstyle-kick",
+      "characterId": "edm_trance_boom",
       "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
-      "velocities": [1,0,0,0,0.95,0,0.85,0,0.92,0,0,0,0.96,0,0.82,0]
+      "velocities": [1,0,0,0,0.95,0,0.85,0,0.92,0,0,0,0.96,0,0.82,0],
+      "punch": 0.55,
+      "clean": 0.72,
+      "tight": 0.48
     },
     {
       "id": "edm-kick-sync",
       "name": "Sync Pump",
       "instrument": "kick",
-      "characterId": "sidechain-pump",
+      "characterId": "edm_club_punch",
       "steps": [1,0,0,0,1,0,0,1,1,0,0,0,1,0,0,1],
-      "velocities": [1,0,0,0,0.95,0,0,0.75,0.9,0,0,0,0.92,0,0,0.78]
+      "velocities": [1,0,0,0,0.95,0,0,0.75,0.9,0,0,0,0.92,0,0,0.78],
+      "punch": 0.68,
+      "clean": 0.85,
+      "tight": 0.42
     },
     {
       "id": "edm-snare-offbeat",
