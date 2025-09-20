@@ -1265,35 +1265,40 @@ export default function App() {
     }
   }, [initAudioGraph]);
 
-  const handleCreateNewProjectTouchStart = useCallback(() => {
-    pendingTouchNewProjectRef.current = true;
-    void ensureAudioContextRunning();
-    if (!started && !isLaunchingNewProjectRef.current) {
-      void Tone.start().catch(() => {
-        // Ignore; we'll retry when launching the project.
-      });
-    }
-  }, [started]);
+  const handleCreateNewProjectTouchStart = useCallback(
+    (event: ReactTouchEvent<HTMLButtonElement>) => {
+      pendingTouchNewProjectRef.current = true;
+      void ensureAudioContextRunning();
+      event.preventDefault();
+      if (isLaunchingNewProjectRef.current) {
+        return;
+      }
+      if (!started) {
+        void Tone.start().catch(() => {
+          // Ignore; we'll retry when launching the project.
+        });
+      }
+      void handleCreateNewProject();
+    },
+    [handleCreateNewProject, started]
+  );
 
   const handleCreateNewProjectTouchEnd = useCallback(
     (event: ReactTouchEvent<HTMLButtonElement>) => {
       if (!pendingTouchNewProjectRef.current) return;
       pendingTouchNewProjectRef.current = false;
       event.preventDefault();
-      void handleCreateNewProject();
     },
-    [handleCreateNewProject]
+    []
   );
 
   const handleCreateNewProjectTouchCancel = useCallback(
     (event: ReactTouchEvent<HTMLButtonElement>) => {
       if (!pendingTouchNewProjectRef.current) return;
       pendingTouchNewProjectRef.current = false;
-      if (isLaunchingNewProjectRef.current) return;
       event.preventDefault();
-      void handleCreateNewProject();
     },
-    [handleCreateNewProject]
+    []
   );
 
   useEffect(() => {
