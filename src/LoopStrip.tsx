@@ -192,10 +192,11 @@ const initializeHarmoniaPattern = (
   }
 
   const stepCount = pattern.steps.length || 16;
-  const { steps, stepDegrees } = distributeHarmoniaPatternDegrees(
-    preset.degrees.map((degree) =>
+  const patternDegrees = (preset.degrees ?? []).map((degree) =>
       Math.max(0, Math.min(6, Math.round(degree))) as HarmoniaScaleDegree
-    ),
+  );
+  const { steps, stepDegrees } = distributeHarmoniaPatternDegrees(
+    patternDegrees,
     stepCount
   );
   const velocities = steps.map((value) => (value ? 1 : 0));

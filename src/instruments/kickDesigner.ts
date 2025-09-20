@@ -201,6 +201,7 @@ export const createKickDesigner = (
     const when = time ?? Tone.now();
     const tight = state.tight;
     const punch = state.punch;
+    const whenSeconds = Tone.Time(when).toSeconds();
 
     const baseNote = typeof note === "number" ? note : note || "C2";
     const baseFrequency = Tone.Frequency(baseNote).toFrequency();
@@ -210,27 +211,27 @@ export const createKickDesigner = (
 
     const bodyDuration = Math.max(0.15, 0.35 + tight * 0.4);
     const bodyStart = baseFrequency * (1 + (1 - tight) * 1.4);
-    body.frequency.setValueAtTime(bodyStart, when);
+    body.frequency.setValueAtTime(bodyStart, whenSeconds);
     body.frequency.exponentialRampToValueAtTime(
       Math.max(30, baseFrequency),
-      when + 0.08 + (1 - tight) * 0.05
+      whenSeconds + 0.08 + (1 - tight) * 0.05
     );
     body.triggerAttackRelease(baseNote, bodyDuration, when, Math.min(1, velocity * 0.95));
 
     const subNote = Tone.Frequency(baseNote).transpose(-12 + punch * -2).toNote();
     const subDuration = Math.max(0.4, 0.6 + tight * 1.2);
-    sub.frequency.setValueAtTime(baseFrequency * 0.5, when);
+    sub.frequency.setValueAtTime(baseFrequency * 0.5, whenSeconds);
     sub.frequency.exponentialRampToValueAtTime(
       Math.max(20, baseFrequency * 0.5),
-      when + 0.12 + tight * 0.2
+      whenSeconds + 0.12 + tight * 0.2
     );
     sub.triggerAttackRelease(subNote, subDuration, when, Math.min(1, velocity * (0.7 + punch * 0.4)));
 
     const releaseTime = Tone.Time(duration).toSeconds();
-    const totalRelease = when + releaseTime;
+    const totalRelease = whenSeconds + releaseTime;
     mix.gain.cancelAndHoldAtTime(totalRelease);
     mix.gain.rampTo(0, 0.2, totalRelease);
-    mix.gain.rampTo(1, 0.001, when);
+    mix.gain.rampTo(1, 0.001, whenSeconds);
   };
 
   const originalDispose = output.dispose.bind(output);

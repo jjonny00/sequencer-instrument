@@ -451,7 +451,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       id: preset.id as HarmoniaPatternId,
       name: preset.name,
       description: preset.description ?? "",
-      degrees: preset.degrees.map((value) =>
+      degrees: (preset.degrees ?? []).map((value) =>
         Math.min(6, Math.max(0, Math.round(value)))
       ) as HarmoniaScaleDegree[],
     }));
