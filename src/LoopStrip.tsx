@@ -95,13 +95,39 @@ const resolveKickDefaults = (
 const applyKickMacrosToChunk = (
   chunk: Chunk,
   instrument: InstrumentDefinition | undefined,
-  characterId: string | null | undefined
+  characterId: string | null | undefined,
+  previousCharacterId?: string | null | undefined
 ): Chunk => {
   if (chunk.instrument !== "kick") return chunk;
   const defaults = resolveKickDefaults(
     instrument,
     characterId ?? chunk.characterId ?? null
   );
+  const activeCharacterId = characterId ?? chunk.characterId ?? null;
+  const hasOverrides =
+    chunk.punch !== undefined || chunk.clean !== undefined || chunk.tight !== undefined;
+  const characterChanged =
+    previousCharacterId !== undefined &&
+    previousCharacterId !== null &&
+    activeCharacterId !== null &&
+    previousCharacterId !== activeCharacterId;
+
+  if (!hasOverrides || characterChanged) {
+    if (
+      chunk.punch === defaults.punch &&
+      chunk.clean === defaults.clean &&
+      chunk.tight === defaults.tight
+    ) {
+      return chunk;
+    }
+    return {
+      ...chunk,
+      punch: defaults.punch,
+      clean: defaults.clean,
+      tight: defaults.tight,
+    };
+  }
+
   const merged = mergeKickDesignerState(defaults, {
     punch: chunk.punch,
     clean: chunk.clean,
@@ -555,6 +581,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           presetPayload?.characterId ?? null,
           basePattern.characterId ?? null
         );
+        const previousCharacterId = basePattern.characterId ?? null;
         let pattern: Chunk = {
           ...basePattern,
           characterId: resolvedCharacterId,
@@ -563,7 +590,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           pattern = applyKickMacrosToChunk(
             pattern,
             instrumentDefinition,
-            resolvedCharacterId
+            resolvedCharacterId,
+            previousCharacterId
           );
         }
         if (instrumentId === "harmonia") {
@@ -669,11 +697,12 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const instrumentDefinition = activePack.instruments[
             instrumentId
           ] as InstrumentDefinition | undefined;
+          const previousCharacterId = basePattern?.characterId ?? null;
           const resolvedCharacterId = resolveInstrumentCharacterId(
             instrumentDefinition,
             characterId,
             presetPayload?.characterId ?? null,
-            basePattern?.characterId ?? null
+            previousCharacterId
           );
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
@@ -682,7 +711,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             nextPattern = applyKickMacrosToChunk(
               nextPattern,
               instrumentDefinition,
-              resolvedCharacterId
+              resolvedCharacterId,
+              previousCharacterId
             );
           }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
