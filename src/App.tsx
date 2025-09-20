@@ -1,4 +1,7 @@
-import type { CSSProperties, TouchEvent as ReactTouchEvent } from "react";
+import type {
+  CSSProperties,
+  TouchEvent as ReactTouchEvent,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -182,6 +185,7 @@ export default function App() {
   const restorationRef = useRef(false);
   const pendingTransportStateRef = useRef<boolean | null>(null);
   const isLaunchingNewProjectRef = useRef(false);
+  const pendingTouchNewProjectRef = useRef(false);
 
   const resolveInstrumentCharacter = useCallback(
     (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
@@ -1261,13 +1265,24 @@ export default function App() {
     }
   }, [initAudioGraph]);
 
-  const handleCreateNewProjectTouch = useCallback(
+  const handleCreateNewProjectTouchStart = useCallback(() => {
+    pendingTouchNewProjectRef.current = true;
+    void ensureAudioContextRunning();
+  }, []);
+
+  const handleCreateNewProjectTouchEnd = useCallback(
     (event: ReactTouchEvent<HTMLButtonElement>) => {
+      if (!pendingTouchNewProjectRef.current) return;
+      pendingTouchNewProjectRef.current = false;
       event.preventDefault();
       void handleCreateNewProject();
     },
     [handleCreateNewProject]
   );
+
+  const handleCreateNewProjectTouchCancel = useCallback(() => {
+    pendingTouchNewProjectRef.current = false;
+  }, []);
 
   useEffect(() => {
     refreshProjectList();
@@ -1659,7 +1674,9 @@ export default function App() {
             <button
               type="button"
               onClick={handleCreateNewProject}
-              onTouchStart={handleCreateNewProjectTouch}
+              onTouchStart={handleCreateNewProjectTouchStart}
+              onTouchEnd={handleCreateNewProjectTouchEnd}
+              onTouchCancel={handleCreateNewProjectTouchCancel}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
