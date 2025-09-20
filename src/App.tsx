@@ -5,7 +5,7 @@ import * as Tone from "tone";
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import type { Track, TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
-import { packs, type InstrumentCharacter } from "./packs";
+import { packs, type InstrumentCharacter, type InstrumentDefinition } from "./packs";
 import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
@@ -38,6 +38,7 @@ import {
   type StoredProjectData,
 } from "./storage";
 import { isUserPresetId } from "./presets";
+import { applyKickMacrosToChunk, resolveInstrumentCharacterId } from "./instrumentCharacters";
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -480,11 +481,72 @@ export default function App() {
     const pack = packs[packIndex];
     setTracks((prev) => {
       const allowed = new Set(Object.keys(pack.instruments));
-      const filtered = prev.filter((track) => {
-        if (!track.instrument) return true;
-        return allowed.has(track.instrument);
+      let changed = false;
+      const nextTracks: Track[] = [];
+      prev.forEach((track) => {
+        if (track.instrument && !allowed.has(track.instrument)) {
+          changed = true;
+          return;
+        }
+        if (!track.instrument) {
+          nextTracks.push(track);
+          return;
+        }
+        const instrumentDefinition = pack.instruments[
+          track.instrument
+        ] as InstrumentDefinition | undefined;
+        if (!instrumentDefinition) {
+          nextTracks.push(track);
+          return;
+        }
+        const previousPatternCharacterId = track.pattern?.characterId ?? null;
+        const resolvedCharacterId = resolveInstrumentCharacterId(
+          instrumentDefinition,
+          track.source?.characterId ?? null,
+          null,
+          previousPatternCharacterId
+        );
+        const nextSource = {
+          packId: pack.id,
+          instrumentId: track.instrument,
+          characterId: resolvedCharacterId,
+          presetId: track.source?.presetId ?? null,
+        };
+        let nextPattern = track.pattern;
+        if (track.pattern) {
+          const patternWithCharacter =
+            track.pattern.characterId === resolvedCharacterId
+              ? track.pattern
+              : { ...track.pattern, characterId: resolvedCharacterId };
+          nextPattern =
+            track.instrument === "kick"
+              ? applyKickMacrosToChunk(
+                  patternWithCharacter,
+                  instrumentDefinition,
+                  resolvedCharacterId,
+                  previousPatternCharacterId
+                )
+              : patternWithCharacter;
+        }
+        const sourceChanged =
+          !track.source ||
+          track.source.packId !== nextSource.packId ||
+          track.source.instrumentId !== nextSource.instrumentId ||
+          track.source.characterId !== nextSource.characterId ||
+          (track.source.presetId ?? null) !== nextSource.presetId;
+        const patternChanged = nextPattern !== track.pattern;
+        if (sourceChanged || patternChanged) {
+          changed = true;
+          nextTracks.push({
+            ...track,
+            source: nextSource,
+            pattern: nextPattern,
+          });
+        } else {
+          nextTracks.push(track);
+        }
       });
-      return filtered.length === prev.length ? prev : filtered;
+      return changed ? nextTracks : prev;
     });
     setEditing(null);
     if (!restorationRef.current) {
