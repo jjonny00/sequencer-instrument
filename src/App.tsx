@@ -1280,9 +1280,16 @@ export default function App() {
     [handleCreateNewProject]
   );
 
-  const handleCreateNewProjectTouchCancel = useCallback(() => {
-    pendingTouchNewProjectRef.current = false;
-  }, []);
+  const handleCreateNewProjectTouchCancel = useCallback(
+    (event: ReactTouchEvent<HTMLButtonElement>) => {
+      if (!pendingTouchNewProjectRef.current) return;
+      pendingTouchNewProjectRef.current = false;
+      if (isLaunchingNewProjectRef.current) return;
+      event.preventDefault();
+      void handleCreateNewProject();
+    },
+    [handleCreateNewProject]
+  );
 
   useEffect(() => {
     refreshProjectList();
