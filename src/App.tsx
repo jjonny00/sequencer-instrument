@@ -58,6 +58,69 @@ const isIOSPWA = () => {
   );
 };
 
+const isPWARestore = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const performanceWithNavigation = window.performance as Performance & {
+    navigation?: PerformanceNavigation;
+  };
+
+  const navigationType = performanceWithNavigation.navigation?.type;
+  const navigationEntries = window.performance.getEntriesByType?.(
+    "navigation"
+  ) as PerformanceNavigationTiming[];
+  const isReloadEntry = navigationEntries?.[0]?.type === "reload";
+
+  const navigatorWithStandalone = window.navigator as Navigator & {
+    standalone?: boolean;
+  };
+
+  const backForwardType =
+    performanceWithNavigation.navigation?.TYPE_BACK_FORWARD ?? 2;
+
+  return (
+    navigationType === backForwardType ||
+    (navigatorWithStandalone.standalone === true && isReloadEntry)
+  );
+};
+
+const forceAudioContextCleanup = async () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const existingContext = Tone.getContext();
+    const rawContext = existingContext.rawContext as AudioContext | undefined;
+    if (rawContext && rawContext.state !== "closed") {
+      try {
+        await rawContext.close();
+      } catch (error) {
+        console.warn("Failed to close raw audio context:", error);
+      }
+    }
+
+    await existingContext.dispose();
+    Tone.setContext(new Tone.Context());
+
+    const audioContextConstructor =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+
+    if (audioContextConstructor) {
+      const dummyContext = new audioContextConstructor();
+      await dummyContext.close();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } catch (error) {
+    console.warn("Audio context cleanup failed:", error);
+  }
+};
+
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
   name: "sequence01",
@@ -198,6 +261,15 @@ export default function App() {
     [editing, tracks]
   );
   const restorationRef = useRef(false);
+
+  useEffect(() => {
+    const restoring = isPWARestore();
+    restorationRef.current = restoring;
+
+    if (isIOSPWA()) {
+      void forceAudioContextCleanup();
+    }
+  }, []);
   const pendingTransportStateRef = useRef<boolean | null>(null);
   const isLaunchingNewProjectRef = useRef(false);
   const pendingTouchNewProjectRef = useRef(false);
@@ -1258,6 +1330,7 @@ export default function App() {
   const initAudioGraph = useCallback(async () => {
     try {
       if (isIOSPWA()) {
+        await forceAudioContextCleanup();
         const maxAttempts = 3;
         let attempts = 0;
 
