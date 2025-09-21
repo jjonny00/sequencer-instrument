@@ -1268,12 +1268,10 @@ export default function App() {
   const handleCreateNewProjectTouchStart = useCallback(() => {
     pendingTouchNewProjectRef.current = true;
     void ensureAudioContextRunning();
-    if (!started) {
-      void Tone.start().catch(() => {
-        // Ignore; we'll retry when launching the project.
-      });
-    }
-  }, [started]);
+    void Tone.start().catch(() => {
+      // Ignore; we'll retry when launching the project.
+    });
+  }, []);
 
   const handleCreateNewProjectTouchCommit = useCallback(
     (event: ReactTouchEvent<HTMLButtonElement>) => {
