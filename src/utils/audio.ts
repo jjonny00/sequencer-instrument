@@ -39,17 +39,19 @@ export const frequencyToFilterValue = (frequency: number) => {
 export const ensureAudioContextRunning = async (): Promise<void> => {
   const context = Tone.getContext();
   const rawContext = context.rawContext as AudioContext;
+  let state: AudioContextState = rawContext.state;
 
-  if (rawContext.state === "running") {
+  if (state === "running") {
     return;
   }
 
   try {
-    if (rawContext.state === "suspended") {
+    if (state === "suspended") {
       await rawContext.resume();
+      state = rawContext.state;
     }
 
-    if (isIOSPWA() && rawContext.state !== "running") {
+    if (isIOSPWA() && state !== "running") {
       const buffer = rawContext.createBuffer(1, 1, rawContext.sampleRate);
       const source = rawContext.createBufferSource();
       const gainNode = rawContext.createGain();
@@ -63,9 +65,10 @@ export const ensureAudioContextRunning = async (): Promise<void> => {
       source.stop(rawContext.currentTime + 0.001);
 
       await rawContext.resume();
+      state = rawContext.state;
     }
 
-    if (rawContext.state !== "running") {
+    if (state !== "running") {
       console.warn("Audio context not running after unlock attempts");
     }
   } catch (error) {
