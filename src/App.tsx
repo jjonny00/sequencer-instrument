@@ -43,6 +43,21 @@ import {
 import { isUserPresetId } from "./presets";
 import { applyKickMacrosToChunk, resolveInstrumentCharacterId } from "./instrumentCharacters";
 
+const isIOSPWA = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const navigatorWithStandalone = window.navigator as Navigator & {
+    standalone?: boolean;
+  };
+
+  return (
+    navigatorWithStandalone.standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches
+  );
+};
+
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
   name: "sequence01",
@@ -1241,16 +1256,55 @@ export default function App() {
   );
 
   const initAudioGraph = useCallback(async () => {
-    await Tone.start(); // iOS unlock
-    Tone.Transport.bpm.value = bpm;
-    Tone.Transport.start(); // start clock; we’ll schedule to it
-    setStarted(true);
-    setIsPlaying(true);
-    setCurrentSectionIndex(0);
-    if (pendingTransportStateRef.current === false) {
-      Tone.Transport.stop();
-      setIsPlaying(false);
-      pendingTransportStateRef.current = null;
+    try {
+      if (isIOSPWA()) {
+        const maxAttempts = 3;
+        let attempts = 0;
+
+        while (attempts < maxAttempts) {
+          try {
+            await Tone.start();
+            await ensureAudioContextRunning();
+            const context = Tone.getContext();
+            if (context.state === "running") {
+              break;
+            }
+          } catch (error) {
+            console.warn(`Audio start attempt ${attempts + 1} failed:`, error);
+          }
+
+          attempts += 1;
+          if (attempts < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
+      } else {
+        await Tone.start();
+        await ensureAudioContextRunning();
+      }
+
+      const context = Tone.getContext();
+      if (context.state !== "running") {
+        throw new Error(`Audio context in state: ${context.state}`);
+      }
+
+      Tone.Transport.bpm.value = bpm;
+      Tone.Transport.start();
+      setStarted(true);
+      setIsPlaying(true);
+      setCurrentSectionIndex(0);
+
+      if (pendingTransportStateRef.current === false) {
+        Tone.Transport.stop();
+        setIsPlaying(false);
+        pendingTransportStateRef.current = null;
+      }
+    } catch (error) {
+      console.error("Failed to initialize audio graph:", error);
+      const errorMessage = isIOSPWA()
+        ? "Audio failed to start. This sometimes happens in standalone mode. Try refreshing the app or opening it in Safari first."
+        : "Audio initialization failed. Please try again or refresh the page.";
+      alert(errorMessage);
     }
   }, [bpm]);
 
@@ -1258,12 +1312,57 @@ export default function App() {
     if (isLaunchingNewProjectRef.current) return;
     isLaunchingNewProjectRef.current = true;
     try {
-      setActiveProjectName("untitled");
       await initAudioGraph();
     } finally {
       isLaunchingNewProjectRef.current = false;
     }
   }, [initAudioGraph]);
+
+  const handleNewProjectClick = useCallback(
+    async (button?: HTMLButtonElement | null) => {
+      const targetButton = button ?? (document.activeElement as HTMLButtonElement | null);
+      const originalText = targetButton?.textContent ?? null;
+
+      try {
+        if (targetButton) {
+          targetButton.disabled = true;
+          targetButton.textContent = "Starting...";
+        }
+
+        setActiveProjectName("untitled");
+
+        if (isIOSPWA()) {
+          const context = Tone.getContext();
+          const rawContext = context.rawContext as AudioContext;
+          const oscillator = rawContext.createOscillator();
+          const gainNode = rawContext.createGain();
+
+          gainNode.gain.setValueAtTime(0, rawContext.currentTime);
+          oscillator.connect(gainNode);
+          gainNode.connect(rawContext.destination);
+
+          oscillator.start();
+          oscillator.stop(rawContext.currentTime + 0.001);
+
+          await new Promise((resolve) => setTimeout(resolve, 50));
+
+          oscillator.disconnect();
+          gainNode.disconnect();
+        }
+
+        await handleCreateNewProject();
+      } catch (error) {
+        console.error("Failed to start new project:", error);
+        alert("Failed to start audio. Please try again or refresh the page.");
+      } finally {
+        if (targetButton) {
+          targetButton.disabled = false;
+          targetButton.textContent = originalText ?? "New Project";
+        }
+      }
+    },
+    [handleCreateNewProject, setActiveProjectName]
+  );
 
   const handleCreateNewProjectTouchStart = useCallback(() => {
     pendingTouchNewProjectRef.current = true;
@@ -1278,9 +1377,9 @@ export default function App() {
       if (!pendingTouchNewProjectRef.current) return;
       pendingTouchNewProjectRef.current = false;
       event.preventDefault();
-      void handleCreateNewProject();
+      void handleNewProjectClick(event.currentTarget);
     },
-    [handleCreateNewProject]
+    [handleNewProjectClick]
   );
 
   useEffect(() => {
@@ -1672,7 +1771,9 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={handleCreateNewProject}
+              onClick={(event) => {
+                void handleNewProjectClick(event.currentTarget);
+              }}
               onTouchStart={handleCreateNewProjectTouchStart}
               onTouchEnd={handleCreateNewProjectTouchCommit}
               onTouchCancel={handleCreateNewProjectTouchCommit}
