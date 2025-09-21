@@ -1,4 +1,7 @@
-import type { CSSProperties } from "react";
+import type {
+  CSSProperties,
+  TouchEvent as ReactTouchEvent,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -39,6 +42,84 @@ import {
 } from "./storage";
 import { isUserPresetId } from "./presets";
 import { applyKickMacrosToChunk, resolveInstrumentCharacterId } from "./instrumentCharacters";
+
+const isIOSPWA = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const navigatorWithStandalone = window.navigator as Navigator & {
+    standalone?: boolean;
+  };
+
+  return (
+    navigatorWithStandalone.standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches
+  );
+};
+
+const isPWARestore = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const performanceWithNavigation = window.performance as Performance & {
+    navigation?: PerformanceNavigation;
+  };
+
+  const navigationType = performanceWithNavigation.navigation?.type;
+  const navigationEntries = window.performance.getEntriesByType?.(
+    "navigation"
+  ) as PerformanceNavigationTiming[];
+  const isReloadEntry = navigationEntries?.[0]?.type === "reload";
+
+  const navigatorWithStandalone = window.navigator as Navigator & {
+    standalone?: boolean;
+  };
+
+  const backForwardType =
+    performanceWithNavigation.navigation?.TYPE_BACK_FORWARD ?? 2;
+
+  return (
+    navigationType === backForwardType ||
+    (navigatorWithStandalone.standalone === true && isReloadEntry)
+  );
+};
+
+const forceAudioContextCleanup = async () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const existingContext = Tone.getContext();
+    const rawContext = existingContext.rawContext as AudioContext | undefined;
+    if (rawContext && rawContext.state !== "closed") {
+      try {
+        await rawContext.close();
+      } catch (error) {
+        console.warn("Failed to close raw audio context:", error);
+      }
+    }
+
+    await existingContext.dispose();
+    Tone.setContext(new Tone.Context());
+
+    const audioContextConstructor =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+
+    if (audioContextConstructor) {
+      const dummyContext = new audioContextConstructor();
+      await dummyContext.close();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } catch (error) {
+    console.warn("Audio context cleanup failed:", error);
+  }
+};
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
@@ -180,7 +261,18 @@ export default function App() {
     [editing, tracks]
   );
   const restorationRef = useRef(false);
+
+  useEffect(() => {
+    const restoring = isPWARestore();
+    restorationRef.current = restoring;
+
+    if (isIOSPWA()) {
+      void forceAudioContextCleanup();
+    }
+  }, []);
   const pendingTransportStateRef = useRef<boolean | null>(null);
+  const isLaunchingNewProjectRef = useRef(false);
+  const pendingTouchNewProjectRef = useRef(false);
 
   const resolveInstrumentCharacter = useCallback(
     (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
@@ -1236,18 +1328,132 @@ export default function App() {
   );
 
   const initAudioGraph = useCallback(async () => {
-    await Tone.start(); // iOS unlock
-    Tone.Transport.bpm.value = bpm;
-    Tone.Transport.start(); // start clock; we’ll schedule to it
-    setStarted(true);
-    setIsPlaying(true);
-    setCurrentSectionIndex(0);
-    if (pendingTransportStateRef.current === false) {
-      Tone.Transport.stop();
-      setIsPlaying(false);
-      pendingTransportStateRef.current = null;
+    try {
+      if (isIOSPWA()) {
+        await forceAudioContextCleanup();
+        const maxAttempts = 3;
+        let attempts = 0;
+
+        while (attempts < maxAttempts) {
+          try {
+            await Tone.start();
+            await ensureAudioContextRunning();
+            const context = Tone.getContext();
+            if (context.state === "running") {
+              break;
+            }
+          } catch (error) {
+            console.warn(`Audio start attempt ${attempts + 1} failed:`, error);
+          }
+
+          attempts += 1;
+          if (attempts < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
+      } else {
+        await Tone.start();
+        await ensureAudioContextRunning();
+      }
+
+      const context = Tone.getContext();
+      if (context.state !== "running") {
+        throw new Error(`Audio context in state: ${context.state}`);
+      }
+
+      Tone.Transport.bpm.value = bpm;
+      Tone.Transport.start();
+      setStarted(true);
+      setIsPlaying(true);
+      setCurrentSectionIndex(0);
+
+      if (pendingTransportStateRef.current === false) {
+        Tone.Transport.stop();
+        setIsPlaying(false);
+        pendingTransportStateRef.current = null;
+      }
+    } catch (error) {
+      console.error("Failed to initialize audio graph:", error);
+      const errorMessage = isIOSPWA()
+        ? "Audio failed to start. This sometimes happens in standalone mode. Try refreshing the app or opening it in Safari first."
+        : "Audio initialization failed. Please try again or refresh the page.";
+      alert(errorMessage);
     }
   }, [bpm]);
+
+  const handleCreateNewProject = useCallback(async () => {
+    if (isLaunchingNewProjectRef.current) return;
+    isLaunchingNewProjectRef.current = true;
+    try {
+      await initAudioGraph();
+    } finally {
+      isLaunchingNewProjectRef.current = false;
+    }
+  }, [initAudioGraph]);
+
+  const handleNewProjectClick = useCallback(
+    async (button?: HTMLButtonElement | null) => {
+      const targetButton = button ?? (document.activeElement as HTMLButtonElement | null);
+      const originalText = targetButton?.textContent ?? null;
+
+      try {
+        if (targetButton) {
+          targetButton.disabled = true;
+          targetButton.textContent = "Starting...";
+        }
+
+        setActiveProjectName("untitled");
+
+        if (isIOSPWA()) {
+          const context = Tone.getContext();
+          const rawContext = context.rawContext as AudioContext;
+          const oscillator = rawContext.createOscillator();
+          const gainNode = rawContext.createGain();
+
+          gainNode.gain.setValueAtTime(0, rawContext.currentTime);
+          oscillator.connect(gainNode);
+          gainNode.connect(rawContext.destination);
+
+          oscillator.start();
+          oscillator.stop(rawContext.currentTime + 0.001);
+
+          await new Promise((resolve) => setTimeout(resolve, 50));
+
+          oscillator.disconnect();
+          gainNode.disconnect();
+        }
+
+        await handleCreateNewProject();
+      } catch (error) {
+        console.error("Failed to start new project:", error);
+        alert("Failed to start audio. Please try again or refresh the page.");
+      } finally {
+        if (targetButton) {
+          targetButton.disabled = false;
+          targetButton.textContent = originalText ?? "New Project";
+        }
+      }
+    },
+    [handleCreateNewProject, setActiveProjectName]
+  );
+
+  const handleCreateNewProjectTouchStart = useCallback(() => {
+    pendingTouchNewProjectRef.current = true;
+    void ensureAudioContextRunning();
+    void Tone.start().catch(() => {
+      // Ignore; we'll retry when launching the project.
+    });
+  }, []);
+
+  const handleCreateNewProjectTouchCommit = useCallback(
+    (event: ReactTouchEvent<HTMLButtonElement>) => {
+      if (!pendingTouchNewProjectRef.current) return;
+      pendingTouchNewProjectRef.current = false;
+      event.preventDefault();
+      void handleNewProjectClick(event.currentTarget);
+    },
+    [handleNewProjectClick]
+  );
 
   useEffect(() => {
     refreshProjectList();
@@ -1637,10 +1843,13 @@ export default function App() {
             }}
           >
             <button
-              onClick={async () => {
-                setActiveProjectName("untitled");
-                await initAudioGraph();
+              type="button"
+              onClick={(event) => {
+                void handleNewProjectClick(event.currentTarget);
               }}
+              onTouchStart={handleCreateNewProjectTouchStart}
+              onTouchEnd={handleCreateNewProjectTouchCommit}
+              onTouchCancel={handleCreateNewProjectTouchCommit}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
