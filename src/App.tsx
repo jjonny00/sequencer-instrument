@@ -1265,40 +1265,24 @@ export default function App() {
     }
   }, [initAudioGraph]);
 
-  const handleCreateNewProjectTouchStart = useCallback(
+  const handleCreateNewProjectTouchStart = useCallback(() => {
+    pendingTouchNewProjectRef.current = true;
+    void ensureAudioContextRunning();
+    if (!started) {
+      void Tone.start().catch(() => {
+        // Ignore; we'll retry when launching the project.
+      });
+    }
+  }, [started]);
+
+  const handleCreateNewProjectTouchCommit = useCallback(
     (event: ReactTouchEvent<HTMLButtonElement>) => {
-      pendingTouchNewProjectRef.current = true;
-      void ensureAudioContextRunning();
+      if (!pendingTouchNewProjectRef.current) return;
+      pendingTouchNewProjectRef.current = false;
       event.preventDefault();
-      if (isLaunchingNewProjectRef.current) {
-        return;
-      }
-      if (!started) {
-        void Tone.start().catch(() => {
-          // Ignore; we'll retry when launching the project.
-        });
-      }
       void handleCreateNewProject();
     },
-    [handleCreateNewProject, started]
-  );
-
-  const handleCreateNewProjectTouchEnd = useCallback(
-    (event: ReactTouchEvent<HTMLButtonElement>) => {
-      if (!pendingTouchNewProjectRef.current) return;
-      pendingTouchNewProjectRef.current = false;
-      event.preventDefault();
-    },
-    []
-  );
-
-  const handleCreateNewProjectTouchCancel = useCallback(
-    (event: ReactTouchEvent<HTMLButtonElement>) => {
-      if (!pendingTouchNewProjectRef.current) return;
-      pendingTouchNewProjectRef.current = false;
-      event.preventDefault();
-    },
-    []
+    [handleCreateNewProject]
   );
 
   useEffect(() => {
@@ -1692,8 +1676,8 @@ export default function App() {
               type="button"
               onClick={handleCreateNewProject}
               onTouchStart={handleCreateNewProjectTouchStart}
-              onTouchEnd={handleCreateNewProjectTouchEnd}
-              onTouchCancel={handleCreateNewProjectTouchCancel}
+              onTouchEnd={handleCreateNewProjectTouchCommit}
+              onTouchCancel={handleCreateNewProjectTouchCommit}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
