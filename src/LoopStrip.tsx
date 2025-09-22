@@ -32,6 +32,7 @@ import {
   applyKickMacrosToChunk,
   resolveInstrumentCharacterId,
 } from "./instrumentCharacters";
+import { isIOSPWA } from "./utils/audio";
 
 const baseInstrumentColors: Record<string, string> = {
   kick: "#e74c3c",
@@ -267,6 +268,19 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const instrumentOptions = Object.keys(pack.instruments);
   const canAddTrack = instrumentOptions.length > 0;
   const addTrackEnabled = canAddTrack;
+
+  useEffect(() => {
+    console.log("Track view mounted");
+    if (isIOSPWA()) {
+      void Tone.start()
+        .then(() => {
+          console.log("Tone.js audio started successfully");
+        })
+        .catch((err) => {
+          console.warn("Tone.js failed to start:", err);
+        });
+    }
+  }, []);
   const selectedGroup = useMemo(() => {
     if (!selectedGroupId) return null;
     return patternGroups.find((group) => group.id === selectedGroupId) ?? null;

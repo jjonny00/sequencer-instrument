@@ -12,7 +12,7 @@ import * as Tone from "tone";
 import type { Chunk, NoteEvent } from "./chunks";
 import type { Track } from "./tracks";
 import { formatInstrumentLabel } from "./utils/instrument";
-import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
+import { initAudioContext, filterValueToFrequency } from "./utils/audio";
 import { ARP_PRESETS } from "./arpPresets";
 import {
   getScaleDegreeOffset,
@@ -1208,7 +1208,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         applyHarmoniaResolution(degree);
       if (!resolution) return;
       if (trigger) {
-        void ensureAudioContextRunning();
+        void initAudioContext();
         const now = Tone.now();
         const notes = resolution.notes.slice();
         const degrees = resolution.intervals.slice();
@@ -1764,7 +1764,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     (degreeIndex: number) => {
       stopArpPlayback({ preserveState: true });
       if (!trigger || !pattern) return;
-      void ensureAudioContextRunning();
+      void initAudioContext();
       const octaves = Math.max(1, pattern.arpOctaves ?? 1);
       const style = pattern.style ?? "up";
       const mode = pattern.timingMode === "free" ? "free" : "sync";
@@ -1910,7 +1910,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const triggerKeyboardNote = (note: string) => {
     if (!trigger || !pattern) return;
-    void ensureAudioContextRunning();
+    void initAudioContext();
     const bend = pattern.pitchBend ?? 0;
     const sustain = pattern.sustain ?? 0.8;
     const noteName = bend ? Tone.Frequency(note).transpose(bend).toNote() : note;

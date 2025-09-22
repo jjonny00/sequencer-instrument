@@ -21,14 +21,7 @@ import {
 } from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
-import {
-  ensureAudioContextRunning,
-  filterValueToFrequency,
-  forceAudioContextCleanup,
-  initAudioContextWithRetries,
-  isFallbackAudioActive,
-  isIOSStandalone,
-} from "./utils/audio";
+import { initAudioContext, filterValueToFrequency, isIOSPWA } from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
@@ -78,7 +71,7 @@ const isPWARestore = () => {
     isBackForwardEntry ||
     (navigatorWithStandalone.standalone === true && isReloadEntry) ||
     // Additional check: if we have a persisted audio context state
-    (isIOSStandalone() && Tone.getContext()?.state !== "closed")
+    (isIOSPWA() && Tone.getContext()?.state !== "closed")
   );
 };
 
@@ -228,14 +221,9 @@ export default function App() {
     restorationRef.current = restoring;
 
     console.log("App initializing:", {
-      isIOSStandalone: isIOSStandalone(),
+      isIOSPWA: isIOSPWA(),
       restoring,
     });
-
-    // Always force cleanup on iOS PWA startup
-    if (isIOSStandalone()) {
-      void forceAudioContextCleanup();
-    }
   }, []);
   const pendingTransportStateRef = useRef<boolean | null>(null);
 
@@ -760,7 +748,7 @@ export default function App() {
         chunk?: Chunk,
         characterId?: string
       ) => {
-        void ensureAudioContextRunning();
+        void initAudioContext();
         const character = resolveInstrumentCharacter(instrumentId, characterId);
         if (!character) return;
         const key = `${instrumentId}:${character.id}`;
@@ -1292,15 +1280,8 @@ export default function App() {
     [refreshProjectList]
   );
 
-  const initAudioGraph = useCallback(async () => {
+  const initAudioGraph = useCallback(() => {
     try {
-      await ensureAudioContextRunning();
-
-      const context = Tone.getContext();
-      if (context.state !== "running") {
-        throw new Error(`Audio context in state: ${context.state}`);
-      }
-
       Tone.Transport.bpm.value = bpm;
       Tone.Transport.start();
       setStarted(true);
@@ -1315,29 +1296,16 @@ export default function App() {
 
       console.log("Audio graph initialized successfully");
     } catch (error) {
-      console.error("Failed to initialize audio graph:", error);
-      const errorMessage = isIOSStandalone()
-        ? "Audio failed to start. This sometimes happens in standalone mode. Try closing and reopening the app, or open it in Safari first."
-        : "Audio initialization failed. Please try again or refresh the page.";
-      alert(errorMessage);
+      console.warn("Failed to initialize audio graph:", error);
     }
   }, [bpm]);
 
   const handleNewProjectClick = useCallback(() => {
-    console.log("=== BAREBONES NEW PROJECT CLICK START ===");
-    console.log("Timestamp:", new Date().toISOString());
-
+    console.log("New project button clicked");
     setActiveProjectName("untitled");
-    console.log("Project name set to 'untitled'");
-
     setStarted(true);
-    console.log("setStarted(true) called");
-
-    setCurrentSectionIndex(0);
-    console.log("setCurrentSectionIndex(0) called");
-
-    console.log("=== BAREBONES NEW PROJECT CLICK END ===");
-  }, [setActiveProjectName, setCurrentSectionIndex, setStarted]);
+    setViewMode("track");
+  }, [setActiveProjectName, setStarted, setViewMode]);
 
   useEffect(() => {
     refreshProjectList();
@@ -1346,16 +1314,12 @@ export default function App() {
   const handleLaunchProject = useCallback(
     async (name: string) => {
       if (!started) {
-        const audioReady = await initAudioContextWithRetries();
-        if (!audioReady) {
-          if (isFallbackAudioActive()) {
-            alert(
-              "Audio engine fallback is active. Sequencer playback may be unavailable until the app is reopened."
-            );
-          }
+        try {
+          await initAudioContext();
+        } catch {
           return;
         }
-        await initAudioGraph();
+        initAudioGraph();
       }
       handleLoadProjectByName(name);
     },
@@ -1396,20 +1360,7 @@ export default function App() {
       }
 
       console.log("Document visible, refreshing audio context state");
-      void (async () => {
-        try {
-          await forceAudioContextCleanup();
-        } catch (error) {
-          console.warn("Failed to reset audio context on visibility change:", error);
-        }
-
-        try {
-          await Tone.getContext().resume();
-        } catch (error) {
-          console.warn("Failed to resume audio context:", error);
-        }
-      })();
-
+      void initAudioContext();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
