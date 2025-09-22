@@ -29,7 +29,8 @@ import {
   filterValueToFrequency,
   forceAudioContextCleanup,
   initAudioContextWithRetries,
-  isIOSPWA,
+  isFallbackAudioActive,
+  isIOSStandalone,
   silentUnlock,
 } from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
@@ -81,7 +82,7 @@ const isPWARestore = () => {
     isBackForwardEntry ||
     (navigatorWithStandalone.standalone === true && isReloadEntry) ||
     // Additional check: if we have a persisted audio context state
-    (isIOSPWA() && Tone.getContext()?.state !== "closed")
+    (isIOSStandalone() && Tone.getContext()?.state !== "closed")
   );
 };
 
@@ -230,10 +231,13 @@ export default function App() {
     const restoring = isPWARestore();
     restorationRef.current = restoring;
 
-    console.log("App initializing:", { isIOSPWA: isIOSPWA(), restoring });
+    console.log("App initializing:", {
+      isIOSStandalone: isIOSStandalone(),
+      restoring,
+    });
 
     // Always force cleanup on iOS PWA startup
-    if (isIOSPWA()) {
+    if (isIOSStandalone()) {
       void forceAudioContextCleanup();
     }
   }, []);
@@ -1318,7 +1322,7 @@ export default function App() {
       console.log("Audio graph initialized successfully");
     } catch (error) {
       console.error("Failed to initialize audio graph:", error);
-      const errorMessage = isIOSPWA()
+      const errorMessage = isIOSStandalone()
         ? "Audio failed to start. This sometimes happens in standalone mode. Try closing and reopening the app, or open it in Safari first."
         : "Audio initialization failed. Please try again or refresh the page.";
       alert(errorMessage);
@@ -1344,7 +1348,16 @@ export default function App() {
 
         const audioReady = await initAudioContextWithRetries();
         if (!audioReady) {
-          console.warn("Audio initialization requested reload; aborting new project flow");
+          if (isFallbackAudioActive()) {
+            console.warn("Audio initialization failed after reload; fallback mode active");
+            alert(
+              "Audio engine could not be restored. Some sounds may not play correctly in this session."
+            );
+          } else {
+            console.warn(
+              "Audio initialization requested reload; aborting new project flow"
+            );
+          }
           return;
         }
 
@@ -1353,7 +1366,7 @@ export default function App() {
         console.log("New project created successfully");
       } catch (error) {
         console.error("Failed to start new project:", error);
-        const errorMessage = isIOSPWA()
+        const errorMessage = isIOSStandalone()
           ? "Audio failed to start. This sometimes happens in standalone mode. Try closing and reopening the app, or open it in Safari first."
           : "Failed to start audio. Please try again or refresh the page.";
         alert(errorMessage);
@@ -1370,7 +1383,9 @@ export default function App() {
 
   const handleCreateNewProjectTouchStart = useCallback(() => {
     pendingTouchNewProjectRef.current = true;
-    void silentUnlock();
+    if (isIOSStandalone()) {
+      void silentUnlock();
+    }
   }, []);
 
   const handleCreateNewProjectTouchCommit = useCallback(
@@ -1392,6 +1407,11 @@ export default function App() {
       if (!started) {
         const audioReady = await initAudioContextWithRetries();
         if (!audioReady) {
+          if (isFallbackAudioActive()) {
+            alert(
+              "Audio engine fallback is active. Sequencer playback may be unavailable until the app is reopened."
+            );
+          }
           return;
         }
         await initAudioGraph();
@@ -1434,13 +1454,20 @@ export default function App() {
         return;
       }
 
-      const context = Tone.getContext();
-      if (context.state === "suspended") {
-        console.log("Document visible, attempting to resume audio context");
-        void context.resume().catch((error) => {
+      console.log("Document visible, refreshing audio context state");
+      void (async () => {
+        try {
+          await forceAudioContextCleanup();
+        } catch (error) {
+          console.warn("Failed to reset audio context on visibility change:", error);
+        }
+
+        try {
+          await Tone.getContext().resume();
+        } catch (error) {
           console.warn("Failed to resume audio context:", error);
-        });
-      }
+        }
+      })();
 
       isLaunchingNewProjectRef.current = false;
     };

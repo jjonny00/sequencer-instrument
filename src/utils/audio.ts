@@ -44,6 +44,11 @@ const wait = (ms: number) =>
     window.setTimeout(resolve, ms);
   });
 
+const AUDIO_RELOAD_FLAG = "sequencer:audioReloadPending";
+
+let fallbackAudioElement: HTMLAudioElement | null = null;
+let fallbackModeActive = false;
+
 type AsyncActionResult =
   | { status: "resolved" }
   | { status: "rejected"; error: unknown }
@@ -102,7 +107,7 @@ const applyToneContext = (newContext: Tone.Context) => {
   }
 };
 
-export const isIOSPWA = () => {
+export const isIOSStandalone = () => {
   if (typeof window === "undefined") {
     return false;
   }
@@ -163,6 +168,66 @@ export const silentUnlock = async (): Promise<void> => {
   }
 
   await pendingSilentUnlock;
+};
+
+const ensureFallbackAudioElement = () => {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  if (!fallbackAudioElement) {
+    fallbackAudioElement = document.createElement("audio");
+    fallbackAudioElement.setAttribute("aria-hidden", "true");
+    fallbackAudioElement.tabIndex = -1;
+    fallbackAudioElement.style.position = "absolute";
+    fallbackAudioElement.style.width = "0";
+    fallbackAudioElement.style.height = "0";
+    fallbackAudioElement.style.opacity = "0";
+    document.body.appendChild(fallbackAudioElement);
+  }
+
+  return fallbackAudioElement;
+};
+
+const activateFallbackAudioMode = () => {
+  if (fallbackModeActive) {
+    return;
+  }
+
+  fallbackModeActive = true;
+  console.warn("[Audio Init] Activating HTML5 <audio> fallback mode");
+  ensureFallbackAudioElement();
+};
+
+export const isFallbackAudioActive = () => fallbackModeActive;
+
+export const playFallbackAudio = async (src: string): Promise<void> => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!fallbackModeActive) {
+    console.warn(
+      "[Audio Init] playFallbackAudio called while fallback mode inactive"
+    );
+  }
+
+  const element = ensureFallbackAudioElement();
+  if (!element) {
+    console.warn("[Audio Init] Unable to create fallback <audio> element");
+    return;
+  }
+
+  if (element.src !== src) {
+    element.src = src;
+  }
+
+  try {
+    element.currentTime = 0;
+    await element.play();
+  } catch (error) {
+    console.warn("[Audio Init] Failed to play fallback audio:", error);
+  }
 };
 
 const CONTEXT_CLOSE_TIMEOUT_MS = 750;
@@ -264,9 +329,25 @@ export const initAudioContextWithRetries = async (): Promise<boolean> => {
     return false;
   }
 
-  console.log("[Audio Init] Starting initialization pipeline");
-  await silentUnlock();
-  await forceAudioContextCleanup();
+  const iosStandalone = isIOSStandalone();
+  const reloadPending = (() => {
+    try {
+      return window.sessionStorage.getItem(AUDIO_RELOAD_FLAG) === "pending";
+    } catch {
+      return false;
+    }
+  })();
+
+  console.log(
+    `[Audio Init] Starting initialization pipeline${
+      iosStandalone ? " (iOS standalone detected)" : ""
+    }`
+  );
+
+  if (iosStandalone) {
+    await silentUnlock();
+    await forceAudioContextCleanup();
+  }
 
   const retryDelays = [0, 250, 500, 1000];
   let lastError: unknown = null;
@@ -289,27 +370,53 @@ export const initAudioContextWithRetries = async (): Promise<boolean> => {
       }
 
       console.log(`[Audio Init] Tone.js context running (attempt ${attempt + 1})`);
+      try {
+        window.sessionStorage.removeItem(AUDIO_RELOAD_FLAG);
+      } catch {
+        // ignore session storage access issues
+      }
       return true;
     } catch (error) {
       lastError = error;
       if (attempt < retryDelays.length - 1) {
         console.warn("[Audio Init] Retry #", attempt + 1, error);
-        await forceAudioContextCleanup();
+        if (iosStandalone) {
+          await forceAudioContextCleanup();
+        }
       }
     }
   }
 
   console.warn("[Audio Init] Exhausted Tone.js retries", lastError);
 
-  if (isIOSPWA()) {
-    console.warn("[Audio Init] Triggering reload fallback for iOS PWA");
+  if (iosStandalone) {
+    if (reloadPending) {
+      console.warn(
+        "[Audio Init] Reload fallback failed, enabling <audio> fallback mode"
+      );
+      activateFallbackAudioMode();
+      try {
+        window.sessionStorage.removeItem(AUDIO_RELOAD_FLAG);
+      } catch {
+        // ignore session storage access issues
+      }
+      return false;
+    }
+
+    console.warn("[Audio Init] Triggering reload fallback for iOS standalone");
     const overlay = createReloadOverlay();
-    window.setTimeout(() => {
+    const removeOverlay = () => {
       if (overlay?.parentElement) {
         overlay.parentElement.removeChild(overlay);
       }
-      window.location.reload();
-    }, 750);
+    };
+    window.addEventListener("beforeunload", removeOverlay, { once: true });
+    try {
+      window.sessionStorage.setItem(AUDIO_RELOAD_FLAG, "pending");
+    } catch {
+      // ignore session storage access issues
+    }
+    window.location.reload();
     return false;
   }
 
@@ -356,7 +463,7 @@ export const ensureAudioContextRunning = async (): Promise<void> => {
       state = rawContext.state;
     }
 
-    if (isIOSPWA() && state !== "running") {
+    if (isIOSStandalone() && state !== "running") {
       const buffer = rawContext.createBuffer(1, 1, rawContext.sampleRate);
       const source = rawContext.createBufferSource();
       const gainNode = rawContext.createGain();
