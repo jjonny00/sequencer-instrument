@@ -24,7 +24,14 @@ import {
 } from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
-import { ensureAudioContextRunning, filterValueToFrequency } from "./utils/audio";
+import {
+  ensureAudioContextRunning,
+  filterValueToFrequency,
+  forceAudioContextCleanup,
+  initAudioContextWithRetries,
+  isIOSPWA,
+  silentUnlock,
+} from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
@@ -42,21 +49,6 @@ import {
 } from "./storage";
 import { isUserPresetId } from "./presets";
 import { applyKickMacrosToChunk, resolveInstrumentCharacterId } from "./instrumentCharacters";
-
-const isIOSPWA = () => {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const navigatorWithStandalone = window.navigator as Navigator & {
-    standalone?: boolean;
-  };
-
-  return (
-    navigatorWithStandalone.standalone === true ||
-    window.matchMedia("(display-mode: standalone)").matches
-  );
-};
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -91,65 +83,6 @@ const isPWARestore = () => {
     // Additional check: if we have a persisted audio context state
     (isIOSPWA() && Tone.getContext()?.state !== "closed")
   );
-};
-
-const forceAudioContextCleanup = async () => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    // Step 1: Dispose all Tone.js resources
-    const existingContext = Tone.getContext();
-    const rawContext = existingContext.rawContext as AudioContext | undefined;
-
-    // Dispose Tone context first
-    if (existingContext) {
-      try {
-        await existingContext.dispose();
-      } catch (error) {
-        console.warn("Failed to dispose Tone context:", error);
-      }
-    }
-
-    // Step 2: Force close the raw AudioContext
-    if (rawContext && rawContext.state !== "closed") {
-      try {
-        await rawContext.close();
-      } catch (error) {
-        console.warn("Failed to close raw audio context:", error);
-      }
-    }
-
-    // Step 3: Create and immediately close multiple dummy contexts
-    // This helps clear any lingering iOS audio state
-    const audioContextConstructor =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-
-    if (audioContextConstructor) {
-      for (let i = 0; i < 2; i++) {
-        try {
-          const dummyContext = new audioContextConstructor();
-          await dummyContext.close();
-        } catch (error) {
-          console.warn(`Failed to create/close dummy context ${i}:`, error);
-        }
-      }
-    }
-
-    // Step 4: Create fresh Tone context
-    const newContext = new Tone.Context();
-    Tone.setContext(newContext);
-
-    // Step 5: Additional cleanup delay for iOS
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
-    console.log("Audio context cleanup completed");
-  } catch (error) {
-    console.warn("Audio context cleanup failed:", error);
-  }
 };
 
 const createInitialPatternGroup = (): PatternGroup => ({
@@ -1363,69 +1296,19 @@ export default function App() {
 
   const initAudioGraph = useCallback(async () => {
     try {
-      // Always force cleanup for iOS PWA to prevent state corruption
-      if (isIOSPWA()) {
-        await forceAudioContextCleanup();
-
-        // Multiple startup attempts for iOS PWA
-        const maxAttempts = 3;
-        let attempts = 0;
-        let lastError: Error | null = null;
-
-        while (attempts < maxAttempts) {
-          try {
-            await Tone.start();
-            await ensureAudioContextRunning();
-
-            const context = Tone.getContext();
-            if (context.state === "running") {
-              console.log(
-                `Audio context started successfully on attempt ${attempts + 1}`
-              );
-              break;
-            }
-
-            throw new Error(`Audio context in state: ${context.state}`);
-          } catch (error) {
-            lastError = error as Error;
-            console.warn(`Audio start attempt ${attempts + 1} failed:`, error);
-
-            // Wait before retry, with exponential backoff
-            if (attempts < maxAttempts - 1) {
-              await new Promise((resolve) =>
-                setTimeout(resolve, 100 * (attempts + 1))
-              );
-
-              // Additional cleanup between attempts
-              await forceAudioContextCleanup();
-            }
-          }
-
-          attempts += 1;
-        }
-
-        if (attempts === maxAttempts) {
-          throw lastError || new Error("Failed to start audio after all attempts");
-        }
-      } else {
-        // Standard startup for non-iOS PWA
-        await Tone.start();
-        await ensureAudioContextRunning();
-      }
+      await ensureAudioContextRunning();
 
       const context = Tone.getContext();
       if (context.state !== "running") {
         throw new Error(`Audio context in state: ${context.state}`);
       }
 
-      // Set up transport
       Tone.Transport.bpm.value = bpm;
       Tone.Transport.start();
       setStarted(true);
       setIsPlaying(true);
       setCurrentSectionIndex(0);
 
-      // Handle pending transport state
       if (pendingTransportStateRef.current === false) {
         Tone.Transport.stop();
         setIsPlaying(false);
@@ -1459,38 +1342,21 @@ export default function App() {
           targetButton.textContent = "Starting...";
         }
 
-        setActiveProjectName("untitled");
-
-        // Pre-trigger user interaction for iOS PWA
-        if (isIOSPWA()) {
-          console.log("Pre-triggering audio unlock for iOS PWA");
-
-          const context = Tone.getContext();
-          const rawContext = context.rawContext as AudioContext;
-
-          // Create a silent sound to unlock audio
-          const oscillator = rawContext.createOscillator();
-          const gainNode = rawContext.createGain();
-
-          gainNode.gain.setValueAtTime(0, rawContext.currentTime);
-          oscillator.connect(gainNode);
-          gainNode.connect(rawContext.destination);
-
-          oscillator.start();
-          oscillator.stop(rawContext.currentTime + 0.001);
-
-          // Small delay to let the unlock take effect
-          await new Promise((resolve) => setTimeout(resolve, 50));
-
-          oscillator.disconnect();
-          gainNode.disconnect();
+        const audioReady = await initAudioContextWithRetries();
+        if (!audioReady) {
+          console.warn("Audio initialization requested reload; aborting new project flow");
+          return;
         }
 
+        setActiveProjectName("untitled");
         await initAudioGraph();
         console.log("New project created successfully");
       } catch (error) {
         console.error("Failed to start new project:", error);
-        alert("Failed to start audio. Please try closing and reopening the app.");
+        const errorMessage = isIOSPWA()
+          ? "Audio failed to start. This sometimes happens in standalone mode. Try closing and reopening the app, or open it in Safari first."
+          : "Failed to start audio. Please try again or refresh the page.";
+        alert(errorMessage);
       } finally {
         if (targetButton) {
           targetButton.disabled = false;
@@ -1504,10 +1370,7 @@ export default function App() {
 
   const handleCreateNewProjectTouchStart = useCallback(() => {
     pendingTouchNewProjectRef.current = true;
-    void ensureAudioContextRunning();
-    void Tone.start().catch(() => {
-      // Ignore; we'll retry when launching the project.
-    });
+    void silentUnlock();
   }, []);
 
   const handleCreateNewProjectTouchCommit = useCallback(
@@ -1527,6 +1390,10 @@ export default function App() {
   const handleLaunchProject = useCallback(
     async (name: string) => {
       if (!started) {
+        const audioReady = await initAudioContextWithRetries();
+        if (!audioReady) {
+          return;
+        }
         await initAudioGraph();
       }
       handleLoadProjectByName(name);
@@ -1561,31 +1428,28 @@ export default function App() {
     }
   }, [started]);
 
-  // Add app state visibility handling for iOS PWA
   useEffect(() => {
-    if (!isIOSPWA()) return;
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        console.log("App became visible, checking audio context state");
-
-        // If audio was started but context is suspended, try to resume
-        if (started) {
-          const context = Tone.getContext();
-          if (context.state === "suspended") {
-            console.log("Attempting to resume suspended audio context");
-            void context.resume().catch((error) => {
-              console.warn("Failed to resume audio context:", error);
-            });
-          }
-        }
+      if (document.visibilityState !== "visible") {
+        return;
       }
+
+      const context = Tone.getContext();
+      if (context.state === "suspended") {
+        console.log("Document visible, attempting to resume audio context");
+        void context.resume().catch((error) => {
+          console.warn("Failed to resume audio context:", error);
+        });
+      }
+
+      isLaunchingNewProjectRef.current = false;
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
+    return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [started]);
+    };
+  }, []);
 
   const handleOpenSequenceLibrary = () => {
     if (viewMode !== "track") {

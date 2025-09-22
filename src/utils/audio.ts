@@ -1,5 +1,7 @@
 import * as Tone from "tone";
 
+import { SILENT_MP3_BASE64_CHUNKS } from "./silentMp3";
+
 const MIN_FILTER_FREQUENCY = 80;
 const MAX_FILTER_FREQUENCY = 12000;
 
@@ -9,7 +11,16 @@ const clamp = (value: number, min: number, max: number) =>
 const minLog = Math.log(MIN_FILTER_FREQUENCY);
 const maxLog = Math.log(MAX_FILTER_FREQUENCY);
 
-const isIOSPWA = () => {
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
+const SILENT_MP3_SRC = `data:audio/mp3;base64,${SILENT_MP3_BASE64_CHUNKS.join(
+  ""
+)}`;
+
+export const isIOSPWA = () => {
   if (typeof window === "undefined") {
     return false;
   }
@@ -22,6 +33,191 @@ const isIOSPWA = () => {
     navigatorWithStandalone.standalone === true ||
     window.matchMedia("(display-mode: standalone)").matches
   );
+};
+
+let silentUnlockCompleted = false;
+let pendingSilentUnlock: Promise<void> | null = null;
+
+export const silentUnlock = async (): Promise<void> => {
+  if (typeof window === "undefined" || silentUnlockCompleted) {
+    return;
+  }
+
+  if (!pendingSilentUnlock) {
+    pendingSilentUnlock = (async () => {
+      try {
+        console.log("[Audio Init] Performing silent unlock");
+        const audioElement = new Audio(SILENT_MP3_SRC);
+        audioElement.preload = "auto";
+        audioElement.loop = false;
+        audioElement.volume = 0;
+
+        try {
+          await audioElement.play();
+        } catch (error) {
+          console.warn("[Audio Init] Silent unlock play() rejected:", error);
+          return;
+        }
+
+        await new Promise<void>((resolve) => {
+          const cleanup = () => {
+            audioElement.pause();
+            audioElement.removeAttribute("src");
+            audioElement.load();
+            resolve();
+          };
+
+          audioElement.addEventListener("ended", cleanup, { once: true });
+          audioElement.addEventListener("error", cleanup, { once: true });
+          window.setTimeout(cleanup, 200);
+        });
+
+        silentUnlockCompleted = true;
+        console.log("[Audio Init] Silent unlock completed");
+      } finally {
+        pendingSilentUnlock = null;
+      }
+    })();
+  }
+
+  await pendingSilentUnlock;
+};
+
+export const forceAudioContextCleanup = async (): Promise<void> => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const existingContext = Tone.getContext();
+    const rawContext = existingContext.rawContext as AudioContext | undefined;
+
+    try {
+      existingContext.dispose();
+    } catch (error) {
+      console.warn("[Audio Init] Failed to dispose Tone context:", error);
+    }
+
+    const closableContext = Tone.context as Tone.Context & {
+      close?: () => Promise<void>;
+    };
+    if (typeof closableContext?.close === "function") {
+      try {
+        await closableContext.close();
+      } catch (error) {
+        console.warn("[Audio Init] Tone.context.close() failed:", error);
+      }
+    }
+
+    if (rawContext && typeof rawContext.close === "function") {
+      try {
+        await rawContext.close();
+      } catch (error) {
+        console.warn("[Audio Init] Raw AudioContext close() failed:", error);
+      }
+    }
+
+    const newContext = new Tone.Context();
+    Tone.setContext(newContext);
+
+    const newRawContext = newContext.rawContext as AudioContext | undefined;
+    if (newRawContext?.state === "suspended") {
+      try {
+        await newRawContext.resume();
+      } catch (error) {
+        console.warn("[Audio Init] Failed to resume new AudioContext:", error);
+      }
+    }
+
+    console.log("[Audio Init] Forced AudioContext reset");
+  } catch (error) {
+    console.warn("[Audio Init] forceAudioContextCleanup encountered an error:", error);
+  }
+};
+
+const createReloadOverlay = () => {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.textContent = "Refreshing audio system…";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    inset: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(15, 23, 42, 0.92)",
+    color: "#e2e8f0",
+    fontSize: "1.1rem",
+    fontWeight: "600",
+    zIndex: "9999",
+    textAlign: "center",
+    padding: "24px",
+  });
+
+  document.body.appendChild(overlay);
+  return overlay;
+};
+
+export const initAudioContextWithRetries = async (): Promise<boolean> => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  console.log("[Audio Init] Starting initialization pipeline");
+  await silentUnlock();
+  await forceAudioContextCleanup();
+
+  const retryDelays = [0, 250, 500, 1000];
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+    const delay = retryDelays[attempt];
+    if (delay > 0) {
+      await wait(delay);
+      console.log(`[Audio Init] Attempting Tone.js start (retry ${attempt + 1})`);
+    } else {
+      console.log("[Audio Init] Attempting Tone.js start");
+    }
+
+    try {
+      await Tone.start();
+      await ensureAudioContextRunning();
+      const context = Tone.getContext();
+      if (context.state !== "running") {
+        throw new Error(`Audio context in state: ${context.state}`);
+      }
+
+      console.log(`[Audio Init] Tone.js context running (attempt ${attempt + 1})`);
+      return true;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retryDelays.length - 1) {
+        console.warn("[Audio Init] Retry #", attempt + 1, error);
+        await forceAudioContextCleanup();
+      }
+    }
+  }
+
+  console.warn("[Audio Init] Exhausted Tone.js retries", lastError);
+
+  if (isIOSPWA()) {
+    console.warn("[Audio Init] Triggering reload fallback for iOS PWA");
+    const overlay = createReloadOverlay();
+    window.setTimeout(() => {
+      if (overlay?.parentElement) {
+        overlay.parentElement.removeChild(overlay);
+      }
+      window.location.reload();
+    }, 750);
+    return false;
+  }
+
+  throw (lastError instanceof Error
+    ? lastError
+    : new Error("Failed to initialize audio context"));
 };
 
 export const filterValueToFrequency = (value: number) => {
