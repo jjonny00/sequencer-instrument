@@ -1621,6 +1621,7 @@ export default function App() {
         selectedInstrumentId={addTrackModalState.instrumentId}
         selectedCharacterId={addTrackModalState.characterId}
         selectedPresetId={addTrackModalState.presetId}
+        triggers={triggers}
         editingTrackName={editingTrack?.name}
         editingTrackPattern={editingTrack?.pattern ?? null}
         onSelectPack={handleSelectAddTrackPack}
