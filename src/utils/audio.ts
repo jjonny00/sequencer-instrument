@@ -37,8 +37,15 @@ export const frequencyToFilterValue = (frequency: number) => {
 };
 
 export const ensureAudioContextRunning = async (): Promise<void> => {
-  const context = Tone.getContext();
-  const rawContext = context.rawContext as AudioContext;
+  let rawContext = Tone.getContext().rawContext as AudioContext | undefined;
+
+  if (!rawContext || rawContext.state === "closed") {
+    console.log("Audio context closed, creating fresh context");
+    const newContext = new Tone.Context();
+    Tone.setContext(newContext);
+    rawContext = newContext.rawContext as AudioContext;
+  }
+
   let state: AudioContextState = rawContext.state;
 
   if (state === "running") {
