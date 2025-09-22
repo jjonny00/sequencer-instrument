@@ -7,6 +7,7 @@ type ToneWithInternals = typeof Tone & {
   Transport: typeof Tone.Transport;
   Destination: typeof Tone.Destination;
   Draw: typeof Tone.Draw;
+  Listener: typeof Tone.Listener;
 };
 
 const toneInternals = Tone as ToneWithInternals;
@@ -86,9 +87,20 @@ const runWithTimeout = async (
   }
 };
 
-const SILENT_MP3_SRC = `data:audio/mp3;base64,${SILENT_MP3_BASE64_CHUNKS.join(
-  ""
-)}`;
+const SILENT_MP3_SRC = `data:audio/mp3;base64,${SILENT_MP3_BASE64_CHUNKS.join("")}`;
+
+const applyToneContext = (newContext: Tone.Context) => {
+  Tone.setContext(newContext);
+
+  syncToneSingleton(toneInternals.context, newContext);
+  syncToneSingleton(toneInternals.Transport, Tone.getTransport());
+  syncToneSingleton(toneInternals.Destination, Tone.getDestination());
+  syncToneSingleton(toneInternals.Draw, Tone.getDraw());
+  const listener = Tone.getContext().listener as typeof Tone.Listener | undefined;
+  if (listener) {
+    syncToneSingleton(toneInternals.Listener, listener);
+  }
+};
 
 export const isIOSPWA = () => {
   if (typeof window === "undefined") {
@@ -189,16 +201,24 @@ export const forceAudioContextCleanup = async (): Promise<void> => {
       );
     }
 
-    const newContext = new Tone.Context();
-    Tone.setContext(newContext);
+    let newRawContext: AudioContext | undefined;
+    const audioContextConstructor =
+      window.AudioContext ??
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (typeof audioContextConstructor === "function") {
+      try {
+        newRawContext = new audioContextConstructor();
+      } catch (error) {
+        console.warn("[Audio Init] Failed to construct AudioContext directly:", error);
+      }
+    }
 
-    // Refresh global singletons that Tone caches on the previous context.
-    syncToneSingleton(toneInternals.context, newContext);
-    syncToneSingleton(toneInternals.Transport, Tone.getTransport());
-    syncToneSingleton(toneInternals.Destination, Tone.getDestination());
-    syncToneSingleton(toneInternals.Draw, Tone.getDraw());
+    const newContext =
+      newRawContext !== undefined ? new Tone.Context(newRawContext) : new Tone.Context();
 
-    const newRawContext = newContext.rawContext as AudioContext | undefined;
+    applyToneContext(newContext);
+
+    newRawContext = newContext.rawContext as AudioContext | undefined;
     if (newRawContext?.state === "suspended") {
       try {
         await newRawContext.resume();
@@ -315,9 +335,13 @@ export const ensureAudioContextRunning = async (): Promise<void> => {
 
   if (!rawContext || rawContext.state === "closed") {
     console.log("Audio context closed, creating fresh context");
-    const newContext = new Tone.Context();
-    Tone.setContext(newContext);
-    rawContext = newContext.rawContext as AudioContext;
+    await forceAudioContextCleanup();
+    rawContext = Tone.getContext().rawContext as AudioContext | undefined;
+  }
+
+  if (!rawContext) {
+    console.warn("[Audio Init] Unable to obtain AudioContext after cleanup");
+    return;
   }
 
   let state: AudioContextState = rawContext.state;
