@@ -739,7 +739,7 @@ export function SongView({
                   </div>
                   {trackLabels.length === 0 ? (
                     <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                      This sequence has no playable tracks.
+                      This loop is empty — add instruments in Tracks view first.
                     </span>
                   ) : (
                     <div

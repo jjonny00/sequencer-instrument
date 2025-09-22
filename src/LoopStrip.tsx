@@ -268,6 +268,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const instrumentOptions = Object.keys(pack.instruments);
   const canAddTrack = instrumentOptions.length > 0;
   const addTrackEnabled = canAddTrack;
+  const isHeroAddTrack = tracks.length === 0;
 
   useEffect(() => {
     console.log("Track view mounted");
@@ -933,18 +934,29 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           }}
           disabled={!addTrackEnabled}
           style={{
-            padding: "6px 16px",
+            padding: isHeroAddTrack ? "14px 28px" : "6px 16px",
             borderRadius: 999,
-            border: "1px solid #333",
-            background: addTrackEnabled ? "#27E0B0" : "#1f2532",
-            color: addTrackEnabled ? "#1F2532" : "#475569",
-            fontSize: 13,
+            border: isHeroAddTrack ? "none" : "1px solid #333",
+            background: addTrackEnabled
+              ? isHeroAddTrack
+                ? "linear-gradient(135deg, #27E0B0, #6AE0FF)"
+                : "#27E0B0"
+              : "#1f2532",
+            color: addTrackEnabled
+              ? isHeroAddTrack
+                ? "#0b1220"
+                : "#1F2532"
+              : "#475569",
+            fontSize: isHeroAddTrack ? 16 : 13,
             fontWeight: 700,
             letterSpacing: 0.3,
             cursor: addTrackEnabled ? "pointer" : "not-allowed",
             boxShadow: addTrackEnabled
-              ? "0 2px 6px rgba(15, 20, 32, 0.35)"
+              ? isHeroAddTrack
+                ? "0 16px 30px rgba(39,224,176,0.35)"
+                : "0 2px 6px rgba(15, 20, 32, 0.35)"
               : "none",
+            transition: "transform 0.2s ease, box-shadow 0.2s ease",
           }}
         >
           + Track
@@ -968,11 +980,12 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             style={{
               padding: 16,
               textAlign: "center",
-              fontSize: 12,
+              fontSize: 14,
               color: "#94a3b8",
+              lineHeight: 1.5,
             }}
           >
-            Tap “Add Track” to start building your loop.
+            No beats yet — add a track to get the groove started.
           </div>
         )}
         {tracks.map((t) => {

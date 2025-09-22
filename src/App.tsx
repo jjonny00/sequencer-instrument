@@ -145,6 +145,141 @@ const createDefaultAddTrackState = (
   };
 };
 
+const cloneChunkForDemo = (chunk: Chunk): Chunk => ({
+  ...chunk,
+  steps: chunk.steps.slice(),
+  velocities: chunk.velocities ? chunk.velocities.slice() : undefined,
+  pitches: chunk.pitches ? chunk.pitches.slice() : undefined,
+  notes: chunk.notes ? chunk.notes.slice() : undefined,
+  degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
+  noteEvents: chunk.noteEvents
+    ? chunk.noteEvents.map((event) => ({ ...event }))
+    : undefined,
+  harmoniaStepDegrees: chunk.harmoniaStepDegrees
+    ? chunk.harmoniaStepDegrees.slice()
+    : undefined,
+});
+
+const cloneTrackForDemo = (track: Track): Track => ({
+  ...track,
+  pattern: track.pattern ? cloneChunkForDemo(track.pattern) : null,
+  source: track.source ? { ...track.source } : undefined,
+});
+
+const createDemoProjectData = (): StoredProjectData => {
+  const fallbackPack = packs[0];
+  const demoPack =
+    packs.find((candidate) => candidate.id === "chiptune") ?? fallbackPack;
+  const demoPackIndex = Math.max(
+    0,
+    packs.findIndex((candidate) => candidate.id === demoPack.id)
+  );
+
+  const kickPattern: Chunk = {
+    id: "demo-kick-pattern",
+    name: "Kick Pulse",
+    instrument: "kick",
+    characterId: "chip_square_thump",
+    steps: [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0],
+    velocities: [
+      0.95, 0, 0, 0, 0.9, 0, 0.82, 0, 0.9, 0, 0, 0, 0.88, 0, 0.8, 0,
+    ],
+    punch: 0.62,
+    clean: 0.82,
+    tight: 0.48,
+  };
+
+  const snarePattern: Chunk = {
+    id: "demo-snare-pattern",
+    name: "Backbeat",
+    instrument: "snare",
+    characterId: "noise-crack",
+    steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  };
+
+  const bassPattern: Chunk = {
+    id: "demo-bass-pattern",
+    name: "Drive Bass",
+    instrument: "bass",
+    characterId: "square-bass",
+    steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+    velocities: [0.9, 0, 0, 0, 0.82, 0, 0, 0, 0.86, 0, 0, 0, 0.8, 0, 0, 0],
+    note: "C3",
+  };
+
+  const baseTracks: Track[] = [
+    {
+      id: 1,
+      name: "Kick",
+      instrument: "kick",
+      pattern: kickPattern,
+      muted: false,
+      source: {
+        packId: demoPack.id,
+        instrumentId: "kick",
+        characterId: "chip_square_thump",
+        presetId: "chip-kick-sync",
+      },
+    },
+    {
+      id: 2,
+      name: "Snare",
+      instrument: "snare",
+      pattern: snarePattern,
+      muted: false,
+      source: {
+        packId: demoPack.id,
+        instrumentId: "snare",
+        characterId: "noise-crack",
+        presetId: "chip-snare-backbeat",
+      },
+    },
+    {
+      id: 3,
+      name: "Bass",
+      instrument: "bass",
+      pattern: bassPattern,
+      muted: false,
+      source: {
+        packId: demoPack.id,
+        instrumentId: "bass",
+        characterId: "square-bass",
+        presetId: "chip-bass-drive",
+      },
+    },
+  ];
+
+  const trackSnapshots = baseTracks.map((track) => cloneTrackForDemo(track));
+  const patternGroupId = "pg-demo";
+  const patternGroups: PatternGroup[] = [
+    {
+      id: patternGroupId,
+      name: "demo-loop",
+      tracks: trackSnapshots.map((track) => cloneTrackForDemo(track)),
+    },
+  ];
+
+  const songRows: SongRow[] = [
+    {
+      slots: [patternGroupId],
+      muted: false,
+      velocity: 1,
+    },
+  ];
+
+  return {
+    packIndex: demoPackIndex,
+    bpm: 110,
+    subdivision: "16n",
+    isPlaying: false,
+    tracks: trackSnapshots,
+    patternGroups,
+    songRows,
+    selectedGroupId: patternGroupId,
+    currentSectionIndex: 0,
+  };
+};
+
 export default function App() {
   const [started, setStarted] = useState(false);
   const [bpm, setBpm] = useState(120);
@@ -1326,6 +1461,27 @@ export default function App() {
     [handleLoadProjectByName, initAudioGraph, started]
   );
 
+  const handleLoadDemoSong = useCallback(async () => {
+    if (!started) {
+      try {
+        await initAudioContext();
+      } catch {
+        return;
+      }
+      initAudioGraph();
+    }
+    const demoProject = createDemoProjectData();
+    applyLoadedProject(demoProject);
+    setActiveProjectName("Demo Jam");
+    setViewMode("track");
+  }, [
+    applyLoadedProject,
+    initAudioGraph,
+    setActiveProjectName,
+    setViewMode,
+    started,
+  ]);
+
   const handlePlayStop = () => {
     if (isPlaying) {
       Tone.Transport.stop();
@@ -1751,8 +1907,69 @@ export default function App() {
                 }}
               >
                 {projectList.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                    No songs saved yet
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 16,
+                      padding: 20,
+                      borderRadius: 16,
+                      border: "1px dashed #1f2937",
+                      background: "#0b1624",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div
+                      aria-hidden="true"
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "rgba(39,224,176,0.12)",
+                        color: "#27E0B0",
+                        fontSize: 36,
+                      }}
+                    >
+                      🎶
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                        color: "#cbd5f5",
+                        fontSize: 14,
+                      }}
+                    >
+                      <strong style={{ fontSize: 16 }}>
+                        Start your first jam!
+                      </strong>
+                      <span>
+                        Save your creations to see them listed here, or dive in with
+                        our ready-made groove.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleLoadDemoSong}
+                      style={{
+                        padding: "12px 20px",
+                        borderRadius: 999,
+                        border: "none",
+                        background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
+                        color: "#0b1220",
+                        fontWeight: 600,
+                        fontSize: 14,
+                        cursor: "pointer",
+                        boxShadow: "0 12px 24px rgba(39,224,176,0.25)",
+                      }}
+                    >
+                      Try Demo Song
+                    </button>
                   </div>
                 ) : (
                   projectList.map((name) => (
