@@ -116,7 +116,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       if (!pack || !selectedInstrumentId) return;
       if (!isUserPresetId(presetId)) return;
       const actualId = stripUserPresetPrefix(presetId);
-      const confirmed = window.confirm("Delete this saved preset pattern?");
+      const confirmed = window.confirm("Delete this saved loop?");
       if (!confirmed) return;
       const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
       if (removed) {
@@ -131,13 +131,13 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const handleSavePresetPattern = useCallback(() => {
     if (!pack || !selectedInstrumentId || !editingTrackPattern) {
-      window.alert("No pattern data available to save as a preset pattern.");
+      window.alert("No pattern data available to save as a loop.");
       return;
     }
     const suggestedName =
       editingTrackName?.trim() || formatInstrumentLabel(selectedInstrumentId);
     const defaultName = `${suggestedName} Pattern`;
-    const name = window.prompt("Name your preset pattern", defaultName);
+    const name = window.prompt("Name your saved loop", defaultName);
     if (!name) return;
     const pattern: Chunk = {
       ...editingTrackPattern,
@@ -152,12 +152,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       pattern,
     });
     if (!record) {
-      window.alert("Unable to save this preset pattern.");
+      window.alert("Unable to save this loop.");
       return;
     }
     onSelectPreset(`${USER_PRESET_PREFIX}${record.id}`);
     refreshUserPresets();
-    window.alert("Preset pattern saved.");
+    window.alert("Loop saved.");
   }, [
     pack,
     selectedInstrumentId,
@@ -205,8 +205,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const isEditMode = mode === "edit";
   const title = isEditMode ? "Edit Track" : "Add Track";
   const description = isEditMode
-    ? "Adjust the sound pack, instrument, character, and preset pattern for this track."
-    : "Choose a sound pack, instrument, character, and optional preset pattern to start a new groove.";
+    ? "Adjust the sound pack, instrument, style, and saved loop for this track."
+    : "Choose a sound pack, instrument, style, and optional saved loop to start a new groove.";
   const confirmLabel = isEditMode ? "Update Track" : "Add Track";
   const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
 
@@ -441,7 +441,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </label>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Character</span>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
           <select
             value={selectedCharacterId}
             onChange={(event) => onSelectCharacter(event.target.value)}
@@ -456,7 +456,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           >
             {characterOptions.length === 0 ? (
               <option value="" disabled>
-                No characters
+                No styles
               </option>
             ) : (
               characterOptions.map((character) => (
@@ -488,15 +488,15 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 600 }}>Preset Patterns</span>
+                <span style={{ fontWeight: 600 }}>Saved Loops</span>
                 <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                  Save the current pattern or load one of your favorites.
+                  Save the current loop or load one of your favorites.
                 </span>
               </div>
               {showSavePresetAction ? (
                 <IconButton
                   icon="save"
-                  label="Save current pattern as preset"
+                  label="Save current loop"
                   tone="accent"
                   iconSize={20}
                   style={compactIconButtonStyle}
@@ -508,7 +508,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
-                  Your Presets
+                  Your Saved Loops
                 </span>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div
@@ -546,7 +546,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                         padding: "12px 0",
                       }}
                     >
-                      No presets saved yet
+                      No saved loops yet
                     </div>
                   )}
                 </div>
@@ -554,7 +554,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               {packPresets.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
-                    Pack Presets
+                    Pack Loops
                   </span>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
@@ -573,7 +573,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             color: "#94a3b8",
           }}
         >
-          <span>Current preset: {currentPresetLabel}</span>
+          <span>Current saved loop: {currentPresetLabel}</span>
         </div>
       </div>
     </Modal>

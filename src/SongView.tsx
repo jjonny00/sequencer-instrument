@@ -188,7 +188,7 @@ export function SongView({
           }}
         >
           <span>
-            Sequence: {activeGroup?.name ?? "None"}
+            Loop: {activeGroup?.name ?? "None"}
           </span>
           <span aria-hidden="true" style={{ fontSize: 10 }}>
             ▴
@@ -660,7 +660,7 @@ export function SongView({
               color: "#e6f2ff",
             }}
           >
-            Sequence Library
+            Loop Library
           </h3>
           <span
             style={{
@@ -668,7 +668,7 @@ export function SongView({
               color: "#94a3b8",
             }}
           >
-            Save and edit sequences in Track view, then place them onto the song
+            Save and edit loops in Track view, then place them onto the song
             timeline.
           </span>
         </div>
@@ -682,7 +682,7 @@ export function SongView({
               fontSize: 13,
             }}
           >
-            No sequences yet. Create sequences in Track view to start arranging
+            No loops yet. Create loops in Track view to start arranging
             the song.
           </div>
         ) : (
