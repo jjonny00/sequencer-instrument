@@ -920,7 +920,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
           }}
         >
-          <span>Sequence: {selectedGroup?.name ?? "None"}</span>
+          <span>Loop: {selectedGroup?.name ?? "None"}</span>
           <span aria-hidden="true" style={{ fontSize: 10 }}>
             ▴
           </span>
@@ -1211,7 +1211,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   color: "#e6f2ff",
                 }}
               >
-                Sequence Library
+                Loop Library
               </h3>
               <button
                 type="button"
@@ -1240,8 +1240,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               <button
                 type="button"
                 onClick={openCreateGroup}
-                aria-label="Create new sequence"
-                title="Create new sequence"
+                aria-label="Create new loop"
+                title="Create new loop"
                 style={{
                   width: 36,
                   height: 36,
@@ -1262,7 +1262,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 </span>
               </button>
               <select
-                aria-label="Current sequence"
+                aria-label="Current loop"
                 value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -1376,7 +1376,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 type="button"
                 onClick={handleDeleteGroup}
                 disabled={!selectedGroup || patternGroups.length <= 1}
-                aria-label="Delete sequence"
+                aria-label="Delete loop"
                 style={{
                   flex: "1 1 110px",
                   minWidth: 0,
@@ -1427,8 +1427,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 />
                 <span style={{ fontSize: 12, color: "#94a3b8" }}>
                   {groupEditor.mode === "create"
-                    ? "New sequences start blank. Name it to keep things organized."
-                    : "Rename this sequence."}
+                    ? "New loops start blank. Name it to keep things organized."
+                    : "Rename this loop."}
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
@@ -1448,7 +1448,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                     }}
                   >
                     {groupEditor.mode === "create"
-                      ? "Create New Sequence"
+                      ? "Create New Loop"
                       : "Save Changes"}
                   </button>
                   <button
@@ -1470,14 +1470,14 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             ) : selectedGroup ? (
               <span style={{ fontSize: 12, color: "#94a3b8" }}>
                 {selectedGroup.tracks.length === 0
-                  ? "No saved tracks yet. Tap Save Sequence to capture the current loop."
+                  ? "No saved tracks yet. Tap Save Loop to capture the current loop."
                   : `${selectedGroup.tracks.length} saved track${
                       selectedGroup.tracks.length === 1 ? "" : "s"
                     } including mute states.`}
               </span>
             ) : (
               <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                Create a sequence to capture the current track mix.
+                Create a loop to capture the current track mix.
               </span>
             )}
           </div>

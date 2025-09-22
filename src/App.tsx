@@ -1113,7 +1113,7 @@ export default function App() {
       });
     } catch (error) {
       console.error(error);
-      window.alert("Failed to export project JSON");
+      window.alert("Failed to export song JSON");
     }
   }, [buildProjectSnapshot, activeProjectName]);
 
@@ -1190,7 +1190,7 @@ export default function App() {
   const handleConfirmSaveProject = () => {
     const trimmed = projectNameInput.trim();
     if (!trimmed) {
-      setProjectModalError("Enter a project name");
+      setProjectModalError("Enter a song name");
       return;
     }
     try {
@@ -1202,7 +1202,7 @@ export default function App() {
       setProjectModalMode(null);
     } catch (error) {
       console.error(error);
-      setProjectModalError("Failed to save project");
+      setProjectModalError("Failed to save song");
     }
   };
 
@@ -1258,7 +1258,7 @@ export default function App() {
     (name: string) => {
       const project = loadStoredProject(name);
       if (!project) {
-        setProjectModalError("Project not found");
+        setProjectModalError("Song not found");
         return;
       }
       applyLoadedProject(project);
@@ -1271,7 +1271,7 @@ export default function App() {
 
   const handleDeleteProject = useCallback(
     (name: string) => {
-      const confirmed = window.confirm(`Delete project "${name}"? This can't be undone.`);
+      const confirmed = window.confirm(`Delete song "${name}"? This can't be undone.`);
       if (!confirmed) return;
       deleteProject(name);
       refreshProjectList();
@@ -1301,7 +1301,7 @@ export default function App() {
   }, [bpm]);
 
   const handleNewProjectClick = useCallback(() => {
-    console.log("New project button clicked");
+    console.log("New song button clicked");
     setActiveProjectName("untitled");
     setStarted(true);
     setViewMode("track");
@@ -1484,18 +1484,18 @@ export default function App() {
         <Modal
           isOpen={projectModalMode !== null}
           onClose={closeProjectModal}
-          title={projectModalMode === "save" ? "Save Project" : "Load Project"}
+          title={projectModalMode === "save" ? "Save Song" : "Load Song"}
           subtitle={
             projectModalMode === "save"
               ? "Name your jam to store it locally on this device."
-              : "Open a saved project from local storage."
+              : "Open a saved song from local storage."
           }
           maxWidth={460}
           footer={
             projectModalMode === "save" ? (
               <IconButton
                 icon="save"
-                label="Save project"
+                label="Save song"
                 tone="accent"
                 onClick={handleConfirmSaveProject}
                 disabled={!projectNameInput.trim()}
@@ -1506,7 +1506,7 @@ export default function App() {
           {projectModalMode === "save" ? (
             <>
               <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, color: "#cbd5f5" }}>Project name</span>
+                <span style={{ fontSize: 13, color: "#cbd5f5" }}>Song name</span>
                 <input
                   id="project-name"
                   value={projectNameInput}
@@ -1532,7 +1532,7 @@ export default function App() {
               >
                 {projectList.length === 0 ? (
                   <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                    No projects saved yet
+                    No songs saved yet
                   </div>
                 ) : (
                   projectList.map((name) => {
@@ -1563,13 +1563,13 @@ export default function App() {
                             fontSize: 14,
                             cursor: "pointer",
                           }}
-                          title={`Use project name ${name}`}
+                          title={`Use song name ${name}`}
                         >
                           {name}
                         </button>
                         <IconButton
                           icon="delete"
-                          label={`Delete project ${name}`}
+                          label={`Delete song ${name}`}
                           tone="danger"
                           onClick={() => handleDeleteProject(name)}
                         />
@@ -1591,7 +1591,7 @@ export default function App() {
             >
               {projectList.length === 0 ? (
                 <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                  No projects saved yet
+                  No songs saved yet
                 </div>
               ) : (
                 projectList.map((name) => (
@@ -1617,13 +1617,13 @@ export default function App() {
                     <div style={{ display: "flex", gap: 8 }}>
                       <IconButton
                         icon="folder_open"
-                        label={`Load project ${name}`}
+                        label={`Load song ${name}`}
                         tone="accent"
                         onClick={() => handleLoadProjectByName(name)}
                       />
                       <IconButton
                         icon="delete"
-                        label={`Delete project ${name}`}
+                        label={`Delete song ${name}`}
                         tone="danger"
                         onClick={() => handleDeleteProject(name)}
                       />
@@ -1643,7 +1643,7 @@ export default function App() {
         <Modal
           isOpen={isExportModalOpen || isAudioExporting}
           onClose={handleCloseExportModal}
-          title="Export Project"
+          title="Export Song"
           subtitle="Download your jam as JSON or render audio offline."
           maxWidth={420}
         >
@@ -1657,7 +1657,7 @@ export default function App() {
           >
             <IconButton
               icon="file_download"
-              label="Export project JSON"
+              label="Export song JSON"
               tone="accent"
               onClick={handleExportJson}
               disabled={isAudioExporting}
@@ -1729,7 +1729,7 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              New Project
+              New Song
             </button>
             <div
               style={{
@@ -1739,7 +1739,7 @@ export default function App() {
               }}
             >
               <div style={{ fontSize: 16, fontWeight: 600, color: "#e6f2ff" }}>
-                Saved Projects
+                Saved Songs
               </div>
               <div
                 style={{
@@ -1752,7 +1752,7 @@ export default function App() {
               >
                 {projectList.length === 0 ? (
                   <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                    No projects saved yet
+                    No songs saved yet
                   </div>
                 ) : (
                   projectList.map((name) => (
@@ -1773,7 +1773,7 @@ export default function App() {
                     >
                       <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
                       <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                        Tap to load project
+                        Tap to load song
                       </span>
                     </button>
                   ))
@@ -1837,12 +1837,12 @@ export default function App() {
               >
                 <IconButton
                   icon="save"
-                  label="Save project"
+                  label="Save song"
                   onClick={openSaveProjectModal}
                 />
                 <IconButton
                   icon="folder_open"
-                  label="Load project"
+                  label="Load song"
                   onClick={openLoadProjectModal}
                 />
                 <IconButton
