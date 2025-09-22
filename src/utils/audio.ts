@@ -43,6 +43,49 @@ const wait = (ms: number) =>
     window.setTimeout(resolve, ms);
   });
 
+type AsyncActionResult =
+  | { status: "resolved" }
+  | { status: "rejected"; error: unknown }
+  | { status: "timeout" };
+
+const runWithTimeout = async (
+  action: () => void | Promise<unknown>,
+  label: string,
+  timeoutMs: number
+) => {
+  let actionPromise: Promise<void>;
+  try {
+    actionPromise = (async () => {
+      await action();
+    })();
+  } catch (error) {
+    console.warn(`[Audio Init] ${label} threw unexpectedly:`, error);
+    return;
+  }
+
+  let actionResult: AsyncActionResult = { status: "timeout" };
+
+  try {
+    actionResult = await Promise.race([
+      actionPromise
+        .then(() => ({ status: "resolved" } as const))
+        .catch((error) => ({ status: "rejected", error } as const)),
+      wait(timeoutMs).then(() => ({ status: "timeout" } as const)),
+    ]);
+  } catch (error) {
+    console.warn(`[Audio Init] ${label} threw unexpectedly:`, error);
+    return;
+  }
+
+  if (actionResult.status === "timeout") {
+    console.warn(
+      `[Audio Init] ${label} timed out after ${timeoutMs}ms — continuing without waiting`
+    );
+  } else if (actionResult.status === "rejected") {
+    console.warn(`[Audio Init] ${label} failed:`, actionResult.error);
+  }
+};
+
 const SILENT_MP3_SRC = `data:audio/mp3;base64,${SILENT_MP3_BASE64_CHUNKS.join(
   ""
 )}`;
@@ -110,6 +153,8 @@ export const silentUnlock = async (): Promise<void> => {
   await pendingSilentUnlock;
 };
 
+const CONTEXT_CLOSE_TIMEOUT_MS = 750;
+
 export const forceAudioContextCleanup = async (): Promise<void> => {
   if (typeof window === "undefined") {
     return;
@@ -129,19 +174,19 @@ export const forceAudioContextCleanup = async (): Promise<void> => {
       close?: () => Promise<void>;
     };
     if (typeof closableContext?.close === "function") {
-      try {
-        await closableContext.close();
-      } catch (error) {
-        console.warn("[Audio Init] Tone.context.close() failed:", error);
-      }
+      await runWithTimeout(
+        () => closableContext.close!(),
+        "Tone.context.close()",
+        CONTEXT_CLOSE_TIMEOUT_MS
+      );
     }
 
     if (rawContext && typeof rawContext.close === "function") {
-      try {
-        await rawContext.close();
-      } catch (error) {
-        console.warn("[Audio Init] Raw AudioContext close() failed:", error);
-      }
+      await runWithTimeout(
+        () => rawContext.close(),
+        "raw AudioContext.close()",
+        CONTEXT_CLOSE_TIMEOUT_MS
+      );
     }
 
     const newContext = new Tone.Context();
