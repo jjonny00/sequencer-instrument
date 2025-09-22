@@ -81,6 +81,120 @@ const createInitialPatternGroup = (): PatternGroup => ({
   tracks: [],
 });
 
+const cloneChunkForDemo = (chunk: Chunk): Chunk => ({
+  ...chunk,
+  steps: chunk.steps.slice(),
+  velocities: chunk.velocities ? chunk.velocities.slice() : undefined,
+  pitches: chunk.pitches ? chunk.pitches.slice() : undefined,
+  notes: chunk.notes ? chunk.notes.slice() : undefined,
+  degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
+  noteEvents: chunk.noteEvents
+    ? chunk.noteEvents.map((event) => ({ ...event }))
+    : undefined,
+  harmoniaStepDegrees: chunk.harmoniaStepDegrees
+    ? chunk.harmoniaStepDegrees.slice()
+    : undefined,
+});
+
+const createDemoSongProject = (): StoredProjectData => {
+  const preferredPackId = "chiptune";
+  const resolvedPackIndex = Math.max(
+    0,
+    packs.findIndex((candidate) => candidate.id === preferredPackId)
+  );
+  const pack = packs[resolvedPackIndex] ?? packs[0];
+
+  if (!pack) {
+    return {
+      packIndex: 0,
+      bpm: 110,
+      subdivision: "16n",
+      isPlaying: false,
+      tracks: [],
+      patternGroups: [createInitialPatternGroup()],
+      songRows: [createSongRow()],
+      selectedGroupId: null,
+      currentSectionIndex: 0,
+    };
+  }
+
+  const findChunk = (instrument: string, preferredId?: string): Chunk | null => {
+    if (preferredId) {
+      const preferred = pack.chunks.find((chunk) => chunk.id === preferredId);
+      if (preferred) return preferred;
+    }
+    return pack.chunks.find((chunk) => chunk.instrument === instrument) ?? null;
+  };
+
+  const demoChunks: { chunk: Chunk | null; fallbackName: string }[] = [
+    { chunk: findChunk("kick", "chip-kick-sync"), fallbackName: "Kick" },
+    { chunk: findChunk("snare", "chip-snare-ghost"), fallbackName: "Snare" },
+    { chunk: findChunk("hihat", "chip-hat-8ths"), fallbackName: "Hi-hat" },
+  ];
+
+    const tracks: Track[] = demoChunks.flatMap(
+      ({ chunk, fallbackName }, index) => {
+        if (!chunk) {
+          return [];
+        }
+        const pattern = {
+          ...cloneChunkForDemo(chunk),
+          id: `${chunk.id}-demo-${index + 1}`,
+          name: chunk.name,
+        };
+        return [
+          {
+            id: index + 1,
+            name: chunk.name ?? fallbackName,
+            instrument: chunk.instrument as keyof TriggerMap,
+            pattern,
+            muted: false,
+            source: {
+              packId: pack.id,
+              instrumentId: chunk.instrument,
+              characterId: chunk.characterId ?? "",
+              presetId: chunk.id,
+            },
+          } satisfies Track,
+        ];
+      }
+    );
+
+  const groupId = createPatternGroupId();
+  const groupTracks = tracks.map((track) => ({
+    ...track,
+    pattern: track.pattern
+      ? {
+          ...cloneChunkForDemo(track.pattern),
+          id: `${track.pattern.id}-snapshot`,
+        }
+      : null,
+  }));
+
+  const patternGroups: PatternGroup[] = [
+    {
+      id: groupId,
+      name: "demo-loop",
+      tracks: groupTracks,
+    },
+  ];
+
+  const songRow = createSongRow(1);
+  songRow.slots[0] = groupId;
+
+  return {
+    packIndex: resolvedPackIndex,
+    bpm: 110,
+    subdivision: "16n",
+    isPlaying: false,
+    tracks,
+    patternGroups,
+    songRows: [songRow],
+    selectedGroupId: groupId,
+    currentSectionIndex: 0,
+  };
+};
+
 type Subdivision = "16n" | "8n" | "4n";
 
 const CONTROL_BUTTON_SIZE = 44;
@@ -1113,7 +1227,7 @@ export default function App() {
       });
     } catch (error) {
       console.error(error);
-      window.alert("Failed to export project JSON");
+      window.alert("Failed to export song JSON");
     }
   }, [buildProjectSnapshot, activeProjectName]);
 
@@ -1190,7 +1304,7 @@ export default function App() {
   const handleConfirmSaveProject = () => {
     const trimmed = projectNameInput.trim();
     if (!trimmed) {
-      setProjectModalError("Enter a project name");
+      setProjectModalError("Enter a song name");
       return;
     }
     try {
@@ -1202,7 +1316,7 @@ export default function App() {
       setProjectModalMode(null);
     } catch (error) {
       console.error(error);
-      setProjectModalError("Failed to save project");
+      setProjectModalError("Failed to save song");
     }
   };
 
@@ -1258,7 +1372,7 @@ export default function App() {
     (name: string) => {
       const project = loadStoredProject(name);
       if (!project) {
-        setProjectModalError("Project not found");
+        setProjectModalError("Song not found");
         return;
       }
       applyLoadedProject(project);
@@ -1271,7 +1385,7 @@ export default function App() {
 
   const handleDeleteProject = useCallback(
     (name: string) => {
-      const confirmed = window.confirm(`Delete project "${name}"? This can't be undone.`);
+      const confirmed = window.confirm(`Delete song "${name}"? This can't be undone.`);
       if (!confirmed) return;
       deleteProject(name);
       refreshProjectList();
@@ -1301,7 +1415,7 @@ export default function App() {
   }, [bpm]);
 
   const handleNewProjectClick = useCallback(() => {
-    console.log("New project button clicked");
+    console.log("New song button clicked");
     setActiveProjectName("untitled");
     setStarted(true);
     setViewMode("track");
@@ -1325,6 +1439,33 @@ export default function App() {
     },
     [handleLoadProjectByName, initAudioGraph, started]
   );
+
+  const handleLaunchDemoSong = useCallback(async () => {
+    const demoProject = createDemoSongProject();
+    if (!started) {
+      try {
+        await initAudioContext();
+      } catch {
+        return;
+      }
+      initAudioGraph();
+    }
+    applyLoadedProject(demoProject);
+    setActiveProjectName("Demo Jam");
+    setProjectModalMode(null);
+    setProjectModalError(null);
+    setViewMode("track");
+    setPendingLoopStripAction(null);
+  }, [
+    applyLoadedProject,
+    initAudioGraph,
+    setActiveProjectName,
+    setProjectModalMode,
+    setProjectModalError,
+    setPendingLoopStripAction,
+    setViewMode,
+    started,
+  ]);
 
   const handlePlayStop = () => {
     if (isPlaying) {
@@ -1484,18 +1625,18 @@ export default function App() {
         <Modal
           isOpen={projectModalMode !== null}
           onClose={closeProjectModal}
-          title={projectModalMode === "save" ? "Save Project" : "Load Project"}
+          title={projectModalMode === "save" ? "Save Song" : "Load Song"}
           subtitle={
             projectModalMode === "save"
               ? "Name your jam to store it locally on this device."
-              : "Open a saved project from local storage."
+              : "Open a saved song from local storage."
           }
           maxWidth={460}
           footer={
             projectModalMode === "save" ? (
               <IconButton
                 icon="save"
-                label="Save project"
+                label="Save song"
                 tone="accent"
                 onClick={handleConfirmSaveProject}
                 disabled={!projectNameInput.trim()}
@@ -1506,7 +1647,7 @@ export default function App() {
           {projectModalMode === "save" ? (
             <>
               <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, color: "#cbd5f5" }}>Project name</span>
+                <span style={{ fontSize: 13, color: "#cbd5f5" }}>Song name</span>
                 <input
                   id="project-name"
                   value={projectNameInput}
@@ -1532,7 +1673,7 @@ export default function App() {
               >
                 {projectList.length === 0 ? (
                   <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                    No projects saved yet
+                    No songs saved yet
                   </div>
                 ) : (
                   projectList.map((name) => {
@@ -1563,13 +1704,13 @@ export default function App() {
                             fontSize: 14,
                             cursor: "pointer",
                           }}
-                          title={`Use project name ${name}`}
+                          title={`Use song name ${name}`}
                         >
                           {name}
                         </button>
                         <IconButton
                           icon="delete"
-                          label={`Delete project ${name}`}
+                          label={`Delete song ${name}`}
                           tone="danger"
                           onClick={() => handleDeleteProject(name)}
                         />
@@ -1591,7 +1732,7 @@ export default function App() {
             >
               {projectList.length === 0 ? (
                 <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                  No projects saved yet
+                  No songs saved yet
                 </div>
               ) : (
                 projectList.map((name) => (
@@ -1617,13 +1758,13 @@ export default function App() {
                     <div style={{ display: "flex", gap: 8 }}>
                       <IconButton
                         icon="folder_open"
-                        label={`Load project ${name}`}
+                        label={`Load song ${name}`}
                         tone="accent"
                         onClick={() => handleLoadProjectByName(name)}
                       />
                       <IconButton
                         icon="delete"
-                        label={`Delete project ${name}`}
+                        label={`Delete song ${name}`}
                         tone="danger"
                         onClick={() => handleDeleteProject(name)}
                       />
@@ -1643,7 +1784,7 @@ export default function App() {
         <Modal
           isOpen={isExportModalOpen || isAudioExporting}
           onClose={handleCloseExportModal}
-          title="Export Project"
+          title="Export Song"
           subtitle="Download your jam as JSON or render audio offline."
           maxWidth={420}
         >
@@ -1657,7 +1798,7 @@ export default function App() {
           >
             <IconButton
               icon="file_download"
-              label="Export project JSON"
+              label="Export song JSON"
               tone="accent"
               onClick={handleExportJson}
               disabled={isAudioExporting}
@@ -1729,7 +1870,7 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              New Project
+              New Song
             </button>
             <div
               style={{
@@ -1739,46 +1880,113 @@ export default function App() {
               }}
             >
               <div style={{ fontSize: 16, fontWeight: 600, color: "#e6f2ff" }}>
-                Saved Projects
+                Saved Songs
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  maxHeight: "60vh",
-                  overflowY: "auto",
-                }}
-              >
-                {projectList.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                    No projects saved yet
+              {projectList.length === 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 16,
+                    padding: 20,
+                    borderRadius: 16,
+                    border: "1px dashed #27364b",
+                    background: "linear-gradient(135deg, #0b1424, #101a2d)",
+                    textAlign: "center",
+                    color: "#cbd5f5",
+                  }}
+                >
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>
+                    🎶 Start your first jam!
                   </div>
-                ) : (
-                  projectList.map((name) => (
-                    <button
-                      key={name}
-                      onClick={() => handleLaunchProject(name)}
-                      style={{
-                        padding: "12px 16px",
-                        borderRadius: 14,
-                        border: "1px solid #1f2937",
-                        background: "#0f172a",
-                        color: "#e6f2ff",
-                        textAlign: "left",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                      }}
-                    >
-                      <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                        Tap to load project
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+                    Save songs to see them here. Want to hear how it works?
+                    Load our demo loop and tweak away.
+                  </div>
+                  <div
+                    style={{
+                      width: "100%",
+                      borderRadius: 12,
+                      border: "1px dashed #334155",
+                      padding: 24,
+                      background: "rgba(15, 23, 42, 0.6)",
+                      color: "#1e293b",
+                      fontSize: 32,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    🎛️
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLaunchDemoSong}
+                    style={{
+                      alignSelf: "center",
+                      padding: "10px 20px",
+                      borderRadius: 999,
+                      border: "none",
+                      background: "#27E0B0",
+                      color: "#1F2532",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Try Demo Song
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleLaunchDemoSong}
+                    style={{
+                      padding: "10px 16px",
+                      borderRadius: 999,
+                      border: "1px solid #1f2937",
+                      background: "#132034",
+                      color: "#e6f2ff",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Try Demo Song
+                  </button>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                      maxHeight: "60vh",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {projectList.map((name) => (
+                      <button
+                        key={name}
+                        onClick={() => handleLaunchProject(name)}
+                        style={{
+                          padding: "12px 16px",
+                          borderRadius: 14,
+                          border: "1px solid #1f2937",
+                          background: "#0f172a",
+                          color: "#e6f2ff",
+                          textAlign: "left",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                        }}
+                      >
+                        <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                          Tap to load song
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1837,12 +2045,12 @@ export default function App() {
               >
                 <IconButton
                   icon="save"
-                  label="Save project"
+                  label="Save song"
                   onClick={openSaveProjectModal}
                 />
                 <IconButton
                   icon="folder_open"
-                  label="Load project"
+                  label="Load song"
                   onClick={openLoadProjectModal}
                 />
                 <IconButton

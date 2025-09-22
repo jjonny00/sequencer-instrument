@@ -268,6 +268,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const instrumentOptions = Object.keys(pack.instruments);
   const canAddTrack = instrumentOptions.length > 0;
   const addTrackEnabled = canAddTrack;
+  const showHeroAddTrack = addTrackEnabled && tracks.length === 0;
 
   useEffect(() => {
     console.log("Track view mounted");
@@ -920,7 +921,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
           }}
         >
-          <span>Sequence: {selectedGroup?.name ?? "None"}</span>
+          <span>Loop: {selectedGroup?.name ?? "None"}</span>
           <span aria-hidden="true" style={{ fontSize: 10 }}>
             ▴
           </span>
@@ -935,16 +936,29 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           style={{
             padding: "6px 16px",
             borderRadius: 999,
-            border: "1px solid #333",
-            background: addTrackEnabled ? "#27E0B0" : "#1f2532",
-            color: addTrackEnabled ? "#1F2532" : "#475569",
+            border: showHeroAddTrack ? "1px solid rgba(39, 224, 176, 0.8)" : "1px solid #333",
+            background: showHeroAddTrack
+              ? "linear-gradient(135deg, #27E0B0, #63F5CE)"
+              : addTrackEnabled
+              ? "#27E0B0"
+              : "#1f2532",
+            color: showHeroAddTrack
+              ? "#082127"
+              : addTrackEnabled
+              ? "#1F2532"
+              : "#475569",
             fontSize: 13,
             fontWeight: 700,
             letterSpacing: 0.3,
             cursor: addTrackEnabled ? "pointer" : "not-allowed",
-            boxShadow: addTrackEnabled
+            boxShadow: showHeroAddTrack
+              ? "0 12px 32px rgba(39, 224, 176, 0.35)"
+              : addTrackEnabled
               ? "0 2px 6px rgba(15, 20, 32, 0.35)"
               : "none",
+            transform: showHeroAddTrack ? "scale(1.03)" : "none",
+            transition:
+              "transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border 0.2s ease",
           }}
         >
           + Track
@@ -972,7 +986,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               color: "#94a3b8",
             }}
           >
-            Tap “Add Track” to start building your loop.
+            No beats yet — add a track to get the groove started.
           </div>
         )}
         {tracks.map((t) => {
@@ -1211,7 +1225,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   color: "#e6f2ff",
                 }}
               >
-                Sequence Library
+                Loop Library
               </h3>
               <button
                 type="button"
@@ -1240,8 +1254,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               <button
                 type="button"
                 onClick={openCreateGroup}
-                aria-label="Create new sequence"
-                title="Create new sequence"
+                aria-label="Create new loop"
+                title="Create new loop"
                 style={{
                   width: 36,
                   height: 36,
@@ -1262,7 +1276,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 </span>
               </button>
               <select
-                aria-label="Current sequence"
+                aria-label="Current loop"
                 value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -1376,7 +1390,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 type="button"
                 onClick={handleDeleteGroup}
                 disabled={!selectedGroup || patternGroups.length <= 1}
-                aria-label="Delete sequence"
+                aria-label="Delete loop"
                 style={{
                   flex: "1 1 110px",
                   minWidth: 0,
@@ -1427,8 +1441,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 />
                 <span style={{ fontSize: 12, color: "#94a3b8" }}>
                   {groupEditor.mode === "create"
-                    ? "New sequences start blank. Name it to keep things organized."
-                    : "Rename this sequence."}
+                    ? "New loops start blank. Name it to keep things organized."
+                    : "Rename this loop."}
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
@@ -1448,7 +1462,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                     }}
                   >
                     {groupEditor.mode === "create"
-                      ? "Create New Sequence"
+                      ? "Create New Loop"
                       : "Save Changes"}
                   </button>
                   <button
@@ -1470,14 +1484,14 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             ) : selectedGroup ? (
               <span style={{ fontSize: 12, color: "#94a3b8" }}>
                 {selectedGroup.tracks.length === 0
-                  ? "No saved tracks yet. Tap Save Sequence to capture the current loop."
+                  ? "No saved tracks yet. Tap Save Loop to capture the current loop."
                   : `${selectedGroup.tracks.length} saved track${
                       selectedGroup.tracks.length === 1 ? "" : "s"
                     } including mute states.`}
               </span>
             ) : (
               <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                Create a sequence to capture the current track mix.
+                Create a loop to capture the current track mix.
               </span>
             )}
           </div>

@@ -807,7 +807,7 @@ export function Keyboard({
               fontSize: 12,
             }}
           >
-            <span style={{ fontWeight: 600 }}>Preset Pattern</span>
+            <span style={{ fontWeight: 600 }}>Saved Loop</span>
             <select
               value={preset}
               onChange={(event) => {
