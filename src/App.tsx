@@ -43,6 +43,8 @@ import {
 import { isUserPresetId } from "./presets";
 import { applyKickMacrosToChunk, resolveInstrumentCharacterId } from "./instrumentCharacters";
 
+const IOS_PWA_RELOAD_FLAG = "iosPwaReloadAttempted";
+
 const isIOSPWA = () => {
   if (typeof window === "undefined") {
     return false;
@@ -313,6 +315,15 @@ export default function App() {
       return false;
     }
 
+    const hasReloadBeenAttempted = () => {
+      try {
+        return window.sessionStorage?.getItem(IOS_PWA_RELOAD_FLAG) === "true";
+      } catch (error) {
+        console.warn("Unable to read reload flag from sessionStorage:", error);
+        return true;
+      }
+    };
+
     const isPotentialPWARestore = () => {
       const navigationEntries = window.performance?.getEntriesByType?.(
         "navigation"
@@ -329,6 +340,10 @@ export default function App() {
         return true;
       }
     };
+
+    if (hasReloadBeenAttempted()) {
+      return false;
+    }
 
     return isPotentialPWARestore() && hasCorruptedAudio();
   }, [started]);
@@ -1457,6 +1472,12 @@ export default function App() {
         pendingTransportStateRef.current = null;
       }
 
+      try {
+        window.sessionStorage?.removeItem(IOS_PWA_RELOAD_FLAG);
+      } catch (error) {
+        console.warn("Unable to clear reload flag:", error);
+      }
+
       console.log("Audio graph initialized successfully");
     } catch (error) {
       console.error("Failed to initialize audio graph:", error);
@@ -1476,6 +1497,12 @@ export default function App() {
         if (targetButton) {
           targetButton.textContent = "Reloading...";
           targetButton.disabled = true;
+        }
+
+        try {
+          window.sessionStorage?.setItem(IOS_PWA_RELOAD_FLAG, "true");
+        } catch (error) {
+          console.warn("Unable to persist reload flag:", error);
         }
 
         setTimeout(() => {
@@ -1611,6 +1638,12 @@ export default function App() {
       `;
       reloadMessage.textContent = "Refreshing app...";
       document.body.appendChild(reloadMessage);
+
+      try {
+        window.sessionStorage?.setItem(IOS_PWA_RELOAD_FLAG, "true");
+      } catch (error) {
+        console.warn("Unable to persist reload flag:", error);
+      }
 
       setTimeout(() => {
         window.location.reload();
