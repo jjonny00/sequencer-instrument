@@ -2,6 +2,33 @@ import * as Tone from "tone";
 
 import { SILENT_MP3_BASE64_CHUNKS } from "./silentMp3";
 
+type ToneWithInternals = typeof Tone & {
+  context: Tone.Context;
+  Transport: typeof Tone.Transport;
+  Destination: typeof Tone.Destination;
+  Draw: typeof Tone.Draw;
+};
+
+const toneInternals = Tone as ToneWithInternals;
+
+const syncToneSingleton = <T extends object>(target: T, source: T) => {
+  if (!target || !source) {
+    return;
+  }
+
+  const prototype = Object.getPrototypeOf(source);
+  if (prototype && prototype !== Object.getPrototypeOf(target)) {
+    Object.setPrototypeOf(target, prototype);
+  }
+
+  for (const key of Reflect.ownKeys(source)) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor) {
+      Object.defineProperty(target, key, descriptor);
+    }
+  }
+};
+
 const MIN_FILTER_FREQUENCY = 80;
 const MAX_FILTER_FREQUENCY = 12000;
 
@@ -119,6 +146,12 @@ export const forceAudioContextCleanup = async (): Promise<void> => {
 
     const newContext = new Tone.Context();
     Tone.setContext(newContext);
+
+    // Refresh global singletons that Tone caches on the previous context.
+    syncToneSingleton(toneInternals.context, newContext);
+    syncToneSingleton(toneInternals.Transport, Tone.getTransport());
+    syncToneSingleton(toneInternals.Destination, Tone.getDestination());
+    syncToneSingleton(toneInternals.Draw, Tone.getDraw());
 
     const newRawContext = newContext.rawContext as AudioContext | undefined;
     if (newRawContext?.state === "suspended") {
