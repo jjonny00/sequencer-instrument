@@ -1,7 +1,4 @@
-import type {
-  CSSProperties,
-  TouchEvent as ReactTouchEvent,
-} from "react";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -31,7 +28,6 @@ import {
   initAudioContextWithRetries,
   isFallbackAudioActive,
   isIOSStandalone,
-  silentUnlock,
 } from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
@@ -242,8 +238,6 @@ export default function App() {
     }
   }, []);
   const pendingTransportStateRef = useRef<boolean | null>(null);
-  const isLaunchingNewProjectRef = useRef(false);
-  const pendingTouchNewProjectRef = useRef(false);
 
   const resolveInstrumentCharacter = useCallback(
     (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
@@ -1329,74 +1323,21 @@ export default function App() {
     }
   }, [bpm]);
 
-  const handleNewProjectClick = useCallback(
-    async (button?: HTMLButtonElement | null) => {
-      if (isLaunchingNewProjectRef.current) {
-        console.log("Already launching project, ignoring duplicate click");
-        return;
-      }
+  const handleNewProjectClick = useCallback(() => {
+    console.log("=== BAREBONES NEW PROJECT CLICK START ===");
+    console.log("Timestamp:", new Date().toISOString());
 
-      isLaunchingNewProjectRef.current = true;
-      const targetButton = button ?? (document.activeElement as HTMLButtonElement | null);
-      const originalText = targetButton?.textContent ?? null;
+    setActiveProjectName("untitled");
+    console.log("Project name set to 'untitled'");
 
-      try {
-        if (targetButton) {
-          targetButton.disabled = true;
-          targetButton.textContent = "Starting...";
-        }
+    setStarted(true);
+    console.log("setStarted(true) called");
 
-        const audioReady = await initAudioContextWithRetries();
-        if (!audioReady) {
-          if (isFallbackAudioActive()) {
-            console.warn("Audio initialization failed after reload; fallback mode active");
-            alert(
-              "Audio engine could not be restored. Some sounds may not play correctly in this session."
-            );
-          } else {
-            console.warn(
-              "Audio initialization requested reload; aborting new project flow"
-            );
-          }
-          return;
-        }
+    setCurrentSectionIndex(0);
+    console.log("setCurrentSectionIndex(0) called");
 
-        setActiveProjectName("untitled");
-        await initAudioGraph();
-        console.log("New project created successfully");
-      } catch (error) {
-        console.error("Failed to start new project:", error);
-        const errorMessage = isIOSStandalone()
-          ? "Audio failed to start. This sometimes happens in standalone mode. Try closing and reopening the app, or open it in Safari first."
-          : "Failed to start audio. Please try again or refresh the page.";
-        alert(errorMessage);
-      } finally {
-        if (targetButton) {
-          targetButton.disabled = false;
-          targetButton.textContent = originalText ?? "New Project";
-        }
-        isLaunchingNewProjectRef.current = false;
-      }
-    },
-    [initAudioGraph, setActiveProjectName]
-  );
-
-  const handleCreateNewProjectTouchStart = useCallback(() => {
-    pendingTouchNewProjectRef.current = true;
-    if (isIOSStandalone()) {
-      void silentUnlock();
-    }
-  }, []);
-
-  const handleCreateNewProjectTouchCommit = useCallback(
-    (event: ReactTouchEvent<HTMLButtonElement>) => {
-      if (!pendingTouchNewProjectRef.current) return;
-      pendingTouchNewProjectRef.current = false;
-      event.preventDefault();
-      void handleNewProjectClick(event.currentTarget);
-    },
-    [handleNewProjectClick]
-  );
+    console.log("=== BAREBONES NEW PROJECT CLICK END ===");
+  }, [setActiveProjectName, setCurrentSectionIndex, setStarted]);
 
   useEffect(() => {
     refreshProjectList();
@@ -1469,7 +1410,6 @@ export default function App() {
         }
       })();
 
-      isLaunchingNewProjectRef.current = false;
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -1826,12 +1766,7 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={(event) => {
-                void handleNewProjectClick(event.currentTarget);
-              }}
-              onTouchStart={handleCreateNewProjectTouchStart}
-              onTouchEnd={handleCreateNewProjectTouchCommit}
-              onTouchCancel={handleCreateNewProjectTouchCommit}
+              onClick={() => handleNewProjectClick()}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
@@ -1840,6 +1775,7 @@ export default function App() {
                 background: "#27E0B0",
                 color: "#1F2532",
                 fontWeight: 600,
+                cursor: "pointer",
               }}
             >
               New Project
