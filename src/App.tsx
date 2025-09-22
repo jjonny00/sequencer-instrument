@@ -308,6 +308,31 @@ export default function App() {
   const isLaunchingNewProjectRef = useRef(false);
   const pendingTouchNewProjectRef = useRef(false);
 
+  const shouldForceReload = useCallback(() => {
+    if (!isIOSPWA()) {
+      return false;
+    }
+
+    const isPotentialPWARestore = () => {
+      const navigationEntries = window.performance?.getEntriesByType?.(
+        "navigation"
+      ) as PerformanceNavigationTiming[] | undefined;
+      const navigationType = navigationEntries?.[0]?.type;
+      return navigationType === "reload" || navigationType === "back_forward";
+    };
+
+    const hasCorruptedAudio = () => {
+      try {
+        const context = Tone.getContext();
+        return context !== undefined && context.state === "suspended" && !started;
+      } catch {
+        return true;
+      }
+    };
+
+    return isPotentialPWARestore() && hasCorruptedAudio();
+  }, [started]);
+
   const resolveInstrumentCharacter = useCallback(
     (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
       const pack = packs[packIndex];
@@ -1444,13 +1469,26 @@ export default function App() {
 
   const handleNewProjectClick = useCallback(
     async (button?: HTMLButtonElement | null) => {
+      const targetButton = button ??
+        ((document.activeElement as HTMLButtonElement | null) ?? null);
+
+      if (shouldForceReload()) {
+        if (targetButton) {
+          targetButton.textContent = "Reloading...";
+          targetButton.disabled = true;
+        }
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+        return;
+      }
+
       if (isLaunchingNewProjectRef.current) {
-        console.log("Already launching project, ignoring duplicate click");
         return;
       }
 
       isLaunchingNewProjectRef.current = true;
-      const targetButton = button ?? (document.activeElement as HTMLButtonElement | null);
       const originalText = targetButton?.textContent ?? null;
 
       try {
@@ -1460,46 +1498,29 @@ export default function App() {
         }
 
         setActiveProjectName("untitled");
-
-        // Pre-trigger user interaction for iOS PWA
-        if (isIOSPWA()) {
-          console.log("Pre-triggering audio unlock for iOS PWA");
-
-          const context = Tone.getContext();
-          const rawContext = context.rawContext as AudioContext;
-
-          // Create a silent sound to unlock audio
-          const oscillator = rawContext.createOscillator();
-          const gainNode = rawContext.createGain();
-
-          gainNode.gain.setValueAtTime(0, rawContext.currentTime);
-          oscillator.connect(gainNode);
-          gainNode.connect(rawContext.destination);
-
-          oscillator.start();
-          oscillator.stop(rawContext.currentTime + 0.001);
-
-          // Small delay to let the unlock take effect
-          await new Promise((resolve) => setTimeout(resolve, 50));
-
-          oscillator.disconnect();
-          gainNode.disconnect();
-        }
-
         await initAudioGraph();
-        console.log("New project created successfully");
       } catch (error) {
         console.error("Failed to start new project:", error);
-        alert("Failed to start audio. Please try closing and reopening the app.");
-      } finally {
+
         if (targetButton) {
+          targetButton.textContent = "Reloading...";
+        }
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } finally {
+        if (
+          targetButton &&
+          !(targetButton.textContent?.includes("Reloading") ?? false)
+        ) {
           targetButton.disabled = false;
           targetButton.textContent = originalText ?? "New Project";
         }
         isLaunchingNewProjectRef.current = false;
       }
     },
-    [initAudioGraph, setActiveProjectName]
+    [initAudioGraph, setActiveProjectName, shouldForceReload]
   );
 
   const handleCreateNewProjectTouchStart = useCallback(() => {
@@ -1560,6 +1581,46 @@ export default function App() {
       setIsPlaying(true);
     }
   }, [started]);
+
+  useEffect(() => {
+    if (!isIOSPWA()) {
+      return;
+    }
+
+    const checkTimer = window.setTimeout(() => {
+      if (!shouldForceReload()) {
+        return;
+      }
+
+      console.log("Detected problematic PWA launch, auto-reloading...");
+
+      const reloadMessage = document.createElement("div");
+      reloadMessage.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #1F2532;
+        color: #27E0B0;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #27E0B0;
+        z-index: 9999;
+        font-family: system-ui;
+        text-align: center;
+      `;
+      reloadMessage.textContent = "Refreshing app...";
+      document.body.appendChild(reloadMessage);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 800);
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(checkTimer);
+    };
+  }, [shouldForceReload]);
 
   // Add app state visibility handling for iOS PWA
   useEffect(() => {
