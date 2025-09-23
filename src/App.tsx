@@ -1466,6 +1466,35 @@ export default function App() {
     started,
   ]);
 
+  const handleReturnToSongSelection = useCallback(() => {
+    try {
+      const snapshot = buildProjectSnapshot();
+      const trimmedName = activeProjectName.trim();
+      const projectName = trimmedName.length > 0 ? trimmedName : "untitled";
+      saveStoredProject(projectName, snapshot);
+      setActiveProjectName(projectName);
+    } catch (error) {
+      console.error("Failed to save song before returning to selection:", error);
+    }
+    Tone.Transport.stop();
+    setIsPlaying(false);
+    setProjectModalMode(null);
+    setIsExportModalOpen(false);
+    setAudioExportMessage("Preparing export…");
+    setAddTrackModalState((state) => ({ ...state, isOpen: false }));
+    setEditing(null);
+    setIsRecording(false);
+    setPendingLoopStripAction(null);
+    setCurrentSectionIndex(0);
+    setStarted(false);
+    setViewMode("track");
+    refreshProjectList();
+  }, [
+    buildProjectSnapshot,
+    activeProjectName,
+    refreshProjectList,
+  ]);
+
   const handlePlayStop = () => {
     if (isPlaying) {
       Tone.Transport.stop();
@@ -1902,9 +1931,13 @@ export default function App() {
                 color: "#1F2532",
                 fontWeight: 600,
                 cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 12,
               }}
             >
-              New Song
+              + New Song
             </button>
             <div
               style={{
@@ -2029,37 +2062,75 @@ export default function App() {
               style={{
                 display: "flex",
                 gap: 8,
+                alignItems: "center",
+                flexWrap: "wrap",
               }}
             >
               <button
-                onClick={() => setViewMode("track")}
+                type="button"
+                onClick={handleReturnToSongSelection}
                 style={{
-                  flex: 1,
-                  padding: "8px 0",
+                  padding: "8px 12px",
                   borderRadius: 8,
                   border: "1px solid #333",
-                  background: viewMode === "track" ? "#27E0B0" : "#1f2532",
-                  color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
+                  background: "#111827",
+                  color: "#e6f2ff",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
+                  flexShrink: 0,
                 }}
               >
-                Tracks
+                <span
+                  className="material-symbols-outlined"
+                  aria-hidden="true"
+                  style={{ fontSize: 18 }}
+                >
+                  arrow_back
+                </span>
+                Back to Songs
               </button>
-              <button
-                onClick={() => {
-                  setEditing(null);
-                  setViewMode("song");
-                }}
+              <div
                 style={{
+                  display: "flex",
+                  gap: 8,
                   flex: 1,
-                  padding: "8px 0",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: viewMode === "song" ? "#27E0B0" : "#1f2532",
-                  color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
+                  minWidth: 0,
                 }}
               >
-                Song
-              </button>
+                <button
+                  onClick={() => setViewMode("track")}
+                  style={{
+                    flex: 1,
+                    padding: "8px 0",
+                    borderRadius: 8,
+                    border: "1px solid #333",
+                    background: viewMode === "track" ? "#27E0B0" : "#1f2532",
+                    color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
+                  }}
+                >
+                  Tracks
+                </button>
+                <button
+                  onClick={() => {
+                    setEditing(null);
+                    setViewMode("song");
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "8px 0",
+                    borderRadius: 8,
+                    border: "1px solid #333",
+                    background: viewMode === "song" ? "#27E0B0" : "#1f2532",
+                    color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
+                  }}
+                >
+                  Song
+                </button>
+              </div>
             </div>
             {viewMode === "song" ? (
               <div
