@@ -1637,6 +1637,7 @@ export default function App() {
               <IconButton
                 icon="save"
                 label="Save song"
+                showLabel
                 tone="accent"
                 onClick={handleConfirmSaveProject}
                 disabled={!projectNameInput.trim()}
@@ -1650,9 +1651,10 @@ export default function App() {
                 <span style={{ fontSize: 13, color: "#cbd5f5" }}>Song name</span>
                 <input
                   id="project-name"
+                  type="text"
                   value={projectNameInput}
                   onChange={(event) => setProjectNameInput(event.target.value)}
-                  placeholder="My Jam"
+                  aria-describedby="project-name-helper"
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -1661,6 +1663,12 @@ export default function App() {
                     color: "#e6f2ff",
                   }}
                 />
+                <span
+                  id="project-name-helper"
+                  style={{ fontSize: 12, color: "#94a3b8" }}
+                >
+                  Choose a name so you can find this song later.
+                </span>
               </label>
               <div
                 style={{
@@ -1785,58 +1793,84 @@ export default function App() {
           isOpen={isExportModalOpen || isAudioExporting}
           onClose={handleCloseExportModal}
           title="Export Song"
-          subtitle="Download your jam as JSON or render audio offline."
           maxWidth={420}
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <IconButton
-              icon="file_download"
-              label="Export song JSON"
-              tone="accent"
-              onClick={handleExportJson}
-              disabled={isAudioExporting}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <p style={{ margin: 0, fontSize: 15, color: "#cbd5f5" }}>
+              Save your song as audio to share, or as a project file to keep working later.
+            </p>
+            <div
+              aria-hidden="true"
+              style={{
+                height: 1,
+                width: "100%",
+                background: "rgba(148, 163, 184, 0.16)",
+              }}
             />
-            <IconButton
-              icon="file_download"
-              label="Export audio"
-              tone="accent"
-              onClick={handleExportAudio}
-              disabled={isAudioExporting}
-            />
-          </div>
-          {isAudioExporting ? (
             <div
               style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: 14,
-                border: "1px solid #1f2937",
-                background: "#0b1624",
                 display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 8,
-                textAlign: "center",
-                color: "#cbd5f5",
-                fontSize: 13,
+                gap: 12,
+                alignItems: "stretch",
               }}
             >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 28, color: "#27E0B0" }}
-              >
-                hourglass_top
-              </span>
-              <span>{audioExportMessage}</span>
+              <IconButton
+                icon="file_download"
+                label="Audio"
+                description="Shareable .wav"
+                showLabel
+                onClick={handleExportAudio}
+                disabled={isAudioExporting}
+                style={{
+                  flex: 1,
+                  color: "#27E0B0",
+                  borderColor: "#1f2937",
+                  background: "#111827",
+                }}
+                title="Export as audio"
+              />
+              <IconButton
+                icon="folder"
+                label="Project File"
+                description="Reopen in Sequencer"
+                showLabel
+                onClick={handleExportJson}
+                disabled={isAudioExporting}
+                style={{
+                  flex: 1,
+                  color: "#27E0B0",
+                  borderColor: "#1f2937",
+                  background: "#111827",
+                }}
+                title="Export as project file"
+              />
             </div>
-          ) : null}
+            {isAudioExporting ? (
+              <div
+                style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  border: "1px solid #1f2937",
+                  background: "#0b1624",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
+                  textAlign: "center",
+                  color: "#cbd5f5",
+                  fontSize: 13,
+                }}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 24, color: "#27E0B0" }}
+                >
+                  hourglass_top
+                </span>
+                <span>{audioExportMessage}</span>
+              </div>
+            ) : null}
+          </div>
         </Modal>
       )}
       {!started ? (

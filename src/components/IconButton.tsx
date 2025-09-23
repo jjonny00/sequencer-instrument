@@ -12,6 +12,8 @@ interface IconButtonProps
   label: string;
   tone?: IconButtonTone;
   iconSize?: number;
+  showLabel?: boolean;
+  description?: string;
 }
 
 const baseStyle: CSSProperties = {
@@ -30,6 +32,21 @@ const baseStyle: CSSProperties = {
   lineHeight: 0,
   padding: 0,
   touchAction: "manipulation",
+};
+
+const iconOnlyStyle: CSSProperties = {
+  padding: baseStyle.padding,
+  gap: 0,
+};
+
+const iconWithLabelStyle: CSSProperties = {
+  padding: "10px 14px",
+  gap: 10,
+  fontSize: 14,
+  lineHeight: "20px",
+  fontWeight: 600,
+  justifyContent: "flex-start",
+  alignItems: "center",
 };
 
 const toneStyles: Record<IconButtonTone, CSSProperties> = {
@@ -53,24 +70,40 @@ const toneStyles: Record<IconButtonTone, CSSProperties> = {
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   function IconButton(
-    { icon, label, tone = "default", iconSize = 24, style, disabled, title, ...props },
+    {
+      icon,
+      label,
+      tone = "default",
+      iconSize = 24,
+      showLabel = false,
+      description,
+      style,
+      disabled,
+      title,
+      ...props
+    },
     ref
   ) {
+    const hasTextContent = showLabel || Boolean(description);
     const combinedStyle: CSSProperties = {
       ...baseStyle,
       ...(toneStyles[tone] ?? toneStyles.default),
+      ...(hasTextContent ? iconWithLabelStyle : iconOnlyStyle),
       ...(style ?? {}),
       cursor: disabled ? "not-allowed" : baseStyle.cursor,
       opacity: disabled ? 0.5 : 1,
     };
 
-    const finalTitle = title ?? label;
+    const accessibleLabel = description
+      ? `${label}. ${description}`
+      : label;
+    const finalTitle = title ?? accessibleLabel;
 
     return (
       <button
         ref={ref}
         type="button"
-        aria-label={label}
+        aria-label={accessibleLabel}
         title={finalTitle}
         {...props}
         disabled={disabled}
@@ -89,6 +122,40 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         >
           {icon}
         </span>
+        {hasTextContent ? (
+          <span
+            aria-hidden="true"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: description ? 2 : 0,
+              color: combinedStyle.color,
+              textAlign: "left",
+              fontSize: iconWithLabelStyle.fontSize,
+              lineHeight: iconWithLabelStyle.lineHeight,
+              fontWeight: iconWithLabelStyle.fontWeight,
+            }}
+          >
+            {showLabel ? (
+              <span style={{ fontSize: 15, lineHeight: "20px", fontWeight: 600 }}>
+                {label}
+              </span>
+            ) : null}
+            {description ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  lineHeight: "16px",
+                  fontWeight: 500,
+                  color: "#94a3b8",
+                }}
+              >
+                {description}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
       </button>
     );
   }
