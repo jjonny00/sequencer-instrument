@@ -2,11 +2,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type FC,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
+import * as Tone from "tone";
 
 import type { Pack } from "./packs";
 import { getCharacterOptions } from "./addTrackOptions";
@@ -23,6 +26,108 @@ import {
 import type { Chunk } from "./chunks";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
+import type { TriggerMap } from "./tracks";
+import { initAudioContext } from "./utils/audio";
+
+interface StepSectionProps {
+  visible: boolean;
+  delay?: number;
+  children: ReactNode;
+}
+
+const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => {
+  const [shouldRender, setShouldRender] = useState(visible);
+  const [isActive, setIsActive] = useState(visible);
+  const hideTimeoutRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const win = typeof window !== "undefined" ? window : undefined;
+
+    if (visible) {
+      setShouldRender(true);
+      if (!win) {
+        setIsActive(true);
+        return () => undefined;
+      }
+
+      rafRef.current = win.requestAnimationFrame(() => {
+        setIsActive(true);
+      });
+
+      return () => {
+        if (rafRef.current !== null) {
+          win.cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+      };
+    }
+
+    setIsActive(false);
+
+    if (!win) {
+      setShouldRender(false);
+      return () => undefined;
+    }
+
+    hideTimeoutRef.current = win.setTimeout(() => {
+      setShouldRender(false);
+      hideTimeoutRef.current = null;
+    }, 220);
+
+    return () => {
+      if (hideTimeoutRef.current !== null) {
+        win.clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    return () => {
+      const win = typeof window !== "undefined" ? window : undefined;
+      if (!win) return;
+
+      if (rafRef.current !== null) {
+        win.cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (hideTimeoutRef.current !== null) {
+        win.clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  if (!shouldRender) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        opacity: isActive ? 1 : 0,
+        transform: isActive ? "translateY(0)" : "translateY(12px)",
+        transition: `opacity 0.2s ease ${delay}s, transform 0.24s ease ${delay}s`,
+        willChange: "opacity, transform",
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        pointerEvents: isActive ? "auto" : "none",
+        width: "100%",
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
+interface PresetListItem {
+  id: string;
+  name: string;
+  characterId: string | null;
+  pattern?: Chunk;
+}
 
 interface AddTrackModalProps {
   isOpen: boolean;
@@ -32,6 +137,7 @@ interface AddTrackModalProps {
   selectedInstrumentId: string;
   selectedCharacterId: string;
   selectedPresetId: string | null;
+  triggers: TriggerMap;
   editingTrackName?: string;
   editingTrackPattern?: Chunk | null;
   onSelectPack: (packId: string) => void;
@@ -51,6 +157,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   selectedInstrumentId,
   selectedCharacterId,
   selectedPresetId,
+  triggers,
   editingTrackName,
   editingTrackPattern,
   onSelectPack,
@@ -61,7 +168,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   onConfirm,
   onDelete,
 }) => {
-  const pack = packs.find((candidate) => candidate.id === selectedPackId) ?? packs[0] ?? null;
+  const pack = useMemo(
+    () => packs.find((candidate) => candidate.id === selectedPackId) ?? null,
+    [packs, selectedPackId]
+  );
   const instrumentOptions = pack ? Object.keys(pack.instruments) : [];
   const characterOptions = useMemo(
     () =>
@@ -79,7 +189,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   );
 
   const [userPresets, setUserPresets] = useState<
-    { id: string; name: string; characterId: string | null }[]
+    { id: string; name: string; characterId: string | null; pattern: Chunk | null }[]
   >([]);
 
   const refreshUserPresets = useCallback(() => {
@@ -91,6 +201,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       id: preset.id,
       name: preset.name,
       characterId: preset.characterId,
+      pattern: preset.pattern,
     }));
     setUserPresets(presets);
   }, [pack, selectedInstrumentId]);
@@ -182,6 +293,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         id: preset.id,
         name: preset.name,
         characterId: preset.characterId ?? null,
+        pattern: preset,
       })),
     [presetOptions]
   );
@@ -192,16 +304,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         id: `${USER_PRESET_PREFIX}${preset.id}`,
         name: preset.name,
         characterId: preset.characterId,
+        pattern: preset.pattern ?? undefined,
       })),
     [userPresets]
   );
 
-  const combinedPresetItems = useMemo(
-    () => [...userPresetItems, ...packPresets],
-    [userPresetItems, packPresets]
-  );
-
-  const confirmDisabled = !pack || !selectedInstrumentId;
+  const confirmDisabled = !pack || !selectedInstrumentId || !selectedCharacterId;
   const isEditMode = mode === "edit";
   const title = isEditMode ? "Edit Track" : "Add Track";
   const description = isEditMode
@@ -258,8 +366,106 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [onSelectPreset, selectedPresetId]
   );
 
+  const previewStyle = useCallback(
+    async (characterId: string) => {
+      if (!characterId || !selectedInstrumentId) return;
+      const trigger = triggers[selectedInstrumentId];
+      if (!trigger) return;
+      try {
+        await initAudioContext();
+      } catch {
+        return;
+      }
+      const start = Tone.now() + 0.05;
+      const previewChunk: Chunk = {
+        id: "style-preview",
+        name: "Style Preview",
+        instrument: selectedInstrumentId,
+        characterId: characterId,
+        steps: [],
+      };
+      trigger(start, 0.9, 0, undefined, 0.5, previewChunk, characterId);
+    },
+    [selectedInstrumentId, triggers]
+  );
+
+  const previewPreset = useCallback(
+    async (chunk: Chunk, fallbackCharacterId?: string | null) => {
+      const instrumentId = chunk.instrument || selectedInstrumentId;
+      if (!instrumentId) return;
+      const trigger = triggers[instrumentId];
+      if (!trigger) return;
+      try {
+        await initAudioContext();
+      } catch {
+        return;
+      }
+      const activeCharacterId =
+        fallbackCharacterId ?? chunk.characterId ?? selectedCharacterId ?? null;
+      const start = Tone.now() + 0.05;
+      let hasTriggered = false;
+
+      if (chunk.noteEvents && chunk.noteEvents.length > 0) {
+        const events = chunk.noteEvents
+          .slice(0, 16)
+          .sort((a, b) => a.time - b.time);
+        events.forEach((event) => {
+          const velocity = Math.max(0, Math.min(1, event.velocity));
+          trigger(
+            start + event.time,
+            velocity,
+            undefined,
+            event.note,
+            event.duration,
+            chunk,
+            activeCharacterId ?? undefined
+          );
+        });
+        hasTriggered = events.length > 0;
+      } else if (chunk.steps && chunk.steps.length > 0) {
+        const stepDuration = Tone.Time("16n").toSeconds();
+        const limit = Math.min(chunk.steps.length, 16);
+        const velocities = chunk.velocities ?? [];
+        const pitches = chunk.pitches ?? [];
+        const notes = chunk.notes ?? [];
+        for (let index = 0; index < limit; index += 1) {
+          const stepValue = chunk.steps[index];
+          if (!stepValue) continue;
+          const rawVelocity =
+            velocities[index] ?? (typeof stepValue === "number" ? stepValue : 1);
+          const velocity = Math.max(0, Math.min(1, rawVelocity ?? 1));
+          const pitch = pitches[index] ?? 0;
+          const note = notes[index] ?? chunk.note;
+          trigger(
+            start + index * stepDuration,
+            velocity,
+            pitch,
+            note,
+            chunk.sustain,
+            chunk,
+            activeCharacterId ?? undefined
+          );
+          hasTriggered = true;
+        }
+      }
+
+      if (!hasTriggered) {
+        trigger(start, 0.9, 0, chunk.note, chunk.sustain, chunk, activeCharacterId ?? undefined);
+      }
+    },
+    [selectedCharacterId, selectedInstrumentId, triggers]
+  );
+
+  const handleCharacterChange = useCallback(
+    (characterId: string) => {
+      onSelectCharacter(characterId);
+      void previewStyle(characterId);
+    },
+    [onSelectCharacter, previewStyle]
+  );
+
   const renderPresetRow = (
-    item: { id: string; name: string; characterId: string | null },
+    item: PresetListItem,
     source: "user" | "pack"
   ) => {
     const isSelected = selectedPresetId === item.id;
@@ -268,12 +474,17 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         ? characterLabelMap.get(item.characterId) ?? undefined
         : undefined;
 
-    const handleClick = () => handleTogglePresetSelection(item.id);
+    const handleActivate = () => {
+      if (item.pattern) {
+        void previewPreset(item.pattern, item.characterId);
+      }
+      handleTogglePresetSelection(item.id);
+    };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        handleClick();
+        handleActivate();
       }
     };
 
@@ -282,7 +493,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         key={`${source}-${item.id}`}
         role="button"
         tabIndex={0}
-        onClick={handleClick}
+        onClick={handleActivate}
         onKeyDown={handleKeyDown}
         style={{
           display: "flex",
@@ -327,10 +538,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [handleTogglePresetSelection]
   );
 
-  const currentPresetLabel = selectedPresetId
-    ? combinedPresetItems.find((preset) => preset.id === selectedPresetId)?.name ?? "Custom"
-    : "None";
-
   const sectionListStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -338,8 +545,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     flex: "1 1 auto",
     minHeight: 0,
     paddingRight: 4,
-    paddingBottom: 16,
   };
+
+  const instrumentVisible = Boolean(pack && selectedPackId);
+  const styleVisible = instrumentVisible && Boolean(selectedInstrumentId);
+  const presetVisible = styleVisible && Boolean(selectedCharacterId);
 
   return (
     <Modal
@@ -349,27 +559,18 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       subtitle={description}
       fullScreen
       footer={
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            width: "100%",
-            padding: "4px 0",
-          }}
-        >
+        <>
           {isEditMode && onDelete ? (
             <IconButton
               icon="delete"
               label="Remove track"
               tone="danger"
               iconSize={20}
-              style={compactIconButtonStyle}
+              style={{ ...compactIconButtonStyle, marginRight: "auto" }}
               onClick={onDelete}
             />
           ) : (
-            <div />
+            <div aria-hidden="true" style={{ marginRight: "auto" }} />
           )}
           <div style={{ display: "flex", gap: 12 }}>
             <button
@@ -388,97 +589,110 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               {confirmLabel}
             </button>
           </div>
-        </div>
+        </>
       }
     >
       <div style={sectionListStyle}>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-          <select
-            value={pack?.id ?? ""}
-            onChange={(event) => onSelectPack(event.target.value)}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid #2f384a",
-              background: "#0f172a",
-              color: "#e6f2ff",
-            }}
-          >
-            {packs.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-          <select
-            value={selectedInstrumentId}
-            onChange={(event) => onSelectInstrument(event.target.value)}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid #2f384a",
-              background: "#0f172a",
-              color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
-            }}
-          >
-            {instrumentOptions.length === 0 ? (
+        <div>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
+            <select
+              value={selectedPackId}
+              onChange={(event) => onSelectPack(event.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color: selectedPackId ? "#e6f2ff" : "#64748b",
+              }}
+            >
               <option value="" disabled>
-                No instruments available
+                Select a sound pack
               </option>
-            ) : (
-              instrumentOptions.map((instrument) => (
+              {packs.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <StepSection visible={instrumentVisible}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
+            <select
+              value={selectedInstrumentId}
+              onChange={(event) => onSelectInstrument(event.target.value)}
+              disabled={instrumentOptions.length === 0}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color:
+                  selectedInstrumentId && instrumentOptions.length > 0
+                    ? "#e6f2ff"
+                    : "#64748b",
+              }}
+            >
+              <option value="" disabled>
+                {instrumentOptions.length === 0
+                  ? "No instruments available"
+                  : "Select an instrument"}
+              </option>
+              {instrumentOptions.map((instrument) => (
                 <option key={instrument} value={instrument}>
                   {formatInstrumentLabel(instrument)}
                 </option>
-              ))
-            )}
-          </select>
-        </label>
+              ))}
+            </select>
+          </label>
+        </StepSection>
 
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
-          <select
-            value={selectedCharacterId}
-            onChange={(event) => onSelectCharacter(event.target.value)}
-            disabled={characterOptions.length === 0}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid #2f384a",
-              background: "#0f172a",
-              color: characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
-            }}
-          >
-            {characterOptions.length === 0 ? (
+        <StepSection visible={styleVisible} delay={0.05}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
+            <select
+              value={selectedCharacterId}
+              onChange={(event) => handleCharacterChange(event.target.value)}
+              disabled={characterOptions.length === 0}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                color:
+                  selectedCharacterId && characterOptions.length > 0
+                    ? "#e6f2ff"
+                    : "#64748b",
+              }}
+            >
               <option value="" disabled>
-                No styles
+                {characterOptions.length === 0 ? "No styles available" : "Select a style"}
               </option>
-            ) : (
-              characterOptions.map((character) => (
+              {characterOptions.map((character) => (
                 <option key={character.id} value={character.id}>
                   {character.name}
                 </option>
-              ))
-            )}
-          </select>
-        </label>
+              ))}
+            </select>
+          </label>
+        </StepSection>
 
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            padding: 16,
-            borderRadius: 16,
-            background: "#0b1624",
-            border: "1px solid #1f2937",
-          }}
-        >
+        <StepSection visible={presetVisible} delay={0.1}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              padding: 16,
+              borderRadius: 16,
+              background: "#0b1624",
+              border: "1px solid #1f2937",
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -556,6 +770,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                   <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
                     Pack Loops
                   </span>
+                  <span style={{ fontSize: 11, color: "#64748b" }}>
+                    Tap to preview before adding.
+                  </span>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
                   </div>
@@ -563,18 +780,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               ) : null}
             </div>
           </div>
+        </StepSection>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            fontSize: 12,
-            color: "#94a3b8",
-          }}
-        >
-          <span>Current saved loop: {currentPresetLabel}</span>
-        </div>
       </div>
     </Modal>
   );
