@@ -39,7 +39,6 @@ const modalStyle: CSSProperties = {
   borderRadius: 20,
   border: "1px solid #1f2937",
   boxShadow: "0 28px 60px rgba(5, 10, 18, 0.6)",
-  padding: 24,
   color: "#e2e8f0",
   display: "flex",
   flexDirection: "column",
@@ -47,6 +46,7 @@ const modalStyle: CSSProperties = {
   maxHeight: "90vh",
   minHeight: 0,
   boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 export const Modal: FC<ModalProps> = ({
@@ -188,22 +188,19 @@ export const Modal: FC<ModalProps> = ({
         height: "100dvh",
         maxHeight: "100dvh",
         minHeight: "100dvh",
-        padding: "20px 20px 0",
-        overflow: "hidden",
       }
     : {
         ...modalStyle,
         maxWidth,
-        paddingBottom: footer ? 0 : modalStyle.padding,
       };
-
-  if (fullScreen && footer) {
-    resolvedModalStyle.paddingBottom = 0;
-  }
 
   if (footer) {
     resolvedModalStyle.gap = 0;
   }
+
+  const horizontalPadding = fullScreen ? 20 : 24;
+  const topPadding = fullScreen ? 20 : 24;
+  const bottomPadding = footer ? 0 : horizontalPadding;
 
   const bodyWrapperStyle: CSSProperties = {
     display: "flex",
@@ -213,6 +210,7 @@ export const Modal: FC<ModalProps> = ({
     flexShrink: 1,
     minHeight: 0,
     flexBasis: "0%",
+    padding: `${topPadding}px ${horizontalPadding}px ${bottomPadding}px`,
   };
 
   const contentStyle: CSSProperties = {
@@ -235,7 +233,7 @@ export const Modal: FC<ModalProps> = ({
     justifyContent: "flex-end",
     gap: 16,
     width: "100%",
-    padding: "16px 24px",
+    padding: `16px ${horizontalPadding}px`,
     paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
     borderTop: "1px solid #1f2937",
     background: "#0f172a",
