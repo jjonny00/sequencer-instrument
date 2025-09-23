@@ -110,40 +110,15 @@ interface AddTrackModalState {
   presetId: string | null;
 }
 
-const createDefaultAddTrackState = (
-  packIdx: number
-): AddTrackModalState => {
-  const pack = packs[packIdx];
-  if (!pack) {
-    return {
-      isOpen: false,
-      mode: "add",
-      targetTrackId: null,
-      packId: "",
-      instrumentId: "",
-      characterId: "",
-      presetId: null,
-    };
-  }
-  const instrumentId = Object.keys(pack.instruments)[0] ?? "";
-  const characters = instrumentId
-    ? getCharacterOptions(pack.id, instrumentId)
-    : [];
-  const preferredCharacterId = pack.instruments[instrumentId]?.defaultCharacterId;
-  const characterId = characters.find((character) => character.id === preferredCharacterId)?.id
-    ?? characters[0]?.id
-    ?? "";
-  const preset = pack.chunks.find((chunk) => chunk.instrument === instrumentId);
-  return {
-    isOpen: false,
-    mode: "add",
-    targetTrackId: null,
-    packId: pack.id,
-    instrumentId,
-    characterId,
-    presetId: preset ? preset.id : null,
-  };
-};
+const createDefaultAddTrackState = (): AddTrackModalState => ({
+  isOpen: false,
+  mode: "add",
+  targetTrackId: null,
+  packId: "",
+  instrumentId: "",
+  characterId: "",
+  presetId: null,
+});
 
 const cloneChunkForDemo = (chunk: Chunk): Chunk => ({
   ...chunk,
@@ -329,7 +304,7 @@ export default function App() {
     "openLibrary" | null
   >(null);
   const [addTrackModalState, setAddTrackModalState] = useState<AddTrackModalState>(
-    () => createDefaultAddTrackState(packIndex)
+    () => createDefaultAddTrackState()
   );
   const [projectModalMode, setProjectModalMode] = useState<"save" | "load" | null>(
     null
@@ -457,38 +432,11 @@ export default function App() {
   }, []);
 
   const openAddTrackModal = useCallback(() => {
-    setAddTrackModalState(() => {
-      const pack = packs[packIndex];
-      if (!pack) {
-        return {
-          isOpen: true,
-          mode: "add",
-          targetTrackId: null,
-          packId: "",
-          instrumentId: "",
-          characterId: "",
-          presetId: null,
-        };
-      }
-      const instrumentId = Object.keys(pack.instruments)[0] ?? "";
-      const characters = instrumentId
-        ? getCharacterOptions(pack.id, instrumentId)
-        : [];
-      const characterId = characters[0]?.id ?? "";
-      const preset = pack.chunks.find(
-        (chunk) => chunk.instrument === instrumentId
-      );
-      return {
-        isOpen: true,
-        mode: "add",
-        targetTrackId: null,
-        packId: pack.id,
-        instrumentId,
-        characterId,
-        presetId: preset ? preset.id : null,
-      };
+    setAddTrackModalState({
+      ...createDefaultAddTrackState(),
+      isOpen: true,
     });
-  }, [packIndex]);
+  }, []);
 
   const closeAddTrackModal = useCallback(() => {
     setAddTrackModalState((state) => ({ ...state, isOpen: false }));
@@ -500,7 +448,18 @@ export default function App() {
       if (index >= 0 && index !== packIndex) {
         setPackIndex(index);
       }
-      setAddTrackModalState((state) => ({ ...state, packId }));
+      setAddTrackModalState((state) => {
+        if (state.packId === packId) {
+          return state;
+        }
+        return {
+          ...state,
+          packId,
+          instrumentId: "",
+          characterId: "",
+          presetId: null,
+        };
+      });
     },
     [packIndex, setPackIndex]
   );
@@ -510,24 +469,11 @@ export default function App() {
       if (state.instrumentId === instrumentId) {
         return state;
       }
-      const pack = packs.find((candidate) => candidate.id === state.packId);
-      const characters = instrumentId
-        ? getCharacterOptions(state.packId, instrumentId)
-        : [];
-      const instrumentDefinition = pack?.instruments[instrumentId];
-      const preferredCharacterId = instrumentDefinition?.defaultCharacterId;
-      const nextCharacterId = characters.length
-        ? characters.find((character) => character.id === preferredCharacterId)?.id ?? characters[0].id
-        : "";
-      const presetOptions = pack
-        ? pack.chunks.filter((chunk) => chunk.instrument === instrumentId)
-        : [];
-      const nextPresetId = presetOptions[0]?.id ?? null;
       return {
         ...state,
         instrumentId,
-        characterId: nextCharacterId,
-        presetId: nextPresetId,
+        characterId: "",
+        presetId: null,
       };
     });
   }, []);
@@ -589,8 +535,10 @@ export default function App() {
 
   useEffect(() => {
     if (!addTrackModalState.isOpen) return;
+    if (!addTrackModalState.packId) return;
     const pack = packs.find((p) => p.id === addTrackModalState.packId);
     if (!pack) return;
+
     const instrumentOptions = Object.keys(pack.instruments);
     if (instrumentOptions.length === 0) {
       if (
@@ -607,40 +555,73 @@ export default function App() {
       }
       return;
     }
-    if (!instrumentOptions.includes(addTrackModalState.instrumentId)) {
-      const nextInstrument = instrumentOptions[0];
-      const characters = getCharacterOptions(pack.id, nextInstrument);
-      const nextCharacter = characters[0]?.id ?? "";
-      const presetOptions = pack.chunks.filter(
-        (chunk) => chunk.instrument === nextInstrument
-      );
+
+    if (
+      addTrackModalState.instrumentId &&
+      !instrumentOptions.includes(addTrackModalState.instrumentId)
+    ) {
+      const fallbackInstrument =
+        addTrackModalState.mode === "edit" ? instrumentOptions[0] : "";
       setAddTrackModalState((state) => ({
         ...state,
-        instrumentId: nextInstrument,
-        characterId: nextCharacter,
-        presetId: presetOptions[0]?.id ?? null,
+        instrumentId: fallbackInstrument,
+        characterId: "",
+        presetId: null,
       }));
       return;
     }
+
+    if (!addTrackModalState.instrumentId) {
+      if (
+        addTrackModalState.characterId !== "" ||
+        addTrackModalState.presetId !== null
+      ) {
+        setAddTrackModalState((state) => ({
+          ...state,
+          characterId: "",
+          presetId: null,
+        }));
+      }
+      return;
+    }
+
     const characters = getCharacterOptions(
       pack.id,
       addTrackModalState.instrumentId
     );
+
     if (
-      characters.length > 0 &&
+      addTrackModalState.characterId &&
       !characters.some(
         (character) => character.id === addTrackModalState.characterId
       )
     ) {
+      const fallbackCharacter =
+        addTrackModalState.mode === "edit" && characters.length > 0
+          ? characters[0].id
+          : "";
       setAddTrackModalState((state) => ({
         ...state,
-        characterId: characters[0].id,
+        characterId: fallbackCharacter,
+        presetId: null,
       }));
       return;
     }
+
+    if (!addTrackModalState.characterId) {
+      if (addTrackModalState.presetId !== null) {
+        setAddTrackModalState((state) => ({
+          ...state,
+          presetId: null,
+        }));
+      }
+      return;
+    }
+
     const presetOptions = pack.chunks.filter(
       (chunk) => chunk.instrument === addTrackModalState.instrumentId
     );
+
     if (
       addTrackModalState.presetId &&
       !isUserPresetId(addTrackModalState.presetId) &&
@@ -648,7 +629,10 @@ export default function App() {
     ) {
       setAddTrackModalState((state) => ({
         ...state,
-        presetId: presetOptions[0]?.id ?? null,
+        presetId:
+          addTrackModalState.mode === "edit" && presetOptions.length > 0
+            ? presetOptions[0].id
+            : null,
       }));
     }
   }, [addTrackModalState]);

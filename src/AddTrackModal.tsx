@@ -148,7 +148,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   onConfirm,
   onDelete,
 }) => {
-  const pack = packs.find((candidate) => candidate.id === selectedPackId) ?? packs[0] ?? null;
+  const pack = useMemo(
+    () => packs.find((candidate) => candidate.id === selectedPackId) ?? null,
+    [packs, selectedPackId]
+  );
   const instrumentOptions = pack ? Object.keys(pack.instruments) : [];
   const characterOptions = useMemo(
     () =>
@@ -525,7 +528,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     paddingBottom: 16,
   };
 
-  const instrumentVisible = Boolean(pack);
+  const instrumentVisible = Boolean(pack && selectedPackId);
   const styleVisible = instrumentVisible && Boolean(selectedInstrumentId);
   const presetVisible = styleVisible && Boolean(selectedCharacterId);
 
@@ -584,16 +587,19 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
             <select
-              value={pack?.id ?? ""}
+              value={selectedPackId}
               onChange={(event) => onSelectPack(event.target.value)}
               style={{
                 padding: "10px 12px",
                 borderRadius: 12,
                 border: "1px solid #2f384a",
                 background: "#0f172a",
-                color: "#e6f2ff",
+                color: selectedPackId ? "#e6f2ff" : "#64748b",
               }}
             >
+              <option value="" disabled>
+                Select a sound pack
+              </option>
               {packs.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.name}
@@ -609,25 +615,28 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <select
               value={selectedInstrumentId}
               onChange={(event) => onSelectInstrument(event.target.value)}
+              disabled={instrumentOptions.length === 0}
               style={{
                 padding: "10px 12px",
                 borderRadius: 12,
                 border: "1px solid #2f384a",
                 background: "#0f172a",
-                color: selectedInstrumentId ? "#e6f2ff" : "#64748b",
+                color:
+                  selectedInstrumentId && instrumentOptions.length > 0
+                    ? "#e6f2ff"
+                    : "#64748b",
               }}
             >
-              {instrumentOptions.length === 0 ? (
-                <option value="" disabled>
-                  No instruments available
+              <option value="" disabled>
+                {instrumentOptions.length === 0
+                  ? "No instruments available"
+                  : "Select an instrument"}
+              </option>
+              {instrumentOptions.map((instrument) => (
+                <option key={instrument} value={instrument}>
+                  {formatInstrumentLabel(instrument)}
                 </option>
-              ) : (
-                instrumentOptions.map((instrument) => (
-                  <option key={instrument} value={instrument}>
-                    {formatInstrumentLabel(instrument)}
-                  </option>
-                ))
-              )}
+              ))}
             </select>
           </label>
         </StepSection>
@@ -644,20 +653,20 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                 borderRadius: 12,
                 border: "1px solid #2f384a",
                 background: "#0f172a",
-                color: characterOptions.length > 0 ? "#e6f2ff" : "#64748b",
+                color:
+                  selectedCharacterId && characterOptions.length > 0
+                    ? "#e6f2ff"
+                    : "#64748b",
               }}
             >
-              {characterOptions.length === 0 ? (
-                <option value="" disabled>
-                  No styles
+              <option value="" disabled>
+                {characterOptions.length === 0 ? "No styles available" : "Select a style"}
+              </option>
+              {characterOptions.map((character) => (
+                <option key={character.id} value={character.id}>
+                  {character.name}
                 </option>
-              ) : (
-                characterOptions.map((character) => (
-                  <option key={character.id} value={character.id}>
-                    {character.name}
-                  </option>
-                ))
-              )}
+              ))}
             </select>
           </label>
         </StepSection>
