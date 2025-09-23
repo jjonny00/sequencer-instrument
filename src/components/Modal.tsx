@@ -86,20 +86,48 @@ export const Modal: FC<ModalProps> = ({
     const root = doc.documentElement ?? null;
     const previousBodyOverflow = body ? body.style.overflow : undefined;
     const previousRootOverflow = root ? root.style.overflow : undefined;
+    const previousBodyTouchAction = body ? body.style.touchAction : undefined;
+    const previousRootTouchAction = root ? root.style.touchAction : undefined;
+    const previousBodyOverscroll = body ? body.style.overscrollBehavior : undefined;
+    const previousRootOverscroll = root ? root.style.overscrollBehavior : undefined;
+    const previousBodyPosition = body ? body.style.position : undefined;
+    const previousBodyTop = body ? body.style.top : undefined;
+    const previousBodyLeft = body ? body.style.left : undefined;
+    const previousBodyWidth = body ? body.style.width : undefined;
+    const scrollY = win?.scrollY ?? 0;
     if (body) {
       body.style.overflow = "hidden";
+      body.style.touchAction = "none";
+      body.style.overscrollBehavior = "contain";
+      body.style.position = "fixed";
+      body.style.top = `-${scrollY}px`;
+      body.style.left = "0";
+      body.style.width = "100%";
     }
     if (root) {
       root.style.overflow = "hidden";
+      root.style.touchAction = "none";
+      root.style.overscrollBehavior = "contain";
     }
 
     return () => {
       win.removeEventListener("keydown", handleKeyDown);
       if (body) {
         body.style.overflow = previousBodyOverflow ?? "";
+        body.style.touchAction = previousBodyTouchAction ?? "";
+        body.style.overscrollBehavior = previousBodyOverscroll ?? "";
+        body.style.position = previousBodyPosition ?? "";
+        body.style.top = previousBodyTop ?? "";
+        body.style.left = previousBodyLeft ?? "";
+        body.style.width = previousBodyWidth ?? "";
       }
       if (root) {
         root.style.overflow = previousRootOverflow ?? "";
+        root.style.touchAction = previousRootTouchAction ?? "";
+        root.style.overscrollBehavior = previousRootOverscroll ?? "";
+      }
+      if (win) {
+        win.scrollTo(0, scrollY);
       }
     };
   }, [isOpen, onClose]);
@@ -191,6 +219,7 @@ export const Modal: FC<ModalProps> = ({
         flexBasis: "0%",
         WebkitOverflowScrolling: "touch",
         overscrollBehavior: "contain",
+        paddingBottom: footer ? footerHeight + 16 : 0,
       };
 
   return (

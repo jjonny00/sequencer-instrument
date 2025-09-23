@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,67 +36,88 @@ interface StepSectionProps {
 }
 
 const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => {
-  const contentRef = useRef<HTMLDivElement | null>(null);
-  const [contentHeight, setContentHeight] = useState(0);
+  const [shouldRender, setShouldRender] = useState(visible);
+  const [isActive, setIsActive] = useState(visible);
+  const hideTimeoutRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
 
-  useLayoutEffect(() => {
-    const element = contentRef.current;
-    if (!element) return;
-
-    const updateHeight = () => {
-      setContentHeight(element.getBoundingClientRect().height);
-    };
-
-    updateHeight();
-
+  useEffect(() => {
     const win = typeof window !== "undefined" ? window : undefined;
-    if (!win) return;
 
-    let observer: ResizeObserver | null = null;
+    if (visible) {
+      setShouldRender(true);
+      if (!win) {
+        setIsActive(true);
+        return () => undefined;
+      }
 
-    if (win.ResizeObserver) {
-      observer = new win.ResizeObserver(updateHeight);
-      observer.observe(element);
-    } else {
-      win.addEventListener("resize", updateHeight);
+      rafRef.current = win.requestAnimationFrame(() => {
+        setIsActive(true);
+      });
+
+      return () => {
+        if (rafRef.current !== null) {
+          win.cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+      };
     }
 
+    setIsActive(false);
+
+    if (!win) {
+      setShouldRender(false);
+      return () => undefined;
+    }
+
+    hideTimeoutRef.current = win.setTimeout(() => {
+      setShouldRender(false);
+      hideTimeoutRef.current = null;
+    }, 220);
+
     return () => {
-      observer?.disconnect();
-      if (!observer) {
-        win.removeEventListener("resize", updateHeight);
+      if (hideTimeoutRef.current !== null) {
+        win.clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
       }
     };
-  }, [children]);
+  }, [visible]);
 
-  const targetHeight = visible ? Math.max(contentHeight, 1) : 0;
+  useEffect(() => {
+    return () => {
+      const win = typeof window !== "undefined" ? window : undefined;
+      if (!win) return;
+
+      if (rafRef.current !== null) {
+        win.cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (hideTimeoutRef.current !== null) {
+        win.clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <div
       style={{
+        opacity: isActive ? 1 : 0,
+        transform: isActive ? "translateY(0)" : "translateY(12px)",
+        transition: `opacity 0.2s ease ${delay}s, transform 0.24s ease ${delay}s`,
+        willChange: "opacity, transform",
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        pointerEvents: isActive ? "auto" : "none",
         width: "100%",
-        maxHeight: targetHeight,
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateX(0)" : "translateX(16px)",
-        overflow: "hidden",
-        transition:
-          "max-height 0.4s ease, opacity 0.3s ease, transform 0.3s ease",
-        transitionDelay: visible ? `${delay}s` : "0s",
-        pointerEvents: visible ? "auto" : "none",
-        marginBottom: visible ? 16 : 0,
       }}
     >
-      <div
-        ref={contentRef}
-        style={{
-          visibility: visible ? "visible" : "hidden",
-          transform: visible ? "translateX(0)" : "translateX(16px)",
-          transition: "transform 0.3s ease",
-          transitionDelay: visible ? `${delay}s` : "0s",
-        }}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 };
@@ -331,6 +351,17 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     opacity: confirmDisabled ? 0.7 : 1,
   };
 
+  const footerContainerStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    width: "100%",
+    padding: "12px 20px",
+    borderTop: "1px solid #1f2937",
+    background: "rgba(11, 18, 32, 0.96)",
+  };
+
   const handleTogglePresetSelection = useCallback(
     (presetId: string | null) => {
       if (presetId === null) {
@@ -521,11 +552,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const sectionListStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
-    gap: 0,
+    gap: 16,
     flex: "1 1 auto",
     minHeight: 0,
     paddingRight: 4,
-    paddingBottom: 16,
   };
 
   const instrumentVisible = Boolean(pack && selectedPackId);
@@ -541,14 +571,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       fullScreen
       footer={
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            width: "100%",
-            padding: "8px 0",
-          }}
+          style={footerContainerStyle}
         >
           {isEditMode && onDelete ? (
             <IconButton
@@ -583,7 +606,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <div style={{ marginBottom: 16 }}>
+        <div>
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
             <select
