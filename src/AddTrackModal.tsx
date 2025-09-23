@@ -1,7 +1,9 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type FC,
@@ -34,23 +36,71 @@ interface StepSectionProps {
   children: ReactNode;
 }
 
-const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => (
-  <div
-    style={{
-      maxHeight: visible ? 800 : 0,
-      opacity: visible ? 1 : 0,
-      transform: visible ? "translateX(0)" : "translateX(16px)",
-      overflow: "hidden",
-      transition:
-        "max-height 0.4s ease, opacity 0.3s ease, transform 0.3s ease",
-      transitionDelay: visible ? `${delay}s` : "0s",
-      pointerEvents: visible ? "auto" : "none",
-      marginBottom: visible ? 16 : 0,
-    }}
-  >
-    <div style={{ visibility: visible ? "visible" : "hidden" }}>{children}</div>
-  </div>
-);
+const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const element = contentRef.current;
+    if (!element) return;
+
+    const updateHeight = () => {
+      setContentHeight(element.getBoundingClientRect().height);
+    };
+
+    updateHeight();
+
+    const win = typeof window !== "undefined" ? window : undefined;
+    if (!win) return;
+
+    let observer: ResizeObserver | null = null;
+
+    if (win.ResizeObserver) {
+      observer = new win.ResizeObserver(updateHeight);
+      observer.observe(element);
+    } else {
+      win.addEventListener("resize", updateHeight);
+    }
+
+    return () => {
+      observer?.disconnect();
+      if (!observer) {
+        win.removeEventListener("resize", updateHeight);
+      }
+    };
+  }, [children]);
+
+  const targetHeight = visible ? Math.max(contentHeight, 1) : 0;
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxHeight: targetHeight,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateX(0)" : "translateX(16px)",
+        overflow: "hidden",
+        transition:
+          "max-height 0.4s ease, opacity 0.3s ease, transform 0.3s ease",
+        transitionDelay: visible ? `${delay}s` : "0s",
+        pointerEvents: visible ? "auto" : "none",
+        marginBottom: visible ? 16 : 0,
+      }}
+    >
+      <div
+        ref={contentRef}
+        style={{
+          visibility: visible ? "visible" : "hidden",
+          transform: visible ? "translateX(0)" : "translateX(16px)",
+          transition: "transform 0.3s ease",
+          transitionDelay: visible ? `${delay}s` : "0s",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
 
 interface PresetListItem {
   id: string;
@@ -234,11 +284,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         pattern: preset.pattern ?? undefined,
       })),
     [userPresets]
-  );
-
-  const combinedPresetItems = useMemo(
-    () => [...userPresetItems, ...packPresets],
-    [userPresetItems, packPresets]
   );
 
   const confirmDisabled = !pack || !selectedInstrumentId || !selectedCharacterId;
@@ -470,10 +515,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [handleTogglePresetSelection]
   );
 
-  const currentPresetLabel = selectedPresetId
-    ? combinedPresetItems.find((preset) => preset.id === selectedPresetId)?.name ?? "Custom"
-    : "None";
-
   const sectionListStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -503,7 +544,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             justifyContent: "space-between",
             gap: 12,
             width: "100%",
-            padding: "4px 0",
+            padding: "8px 0",
           }}
         >
           {isEditMode && onDelete ? (
@@ -722,18 +763,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           </div>
         </StepSection>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            fontSize: 12,
-            color: "#94a3b8",
-            marginTop: 4,
-          }}
-        >
-          <span>Current saved loop: {currentPresetLabel}</span>
-        </div>
       </div>
     </Modal>
   );

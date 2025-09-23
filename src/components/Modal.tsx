@@ -30,6 +30,7 @@ const overlayStyle: CSSProperties = {
   justifyContent: "center",
   padding: "min(32px, 5vw)",
   zIndex: 50,
+  overscrollBehavior: "contain",
 };
 
 const modalStyle: CSSProperties = {
@@ -82,15 +83,23 @@ export const Modal: FC<ModalProps> = ({
     win.addEventListener("keydown", handleKeyDown);
 
     const body = doc.body ?? null;
-    const previousOverflow = body ? body.style.overflow : undefined;
+    const root = doc.documentElement ?? null;
+    const previousBodyOverflow = body ? body.style.overflow : undefined;
+    const previousRootOverflow = root ? root.style.overflow : undefined;
     if (body) {
       body.style.overflow = "hidden";
+    }
+    if (root) {
+      root.style.overflow = "hidden";
     }
 
     return () => {
       win.removeEventListener("keydown", handleKeyDown);
       if (body) {
-        body.style.overflow = previousOverflow ?? "";
+        body.style.overflow = previousBodyOverflow ?? "";
+      }
+      if (root) {
+        root.style.overflow = previousRootOverflow ?? "";
       }
     };
   }, [isOpen, onClose]);
