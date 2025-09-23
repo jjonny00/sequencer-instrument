@@ -1634,13 +1634,21 @@ export default function App() {
           maxWidth={460}
           footer={
             projectModalMode === "save" ? (
-              <IconButton
-                icon="save"
-                label="Save song"
-                tone="accent"
-                onClick={handleConfirmSaveProject}
-                disabled={!projectNameInput.trim()}
-              />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  width: "100%",
+                }}
+              >
+                <IconButton
+                  icon="save"
+                  label="Save song"
+                  tone="accent"
+                  onClick={handleConfirmSaveProject}
+                  disabled={!projectNameInput.trim()}
+                />
+              </div>
             ) : null
           }
         >
@@ -1650,9 +1658,10 @@ export default function App() {
                 <span style={{ fontSize: 13, color: "#cbd5f5" }}>Song name</span>
                 <input
                   id="project-name"
+                  type="text"
                   value={projectNameInput}
                   onChange={(event) => setProjectNameInput(event.target.value)}
-                  placeholder="My Jam"
+                  aria-describedby="project-name-helper"
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -1661,6 +1670,12 @@ export default function App() {
                     color: "#e6f2ff",
                   }}
                 />
+                <span
+                  id="project-name-helper"
+                  style={{ fontSize: 12, color: "#94a3b8" }}
+                >
+                  Choose a name so you can find this song later.
+                </span>
               </label>
               <div
                 style={{
@@ -1787,29 +1802,35 @@ export default function App() {
           title="Export Song"
           subtitle="Download your jam as JSON or render audio offline."
           maxWidth={420}
+          footer={
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                width: "100%",
+              }}
+            >
+              <IconButton
+                icon="file_download"
+                label="Export as Audio"
+                tone="accent"
+                onClick={handleExportAudio}
+                disabled={isAudioExporting}
+              />
+              <IconButton
+                icon="file_download"
+                label="Export as Project File"
+                tone="accent"
+                onClick={handleExportJson}
+                disabled={isAudioExporting}
+              />
+            </div>
+          }
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <IconButton
-              icon="file_download"
-              label="Export song JSON"
-              tone="accent"
-              onClick={handleExportJson}
-              disabled={isAudioExporting}
-            />
-            <IconButton
-              icon="file_download"
-              label="Export audio"
-              tone="accent"
-              onClick={handleExportAudio}
-              disabled={isAudioExporting}
-            />
+          <div style={{ fontSize: 13, color: "#94a3b8" }}>
+            Share your jam with friends or save your work for later.
           </div>
           {isAudioExporting ? (
             <div
