@@ -46,6 +46,7 @@ const modalStyle: CSSProperties = {
   gap: 20,
   maxHeight: "90vh",
   minHeight: 0,
+  boxSizing: "border-box",
 };
 
 export const Modal: FC<ModalProps> = ({
@@ -187,40 +188,59 @@ export const Modal: FC<ModalProps> = ({
         height: "100dvh",
         maxHeight: "100dvh",
         minHeight: "100dvh",
-        padding: "20px 20px calc(24px + env(safe-area-inset-bottom))",
-        boxSizing: "border-box",
-        display: "grid",
-        gridTemplateRows: footer
-          ? "auto minmax(0, 1fr) auto"
-          : "auto minmax(0, 1fr)",
+        padding: "20px 20px 0",
         overflow: "hidden",
       }
-    : { ...modalStyle, maxWidth };
-
-  const contentStyle: CSSProperties = fullScreen
-    ? {
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-        overflowY: "auto",
-        minHeight: 0,
-        WebkitOverflowScrolling: "touch",
-        overscrollBehavior: "contain",
-        paddingBottom: footer ? footerHeight + 16 : 0,
-      }
     : {
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-        overflowY: "auto",
-        minHeight: 0,
-        flexGrow: 1,
-        flexShrink: 1,
-        flexBasis: "0%",
-        WebkitOverflowScrolling: "touch",
-        overscrollBehavior: "contain",
-        paddingBottom: footer ? footerHeight + 16 : 0,
+        ...modalStyle,
+        maxWidth,
+        paddingBottom: footer ? 0 : modalStyle.padding,
       };
+
+  if (fullScreen && footer) {
+    resolvedModalStyle.paddingBottom = 0;
+  }
+
+  if (footer) {
+    resolvedModalStyle.gap = 0;
+  }
+
+  const bodyWrapperStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+    flexBasis: "0%",
+  };
+
+  const contentStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    overflowY: "auto",
+    minHeight: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: "0%",
+    WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
+    paddingBottom: footer ? footerHeight + 16 : 0,
+  };
+
+  const footerContainerStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 16,
+    width: "100%",
+    padding: "16px 24px",
+    paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+    borderTop: "1px solid #1f2937",
+    background: "#0f172a",
+    boxSizing: "border-box",
+  };
 
   return (
     <div
@@ -235,59 +255,55 @@ export const Modal: FC<ModalProps> = ({
         style={resolvedModalStyle}
         onClick={(event) => event.stopPropagation()}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: subtitle ? "flex-start" : "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <h2
-              id={labelId}
-              style={{
-                margin: 0,
-                fontSize: "1.25rem",
-                fontWeight: 700,
-                letterSpacing: 0.2,
-              }}
-            >
-              {title}
-            </h2>
-            {hasSubtitle ? (
-              <p
-                id={descriptionId}
-                style={{
-                  margin: 0,
-                  fontSize: 13,
-                  color: "#94a3b8",
-                  lineHeight: 1.5,
-                }}
-              >
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
-          <IconButton
-            icon="close"
-            label="Close"
-            tone="ghost"
-            onClick={onClose}
-            style={{ alignSelf: "flex-start" }}
-          />
-        </div>
-        <div className="scrollable" style={contentStyle}>
-          {children}
-        </div>
-        {footer ? (
+        <div style={bodyWrapperStyle}>
           <div
-            ref={footerRef}
             style={{
               display: "flex",
-              justifyContent: "flex-end",
+              alignItems: subtitle ? "flex-start" : "center",
+              justifyContent: "space-between",
+              gap: 12,
             }}
           >
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <h2
+                id={labelId}
+                style={{
+                  margin: 0,
+                  fontSize: "1.25rem",
+                  fontWeight: 700,
+                  letterSpacing: 0.2,
+                }}
+              >
+                {title}
+              </h2>
+              {hasSubtitle ? (
+                <p
+                  id={descriptionId}
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    color: "#94a3b8",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {subtitle}
+                </p>
+              ) : null}
+            </div>
+            <IconButton
+              icon="close"
+              label="Close"
+              tone="ghost"
+              onClick={onClose}
+              style={{ alignSelf: "flex-start" }}
+            />
+          </div>
+          <div className="scrollable" style={contentStyle}>
+            {children}
+          </div>
+        </div>
+        {footer ? (
+          <div ref={footerRef} style={footerContainerStyle}>
             {footer}
           </div>
         ) : null}

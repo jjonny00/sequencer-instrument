@@ -351,17 +351,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     opacity: confirmDisabled ? 0.7 : 1,
   };
 
-  const footerContainerStyle: CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    width: "100%",
-    padding: "12px 20px",
-    borderTop: "1px solid #1f2937",
-    background: "rgba(11, 18, 32, 0.96)",
-  };
-
   const handleTogglePresetSelection = useCallback(
     (presetId: string | null) => {
       if (presetId === null) {
@@ -570,20 +559,18 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       subtitle={description}
       fullScreen
       footer={
-        <div
-          style={footerContainerStyle}
-        >
+        <>
           {isEditMode && onDelete ? (
             <IconButton
               icon="delete"
               label="Remove track"
               tone="danger"
               iconSize={20}
-              style={compactIconButtonStyle}
+              style={{ ...compactIconButtonStyle, marginRight: "auto" }}
               onClick={onDelete}
             />
           ) : (
-            <div />
+            <div aria-hidden="true" style={{ marginRight: "auto" }} />
           )}
           <div style={{ display: "flex", gap: 12 }}>
             <button
@@ -602,7 +589,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               {confirmLabel}
             </button>
           </div>
-        </div>
+        </>
       }
     >
       <div style={sectionListStyle}>
