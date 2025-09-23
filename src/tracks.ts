@@ -30,3 +30,6 @@ export interface Track {
   muted: boolean;
   source?: TrackSource;
 }
+
+export const createTriggerKey = (packId: string, instrumentId: string) =>
+  `${packId}::${instrumentId}`;

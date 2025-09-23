@@ -265,8 +265,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const labelLongPressRef = useRef<Map<number, boolean>>(new Map());
   const pack = packs[packIndex];
-  const instrumentOptions = Object.keys(pack.instruments);
-  const canAddTrack = instrumentOptions.length > 0;
+  const canAddTrack = packs.some(
+    (candidate) => Object.keys(candidate.instruments).length > 0
+  );
   const addTrackEnabled = canAddTrack;
   const isHeroAddTrack = tracks.length === 0;
 
@@ -435,7 +436,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       if (!addTrackEnabled) return;
       if (!instrumentId) return;
       const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
-      if (!activePack || activePack.id !== pack.id) {
+      if (!activePack) {
         return;
       }
       const resolvePreset = () => {
@@ -554,7 +555,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     ) => {
       if (!instrumentId) return;
       const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
-      if (!activePack || activePack.id !== pack.id) {
+      if (!activePack) {
         return;
       }
       const resolvePreset = () => {
@@ -994,6 +995,11 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const isMuted = t.muted;
           const isEditing = editing === t.id;
           const trackLabel = getTrackNumberLabel(tracks, t.id);
+          const packName = t.source?.packId
+            ? packs.find((candidate) => candidate.id === t.source?.packId)?.name ?? "Unknown Pack"
+            : t.instrument
+            ? "Unknown Pack"
+            : undefined;
 
           const handleLabelPointerDown = (
             event: ReactPointerEvent<HTMLDivElement>
@@ -1097,6 +1103,27 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                     transition: "opacity 0.2s ease, filter 0.2s ease",
                   }}
                 >
+                  {packName ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 6,
+                        right: 8,
+                        padding: "2px 6px",
+                        borderRadius: 8,
+                        background: "rgba(15, 20, 32, 0.85)",
+                        border: "1px solid #2a3344",
+                        color: "#cbd5f5",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        letterSpacing: 0.4,
+                        textTransform: "uppercase",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {packName}
+                    </div>
+                  ) : null}
                   {t.pattern ? (
                     isEditing ? (
                       <PatternEditor

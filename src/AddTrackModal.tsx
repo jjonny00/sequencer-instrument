@@ -26,7 +26,7 @@ import {
 import type { Chunk } from "./chunks";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
-import type { TriggerMap } from "./tracks";
+import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
 
 interface StepSectionProps {
@@ -368,8 +368,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const previewStyle = useCallback(
     async (characterId: string) => {
-      if (!characterId || !selectedInstrumentId) return;
-      const trigger = triggers[selectedInstrumentId];
+      if (!characterId || !selectedInstrumentId || !selectedPackId) return;
+      const trigger =
+        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
       if (!trigger) return;
       try {
         await initAudioContext();
@@ -386,14 +387,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       };
       trigger(start, 0.9, 0, undefined, 0.5, previewChunk, characterId);
     },
-    [selectedInstrumentId, triggers]
+    [selectedInstrumentId, selectedPackId, triggers]
   );
 
   const previewPreset = useCallback(
     async (chunk: Chunk, fallbackCharacterId?: string | null) => {
       const instrumentId = chunk.instrument || selectedInstrumentId;
-      if (!instrumentId) return;
-      const trigger = triggers[instrumentId];
+      if (!instrumentId || !selectedPackId) return;
+      const trigger = triggers[createTriggerKey(selectedPackId, instrumentId)];
       if (!trigger) return;
       try {
         await initAudioContext();
@@ -453,7 +454,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         trigger(start, 0.9, 0, chunk.note, chunk.sustain, chunk, activeCharacterId ?? undefined);
       }
     },
-    [selectedCharacterId, selectedInstrumentId, triggers]
+    [selectedCharacterId, selectedInstrumentId, selectedPackId, triggers]
   );
 
   const handleCharacterChange = useCallback(
