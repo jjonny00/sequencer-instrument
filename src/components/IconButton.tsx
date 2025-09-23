@@ -12,6 +12,7 @@ interface IconButtonProps
   label: string;
   tone?: IconButtonTone;
   iconSize?: number;
+  showLabel?: boolean;
 }
 
 const baseStyle: CSSProperties = {
@@ -30,6 +31,19 @@ const baseStyle: CSSProperties = {
   lineHeight: 0,
   padding: 0,
   touchAction: "manipulation",
+};
+
+const iconOnlyStyle: CSSProperties = {
+  padding: baseStyle.padding,
+  gap: 0,
+};
+
+const iconWithLabelStyle: CSSProperties = {
+  padding: "0 16px",
+  gap: 8,
+  fontSize: 14,
+  lineHeight: "20px",
+  fontWeight: 600,
 };
 
 const toneStyles: Record<IconButtonTone, CSSProperties> = {
@@ -53,12 +67,23 @@ const toneStyles: Record<IconButtonTone, CSSProperties> = {
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   function IconButton(
-    { icon, label, tone = "default", iconSize = 24, style, disabled, title, ...props },
+    {
+      icon,
+      label,
+      tone = "default",
+      iconSize = 24,
+      showLabel = false,
+      style,
+      disabled,
+      title,
+      ...props
+    },
     ref
   ) {
     const combinedStyle: CSSProperties = {
       ...baseStyle,
       ...(toneStyles[tone] ?? toneStyles.default),
+      ...(showLabel ? iconWithLabelStyle : iconOnlyStyle),
       ...(style ?? {}),
       cursor: disabled ? "not-allowed" : baseStyle.cursor,
       opacity: disabled ? 0.5 : 1,
@@ -89,6 +114,19 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         >
           {icon}
         </span>
+        {showLabel ? (
+          <span
+            aria-hidden="true"
+            style={{
+              fontSize: iconWithLabelStyle.fontSize,
+              lineHeight: iconWithLabelStyle.lineHeight,
+              fontWeight: iconWithLabelStyle.fontWeight,
+              color: combinedStyle.color,
+            }}
+          >
+            {label}
+          </span>
+        ) : null}
       </button>
     );
   }

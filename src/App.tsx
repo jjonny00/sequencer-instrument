@@ -1644,6 +1644,7 @@ export default function App() {
                 <IconButton
                   icon="save"
                   label="Save song"
+                  showLabel
                   tone="accent"
                   onClick={handleConfirmSaveProject}
                   disabled={!projectNameInput.trim()}
@@ -1815,6 +1816,7 @@ export default function App() {
               <IconButton
                 icon="file_download"
                 label="Export as Audio"
+                showLabel
                 tone="accent"
                 onClick={handleExportAudio}
                 disabled={isAudioExporting}
@@ -1822,6 +1824,7 @@ export default function App() {
               <IconButton
                 icon="file_download"
                 label="Export as Project File"
+                showLabel
                 tone="accent"
                 onClick={handleExportJson}
                 disabled={isAudioExporting}
