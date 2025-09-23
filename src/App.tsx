@@ -1634,22 +1634,14 @@ export default function App() {
           maxWidth={460}
           footer={
             projectModalMode === "save" ? (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  width: "100%",
-                }}
-              >
-                <IconButton
-                  icon="save"
-                  label="Save song"
-                  showLabel
-                  tone="accent"
-                  onClick={handleConfirmSaveProject}
-                  disabled={!projectNameInput.trim()}
-                />
-              </div>
+              <IconButton
+                icon="save"
+                label="Save song"
+                showLabel
+                tone="accent"
+                onClick={handleConfirmSaveProject}
+                disabled={!projectNameInput.trim()}
+              />
             ) : null
           }
         >
@@ -1804,15 +1796,7 @@ export default function App() {
           subtitle="Download your jam as JSON or render audio offline."
           maxWidth={420}
           footer={
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                gap: 12,
-                flexWrap: "wrap",
-                width: "100%",
-              }}
-            >
+            <>
               <IconButton
                 icon="file_download"
                 label="Export as Audio"
@@ -1829,7 +1813,7 @@ export default function App() {
                 onClick={handleExportJson}
                 disabled={isAudioExporting}
               />
-            </div>
+            </>
           }
         >
           <div style={{ fontSize: 13, color: "#94a3b8" }}>
