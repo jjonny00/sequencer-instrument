@@ -1098,7 +1098,7 @@ export default function App() {
         return;
       }
       if (pendingLoopStripAction === "openLibrary") {
-        handle.openSequenceLibrary();
+        handle.openLoopsLibrary();
       }
       setPendingLoopStripAction(null);
     };
@@ -1509,16 +1509,16 @@ export default function App() {
     };
   }, []);
 
-  const handleOpenSequenceLibrary = () => {
+  const handleOpenLoopsLibrary = () => {
     if (viewMode !== "track") {
       setViewMode("track");
       setPendingLoopStripAction("openLibrary");
       return;
     }
-    loopStripRef.current?.openSequenceLibrary();
+    loopStripRef.current?.openLoopsLibrary();
   };
 
-  const handleSelectSequenceFromSongView = useCallback(
+  const handleSelectLoopFromSongView = useCallback(
     (groupId: string) => {
       setSelectedGroupId(groupId);
       setEditing(null);
@@ -2329,8 +2329,8 @@ export default function App() {
                 setBpm={setBpm}
                 onToggleTransport={handlePlayStop}
                 selectedGroupId={selectedGroupId}
-                onOpenSequenceLibrary={handleOpenSequenceLibrary}
-                onSelectSequence={handleSelectSequenceFromSongView}
+                onOpenLoopsLibrary={handleOpenLoopsLibrary}
+                onSelectLoop={handleSelectLoopFromSongView}
               />
             )}
           </div>
