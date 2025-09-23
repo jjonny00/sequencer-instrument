@@ -13,6 +13,7 @@ interface IconButtonProps
   tone?: IconButtonTone;
   iconSize?: number;
   showLabel?: boolean;
+  description?: string;
 }
 
 const baseStyle: CSSProperties = {
@@ -39,11 +40,13 @@ const iconOnlyStyle: CSSProperties = {
 };
 
 const iconWithLabelStyle: CSSProperties = {
-  padding: "0 16px",
-  gap: 8,
+  padding: "12px 16px",
+  gap: 12,
   fontSize: 14,
   lineHeight: "20px",
   fontWeight: 600,
+  justifyContent: "flex-start",
+  alignItems: "center",
 };
 
 const toneStyles: Record<IconButtonTone, CSSProperties> = {
@@ -73,6 +76,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       tone = "default",
       iconSize = 24,
       showLabel = false,
+      description,
       style,
       disabled,
       title,
@@ -80,22 +84,26 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     },
     ref
   ) {
+    const hasTextContent = showLabel || Boolean(description);
     const combinedStyle: CSSProperties = {
       ...baseStyle,
       ...(toneStyles[tone] ?? toneStyles.default),
-      ...(showLabel ? iconWithLabelStyle : iconOnlyStyle),
+      ...(hasTextContent ? iconWithLabelStyle : iconOnlyStyle),
       ...(style ?? {}),
       cursor: disabled ? "not-allowed" : baseStyle.cursor,
       opacity: disabled ? 0.5 : 1,
     };
 
-    const finalTitle = title ?? label;
+    const accessibleLabel = description
+      ? `${label}. ${description}`
+      : label;
+    const finalTitle = title ?? accessibleLabel;
 
     return (
       <button
         ref={ref}
         type="button"
-        aria-label={label}
+        aria-label={accessibleLabel}
         title={finalTitle}
         {...props}
         disabled={disabled}
@@ -114,17 +122,38 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         >
           {icon}
         </span>
-        {showLabel ? (
+        {hasTextContent ? (
           <span
             aria-hidden="true"
             style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: description ? 2 : 0,
+              color: combinedStyle.color,
+              textAlign: "left",
               fontSize: iconWithLabelStyle.fontSize,
               lineHeight: iconWithLabelStyle.lineHeight,
               fontWeight: iconWithLabelStyle.fontWeight,
-              color: combinedStyle.color,
             }}
           >
-            {label}
+            {showLabel ? (
+              <span style={{ fontSize: 15, lineHeight: "20px", fontWeight: 600 }}>
+                {label}
+              </span>
+            ) : null}
+            {description ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  lineHeight: "16px",
+                  fontWeight: 500,
+                  opacity: 0.8,
+                }}
+              >
+                {description}
+              </span>
+            ) : null}
           </span>
         ) : null}
       </button>

@@ -1793,58 +1793,75 @@ export default function App() {
           isOpen={isExportModalOpen || isAudioExporting}
           onClose={handleCloseExportModal}
           title="Export Song"
-          subtitle="Download your jam as JSON or render audio offline."
           maxWidth={420}
           footer={
-            <>
+            <div style={{ display: "flex", gap: 12, width: "100%" }}>
               <IconButton
                 icon="file_download"
                 label="Export as Audio"
+                description="Shareable .wav file."
                 showLabel
                 tone="accent"
                 onClick={handleExportAudio}
                 disabled={isAudioExporting}
+                style={{ flex: 1 }}
               />
               <IconButton
-                icon="file_download"
+                icon="folder"
                 label="Export as Project File"
+                description="Reopen in Sequencer."
                 showLabel
                 tone="accent"
                 onClick={handleExportJson}
                 disabled={isAudioExporting}
+                style={{ flex: 1 }}
               />
-            </>
+            </div>
           }
         >
-          <div style={{ fontSize: 13, color: "#94a3b8" }}>
-            Share your jam with friends or save your work for later.
-          </div>
-          {isAudioExporting ? (
-            <div
-              style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: 14,
-                border: "1px solid #1f2937",
-                background: "#0b1624",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 8,
-                textAlign: "center",
-                color: "#cbd5f5",
-                fontSize: 13,
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 28, color: "#27E0B0" }}
-              >
-                hourglass_top
-              </span>
-              <span>{audioExportMessage}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <p style={{ margin: 0, fontSize: 15, color: "#cbd5f5" }}>
+                Choose how you’d like to save your song.
+              </p>
+              <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
+                Download audio to share, or a project file to keep working later.
+              </p>
             </div>
-          ) : null}
+            <div
+              aria-hidden="true"
+              style={{
+                height: 1,
+                width: "100%",
+                background: "rgba(148, 163, 184, 0.16)",
+              }}
+            />
+            {isAudioExporting ? (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 14,
+                  border: "1px solid #1f2937",
+                  background: "#0b1624",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
+                  textAlign: "center",
+                  color: "#cbd5f5",
+                  fontSize: 13,
+                }}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 28, color: "#27E0B0" }}
+                >
+                  hourglass_top
+                </span>
+                <span>{audioExportMessage}</span>
+              </div>
+            ) : null}
+          </div>
         </Modal>
       )}
       {!started ? (
