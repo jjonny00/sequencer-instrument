@@ -207,7 +207,7 @@ type GroupEditorState =
     };
 
 export interface LoopStripHandle {
-  openSequenceLibrary: () => void;
+  openLoopsLibrary: () => void;
   addTrack: () => void;
   addTrackWithOptions: (options: AddTrackRequest) => void;
   updateTrackWithOptions: (trackId: number, options: AddTrackRequest) => void;
@@ -260,7 +260,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const [stepEditing, setStepEditing] = useState<
     { trackId: number; index: number } | null
   >(null);
-  const [isSequenceLibraryOpen, setIsSequenceLibraryOpen] = useState(false);
+  const [isLoopsLibraryOpen, setIsLoopsLibraryOpen] = useState(false);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const labelLongPressRef = useRef<Map<number, boolean>>(new Map());
@@ -323,7 +323,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         setSelectedGroupId(null);
       }
       setGroupEditor(null);
-      setIsSequenceLibraryOpen(false);
+      setIsLoopsLibraryOpen(false);
       return;
     }
     const exists = selectedGroupId
@@ -672,7 +672,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   useImperativeHandle(
     ref,
     () => ({
-      openSequenceLibrary: () => setIsSequenceLibraryOpen(true),
+      openLoopsLibrary: () => setIsLoopsLibraryOpen(true),
       addTrack: () => handleAddTrack(),
       addTrackWithOptions: (options: AddTrackRequest) =>
         handleAddTrackWithOptions(options),
@@ -903,7 +903,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         <button
           type="button"
           onClick={() =>
-            setIsSequenceLibraryOpen((open) => !open && patternGroups.length > 0)
+            setIsLoopsLibraryOpen((open) => !open && patternGroups.length > 0)
           }
           disabled={patternGroups.length === 0}
           style={{
@@ -1180,9 +1180,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           );
         })}
       </div>
-      {isSequenceLibraryOpen && (
+      {isLoopsLibraryOpen && (
         <div
-          onClick={() => setIsSequenceLibraryOpen(false)}
+          onClick={() => setIsLoopsLibraryOpen(false)}
           style={{
             position: "fixed",
             inset: 0,
@@ -1224,11 +1224,11 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   color: "#e6f2ff",
                 }}
               >
-                Loop Library
+                Loops Library
               </h3>
               <button
                 type="button"
-                onClick={() => setIsSequenceLibraryOpen(false)}
+                onClick={() => setIsLoopsLibraryOpen(false)}
                 style={{
                   marginLeft: "auto",
                   padding: "4px 8px",
@@ -1281,7 +1281,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   const value = event.target.value;
                   setSelectedGroupId(value || null);
                   setGroupEditor(null);
-                  setIsSequenceLibraryOpen(false);
+                  setIsLoopsLibraryOpen(false);
                 }}
                 style={{
                   flex: "1 1 auto",
@@ -1295,7 +1295,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               >
                 {patternGroups.map((group) => (
                   <option key={group.id} value={group.id}>
-                    {group.name}
+                    📼 {group.name}
                   </option>
                 ))}
               </select>
@@ -1448,7 +1448,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                     type="button"
                     onClick={() => {
                       handleSaveGroup();
-                      setIsSequenceLibraryOpen(false);
+                      setIsLoopsLibraryOpen(false);
                     }}
                     style={{
                       padding: "8px 12px",
@@ -1483,7 +1483,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             ) : selectedGroup ? (
               <span style={{ fontSize: 12, color: "#94a3b8" }}>
                 {selectedGroup.tracks.length === 0
-                  ? "No saved tracks yet. Tap Save Loop to capture the current loop."
+                  ? "Save this beat to use again later!"
                   : `${selectedGroup.tracks.length} saved track${
                       selectedGroup.tracks.length === 1 ? "" : "s"
                     } including mute states.`}

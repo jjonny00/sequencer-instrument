@@ -18,8 +18,8 @@ interface SongViewProps {
   setBpm: Dispatch<SetStateAction<number>>;
   onToggleTransport: () => void;
   selectedGroupId: string | null;
-  onOpenSequenceLibrary: () => void;
-  onSelectSequence: (groupId: string) => void;
+  onOpenLoopsLibrary: () => void;
+  onSelectLoop: (groupId: string) => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -39,8 +39,8 @@ export function SongView({
   setBpm,
   onToggleTransport,
   selectedGroupId,
-  onOpenSequenceLibrary,
-  onSelectSequence,
+  onOpenLoopsLibrary,
+  onSelectLoop,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -170,7 +170,7 @@ export function SongView({
       >
         <button
           type="button"
-          onClick={onOpenSequenceLibrary}
+          onClick={onOpenLoopsLibrary}
           disabled={patternGroups.length === 0}
           style={{
             padding: "6px 14px",
@@ -660,7 +660,7 @@ export function SongView({
               color: "#e6f2ff",
             }}
           >
-            Loop Library
+            Loops Library
           </h3>
           <span
             style={{
@@ -702,7 +702,7 @@ export function SongView({
                 <button
                   key={group.id}
                   type="button"
-                  onClick={() => onSelectSequence(group.id)}
+                  onClick={() => onSelectLoop(group.id)}
                   style={{
                     borderRadius: 10,
                     border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
@@ -726,6 +726,9 @@ export function SongView({
                       gap: 8,
                     }}
                   >
+                    <span aria-hidden="true" style={{ fontSize: 16 }}>
+                      📼
+                    </span>
                     <span style={{ fontWeight: 600 }}>{group.name}</span>
                     <span
                       style={{
