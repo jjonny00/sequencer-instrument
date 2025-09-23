@@ -40,8 +40,8 @@ const iconOnlyStyle: CSSProperties = {
 };
 
 const iconWithLabelStyle: CSSProperties = {
-  padding: "12px 16px",
-  gap: 12,
+  padding: "10px 14px",
+  gap: 10,
   fontSize: 14,
   lineHeight: "20px",
   fontWeight: 600,
@@ -148,7 +148,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
                   fontSize: 12,
                   lineHeight: "16px",
                   fontWeight: 500,
-                  opacity: 0.8,
+                  color: "#94a3b8",
                 }}
               >
                 {description}
