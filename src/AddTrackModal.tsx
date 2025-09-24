@@ -456,131 +456,109 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <div data-select-root>
-          <label style={fieldLabelStyle}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-            <select
-              value={selectedPackId || ""}
-              onChange={(event) => onSelectPack(event.target.value)}
-              style={{
-                ...baseSelectStyle,
-                color: selectedPackId ? "#e6f2ff" : "#64748b",
-              }}
-            >
-              <option value="" disabled>
-                Select a sound pack
+        <label style={fieldLabelStyle}>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
+          <select
+            value={selectedPackId || ""}
+            onChange={(event) => onSelectPack(event.target.value)}
+            style={{
+              ...baseSelectStyle,
+              color: selectedPackId ? "#e6f2ff" : "#64748b",
+            }}
+          >
+            <option value="" disabled>
+              Select a sound pack
+            </option>
+            {packs.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
               </option>
-              {packs.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+            ))}
+          </select>
+        </label>
 
-        <div
+        <label
           aria-disabled={instrumentDisabled}
-          data-select-root
           style={{
+            ...fieldLabelStyle,
             opacity: instrumentDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
-            pointerEvents: "auto",
           }}
         >
-          <label style={fieldLabelStyle}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-            <select
-              value={selectedInstrumentId || ""}
-              onChange={(event) => onSelectInstrument(event.target.value)}
-              disabled={instrumentDisabled}
-              style={{
-                ...baseSelectStyle,
-                ...(instrumentDisabled ? disabledSelectStyle : {}),
-                color:
-                  selectedInstrumentId && !instrumentDisabled
-                    ? "#e6f2ff"
-                    : "#64748b",
-              }}
-            >
-              {instrumentDisabled ? (
-                <option value="" disabled>
-                  {!selectedPackId
-                    ? "Select a sound pack first"
-                    : "Loading instruments..."}
-                </option>
-              ) : (
-                <>
-                  <option value="" disabled>
-                    Select an instrument
-                  </option>
-                  {instrumentOptions.map((instrument) => (
-                    <option key={instrument} value={instrument}>
-                      {formatInstrumentLabel(instrument)}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-          </label>
-        </div>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
+          <select
+            value={selectedInstrumentId || ""}
+            onChange={(event) => onSelectInstrument(event.target.value)}
+            disabled={instrumentDisabled}
+            style={{
+              ...baseSelectStyle,
+              ...(instrumentDisabled ? disabledSelectStyle : {}),
+              color:
+                selectedInstrumentId && !instrumentDisabled
+                  ? "#e6f2ff"
+                  : "#64748b",
+            }}
+          >
+            <option value="" disabled>
+              {!selectedPackId
+                ? "Select a sound pack first"
+                : instrumentOptionsReady
+                ? "Select an instrument"
+                : "Loading instruments..."}
+            </option>
+            {instrumentOptions.map((instrument) => (
+              <option key={instrument} value={instrument}>
+                {formatInstrumentLabel(instrument)}
+              </option>
+            ))}
+          </select>
+        </label>
 
-        <div
+        <label
           aria-disabled={styleDisabled}
-          data-select-root
           style={{
+            ...fieldLabelStyle,
             opacity: styleDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
-            pointerEvents: "auto",
           }}
         >
-          <label style={fieldLabelStyle}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
-            <select
-              value={selectedCharacterId || ""}
-              onChange={(event) => handleCharacterChange(event.target.value)}
-              disabled={styleDisabled}
-              style={{
-                ...baseSelectStyle,
-                ...(styleDisabled ? disabledSelectStyle : {}),
-                color:
-                  selectedCharacterId && !styleDisabled
-                    ? "#e6f2ff"
-                    : "#64748b",
-              }}
-            >
-              {styleDisabled ? (
-                <option value="" disabled>
-                  {!selectedInstrumentId
-                    ? "Select an instrument first"
-                    : "Loading styles..."}
-                </option>
-              ) : (
-                <>
-                  <option value="" disabled>
-                    Select a style
-                  </option>
-                  {characterOptions.map((character) => (
-                    <option key={character.id} value={character.id}>
-                      {character.name}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-          </label>
-        </div>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
+          <select
+            value={selectedCharacterId || ""}
+            onChange={(event) => handleCharacterChange(event.target.value)}
+            disabled={styleDisabled}
+            style={{
+              ...baseSelectStyle,
+              ...(styleDisabled ? disabledSelectStyle : {}),
+              color:
+                selectedCharacterId && !styleDisabled
+                  ? "#e6f2ff"
+                  : "#64748b",
+            }}
+          >
+            <option value="" disabled>
+              {!selectedInstrumentId
+                ? "Select an instrument first"
+                : styleOptionsReady
+                ? "Select a style"
+                : "Loading styles..."}
+            </option>
+            {characterOptions.map((character) => (
+              <option key={character.id} value={character.id}>
+                {character.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div
           aria-disabled={presetSelectDisabled}
-          data-select-root
           style={{
-            opacity: presetSelectDisabled ? 0.6 : 1,
-            transition: "opacity 0.2s ease",
-            pointerEvents: "auto",
             display: "flex",
             flexDirection: "column",
             gap: 8,
+            opacity: presetSelectDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
           }}
         >
           <label style={fieldLabelStyle}>
