@@ -29,6 +29,8 @@ import { initAudioContext } from "./utils/audio";
 
 type SelectField = "pack" | "instrument" | "style" | "preset";
 
+const ENABLE_DELAY_MS = 180;
+
 const baseSelectStyle: CSSProperties = {
   padding: "10px 12px",
   borderRadius: 12,
@@ -42,6 +44,11 @@ const disabledSelectStyle: CSSProperties = {
   opacity: 0.5,
   color: "#64748b",
   cursor: "not-allowed",
+};
+
+const statusTextStyle: CSSProperties = {
+  fontSize: 12,
+  color: "#94a3b8",
 };
 
 interface AddTrackModalProps {
@@ -87,7 +94,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     () => packs.find((candidate) => candidate.id === selectedPackId) ?? null,
     [packs, selectedPackId]
   );
-  const instrumentOptions = pack ? Object.keys(pack.instruments) : [];
+  const instrumentOptions = useMemo(
+    () => (pack ? Object.keys(pack.instruments) : []),
+    [pack]
+  );
   const characterOptions = useMemo(
     () =>
       selectedInstrumentId && pack?.id
@@ -107,6 +117,16 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     { id: string; name: string; characterId: string | null; pattern: Chunk | null }[]
   >([]);
   const [handoffLock, setHandoffLock] = useState<SelectField | null>(null);
+  const [loadingState, setLoadingState] = useState({
+    instrument: false,
+    style: false,
+    preset: false,
+  });
+  const [readyState, setReadyState] = useState({
+    instrument: false,
+    style: false,
+    preset: false,
+  });
 
   const packPresets = useMemo(
     () =>
@@ -131,12 +151,190 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   );
 
   const scheduleAfterBlur = useCallback((task: () => void) => {
-    if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
-      window.setTimeout(task, 50);
-    } else {
-      setTimeout(task, 50);
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestAnimationFrame === "function"
+    ) {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(task);
+      });
+      return;
     }
+    setTimeout(task, 0);
   }, []);
+
+  const scheduleReadyTransition = useCallback((task: () => void) => {
+    let cancelled = false;
+    let raf1: number | undefined;
+    let raf2: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const finalize = () => {
+      if (cancelled) return;
+      task();
+    };
+
+    const startTimer = () => {
+      timeoutId = setTimeout(finalize, ENABLE_DELAY_MS);
+    };
+
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestAnimationFrame === "function"
+    ) {
+      raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(startTimer);
+      });
+    } else {
+      startTimer();
+    }
+
+    return () => {
+      cancelled = true;
+      if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+        if (raf1 !== undefined) {
+          window.cancelAnimationFrame(raf1);
+        }
+        if (raf2 !== undefined) {
+          window.cancelAnimationFrame(raf2);
+        }
+      }
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  const setLoading = useCallback((field: Exclude<SelectField, "pack">, value: boolean) => {
+    setLoadingState((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
+
+  const setReady = useCallback((field: Exclude<SelectField, "pack">, value: boolean) => {
+    setReadyState((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
+
+  const resetSelectStatus = useCallback(
+    (field: Exclude<SelectField, "pack">) => {
+      setLoading(field, false);
+      setReady(field, false);
+    },
+    [setLoading, setReady]
+  );
+
+  const startLoadingSelect = useCallback(
+    (field: Exclude<SelectField, "pack">) => {
+      setLoading(field, true);
+      setReady(field, false);
+    },
+    [setLoading, setReady]
+  );
+
+  const instrumentOptionsKey = useMemo(
+    () => instrumentOptions.join("|"),
+    [instrumentOptions]
+  );
+  const characterOptionsKey = useMemo(
+    () => characterOptions.map((option) => option.id).join("|"),
+    [characterOptions]
+  );
+  const presetOptionsKey = useMemo(
+    () => presetOptions.map((option) => option.id).join("|"),
+    [presetOptions]
+  );
+
+  useEffect(() => {
+    if (!selectedPackId) {
+      resetSelectStatus("instrument");
+      return;
+    }
+    if (instrumentOptions.length === 0) {
+      resetSelectStatus("instrument");
+      return;
+    }
+
+    setLoading("instrument", true);
+    setReady("instrument", false);
+    const cleanup = scheduleReadyTransition(() => {
+      setLoading("instrument", false);
+      setReady("instrument", true);
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [
+    instrumentOptions.length,
+    instrumentOptionsKey,
+    resetSelectStatus,
+    scheduleReadyTransition,
+    selectedPackId,
+    setLoading,
+    setReady,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPackId || !selectedInstrumentId) {
+      resetSelectStatus("style");
+      return;
+    }
+    if (characterOptions.length === 0) {
+      resetSelectStatus("style");
+      return;
+    }
+
+    setLoading("style", true);
+    setReady("style", false);
+    const cleanup = scheduleReadyTransition(() => {
+      setLoading("style", false);
+      setReady("style", true);
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [
+    characterOptions.length,
+    characterOptionsKey,
+    resetSelectStatus,
+    scheduleReadyTransition,
+    selectedInstrumentId,
+    selectedPackId,
+    setLoading,
+    setReady,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPackId || !selectedInstrumentId || !selectedCharacterId) {
+      resetSelectStatus("preset");
+      return;
+    }
+
+    setLoading("preset", true);
+    setReady("preset", false);
+    const cleanup = scheduleReadyTransition(() => {
+      setLoading("preset", false);
+      setReady("preset", true);
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [
+    presetOptionsKey,
+    resetSelectStatus,
+    scheduleReadyTransition,
+    selectedCharacterId,
+    selectedInstrumentId,
+    selectedPackId,
+    setLoading,
+    setReady,
+  ]);
 
   const previewStyle = useCallback(
     async (characterId: string) => {
@@ -326,15 +524,29 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       ) as HTMLElement | null;
       activeElement?.blur();
       setHandoffLock("pack");
+      startLoadingSelect("instrument");
+      resetSelectStatus("style");
+      resetSelectStatus("preset");
       scheduleAfterBlur(() => {
         try {
           onSelectPack(nextValue);
+          onSelectInstrument("");
+          onSelectCharacter("");
+          onSelectPreset(null);
         } finally {
           setHandoffLock(null);
         }
       });
     },
-    [onSelectPack, scheduleAfterBlur]
+    [
+      onSelectCharacter,
+      onSelectInstrument,
+      onSelectPack,
+      onSelectPreset,
+      resetSelectStatus,
+      scheduleAfterBlur,
+      startLoadingSelect,
+    ]
   );
 
   const handleInstrumentSelectChange = useCallback(
@@ -347,15 +559,26 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       ) as HTMLElement | null;
       activeElement?.blur();
       setHandoffLock("instrument");
+      startLoadingSelect("style");
+      resetSelectStatus("preset");
       scheduleAfterBlur(() => {
         try {
           onSelectInstrument(nextValue);
+          onSelectCharacter("");
+          onSelectPreset(null);
         } finally {
           setHandoffLock(null);
         }
       });
     },
-    [onSelectInstrument, scheduleAfterBlur]
+    [
+      onSelectCharacter,
+      onSelectInstrument,
+      onSelectPreset,
+      resetSelectStatus,
+      scheduleAfterBlur,
+      startLoadingSelect,
+    ]
   );
 
   const handleStyleSelectChange = useCallback(
@@ -368,16 +591,26 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       ) as HTMLElement | null;
       activeElement?.blur();
       setHandoffLock("style");
+      startLoadingSelect("preset");
       scheduleAfterBlur(() => {
         try {
           onSelectCharacter(nextValue);
-          void previewStyle(nextValue);
+          onSelectPreset(null);
+          if (nextValue) {
+            void previewStyle(nextValue);
+          }
         } finally {
           setHandoffLock(null);
         }
       });
     },
-    [onSelectCharacter, previewStyle, scheduleAfterBlur]
+    [
+      onSelectCharacter,
+      onSelectPreset,
+      previewStyle,
+      scheduleAfterBlur,
+      startLoadingSelect,
+    ]
   );
 
   const handlePresetSelectChange = useCallback(
@@ -469,23 +702,18 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const packSelectDisabled = handoffLock !== null && handoffLock !== "pack";
 
-  const instrumentOptionsReady = Boolean(pack && instrumentOptions.length > 0);
-  const instrumentBaseDisabled = !instrumentOptionsReady;
   const instrumentSelectDisabled =
-    instrumentBaseDisabled || (handoffLock !== null && handoffLock !== "instrument");
-
-  const styleOptionsReady =
-    Boolean(
-      instrumentOptionsReady &&
-        selectedInstrumentId &&
-        characterOptions.length > 0
-    );
-  const styleBaseDisabled = !styleOptionsReady;
+    handoffLock !== null && handoffLock !== "instrument"
+      ? true
+      : loadingState.instrument || !readyState.instrument;
   const styleSelectDisabled =
-    styleBaseDisabled || (handoffLock !== null && handoffLock !== "style");
-  const presetBaseDisabled = styleBaseDisabled || !selectedCharacterId;
+    handoffLock !== null && handoffLock !== "style"
+      ? true
+      : loadingState.style || !readyState.style;
   const presetSelectDisabled =
-    presetBaseDisabled || (handoffLock !== null && handoffLock !== "preset");
+    handoffLock !== null && handoffLock !== "preset"
+      ? true
+      : loadingState.preset || !readyState.preset;
   const hasAvailablePresets = packPresets.length + userPresetItems.length > 0;
 
   const presetSelectValue = selectedPresetId ?? "";
@@ -496,6 +724,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Select an instrument first"
     : !selectedCharacterId
     ? "Select a style first"
+    : loadingState.preset
+    ? "Loading presets..."
     : "Saved loops unavailable";
 
   const presetDefaultOptionLabel = hasAvailablePresets
@@ -600,9 +830,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <option value="" disabled>
               {!selectedPackId
                 ? "Select a sound pack first"
-                : instrumentOptionsReady
+                : loadingState.instrument
+                ? "Loading instruments..."
+                : readyState.instrument
                 ? "Select an instrument"
-                : "Loading instruments..."}
+                : "Select a sound pack first"}
             </option>
             {instrumentOptions.map((instrument) => (
               <option key={instrument} value={instrument}>
@@ -610,6 +842,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               </option>
             ))}
           </select>
+          {loadingState.instrument ? (
+            <span role="status" aria-live="polite" style={statusTextStyle}>
+              Loading instruments...
+            </span>
+          ) : null}
         </label>
 
         <label
@@ -637,9 +874,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <option value="" disabled>
               {!selectedInstrumentId
                 ? "Select an instrument first"
-                : styleOptionsReady
+                : loadingState.style
+                ? "Loading styles..."
+                : readyState.style
                 ? "Select a style"
-                : "Loading styles..."}
+                : "Select an instrument first"}
             </option>
             {characterOptions.map((character) => (
               <option key={character.id} value={character.id}>
@@ -647,6 +886,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               </option>
             ))}
           </select>
+          {loadingState.style ? (
+            <span role="status" aria-live="polite" style={statusTextStyle}>
+              Loading styles...
+            </span>
+          ) : null}
         </label>
 
         <div
@@ -674,39 +918,44 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     : "#64748b",
               }}
             >
-              {presetSelectDisabled ? (
-                <option value="" disabled>
-                  {presetBlockedLabel}
-                </option>
-              ) : (
-                <>
-                  <option value="">{presetDefaultOptionLabel}</option>
-                  {hasAvailablePresets ? (
-                    <>
-                      {userPresetItems.length > 0 ? (
-                        <optgroup label="Your saved loops">
-                          {userPresetItems.map((preset) => (
-                            <option key={`user-${preset.id}`} value={preset.id}>
-                              {preset.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : null}
-                      {packPresets.length > 0 ? (
-                        <optgroup label="Pack loops">
-                          {packPresets.map((preset) => (
-                            <option key={`pack-${preset.id}`} value={preset.id}>
-                              {preset.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : null}
-                    </>
-                  ) : null}
-                </>
-              )}
-            </select>
-          </label>
+            {presetSelectDisabled ? (
+              <option value="" disabled>
+                {presetBlockedLabel}
+              </option>
+            ) : (
+              <>
+                <option value="">{presetDefaultOptionLabel}</option>
+                {hasAvailablePresets ? (
+                  <>
+                    {userPresetItems.length > 0 ? (
+                      <optgroup label="Your saved loops">
+                        {userPresetItems.map((preset) => (
+                          <option key={`user-${preset.id}`} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {packPresets.length > 0 ? (
+                      <optgroup label="Pack loops">
+                        {packPresets.map((preset) => (
+                          <option key={`pack-${preset.id}`} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            )}
+          </select>
+          {loadingState.preset ? (
+            <span role="status" aria-live="polite" style={statusTextStyle}>
+              Loading presets...
+            </span>
+          ) : null}
+        </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {showSavePresetAction ? (
               <IconButton
