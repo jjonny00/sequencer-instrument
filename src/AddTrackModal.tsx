@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ChangeEvent,
   type CSSProperties,
   type FC,
 } from "react";
@@ -26,6 +27,10 @@ import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
 
+type SelectField = "pack" | "instrument" | "style" | "preset";
+
+const ENABLE_DELAY_MS = 180;
+
 const baseSelectStyle: CSSProperties = {
   padding: "10px 12px",
   borderRadius: 12,
@@ -39,6 +44,11 @@ const disabledSelectStyle: CSSProperties = {
   opacity: 0.5,
   color: "#64748b",
   cursor: "not-allowed",
+};
+
+const statusTextStyle: CSSProperties = {
+  fontSize: 12,
+  color: "#94a3b8",
 };
 
 interface AddTrackModalProps {
@@ -84,7 +94,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     () => packs.find((candidate) => candidate.id === selectedPackId) ?? null,
     [packs, selectedPackId]
   );
-  const instrumentOptions = pack ? Object.keys(pack.instruments) : [];
+  const instrumentOptions = useMemo(
+    () => (pack ? Object.keys(pack.instruments) : []),
+    [pack]
+  );
   const characterOptions = useMemo(
     () =>
       selectedInstrumentId && pack?.id
@@ -103,93 +116,17 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const [userPresets, setUserPresets] = useState<
     { id: string; name: string; characterId: string | null; pattern: Chunk | null }[]
   >([]);
-
-  const refreshUserPresets = useCallback(() => {
-    if (!pack || !selectedInstrumentId) {
-      setUserPresets([]);
-      return;
-    }
-    const presets = listInstrumentPresets(pack.id, selectedInstrumentId).map((preset) => ({
-      id: preset.id,
-      name: preset.name,
-      characterId: preset.characterId,
-      pattern: preset.pattern,
-    }));
-    setUserPresets(presets);
-  }, [pack, selectedInstrumentId]);
-
-  useEffect(() => {
-    refreshUserPresets();
-  }, [refreshUserPresets]);
-
-  useEffect(() => {
-    const handleUpdate = () => refreshUserPresets();
-    if (typeof window !== "undefined") {
-      window.addEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
-    }
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
-      }
-    };
-  }, [refreshUserPresets]);
-
-  const handleDeletePreset = useCallback(
-    (presetId: string) => {
-      if (!pack || !selectedInstrumentId) return;
-      if (!isUserPresetId(presetId)) return;
-      const actualId = stripUserPresetPrefix(presetId);
-      const confirmed = window.confirm("Delete this saved loop?");
-      if (!confirmed) return;
-      const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
-      if (removed) {
-        if (selectedPresetId === presetId) {
-          onSelectPreset(null);
-        }
-        refreshUserPresets();
-      }
-    },
-    [pack, selectedInstrumentId, selectedPresetId, onSelectPreset, refreshUserPresets]
-  );
-
-  const handleSavePresetPattern = useCallback(() => {
-    if (!pack || !selectedInstrumentId || !editingTrackPattern) {
-      window.alert("No pattern data available to save as a loop.");
-      return;
-    }
-    const suggestedName =
-      editingTrackName?.trim() || formatInstrumentLabel(selectedInstrumentId);
-    const defaultName = `${suggestedName} Pattern`;
-    const name = window.prompt("Name your saved loop", defaultName);
-    if (!name) return;
-    const pattern: Chunk = {
-      ...editingTrackPattern,
-      instrument: selectedInstrumentId,
-      characterId: editingTrackPattern.characterId ?? selectedCharacterId ?? undefined,
-    };
-    const record = saveInstrumentPreset({
-      name,
-      packId: pack.id,
-      instrumentId: selectedInstrumentId,
-      characterId: pattern.characterId ?? null,
-      pattern,
-    });
-    if (!record) {
-      window.alert("Unable to save this loop.");
-      return;
-    }
-    onSelectPreset(`${USER_PRESET_PREFIX}${record.id}`);
-    refreshUserPresets();
-    window.alert("Loop saved.");
-  }, [
-    pack,
-    selectedInstrumentId,
-    editingTrackPattern,
-    editingTrackName,
-    selectedCharacterId,
-    onSelectPreset,
-    refreshUserPresets,
-  ]);
+  const [handoffLock, setHandoffLock] = useState<SelectField | null>(null);
+  const [loadingState, setLoadingState] = useState({
+    instrument: false,
+    style: false,
+    preset: false,
+  });
+  const [readyState, setReadyState] = useState({
+    instrument: false,
+    style: false,
+    preset: false,
+  });
 
   const packPresets = useMemo(
     () =>
@@ -213,47 +150,191 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [userPresets]
   );
 
-  const confirmDisabled = !pack || !selectedInstrumentId || !selectedCharacterId;
-  const isEditMode = mode === "edit";
-  const title = isEditMode ? "Edit Track" : "Add Track";
-  const description = isEditMode
-    ? "Adjust the sound pack, instrument, style, and saved loop for this track."
-    : "Choose a sound pack, instrument, style, and optional saved loop to start a new groove.";
-  const confirmLabel = isEditMode ? "Update Track" : "Add Track";
-  const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
+  const scheduleAfterBlur = useCallback((task: () => void) => {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestAnimationFrame === "function"
+    ) {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(task);
+      });
+      return;
+    }
+    setTimeout(task, 0);
+  }, []);
 
-  const footerButtonBaseStyle: CSSProperties = {
-    padding: "8px 18px",
-    borderRadius: 999,
-    border: "1px solid #333",
-    fontSize: 14,
-    fontWeight: 600,
-    letterSpacing: 0.3,
-    minWidth: 0,
-    cursor: "pointer",
-    transition: "background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
-  };
+  const scheduleReadyTransition = useCallback((task: () => void) => {
+    let cancelled = false;
+    let raf1: number | undefined;
+    let raf2: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-  const compactIconButtonStyle: CSSProperties = {
-    minHeight: 36,
-    minWidth: 36,
-    borderRadius: 10,
-  };
+    const finalize = () => {
+      if (cancelled) return;
+      task();
+    };
 
-  const cancelButtonStyle: CSSProperties = {
-    ...footerButtonBaseStyle,
-    background: "#1f2532",
-    color: "#e6f2ff",
-  };
+    const startTimer = () => {
+      timeoutId = setTimeout(finalize, ENABLE_DELAY_MS);
+    };
 
-  const confirmButtonStyle: CSSProperties = {
-    ...footerButtonBaseStyle,
-    background: confirmDisabled ? "#1b2130" : "#27E0B0",
-    color: confirmDisabled ? "#475569" : "#1F2532",
-    border: `1px solid ${confirmDisabled ? "#1f2937" : "#27E0B0"}`,
-    cursor: confirmDisabled ? "not-allowed" : "pointer",
-    opacity: confirmDisabled ? 0.7 : 1,
-  };
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestAnimationFrame === "function"
+    ) {
+      raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(startTimer);
+      });
+    } else {
+      startTimer();
+    }
+
+    return () => {
+      cancelled = true;
+      if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+        if (raf1 !== undefined) {
+          window.cancelAnimationFrame(raf1);
+        }
+        if (raf2 !== undefined) {
+          window.cancelAnimationFrame(raf2);
+        }
+      }
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  const setLoading = useCallback((field: Exclude<SelectField, "pack">, value: boolean) => {
+    setLoadingState((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
+
+  const setReady = useCallback((field: Exclude<SelectField, "pack">, value: boolean) => {
+    setReadyState((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
+
+  const resetSelectStatus = useCallback(
+    (field: Exclude<SelectField, "pack">) => {
+      setLoading(field, false);
+      setReady(field, false);
+    },
+    [setLoading, setReady]
+  );
+
+  const startLoadingSelect = useCallback(
+    (field: Exclude<SelectField, "pack">) => {
+      setLoading(field, true);
+      setReady(field, false);
+    },
+    [setLoading, setReady]
+  );
+
+  const instrumentOptionsKey = useMemo(
+    () => instrumentOptions.join("|"),
+    [instrumentOptions]
+  );
+  const characterOptionsKey = useMemo(
+    () => characterOptions.map((option) => option.id).join("|"),
+    [characterOptions]
+  );
+  const presetOptionsKey = useMemo(
+    () => presetOptions.map((option) => option.id).join("|"),
+    [presetOptions]
+  );
+
+  useEffect(() => {
+    if (!selectedPackId) {
+      resetSelectStatus("instrument");
+      return;
+    }
+    if (instrumentOptions.length === 0) {
+      resetSelectStatus("instrument");
+      return;
+    }
+
+    setLoading("instrument", true);
+    setReady("instrument", false);
+    const cleanup = scheduleReadyTransition(() => {
+      setLoading("instrument", false);
+      setReady("instrument", true);
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [
+    instrumentOptions.length,
+    instrumentOptionsKey,
+    resetSelectStatus,
+    scheduleReadyTransition,
+    selectedPackId,
+    setLoading,
+    setReady,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPackId || !selectedInstrumentId) {
+      resetSelectStatus("style");
+      return;
+    }
+    if (characterOptions.length === 0) {
+      resetSelectStatus("style");
+      return;
+    }
+
+    setLoading("style", true);
+    setReady("style", false);
+    const cleanup = scheduleReadyTransition(() => {
+      setLoading("style", false);
+      setReady("style", true);
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [
+    characterOptions.length,
+    characterOptionsKey,
+    resetSelectStatus,
+    scheduleReadyTransition,
+    selectedInstrumentId,
+    selectedPackId,
+    setLoading,
+    setReady,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPackId || !selectedInstrumentId || !selectedCharacterId) {
+      resetSelectStatus("preset");
+      return;
+    }
+
+    setLoading("preset", true);
+    setReady("preset", false);
+    const cleanup = scheduleReadyTransition(() => {
+      setLoading("preset", false);
+      setReady("preset", true);
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [
+    presetOptionsKey,
+    resetSelectStatus,
+    scheduleReadyTransition,
+    selectedCharacterId,
+    selectedInstrumentId,
+    selectedPackId,
+    setLoading,
+    setReady,
+  ]);
 
   const previewStyle = useCallback(
     async (characterId: string) => {
@@ -346,13 +427,263 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [selectedCharacterId, selectedInstrumentId, selectedPackId, triggers]
   );
 
-  const handleCharacterChange = useCallback(
-    (characterId: string) => {
-      onSelectCharacter(characterId);
-      void previewStyle(characterId);
+  const refreshUserPresets = useCallback(() => {
+    if (!pack || !selectedInstrumentId) {
+      setUserPresets([]);
+      return;
+    }
+    const presets = listInstrumentPresets(pack.id, selectedInstrumentId).map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      characterId: preset.characterId,
+      pattern: preset.pattern,
+    }));
+    setUserPresets(presets);
+  }, [pack, selectedInstrumentId]);
+
+  useEffect(() => {
+    refreshUserPresets();
+  }, [refreshUserPresets]);
+
+  useEffect(() => {
+    const handleUpdate = () => refreshUserPresets();
+    if (typeof window !== "undefined") {
+      window.addEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(PRESETS_UPDATED_EVENT, handleUpdate);
+      }
+    };
+  }, [refreshUserPresets]);
+
+  const handleDeletePreset = useCallback(
+    (presetId: string) => {
+      if (!pack || !selectedInstrumentId) return;
+      if (!isUserPresetId(presetId)) return;
+      const actualId = stripUserPresetPrefix(presetId);
+      const confirmed = window.confirm("Delete this saved loop?");
+      if (!confirmed) return;
+      const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
+      if (removed) {
+        if (selectedPresetId === presetId) {
+          onSelectPreset(null);
+        }
+        refreshUserPresets();
+      }
     },
-    [onSelectCharacter, previewStyle]
+    [pack, selectedInstrumentId, selectedPresetId, onSelectPreset, refreshUserPresets]
   );
+
+  const handleSavePresetPattern = useCallback(() => {
+    if (!pack || !selectedInstrumentId || !editingTrackPattern) {
+      window.alert("No pattern data available to save as a loop.");
+      return;
+    }
+    const suggestedName =
+      editingTrackName?.trim() || formatInstrumentLabel(selectedInstrumentId);
+    const defaultName = `${suggestedName} Pattern`;
+    const name = window.prompt("Name your saved loop", defaultName);
+    if (!name) return;
+    const pattern: Chunk = {
+      ...editingTrackPattern,
+      instrument: selectedInstrumentId,
+      characterId: editingTrackPattern.characterId ?? selectedCharacterId ?? undefined,
+    };
+    const record = saveInstrumentPreset({
+      name,
+      packId: pack.id,
+      instrumentId: selectedInstrumentId,
+      characterId: pattern.characterId ?? null,
+      pattern,
+    });
+    if (!record) {
+      window.alert("Unable to save this loop.");
+      return;
+    }
+    onSelectPreset(`${USER_PRESET_PREFIX}${record.id}`);
+    refreshUserPresets();
+    window.alert("Loop saved.");
+  }, [
+    pack,
+    selectedInstrumentId,
+    editingTrackPattern,
+    editingTrackName,
+    selectedCharacterId,
+    onSelectPreset,
+    refreshUserPresets,
+  ]);
+
+  const handlePackSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
+      setHandoffLock("pack");
+      startLoadingSelect("instrument");
+      resetSelectStatus("style");
+      resetSelectStatus("preset");
+      scheduleAfterBlur(() => {
+        try {
+          onSelectPack(nextValue);
+          onSelectInstrument("");
+          onSelectCharacter("");
+          onSelectPreset(null);
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [
+      onSelectCharacter,
+      onSelectInstrument,
+      onSelectPack,
+      onSelectPreset,
+      resetSelectStatus,
+      scheduleAfterBlur,
+      startLoadingSelect,
+    ]
+  );
+
+  const handleInstrumentSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
+      setHandoffLock("instrument");
+      startLoadingSelect("style");
+      resetSelectStatus("preset");
+      scheduleAfterBlur(() => {
+        try {
+          onSelectInstrument(nextValue);
+          onSelectCharacter("");
+          onSelectPreset(null);
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [
+      onSelectCharacter,
+      onSelectInstrument,
+      onSelectPreset,
+      resetSelectStatus,
+      scheduleAfterBlur,
+      startLoadingSelect,
+    ]
+  );
+
+  const handleStyleSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
+      setHandoffLock("style");
+      startLoadingSelect("preset");
+      scheduleAfterBlur(() => {
+        try {
+          onSelectCharacter(nextValue);
+          onSelectPreset(null);
+          if (nextValue) {
+            void previewStyle(nextValue);
+          }
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [
+      onSelectCharacter,
+      onSelectPreset,
+      previewStyle,
+      scheduleAfterBlur,
+      startLoadingSelect,
+    ]
+  );
+
+  const handlePresetSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
+      setHandoffLock("preset");
+      scheduleAfterBlur(() => {
+        try {
+          if (!nextValue) {
+            onSelectPreset(null);
+            return;
+          }
+          onSelectPreset(nextValue);
+          const allPresets = [...userPresetItems, ...packPresets];
+          const match = allPresets.find((item) => item.id === nextValue);
+          if (match?.pattern) {
+            void previewPreset(match.pattern, match.characterId);
+          }
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [onSelectPreset, packPresets, previewPreset, scheduleAfterBlur, userPresetItems]
+  );
+
+  const confirmDisabled = !pack || !selectedInstrumentId || !selectedCharacterId;
+  const isEditMode = mode === "edit";
+  const title = isEditMode ? "Edit Track" : "Add Track";
+  const description = isEditMode
+    ? "Adjust the sound pack, instrument, style, and saved loop for this track."
+    : "Choose a sound pack, instrument, style, and optional saved loop to start a new groove.";
+  const confirmLabel = isEditMode ? "Update Track" : "Add Track";
+  const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
+
+  const footerButtonBaseStyle: CSSProperties = {
+    padding: "8px 18px",
+    borderRadius: 999,
+    border: "1px solid #333",
+    fontSize: 14,
+    fontWeight: 600,
+    letterSpacing: 0.3,
+    minWidth: 0,
+    cursor: "pointer",
+    transition: "background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+  };
+
+  const compactIconButtonStyle: CSSProperties = {
+    minHeight: 36,
+    minWidth: 36,
+    borderRadius: 10,
+  };
+
+  const cancelButtonStyle: CSSProperties = {
+    ...footerButtonBaseStyle,
+    background: "#1f2532",
+    color: "#e6f2ff",
+  };
+
+  const confirmButtonStyle: CSSProperties = {
+    ...footerButtonBaseStyle,
+    background: confirmDisabled ? "#1b2130" : "#27E0B0",
+    color: confirmDisabled ? "#475569" : "#1F2532",
+    border: `1px solid ${confirmDisabled ? "#1f2937" : "#27E0B0"}`,
+    cursor: confirmDisabled ? "not-allowed" : "pointer",
+    opacity: confirmDisabled ? 0.7 : 1,
+  };
 
   const sectionListStyle: CSSProperties = {
     display: "flex",
@@ -369,19 +700,20 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 6,
   };
 
-  const instrumentOptionsReady = Boolean(pack && instrumentOptions.length > 0);
-  const instrumentDisabled = !instrumentOptionsReady;
+  const packSelectDisabled = handoffLock !== null && handoffLock !== "pack";
 
-  const styleOptionsReady =
-    Boolean(
-      instrumentOptionsReady &&
-        selectedInstrumentId &&
-        characterOptions.length > 0
-    );
-  const styleDisabled = !styleOptionsReady;
-  const presetSelectionDisabled = styleDisabled || !selectedCharacterId;
-
-  const presetSelectDisabled = presetSelectionDisabled;
+  const instrumentSelectDisabled =
+    handoffLock !== null && handoffLock !== "instrument"
+      ? true
+      : loadingState.instrument || !readyState.instrument;
+  const styleSelectDisabled =
+    handoffLock !== null && handoffLock !== "style"
+      ? true
+      : loadingState.style || !readyState.style;
+  const presetSelectDisabled =
+    handoffLock !== null && handoffLock !== "preset"
+      ? true
+      : loadingState.preset || !readyState.preset;
   const hasAvailablePresets = packPresets.length + userPresetItems.length > 0;
 
   const presetSelectValue = selectedPresetId ?? "";
@@ -392,27 +724,13 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Select an instrument first"
     : !selectedCharacterId
     ? "Select a style first"
+    : loadingState.preset
+    ? "Loading presets..."
     : "Saved loops unavailable";
 
   const presetDefaultOptionLabel = hasAvailablePresets
     ? "Start fresh (no saved loop)"
     : "No saved loops available";
-
-  const handlePresetChange = useCallback(
-    (presetId: string) => {
-      if (!presetId) {
-        onSelectPreset(null);
-        return;
-      }
-      onSelectPreset(presetId);
-      const allPresets = [...userPresetItems, ...packPresets];
-      const match = allPresets.find((item) => item.id === presetId);
-      if (match?.pattern) {
-        void previewPreset(match.pattern, match.characterId);
-      }
-    },
-    [onSelectPreset, packPresets, previewPreset, userPresetItems]
-  );
 
   return (
     <Modal
@@ -456,138 +774,140 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <div data-select-root>
-          <label style={fieldLabelStyle}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-            <select
-              value={selectedPackId || ""}
-              onChange={(event) => onSelectPack(event.target.value)}
-              style={{
-                ...baseSelectStyle,
-                color: selectedPackId ? "#e6f2ff" : "#64748b",
-              }}
-            >
-              <option value="" disabled>
-                Select a sound pack
+        <label
+          aria-disabled={packSelectDisabled}
+          style={{
+            ...fieldLabelStyle,
+            opacity: packSelectDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
+          }}
+        >
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
+          <select
+            value={selectedPackId || ""}
+            onChange={handlePackSelectChange}
+            disabled={packSelectDisabled}
+            style={{
+              ...baseSelectStyle,
+              ...(packSelectDisabled ? disabledSelectStyle : {}),
+              color:
+                selectedPackId && !packSelectDisabled ? "#e6f2ff" : "#64748b",
+            }}
+          >
+            <option value="" disabled>
+              Select a sound pack
+            </option>
+            {packs.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
               </option>
-              {packs.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+            ))}
+          </select>
+        </label>
 
-        <div
-          aria-disabled={instrumentDisabled}
-          data-select-root
+        <label
+          aria-disabled={instrumentSelectDisabled}
           style={{
-            opacity: instrumentDisabled ? 0.6 : 1,
+            ...fieldLabelStyle,
+            opacity: instrumentSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
-            pointerEvents: "auto",
           }}
         >
-          <label style={fieldLabelStyle}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-            <select
-              value={selectedInstrumentId || ""}
-              onChange={(event) => onSelectInstrument(event.target.value)}
-              disabled={instrumentDisabled}
-              style={{
-                ...baseSelectStyle,
-                ...(instrumentDisabled ? disabledSelectStyle : {}),
-                color:
-                  selectedInstrumentId && !instrumentDisabled
-                    ? "#e6f2ff"
-                    : "#64748b",
-              }}
-            >
-              {instrumentDisabled ? (
-                <option value="" disabled>
-                  {!selectedPackId
-                    ? "Select a sound pack first"
-                    : "Loading instruments..."}
-                </option>
-              ) : (
-                <>
-                  <option value="" disabled>
-                    Select an instrument
-                  </option>
-                  {instrumentOptions.map((instrument) => (
-                    <option key={instrument} value={instrument}>
-                      {formatInstrumentLabel(instrument)}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-          </label>
-        </div>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
+          <select
+            value={selectedInstrumentId || ""}
+            onChange={handleInstrumentSelectChange}
+            disabled={instrumentSelectDisabled}
+            style={{
+              ...baseSelectStyle,
+              ...(instrumentSelectDisabled ? disabledSelectStyle : {}),
+              color:
+                selectedInstrumentId && !instrumentSelectDisabled
+                  ? "#e6f2ff"
+                  : "#64748b",
+            }}
+          >
+            <option value="" disabled>
+              {!selectedPackId
+                ? "Select a sound pack first"
+                : loadingState.instrument
+                ? "Loading instruments..."
+                : readyState.instrument
+                ? "Select an instrument"
+                : "Select a sound pack first"}
+            </option>
+            {instrumentOptions.map((instrument) => (
+              <option key={instrument} value={instrument}>
+                {formatInstrumentLabel(instrument)}
+              </option>
+            ))}
+          </select>
+          {loadingState.instrument ? (
+            <span role="status" aria-live="polite" style={statusTextStyle}>
+              Loading instruments...
+            </span>
+          ) : null}
+        </label>
 
-        <div
-          aria-disabled={styleDisabled}
-          data-select-root
+        <label
+          aria-disabled={styleSelectDisabled}
           style={{
-            opacity: styleDisabled ? 0.6 : 1,
+            ...fieldLabelStyle,
+            opacity: styleSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
-            pointerEvents: "auto",
           }}
         >
-          <label style={fieldLabelStyle}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
-            <select
-              value={selectedCharacterId || ""}
-              onChange={(event) => handleCharacterChange(event.target.value)}
-              disabled={styleDisabled}
-              style={{
-                ...baseSelectStyle,
-                ...(styleDisabled ? disabledSelectStyle : {}),
-                color:
-                  selectedCharacterId && !styleDisabled
-                    ? "#e6f2ff"
-                    : "#64748b",
-              }}
-            >
-              {styleDisabled ? (
-                <option value="" disabled>
-                  {!selectedInstrumentId
-                    ? "Select an instrument first"
-                    : "Loading styles..."}
-                </option>
-              ) : (
-                <>
-                  <option value="" disabled>
-                    Select a style
-                  </option>
-                  {characterOptions.map((character) => (
-                    <option key={character.id} value={character.id}>
-                      {character.name}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-          </label>
-        </div>
+          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
+          <select
+            value={selectedCharacterId || ""}
+            onChange={handleStyleSelectChange}
+            disabled={styleSelectDisabled}
+            style={{
+              ...baseSelectStyle,
+              ...(styleSelectDisabled ? disabledSelectStyle : {}),
+              color:
+                selectedCharacterId && !styleSelectDisabled
+                  ? "#e6f2ff"
+                  : "#64748b",
+            }}
+          >
+            <option value="" disabled>
+              {!selectedInstrumentId
+                ? "Select an instrument first"
+                : loadingState.style
+                ? "Loading styles..."
+                : readyState.style
+                ? "Select a style"
+                : "Select an instrument first"}
+            </option>
+            {characterOptions.map((character) => (
+              <option key={character.id} value={character.id}>
+                {character.name}
+              </option>
+            ))}
+          </select>
+          {loadingState.style ? (
+            <span role="status" aria-live="polite" style={statusTextStyle}>
+              Loading styles...
+            </span>
+          ) : null}
+        </label>
 
         <div
           aria-disabled={presetSelectDisabled}
-          data-select-root
           style={{
-            opacity: presetSelectDisabled ? 0.6 : 1,
-            transition: "opacity 0.2s ease",
-            pointerEvents: "auto",
             display: "flex",
             flexDirection: "column",
             gap: 8,
+            opacity: presetSelectDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
           }}
         >
           <label style={fieldLabelStyle}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Saved Loop</span>
             <select
               value={presetSelectValue}
-              onChange={(event) => handlePresetChange(event.target.value)}
+              onChange={handlePresetSelectChange}
               disabled={presetSelectDisabled}
               style={{
                 ...baseSelectStyle,
@@ -598,39 +918,44 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     : "#64748b",
               }}
             >
-              {presetSelectDisabled ? (
-                <option value="" disabled>
-                  {presetBlockedLabel}
-                </option>
-              ) : (
-                <>
-                  <option value="">{presetDefaultOptionLabel}</option>
-                  {hasAvailablePresets ? (
-                    <>
-                      {userPresetItems.length > 0 ? (
-                        <optgroup label="Your saved loops">
-                          {userPresetItems.map((preset) => (
-                            <option key={`user-${preset.id}`} value={preset.id}>
-                              {preset.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : null}
-                      {packPresets.length > 0 ? (
-                        <optgroup label="Pack loops">
-                          {packPresets.map((preset) => (
-                            <option key={`pack-${preset.id}`} value={preset.id}>
-                              {preset.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : null}
-                    </>
-                  ) : null}
-                </>
-              )}
-            </select>
-          </label>
+            {presetSelectDisabled ? (
+              <option value="" disabled>
+                {presetBlockedLabel}
+              </option>
+            ) : (
+              <>
+                <option value="">{presetDefaultOptionLabel}</option>
+                {hasAvailablePresets ? (
+                  <>
+                    {userPresetItems.length > 0 ? (
+                      <optgroup label="Your saved loops">
+                        {userPresetItems.map((preset) => (
+                          <option key={`user-${preset.id}`} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {packPresets.length > 0 ? (
+                      <optgroup label="Pack loops">
+                        {packPresets.map((preset) => (
+                          <option key={`pack-${preset.id}`} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            )}
+          </select>
+          {loadingState.preset ? (
+            <span role="status" aria-live="polite" style={statusTextStyle}>
+              Loading presets...
+            </span>
+          ) : null}
+        </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {showSavePresetAction ? (
               <IconButton
