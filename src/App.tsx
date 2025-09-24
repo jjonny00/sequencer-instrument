@@ -1346,14 +1346,34 @@ export default function App() {
       const project = loadStoredProject(name);
       if (!project) {
         setProjectModalError("Song not found");
-        return;
+        return false;
       }
       applyLoadedProject(project);
       setActiveProjectName(name);
       setProjectModalMode(null);
       setProjectModalError(null);
+      return true;
     },
     [applyLoadedProject, setActiveProjectName]
+  );
+
+  const handleRequestLoadProject = useCallback(
+    (
+      name: string,
+      { skipConfirmation = false }: { skipConfirmation?: boolean } = {}
+    ) => {
+      if (!skipConfirmation && started) {
+        const confirmed = window.confirm(
+          "Load this song? Unsaved changes to your current song will be lost."
+        );
+        if (!confirmed) {
+          return false;
+        }
+      }
+
+      return handleLoadProjectByName(name);
+    },
+    [handleLoadProjectByName, started]
   );
 
   const handleDeleteProject = useCallback(
@@ -1410,9 +1430,9 @@ export default function App() {
         }
         initAudioGraph();
       }
-      handleLoadProjectByName(name);
+      handleRequestLoadProject(name, { skipConfirmation: !started });
     },
-    [handleLoadProjectByName, initAudioGraph, started]
+    [handleRequestLoadProject, initAudioGraph, started]
   );
 
   const handleLoadDemoSong = useCallback(async () => {
@@ -1774,7 +1794,9 @@ export default function App() {
                         icon="folder_open"
                         label={`Load song ${name}`}
                         tone="accent"
-                        onClick={() => handleLoadProjectByName(name)}
+                        onClick={() => {
+                          handleRequestLoadProject(name);
+                        }}
                       />
                       <IconButton
                         icon="delete"
