@@ -250,9 +250,7 @@ export const Modal: FC<ModalProps> = ({
       return true;
     }
 
-    const nativeEvent = event.nativeEvent as
-      | (MouseEvent & { composedPath?: () => EventTarget[] })
-      | (TouchEvent & { composedPath?: () => EventTarget[] });
+    const nativeEvent = event.nativeEvent as Event | undefined;
 
     if (nativeEvent && typeof nativeEvent.composedPath === "function") {
       const path = nativeEvent.composedPath();
