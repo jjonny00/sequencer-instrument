@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import type { FC, MouseEvent, TouchEvent } from "react";
 
 export const StepModal: FC<{
   velocity: number;
@@ -6,6 +6,18 @@ export const StepModal: FC<{
   onChange: (p: { velocity?: number; pitch?: number }) => void;
   onClose: () => void;
 }> = ({ velocity, pitch, onChange, onClose }) => {
+  const handleOverlayMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.currentTarget === event.target) {
+      onClose();
+    }
+  };
+
+  const handleOverlayTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.currentTarget === event.target) {
+      onClose();
+    }
+  };
+
   return (
     <div
       style={{
@@ -15,7 +27,10 @@ export const StepModal: FC<{
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        zIndex: 9999,
       }}
+      onMouseDown={handleOverlayMouseDown}
+      onTouchStart={handleOverlayTouchStart}
     >
       <div
         style={{
