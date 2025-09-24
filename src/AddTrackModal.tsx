@@ -108,6 +108,28 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   >([]);
   const [handoffLock, setHandoffLock] = useState<SelectField | null>(null);
 
+  const packPresets = useMemo(
+    () =>
+      presetOptions.map((preset) => ({
+        id: preset.id,
+        name: preset.name,
+        characterId: preset.characterId ?? null,
+        pattern: preset,
+      })),
+    [presetOptions]
+  );
+
+  const userPresetItems = useMemo(
+    () =>
+      userPresets.map((preset) => ({
+        id: `${USER_PRESET_PREFIX}${preset.id}`,
+        name: preset.name,
+        characterId: preset.characterId,
+        pattern: preset.pattern ?? undefined,
+      })),
+    [userPresets]
+  );
+
   const scheduleAfterBlur = useCallback((task: () => void) => {
     if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
       window.requestAnimationFrame(() => {
@@ -117,6 +139,97 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       setTimeout(task, 0);
     }
   }, []);
+
+  const previewStyle = useCallback(
+    async (characterId: string) => {
+      if (!characterId || !selectedInstrumentId || !selectedPackId) return;
+      const trigger =
+        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
+      if (!trigger) return;
+      try {
+        await initAudioContext();
+      } catch {
+        return;
+      }
+      const start = Tone.now() + 0.05;
+      const previewChunk: Chunk = {
+        id: "style-preview",
+        name: "Style Preview",
+        instrument: selectedInstrumentId,
+        characterId: characterId,
+        steps: [],
+      };
+      trigger(start, 0.9, 0, undefined, 0.5, previewChunk, characterId);
+    },
+    [selectedInstrumentId, selectedPackId, triggers]
+  );
+
+  const previewPreset = useCallback(
+    async (chunk: Chunk, fallbackCharacterId?: string | null) => {
+      const instrumentId = chunk.instrument || selectedInstrumentId;
+      if (!instrumentId || !selectedPackId) return;
+      const trigger = triggers[createTriggerKey(selectedPackId, instrumentId)];
+      if (!trigger) return;
+      try {
+        await initAudioContext();
+      } catch {
+        return;
+      }
+      const activeCharacterId =
+        fallbackCharacterId ?? chunk.characterId ?? selectedCharacterId ?? null;
+      const start = Tone.now() + 0.05;
+      let hasTriggered = false;
+
+      if (chunk.noteEvents && chunk.noteEvents.length > 0) {
+        const events = chunk.noteEvents
+          .slice(0, 16)
+          .sort((a, b) => a.time - b.time);
+        events.forEach((event) => {
+          const velocity = Math.max(0, Math.min(1, event.velocity));
+          trigger(
+            start + event.time,
+            velocity,
+            undefined,
+            event.note,
+            event.duration,
+            chunk,
+            activeCharacterId ?? undefined
+          );
+        });
+        hasTriggered = events.length > 0;
+      } else if (chunk.steps && chunk.steps.length > 0) {
+        const stepDuration = Tone.Time("16n").toSeconds();
+        const limit = Math.min(chunk.steps.length, 16);
+        const velocities = chunk.velocities ?? [];
+        const pitches = chunk.pitches ?? [];
+        const notes = chunk.notes ?? [];
+        for (let index = 0; index < limit; index += 1) {
+          const stepValue = chunk.steps[index];
+          if (!stepValue) continue;
+          const rawVelocity =
+            velocities[index] ?? (typeof stepValue === "number" ? stepValue : 1);
+          const velocity = Math.max(0, Math.min(1, rawVelocity ?? 1));
+          const pitch = pitches[index] ?? 0;
+          const note = notes[index] ?? chunk.note;
+          trigger(
+            start + index * stepDuration,
+            velocity,
+            pitch,
+            note,
+            chunk.sustain,
+            chunk,
+            activeCharacterId ?? undefined
+          );
+          hasTriggered = true;
+        }
+      }
+
+      if (!hasTriggered) {
+        trigger(start, 0.9, 0, chunk.note, chunk.sustain, chunk, activeCharacterId ?? undefined);
+      }
+    },
+    [selectedCharacterId, selectedInstrumentId, selectedPackId, triggers]
+  );
 
   const refreshUserPresets = useCallback(() => {
     if (!pack || !selectedInstrumentId) {
@@ -283,28 +396,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [onSelectPreset, packPresets, previewPreset, scheduleAfterBlur, userPresetItems]
   );
 
-  const packPresets = useMemo(
-    () =>
-      presetOptions.map((preset) => ({
-        id: preset.id,
-        name: preset.name,
-        characterId: preset.characterId ?? null,
-        pattern: preset,
-      })),
-    [presetOptions]
-  );
-
-  const userPresetItems = useMemo(
-    () =>
-      userPresets.map((preset) => ({
-        id: `${USER_PRESET_PREFIX}${preset.id}`,
-        name: preset.name,
-        characterId: preset.characterId,
-        pattern: preset.pattern ?? undefined,
-      })),
-    [userPresets]
-  );
-
   const confirmDisabled = !pack || !selectedInstrumentId || !selectedCharacterId;
   const isEditMode = mode === "edit";
   const title = isEditMode ? "Edit Track" : "Add Track";
@@ -346,97 +437,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     cursor: confirmDisabled ? "not-allowed" : "pointer",
     opacity: confirmDisabled ? 0.7 : 1,
   };
-
-  const previewStyle = useCallback(
-    async (characterId: string) => {
-      if (!characterId || !selectedInstrumentId || !selectedPackId) return;
-      const trigger =
-        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
-      if (!trigger) return;
-      try {
-        await initAudioContext();
-      } catch {
-        return;
-      }
-      const start = Tone.now() + 0.05;
-      const previewChunk: Chunk = {
-        id: "style-preview",
-        name: "Style Preview",
-        instrument: selectedInstrumentId,
-        characterId: characterId,
-        steps: [],
-      };
-      trigger(start, 0.9, 0, undefined, 0.5, previewChunk, characterId);
-    },
-    [selectedInstrumentId, selectedPackId, triggers]
-  );
-
-  const previewPreset = useCallback(
-    async (chunk: Chunk, fallbackCharacterId?: string | null) => {
-      const instrumentId = chunk.instrument || selectedInstrumentId;
-      if (!instrumentId || !selectedPackId) return;
-      const trigger = triggers[createTriggerKey(selectedPackId, instrumentId)];
-      if (!trigger) return;
-      try {
-        await initAudioContext();
-      } catch {
-        return;
-      }
-      const activeCharacterId =
-        fallbackCharacterId ?? chunk.characterId ?? selectedCharacterId ?? null;
-      const start = Tone.now() + 0.05;
-      let hasTriggered = false;
-
-      if (chunk.noteEvents && chunk.noteEvents.length > 0) {
-        const events = chunk.noteEvents
-          .slice(0, 16)
-          .sort((a, b) => a.time - b.time);
-        events.forEach((event) => {
-          const velocity = Math.max(0, Math.min(1, event.velocity));
-          trigger(
-            start + event.time,
-            velocity,
-            undefined,
-            event.note,
-            event.duration,
-            chunk,
-            activeCharacterId ?? undefined
-          );
-        });
-        hasTriggered = events.length > 0;
-      } else if (chunk.steps && chunk.steps.length > 0) {
-        const stepDuration = Tone.Time("16n").toSeconds();
-        const limit = Math.min(chunk.steps.length, 16);
-        const velocities = chunk.velocities ?? [];
-        const pitches = chunk.pitches ?? [];
-        const notes = chunk.notes ?? [];
-        for (let index = 0; index < limit; index += 1) {
-          const stepValue = chunk.steps[index];
-          if (!stepValue) continue;
-          const rawVelocity =
-            velocities[index] ?? (typeof stepValue === "number" ? stepValue : 1);
-          const velocity = Math.max(0, Math.min(1, rawVelocity ?? 1));
-          const pitch = pitches[index] ?? 0;
-          const note = notes[index] ?? chunk.note;
-          trigger(
-            start + index * stepDuration,
-            velocity,
-            pitch,
-            note,
-            chunk.sustain,
-            chunk,
-            activeCharacterId ?? undefined
-          );
-          hasTriggered = true;
-        }
-      }
-
-      if (!hasTriggered) {
-        trigger(start, 0.9, 0, chunk.note, chunk.sustain, chunk, activeCharacterId ?? undefined);
-      }
-    },
-    [selectedCharacterId, selectedInstrumentId, selectedPackId, triggers]
-  );
 
   const sectionListStyle: CSSProperties = {
     display: "flex",
