@@ -113,7 +113,6 @@ const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => 
         display: "flex",
         flexDirection: "column",
         gap: 0,
-        pointerEvents: isActive ? "auto" : "none",
         width: "100%",
       }}
     >
@@ -594,8 +593,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <div>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div data-select-root>
+          <label
+            data-select-root
+            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          >
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
             <select
               value={selectedPackId}
@@ -621,7 +623,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </div>
 
         <StepSection visible={instrumentVisible}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label
+            data-select-root
+            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          >
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
             <select
               value={selectedInstrumentId}
@@ -653,7 +658,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </StepSection>
 
         <StepSection visible={styleVisible} delay={0.05}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label
+            data-select-root
+            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          >
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
             <select
               value={selectedCharacterId}

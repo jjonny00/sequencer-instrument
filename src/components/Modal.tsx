@@ -242,15 +242,47 @@ export const Modal: FC<ModalProps> = ({
     boxSizing: "border-box",
   };
 
-  const shouldIgnoreForSelect = (target: EventTarget | null) => {
-    if (!(target instanceof HTMLElement)) {
-      return false;
+  const eventTargetsSelect = (
+    event: MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>
+  ) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest("select,[data-select-root]")) {
+      return true;
     }
-    return Boolean(target.closest("select,[data-select-root]"));
+
+    const nativeEvent = event.nativeEvent as
+      | (MouseEvent & { composedPath?: () => EventTarget[] })
+      | (TouchEvent & { composedPath?: () => EventTarget[] });
+
+    if (nativeEvent && typeof nativeEvent.composedPath === "function") {
+      const path = nativeEvent.composedPath();
+      for (const element of path) {
+        if (!(element instanceof HTMLElement)) continue;
+        if (element.matches("select")) {
+          return true;
+        }
+        if (element.closest && element.closest("[data-select-root]")) {
+          return true;
+        }
+      }
+    }
+
+    const activeElement =
+      typeof document !== "undefined" ? document.activeElement : null;
+    if (activeElement instanceof HTMLElement) {
+      if (activeElement.matches("select")) {
+        return true;
+      }
+      if (activeElement.closest("[data-select-root]")) {
+        return true;
+      }
+    }
+
+    return false;
   };
 
   const handleOverlayMouseDown = (event: MouseEvent<HTMLDivElement>) => {
-    if (shouldIgnoreForSelect(event.target)) {
+    if (eventTargetsSelect(event)) {
       return;
     }
     if (event.target !== event.currentTarget) {
@@ -260,7 +292,7 @@ export const Modal: FC<ModalProps> = ({
   };
 
   const handleOverlayTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (shouldIgnoreForSelect(event.target)) {
+    if (eventTargetsSelect(event)) {
       return;
     }
     if (event.target !== event.currentTarget) {
