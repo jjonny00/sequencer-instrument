@@ -24,13 +24,6 @@ interface ModalProps {
   disableOverlayClose?: boolean;
 }
 
-const getDebugTimestamp = () => {
-  if (typeof performance !== "undefined" && typeof performance.now === "function") {
-    return Number(performance.now().toFixed(2));
-  }
-  return Date.now();
-};
-
 const overlayStyle: CSSProperties = {
   position: "fixed",
   inset: 0,
@@ -251,24 +244,21 @@ export const Modal: FC<ModalProps> = ({
     boxSizing: "border-box",
   };
 
-  const eventTargetsSelect = (
+  const interactionStartsInSelect = (
     event: MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>
   ) => {
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest("select,[data-select-root]")) {
+    if (target instanceof HTMLElement && target.closest("select")) {
       return true;
     }
 
     const nativeEvent = event.nativeEvent as Event | undefined;
-
     if (nativeEvent && typeof nativeEvent.composedPath === "function") {
-      const path = nativeEvent.composedPath();
-      for (const element of path) {
-        if (!(element instanceof HTMLElement)) continue;
-        if (element.matches("select")) {
-          return true;
+      for (const element of nativeEvent.composedPath()) {
+        if (!(element instanceof HTMLElement)) {
+          continue;
         }
-        if (element.closest && element.closest("[data-select-root]")) {
+        if (element.matches("select")) {
           return true;
         }
       }
@@ -276,68 +266,38 @@ export const Modal: FC<ModalProps> = ({
 
     const activeElement =
       typeof document !== "undefined" ? document.activeElement : null;
-    if (activeElement instanceof HTMLElement) {
-      if (activeElement.matches("select")) {
-        return true;
-      }
-      if (activeElement.closest("[data-select-root]")) {
-        return true;
-      }
+    if (activeElement instanceof HTMLElement && activeElement.matches("select")) {
+      return true;
     }
 
     return false;
   };
 
-  const handleOverlayMouseDown = (event: MouseEvent<HTMLDivElement>) => {
-    const fromSelect = eventTargetsSelect(event);
-    const timestamp = getDebugTimestamp();
-    const activeElement =
-      typeof document !== "undefined" ? document.activeElement : null;
-    console.log("[Modal overlay] mousedown", {
-      timestamp,
-      fromSelect,
-      disableOverlayClose,
-      targetTag:
-        event.target instanceof HTMLElement ? event.target.tagName : undefined,
-      activeTag:
-        activeElement instanceof HTMLElement ? activeElement.tagName : undefined,
-    });
+  const shouldCloseFromEvent = (
+    event: MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>
+  ) => {
     if (disableOverlayClose) {
-      return;
+      return false;
     }
-    if (fromSelect) {
-      return;
+    if (event.currentTarget !== event.target) {
+      return false;
     }
-    if (event.target !== event.currentTarget) {
-      return;
+    if (interactionStartsInSelect(event)) {
+      return false;
     }
-    onClose();
+    return true;
+  };
+
+  const handleOverlayMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (shouldCloseFromEvent(event)) {
+      onClose();
+    }
   };
 
   const handleOverlayTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    const fromSelect = eventTargetsSelect(event);
-    const timestamp = getDebugTimestamp();
-    const activeElement =
-      typeof document !== "undefined" ? document.activeElement : null;
-    console.log("[Modal overlay] touchstart", {
-      timestamp,
-      fromSelect,
-      disableOverlayClose,
-      targetTag:
-        event.target instanceof HTMLElement ? event.target.tagName : undefined,
-      activeTag:
-        activeElement instanceof HTMLElement ? activeElement.tagName : undefined,
-    });
-    if (disableOverlayClose) {
-      return;
+    if (shouldCloseFromEvent(event)) {
+      onClose();
     }
-    if (fromSelect) {
-      return;
-    }
-    if (event.target !== event.currentTarget) {
-      return;
-    }
-    onClose();
   };
 
   return (

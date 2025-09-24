@@ -2,12 +2,10 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
   type FC,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import * as Tone from "tone";
 
@@ -29,103 +27,19 @@ import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
 
-interface StepSectionProps {
-  visible: boolean;
-  delay?: number;
-  children: ReactNode;
-}
-
-const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => {
-  const [shouldRender, setShouldRender] = useState(visible);
-  const [isActive, setIsActive] = useState(visible);
-  const hideTimeoutRef = useRef<number | null>(null);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const win = typeof window !== "undefined" ? window : undefined;
-
-    if (visible) {
-      setShouldRender(true);
-      if (!win) {
-        setIsActive(true);
-        return () => undefined;
-      }
-
-      rafRef.current = win.requestAnimationFrame(() => {
-        setIsActive(true);
-      });
-
-      return () => {
-        if (rafRef.current !== null) {
-          win.cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
-      };
-    }
-
-    setIsActive(false);
-
-    if (!win) {
-      setShouldRender(false);
-      return () => undefined;
-    }
-
-    hideTimeoutRef.current = win.setTimeout(() => {
-      setShouldRender(false);
-      hideTimeoutRef.current = null;
-    }, 220);
-
-    return () => {
-      if (hideTimeoutRef.current !== null) {
-        win.clearTimeout(hideTimeoutRef.current);
-        hideTimeoutRef.current = null;
-      }
-    };
-  }, [visible]);
-
-  useEffect(() => {
-    return () => {
-      const win = typeof window !== "undefined" ? window : undefined;
-      if (!win) return;
-
-      if (rafRef.current !== null) {
-        win.cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-      if (hideTimeoutRef.current !== null) {
-        win.clearTimeout(hideTimeoutRef.current);
-        hideTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  if (!shouldRender) {
-    return null;
-  }
-
-  return (
-    <div
-      style={{
-        opacity: isActive ? 1 : 0,
-        transform: isActive ? "none" : "translateY(12px)",
-        transition: `opacity 0.2s ease ${delay}s, transform 0.24s ease ${delay}s`,
-        willChange: "opacity, transform",
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        width: "100%",
-      }}
-    >
-      {children}
-    </div>
-  );
+const baseSelectStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid #2f384a",
+  background: "#0f172a",
+  color: "#e6f2ff",
+  transition: "border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
 };
 
-const getDebugTimestamp = () => {
-  if (typeof performance !== "undefined" && typeof performance.now === "function") {
-    return Number(performance.now().toFixed(2));
-  }
-  return Date.now();
+const disabledSelectStyle: CSSProperties = {
+  opacity: 0.5,
+  color: "#64748b",
+  cursor: "not-allowed",
 };
 
 interface PresetListItem {
@@ -197,69 +111,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const [userPresets, setUserPresets] = useState<
     { id: string; name: string; characterId: string | null; pattern: Chunk | null }[]
   >([]);
-
-  const [isSelectSandboxActive, setIsSelectSandboxActive] = useState(false);
-  const [sandboxSelectValue, setSandboxSelectValue] = useState(selectedPackId);
-
-  const logDebugEvent = useCallback(
-    (context: string, eventName: string, detail: Record<string, unknown> = {}) => {
-      const timestamp = getDebugTimestamp();
-      console.log(`[AddTrackModal][${context}] ${eventName}`, {
-        ...detail,
-        timestamp,
-      });
-    },
-    []
-  );
-
-  const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
-  logDebugEvent("component", "render", {
-    renderCount: renderCountRef.current,
-    isOpen,
-    sandboxActive: isSelectSandboxActive,
-    selectedPackId,
-    selectedInstrumentId,
-    selectedCharacterId,
-    selectedPresetId,
-  });
-
-  useEffect(() => {
-    logDebugEvent("component", "isOpen changed", { isOpen });
-  }, [isOpen, logDebugEvent]);
-
-  useEffect(() => {
-    logDebugEvent("sandbox", "state changed", { sandboxActive: isSelectSandboxActive });
-  }, [isSelectSandboxActive, logDebugEvent]);
-
-  useEffect(() => {
-    if (!isSelectSandboxActive) {
-      setSandboxSelectValue(selectedPackId);
-    }
-  }, [isSelectSandboxActive, selectedPackId]);
-
-  const handleModalClose = useCallback(() => {
-    logDebugEvent("component", "onClose invoked", {
-      sandboxActive: isSelectSandboxActive,
-      renderCount: renderCountRef.current,
-    });
-    onCancel();
-  }, [isSelectSandboxActive, logDebugEvent, onCancel]);
-
-  const activateSelectSandbox = useCallback(() => {
-    logDebugEvent("sandbox", "activate requested", {
-      isOpen,
-      renderCount: renderCountRef.current,
-    });
-    setIsSelectSandboxActive(true);
-  }, [isOpen, logDebugEvent]);
-
-  const deactivateSelectSandbox = useCallback(() => {
-    logDebugEvent("sandbox", "deactivate requested", {
-      renderCount: renderCountRef.current,
-    });
-    setIsSelectSandboxActive(false);
-  }, [logDebugEvent]);
 
   const refreshUserPresets = useCallback(() => {
     if (!pack || !selectedInstrumentId) {
@@ -528,11 +379,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const handleCharacterChange = useCallback(
     (characterId: string) => {
-      logDebugEvent("style-select", "change handler", { characterId });
       onSelectCharacter(characterId);
       void previewStyle(characterId);
     },
-    [logDebugEvent, onSelectCharacter, previewStyle]
+    [onSelectCharacter, previewStyle]
   );
 
   const renderPresetRow = (
@@ -618,153 +468,23 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     paddingRight: 4,
   };
 
-  const instrumentVisible = Boolean(pack && selectedPackId);
-  const styleVisible = instrumentVisible && Boolean(selectedInstrumentId);
-  const presetVisible = styleVisible && Boolean(selectedCharacterId);
+  const fieldLabelStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  };
 
-  if (isSelectSandboxActive) {
-    const sandboxButtonStyle: CSSProperties = {
-      ...footerButtonBaseStyle,
-      background: "#1f2532",
-      color: "#e6f2ff",
-      border: "1px solid #334155",
-    };
+  const instrumentDisabled = !pack || instrumentOptions.length === 0;
+  const styleDisabled =
+    instrumentDisabled || !selectedInstrumentId || characterOptions.length === 0;
+  const presetSelectionDisabled = styleDisabled || !selectedCharacterId;
 
-    const sandboxSelectStyle: CSSProperties = {
-      padding: "10px 12px",
-      borderRadius: 12,
-      border: "1px solid #2f384a",
-      background: "#0f172a",
-      color: "#e6f2ff",
-    };
-
-    return (
-      <Modal
-        isOpen={isOpen}
-        onClose={handleModalClose}
-        title={`${title} Debug Sandbox`}
-        subtitle="Minimal select-only environment without backdrop handlers or animations. Monitor console output while reproducing the dropdown dismissal."
-        fullScreen
-        disableOverlayClose
-        footer={
-          <div style={{ display: "flex", gap: 12 }}>
-            <button
-              type="button"
-              onClick={deactivateSelectSandbox}
-              style={sandboxButtonStyle}
-            >
-              Return to full modal
-            </button>
-            <button
-              type="button"
-              onClick={handleModalClose}
-              style={{
-                ...sandboxButtonStyle,
-                background: "#2f2032",
-                border: "1px solid #3f2942",
-              }}
-            >
-              Close dialog
-            </button>
-          </div>
-        }
-      >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            padding: "12px 0",
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
-            This sandbox renders a single native select without any surrounding animations or
-            backdrop-close logic. Use it to compare against the full Add Track flow and inspect
-            logged focus/blur events when the dropdown collapses unexpectedly.
-          </p>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>
-              Sandbox Select (options mirror packs for familiarity)
-            </span>
-            <select
-              value={sandboxSelectValue}
-              onFocus={(event) =>
-                logDebugEvent("sandbox-select", "focus", {
-                  value: event.target.value,
-                })
-              }
-              onBlur={(event) =>
-                logDebugEvent("sandbox-select", "blur", {
-                  value: event.target.value,
-                })
-              }
-              onMouseDown={(event) =>
-                logDebugEvent("sandbox-select", "mouse down", {
-                  button: event.button,
-                  targetTag:
-                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
-                })
-              }
-              onTouchStart={(event) =>
-                logDebugEvent("sandbox-select", "touch start", {
-                  touches: event.touches.length,
-                })
-              }
-              onClick={(event) =>
-                logDebugEvent("sandbox-select", "click", {
-                  value: event.currentTarget.value,
-                })
-              }
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                logDebugEvent("sandbox-select", "change", {
-                  value: nextValue,
-                });
-                setSandboxSelectValue(nextValue);
-              }}
-              style={sandboxSelectStyle}
-            >
-              <option value="" disabled>
-                Select an option
-              </option>
-              {packs.map((option) => (
-                <option key={`sandbox-${option.id}`} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div
-            style={{
-              border: "1px solid #1f2937",
-              borderRadius: 12,
-              background: "#0b1624",
-              padding: 12,
-              fontSize: 12,
-              color: "#94a3b8",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
-            <strong style={{ fontSize: 13, color: "#e2e8f0" }}>
-              Console instrumentation
-            </strong>
-            <span>
-              Focus, blur, click, mouse down, touch start, and change events log with precise
-              timestamps. Compare these entries with the modal overlay logs to determine what fires
-              when the dropdown collapses.
-            </span>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
+  const presetSectionVisible = !presetSelectionDisabled;
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleModalClose}
+      onClose={onCancel}
       title={title}
       subtitle={description}
       fullScreen
@@ -785,7 +505,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           <div style={{ display: "flex", gap: 12 }}>
             <button
               type="button"
-              onClick={handleModalClose}
+              onClick={onCancel}
               style={cancelButtonStyle}
             >
               Cancel
@@ -803,83 +523,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            padding: 12,
-            borderRadius: 12,
-            border: "1px dashed #334155",
-            background: "#0b1624",
-            color: "#94a3b8",
-          }}
-        >
-          <div style={{ fontSize: 13, color: "#cbd5f5", fontWeight: 600 }}>
-            Select instrumentation debug tools
-          </div>
-          <p style={{ margin: 0, fontSize: 12 }}>
-            Console logging is active for focus, blur, mouse, touch, and change events. Use the
-            sandbox view to isolate the dropdown without modal chrome.
-          </p>
-          <button
-            type="button"
-            onClick={activateSelectSandbox}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 999,
-              border: "1px solid #334155",
-              background: "#1f2532",
-              color: "#e2e8f0",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              alignSelf: "flex-start",
-            }}
-          >
-            Open minimal select sandbox
-          </button>
-        </div>
-        <div data-select-root>
-          <label
-            data-select-root
-            style={{ display: "flex", flexDirection: "column", gap: 6 }}
-          >
+        <div>
+          <label style={fieldLabelStyle}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
             <select
               value={selectedPackId}
-              onFocus={(event) =>
-                logDebugEvent("pack-select", "focus", { value: event.target.value })
-              }
-              onBlur={(event) =>
-                logDebugEvent("pack-select", "blur", { value: event.target.value })
-              }
-              onMouseDown={(event) =>
-                logDebugEvent("pack-select", "mouse down", {
-                  button: event.button,
-                  targetTag:
-                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
-                })
-              }
-              onTouchStart={(event) =>
-                logDebugEvent("pack-select", "touch start", {
-                  touches: event.touches.length,
-                })
-              }
-              onClick={(event) =>
-                logDebugEvent("pack-select", "click", {
-                  value: event.currentTarget.value,
-                })
-              }
-              onChange={(event) => {
-                logDebugEvent("pack-select", "change", { value: event.target.value });
-                onSelectPack(event.target.value);
-              }}
+              onChange={(event) => onSelectPack(event.target.value)}
               style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
+                ...baseSelectStyle,
                 color: selectedPackId ? "#e6f2ff" : "#64748b",
               }}
             >
@@ -895,55 +546,25 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           </label>
         </div>
 
-        <StepSection visible={instrumentVisible}>
-          <label
-            data-select-root
-            style={{ display: "flex", flexDirection: "column", gap: 6 }}
-          >
+        <div
+          aria-disabled={instrumentDisabled}
+          style={{
+            opacity: instrumentDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
+            pointerEvents: "auto",
+          }}
+        >
+          <label style={fieldLabelStyle}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
             <select
               value={selectedInstrumentId}
-              onFocus={(event) =>
-                logDebugEvent("instrument-select", "focus", {
-                  value: event.target.value,
-                })
-              }
-              onBlur={(event) =>
-                logDebugEvent("instrument-select", "blur", {
-                  value: event.target.value,
-                })
-              }
-              onMouseDown={(event) =>
-                logDebugEvent("instrument-select", "mouse down", {
-                  button: event.button,
-                  targetTag:
-                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
-                })
-              }
-              onTouchStart={(event) =>
-                logDebugEvent("instrument-select", "touch start", {
-                  touches: event.touches.length,
-                })
-              }
-              onClick={(event) =>
-                logDebugEvent("instrument-select", "click", {
-                  value: event.currentTarget.value,
-                })
-              }
-              onChange={(event) => {
-                logDebugEvent("instrument-select", "change", {
-                  value: event.target.value,
-                });
-                onSelectInstrument(event.target.value);
-              }}
-              disabled={instrumentOptions.length === 0}
+              onChange={(event) => onSelectInstrument(event.target.value)}
+              disabled={instrumentDisabled}
               style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
+                ...baseSelectStyle,
+                ...(instrumentDisabled ? disabledSelectStyle : {}),
                 color:
-                  selectedInstrumentId && instrumentOptions.length > 0
+                  selectedInstrumentId && !instrumentDisabled
                     ? "#e6f2ff"
                     : "#64748b",
               }}
@@ -960,51 +581,27 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               ))}
             </select>
           </label>
-        </StepSection>
+        </div>
 
-        <StepSection visible={styleVisible} delay={0.05}>
-          <label
-            data-select-root
-            style={{ display: "flex", flexDirection: "column", gap: 6 }}
-          >
+        <div
+          aria-disabled={styleDisabled}
+          style={{
+            opacity: styleDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
+            pointerEvents: "auto",
+          }}
+        >
+          <label style={fieldLabelStyle}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
             <select
               value={selectedCharacterId}
-              onFocus={(event) =>
-                logDebugEvent("style-select", "focus", { value: event.target.value })
-              }
-              onBlur={(event) =>
-                logDebugEvent("style-select", "blur", { value: event.target.value })
-              }
-              onMouseDown={(event) =>
-                logDebugEvent("style-select", "mouse down", {
-                  button: event.button,
-                  targetTag:
-                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
-                })
-              }
-              onTouchStart={(event) =>
-                logDebugEvent("style-select", "touch start", {
-                  touches: event.touches.length,
-                })
-              }
-              onClick={(event) =>
-                logDebugEvent("style-select", "click", {
-                  value: event.currentTarget.value,
-                })
-              }
-              onChange={(event) => {
-                logDebugEvent("style-select", "change", { value: event.target.value });
-                handleCharacterChange(event.target.value);
-              }}
-              disabled={characterOptions.length === 0}
+              onChange={(event) => handleCharacterChange(event.target.value)}
+              disabled={styleDisabled}
               style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
+                ...baseSelectStyle,
+                ...(styleDisabled ? disabledSelectStyle : {}),
                 color:
-                  selectedCharacterId && characterOptions.length > 0
+                  selectedCharacterId && !styleDisabled
                     ? "#e6f2ff"
                     : "#64748b",
               }}
@@ -1019,9 +616,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               ))}
             </select>
           </label>
-        </StepSection>
+        </div>
 
-        <StepSection visible={presetVisible} delay={0.1}>
+        {presetSectionVisible ? (
           <div
             style={{
               display: "flex",
@@ -1120,7 +717,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               ) : null}
             </div>
           </div>
-        </StepSection>
+        ) : null}
 
       </div>
     </Modal>
