@@ -700,6 +700,36 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 6,
   };
 
+  const savedLoopsSectionStyle: CSSProperties = {
+    borderRadius: 12,
+    border: "1px solid #1d2636",
+    background: "#10192c",
+    padding: 16,
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  };
+
+  const savedLoopsHeaderStyle: CSSProperties = {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 600,
+    color: "#e2e8f0",
+  };
+
+  const savedLoopsSubcopyStyle: CSSProperties = {
+    margin: 0,
+    fontSize: 13,
+    color: "#94a3b8",
+    lineHeight: 1.5,
+  };
+
+  const savedLoopsFieldsStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  };
+
   const packSelectDisabled = handoffLock !== null && handoffLock !== "pack";
 
   const instrumentSelectDisabled =
@@ -714,10 +744,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     handoffLock !== null && handoffLock !== "preset"
       ? true
       : loadingState.preset || !readyState.preset;
-  const hasAvailablePresets = packPresets.length + userPresetItems.length > 0;
-
-  const presetSelectValue = selectedPresetId ?? "";
-
   const presetBlockedLabel = !selectedPackId
     ? "Select a sound pack first"
     : !selectedInstrumentId
@@ -728,9 +754,21 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Loading presets..."
     : "Saved loops unavailable";
 
-  const presetDefaultOptionLabel = hasAvailablePresets
-    ? "Start fresh (no saved loop)"
-    : "No saved loops available";
+  const userPresetSelectValue =
+    selectedPresetId && isUserPresetId(selectedPresetId) ? selectedPresetId : "";
+  const packPresetSelectValue =
+    selectedPresetId && !isUserPresetId(selectedPresetId) ? selectedPresetId : "";
+
+  const userPresetSelectDisabled = presetSelectDisabled;
+  const packPresetSelectDisabled = presetSelectDisabled || packPresets.length === 0;
+
+  const savedLoopsHelperText = loadingState.preset
+    ? "Loading presets..."
+    : presetSelectDisabled
+    ? presetBlockedLabel
+    : userPresetItems.length === 0 && packPresets.length === 0
+    ? "No saved loops available yet."
+    : null;
 
   return (
     <Modal
@@ -893,69 +931,87 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           ) : null}
         </label>
 
-        <div
+        <section
           aria-disabled={presetSelectDisabled}
           style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
+            ...savedLoopsSectionStyle,
             opacity: presetSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
-          <label style={fieldLabelStyle}>
-            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Saved Loop</span>
-            <select
-              value={presetSelectValue}
-              onChange={handlePresetSelectChange}
-              disabled={presetSelectDisabled}
-              style={{
-                ...baseSelectStyle,
-                ...(presetSelectDisabled ? disabledSelectStyle : {}),
-                color:
-                  !presetSelectDisabled && selectedPresetId
-                    ? "#e6f2ff"
-                    : "#64748b",
-              }}
-            >
-            {presetSelectDisabled ? (
-              <option value="" disabled>
-                {presetBlockedLabel}
-              </option>
-            ) : (
-              <>
-                <option value="">{presetDefaultOptionLabel}</option>
-                {hasAvailablePresets ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <h3 style={savedLoopsHeaderStyle}>Saved Loops</h3>
+            <p style={savedLoopsSubcopyStyle}>
+              Save the current loop or load one of your favorites.
+            </p>
+          </div>
+          <div style={savedLoopsFieldsStyle}>
+            <label style={fieldLabelStyle}>
+              <span style={{ fontSize: 13, color: "#cbd5f5" }}>Your Saved Loops</span>
+              <select
+                value={userPresetSelectValue}
+                onChange={handlePresetSelectChange}
+                disabled={userPresetSelectDisabled}
+                style={{
+                  ...baseSelectStyle,
+                  ...(userPresetSelectDisabled ? disabledSelectStyle : {}),
+                  color:
+                    !userPresetSelectDisabled && userPresetSelectValue
+                      ? "#e6f2ff"
+                      : "#64748b",
+                }}
+              >
+                <option value="">Start fresh (no saved loop)</option>
+                {userPresetItems.map((preset) => (
+                  <option key={`user-${preset.id}`} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={fieldLabelStyle}>
+              <span style={{ fontSize: 13, color: "#cbd5f5" }}>Pack Loops</span>
+              <select
+                value={packPresetSelectValue}
+                onChange={handlePresetSelectChange}
+                disabled={packPresetSelectDisabled}
+                style={{
+                  ...baseSelectStyle,
+                  ...(packPresetSelectDisabled ? disabledSelectStyle : {}),
+                  color:
+                    !packPresetSelectDisabled && packPresetSelectValue
+                      ? "#e6f2ff"
+                      : "#64748b",
+                }}
+              >
+                {packPresetSelectDisabled ? (
+                  <option value="" disabled>
+                    {packPresets.length === 0
+                      ? "No pack loops available"
+                      : presetBlockedLabel}
+                  </option>
+                ) : (
                   <>
-                    {userPresetItems.length > 0 ? (
-                      <optgroup label="Your saved loops">
-                        {userPresetItems.map((preset) => (
-                          <option key={`user-${preset.id}`} value={preset.id}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                    {packPresets.length > 0 ? (
-                      <optgroup label="Pack loops">
-                        {packPresets.map((preset) => (
-                          <option key={`pack-${preset.id}`} value={preset.id}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
+                    <option value="">Select a pack loop</option>
+                    {packPresets.map((preset) => (
+                      <option key={`pack-${preset.id}`} value={preset.id}>
+                        {preset.name}
+                      </option>
+                    ))}
                   </>
-                ) : null}
-              </>
-            )}
-          </select>
-          {loadingState.preset ? (
-            <span role="status" aria-live="polite" style={statusTextStyle}>
-              Loading presets...
+                )}
+              </select>
+            </label>
+          </div>
+          {savedLoopsHelperText ? (
+            <span
+              role={loadingState.preset ? "status" : undefined}
+              aria-live={loadingState.preset ? "polite" : undefined}
+              style={statusTextStyle}
+            >
+              {savedLoopsHelperText}
             </span>
           ) : null}
-        </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {showSavePresetAction ? (
               <IconButton
@@ -978,7 +1034,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
               />
             ) : null}
           </div>
-        </div>
+        </section>
 
       </div>
     </Modal>
