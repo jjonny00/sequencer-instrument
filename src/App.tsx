@@ -119,7 +119,7 @@ const createDefaultAddTrackState = (): AddTrackModalState => ({
   presetId: null,
 });
 
-const cloneChunkForDemo = (chunk: Chunk): Chunk => ({
+const cloneChunkState = (chunk: Chunk): Chunk => ({
   ...chunk,
   steps: chunk.steps.slice(),
   velocities: chunk.velocities ? chunk.velocities.slice() : undefined,
@@ -134,9 +134,9 @@ const cloneChunkForDemo = (chunk: Chunk): Chunk => ({
     : undefined,
 });
 
-const cloneTrackForDemo = (track: Track): Track => ({
+const cloneTrackState = (track: Track): Track => ({
   ...track,
-  pattern: track.pattern ? cloneChunkForDemo(track.pattern) : null,
+  pattern: track.pattern ? cloneChunkState(track.pattern) : null,
   source: track.source ? { ...track.source } : undefined,
 });
 
@@ -223,13 +223,13 @@ const createDemoProjectData = (): StoredProjectData => {
     },
   ];
 
-  const trackSnapshots = baseTracks.map((track) => cloneTrackForDemo(track));
+  const trackSnapshots = baseTracks.map((track) => cloneTrackState(track));
   const patternGroupId = "pg-demo";
   const patternGroups: PatternGroup[] = [
     {
       id: patternGroupId,
       name: "demo-loop",
-      tracks: trackSnapshots.map((track) => cloneTrackForDemo(track)),
+      tracks: trackSnapshots.map((track) => cloneTrackState(track)),
     },
   ];
 
@@ -299,6 +299,10 @@ export default function App() {
   ]);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
+  const currentLoopDraftRef = useRef<Track[] | null>(null);
+  const skipLoopDraftRestoreRef = useRef(false);
+  const previousViewModeRef = useRef<"track" | "song">(viewMode);
+  const latestTracksRef = useRef<Track[]>(tracks);
   const [pendingLoopStripAction, setPendingLoopStripAction] = useState<
     "openLibrary" | null
   >(null);
@@ -324,6 +328,10 @@ export default function App() {
     [editing, tracks]
   );
   const restorationRef = useRef(false);
+
+  useEffect(() => {
+    latestTracksRef.current = tracks;
+  }, [tracks]);
 
   useEffect(() => {
     const restoring = isPWARestore();
@@ -977,6 +985,24 @@ export default function App() {
   }, [tracks]);
 
   useEffect(() => {
+    const previousMode = previousViewModeRef.current;
+    if (previousMode === "track" && viewMode === "song") {
+      currentLoopDraftRef.current = latestTracksRef.current.map((track) =>
+        cloneTrackState(track)
+      );
+    } else if (previousMode === "song" && viewMode === "track") {
+      if (!skipLoopDraftRestoreRef.current && currentLoopDraftRef.current) {
+        const restored = currentLoopDraftRef.current.map((track) =>
+          cloneTrackState(track)
+        );
+        setTracks(restored);
+      }
+      skipLoopDraftRestoreRef.current = false;
+    }
+    previousViewModeRef.current = viewMode;
+  }, [viewMode, setTracks]);
+
+  useEffect(() => {
     setCurrentSectionIndex((prev) => {
       const maxColumns = songRows.reduce(
         (max, row) => Math.max(max, row.slots.length),
@@ -1292,6 +1318,9 @@ export default function App() {
         setSubdiv(project.subdivision as Subdivision);
       }
       setTracks(project.tracks);
+      currentLoopDraftRef.current = project.tracks.map((track) =>
+        cloneTrackState(track)
+      );
       setPatternGroups(
         project.patternGroups.length > 0
           ? project.patternGroups
@@ -1362,6 +1391,8 @@ export default function App() {
     console.log("New song button clicked");
     setActiveProjectName("untitled");
     setStarted(true);
+    skipLoopDraftRestoreRef.current = true;
+    currentLoopDraftRef.current = null;
     setViewMode("track");
   }, [setActiveProjectName, setStarted, setViewMode]);
 
@@ -1395,7 +1426,11 @@ export default function App() {
     }
     const demoProject = createDemoProjectData();
     applyLoadedProject(demoProject);
+    currentLoopDraftRef.current = demoProject.tracks.map((track) =>
+      cloneTrackState(track)
+    );
     setActiveProjectName("Demo Jam");
+    skipLoopDraftRestoreRef.current = true;
     setViewMode("track");
   }, [
     applyLoadedProject,
@@ -1426,6 +1461,8 @@ export default function App() {
     setPendingLoopStripAction(null);
     setCurrentSectionIndex(0);
     setStarted(false);
+    skipLoopDraftRestoreRef.current = true;
+    currentLoopDraftRef.current = null;
     setViewMode("track");
     refreshProjectList();
   }, [
@@ -1491,6 +1528,7 @@ export default function App() {
       setSelectedGroupId(groupId);
       setEditing(null);
       if (viewMode !== "track") {
+        skipLoopDraftRestoreRef.current = true;
         setViewMode("track");
         setPendingLoopStripAction(null);
       }
@@ -2041,7 +2079,10 @@ export default function App() {
                 }}
               >
                 <button
-                  onClick={() => setViewMode("track")}
+                  onClick={() => {
+                    skipLoopDraftRestoreRef.current = false;
+                    setViewMode("track");
+                  }}
                   style={{
                     flex: 1,
                     padding: "8px 0",
