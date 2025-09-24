@@ -66,7 +66,6 @@ export const Modal: FC<ModalProps> = ({
   const hasSubtitle = Boolean(subtitle);
   const footerRef = useRef<HTMLDivElement | null>(null);
   const [footerHeight, setFooterHeight] = useState(0);
-  const pointerDownOnOverlayRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -243,28 +242,31 @@ export const Modal: FC<ModalProps> = ({
     boxSizing: "border-box",
   };
 
-  const handleOverlayPointerDown = (event: MouseEvent<HTMLDivElement>) => {
-    pointerDownOnOverlayRef.current = event.target === event.currentTarget;
+  const shouldIgnoreForSelect = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    return Boolean(target.closest("select,[data-select-root]"));
   };
 
-  const handleOverlayPointerLeave = () => {
-    pointerDownOnOverlayRef.current = false;
+  const handleOverlayMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (shouldIgnoreForSelect(event.target)) {
+      return;
+    }
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    onClose();
   };
 
   const handleOverlayTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    pointerDownOnOverlayRef.current = event.target === event.currentTarget;
-  };
-
-  const handleOverlayTouchCancel = () => {
-    pointerDownOnOverlayRef.current = false;
-  };
-
-  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (pointerDownOnOverlayRef.current && event.target === event.currentTarget) {
-      onClose();
+    if (shouldIgnoreForSelect(event.target)) {
+      return;
     }
-
-    pointerDownOnOverlayRef.current = false;
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    onClose();
   };
 
   return (
@@ -274,15 +276,14 @@ export const Modal: FC<ModalProps> = ({
       aria-labelledby={labelId}
       aria-describedby={hasSubtitle ? descriptionId : undefined}
       style={resolvedOverlayStyle}
-      onClick={handleOverlayClick}
-      onMouseDown={handleOverlayPointerDown}
-      onMouseLeave={handleOverlayPointerLeave}
+      onMouseDown={handleOverlayMouseDown}
       onTouchStart={handleOverlayTouchStart}
-      onTouchCancel={handleOverlayTouchCancel}
     >
       <div
         style={resolvedModalStyle}
         onClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onTouchStart={(event) => event.stopPropagation()}
       >
         <div style={bodyWrapperStyle}>
           <div

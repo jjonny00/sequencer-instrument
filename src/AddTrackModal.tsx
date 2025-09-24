@@ -107,7 +107,7 @@ const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => 
     <div
       style={{
         opacity: isActive ? 1 : 0,
-        transform: isActive ? "translateY(0)" : "translateY(12px)",
+        transform: isActive ? "none" : "translateY(12px)",
         transition: `opacity 0.2s ease ${delay}s, transform 0.24s ease ${delay}s`,
         willChange: "opacity, transform",
         display: "flex",
