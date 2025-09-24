@@ -65,6 +65,7 @@ export const Modal: FC<ModalProps> = ({
   const hasSubtitle = Boolean(subtitle);
   const footerRef = useRef<HTMLDivElement | null>(null);
   const [footerHeight, setFooterHeight] = useState(0);
+  const pointerDownInsideRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -242,9 +243,22 @@ export const Modal: FC<ModalProps> = ({
   };
 
   const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (pointerDownInsideRef.current) {
+      pointerDownInsideRef.current = false;
+      return;
+    }
+
     if (event.target === event.currentTarget) {
       onClose();
     }
+  };
+
+  const markPointerDownInside = () => {
+    pointerDownInsideRef.current = true;
+  };
+
+  const resetPointerDownInside = () => {
+    pointerDownInsideRef.current = false;
   };
 
   return (
@@ -259,6 +273,16 @@ export const Modal: FC<ModalProps> = ({
       <div
         style={resolvedModalStyle}
         onClick={(event) => event.stopPropagation()}
+        onPointerDown={markPointerDownInside}
+        onPointerUp={resetPointerDownInside}
+        onPointerCancel={resetPointerDownInside}
+        onPointerLeave={resetPointerDownInside}
+        onMouseDown={markPointerDownInside}
+        onMouseUp={resetPointerDownInside}
+        onMouseLeave={resetPointerDownInside}
+        onTouchStart={markPointerDownInside}
+        onTouchEnd={resetPointerDownInside}
+        onTouchCancel={resetPointerDownInside}
       >
         <div style={bodyWrapperStyle}>
           <div
