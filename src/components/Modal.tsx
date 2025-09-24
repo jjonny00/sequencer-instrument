@@ -7,6 +7,7 @@ import {
   type FC,
   type MouseEvent,
   type ReactNode,
+  type TouchEvent,
 } from "react";
 
 import { IconButton } from "./IconButton";
@@ -65,7 +66,7 @@ export const Modal: FC<ModalProps> = ({
   const hasSubtitle = Boolean(subtitle);
   const footerRef = useRef<HTMLDivElement | null>(null);
   const [footerHeight, setFooterHeight] = useState(0);
-  const pointerDownInsideRef = useRef(false);
+  const pointerDownOnOverlayRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -242,23 +243,28 @@ export const Modal: FC<ModalProps> = ({
     boxSizing: "border-box",
   };
 
-  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (pointerDownInsideRef.current) {
-      pointerDownInsideRef.current = false;
-      return;
-    }
+  const handleOverlayPointerDown = (event: MouseEvent<HTMLDivElement>) => {
+    pointerDownOnOverlayRef.current = event.target === event.currentTarget;
+  };
 
-    if (event.target === event.currentTarget) {
+  const handleOverlayPointerLeave = () => {
+    pointerDownOnOverlayRef.current = false;
+  };
+
+  const handleOverlayTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    pointerDownOnOverlayRef.current = event.target === event.currentTarget;
+  };
+
+  const handleOverlayTouchCancel = () => {
+    pointerDownOnOverlayRef.current = false;
+  };
+
+  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (pointerDownOnOverlayRef.current && event.target === event.currentTarget) {
       onClose();
     }
-  };
 
-  const markPointerDownInside = () => {
-    pointerDownInsideRef.current = true;
-  };
-
-  const resetPointerDownInside = () => {
-    pointerDownInsideRef.current = false;
+    pointerDownOnOverlayRef.current = false;
   };
 
   return (
@@ -269,20 +275,14 @@ export const Modal: FC<ModalProps> = ({
       aria-describedby={hasSubtitle ? descriptionId : undefined}
       style={resolvedOverlayStyle}
       onClick={handleOverlayClick}
+      onMouseDown={handleOverlayPointerDown}
+      onMouseLeave={handleOverlayPointerLeave}
+      onTouchStart={handleOverlayTouchStart}
+      onTouchCancel={handleOverlayTouchCancel}
     >
       <div
         style={resolvedModalStyle}
         onClick={(event) => event.stopPropagation()}
-        onPointerDown={markPointerDownInside}
-        onPointerUp={resetPointerDownInside}
-        onPointerCancel={resetPointerDownInside}
-        onPointerLeave={resetPointerDownInside}
-        onMouseDown={markPointerDownInside}
-        onMouseUp={resetPointerDownInside}
-        onMouseLeave={resetPointerDownInside}
-        onTouchStart={markPointerDownInside}
-        onTouchEnd={resetPointerDownInside}
-        onTouchCancel={resetPointerDownInside}
       >
         <div style={bodyWrapperStyle}>
           <div
