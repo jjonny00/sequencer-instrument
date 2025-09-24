@@ -131,12 +131,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   );
 
   const scheduleAfterBlur = useCallback((task: () => void) => {
-    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(task);
-      });
+    if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+      window.setTimeout(task, 50);
     } else {
-      setTimeout(task, 0);
+      setTimeout(task, 50);
     }
   }, []);
 
@@ -323,6 +321,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       const select = event.target;
       const nextValue = select.value;
       select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
       setHandoffLock("pack");
       scheduleAfterBlur(() => {
         try {
@@ -340,6 +342,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       const select = event.target;
       const nextValue = select.value;
       select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
       setHandoffLock("instrument");
       scheduleAfterBlur(() => {
         try {
@@ -357,6 +363,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       const select = event.target;
       const nextValue = select.value;
       select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
       setHandoffLock("style");
       scheduleAfterBlur(() => {
         try {
@@ -375,6 +385,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       const select = event.target;
       const nextValue = select.value;
       select.blur();
+      const activeElement = (
+        typeof document !== "undefined" ? document.activeElement : null
+      ) as HTMLElement | null;
+      activeElement?.blur();
       setHandoffLock("preset");
       scheduleAfterBlur(() => {
         try {
