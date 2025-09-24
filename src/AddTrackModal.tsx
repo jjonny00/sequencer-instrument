@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ChangeEvent,
   type CSSProperties,
   type FC,
 } from "react";
@@ -25,6 +26,8 @@ import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
+
+type SelectField = "pack" | "instrument" | "style" | "preset";
 
 const baseSelectStyle: CSSProperties = {
   padding: "10px 12px",
@@ -103,6 +106,17 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const [userPresets, setUserPresets] = useState<
     { id: string; name: string; characterId: string | null; pattern: Chunk | null }[]
   >([]);
+  const [handoffLock, setHandoffLock] = useState<SelectField | null>(null);
+
+  const scheduleAfterBlur = useCallback((task: () => void) => {
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(task);
+      });
+    } else {
+      setTimeout(task, 0);
+    }
+  }, []);
 
   const refreshUserPresets = useCallback(() => {
     if (!pack || !selectedInstrumentId) {
@@ -190,6 +204,84 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     onSelectPreset,
     refreshUserPresets,
   ]);
+
+  const handlePackSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      setHandoffLock("pack");
+      scheduleAfterBlur(() => {
+        try {
+          onSelectPack(nextValue);
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [onSelectPack, scheduleAfterBlur]
+  );
+
+  const handleInstrumentSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      setHandoffLock("instrument");
+      scheduleAfterBlur(() => {
+        try {
+          onSelectInstrument(nextValue);
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [onSelectInstrument, scheduleAfterBlur]
+  );
+
+  const handleStyleSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      setHandoffLock("style");
+      scheduleAfterBlur(() => {
+        try {
+          onSelectCharacter(nextValue);
+          void previewStyle(nextValue);
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [onSelectCharacter, previewStyle, scheduleAfterBlur]
+  );
+
+  const handlePresetSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const select = event.target;
+      const nextValue = select.value;
+      select.blur();
+      setHandoffLock("preset");
+      scheduleAfterBlur(() => {
+        try {
+          if (!nextValue) {
+            onSelectPreset(null);
+            return;
+          }
+          onSelectPreset(nextValue);
+          const allPresets = [...userPresetItems, ...packPresets];
+          const match = allPresets.find((item) => item.id === nextValue);
+          if (match?.pattern) {
+            void previewPreset(match.pattern, match.characterId);
+          }
+        } finally {
+          setHandoffLock(null);
+        }
+      });
+    },
+    [onSelectPreset, packPresets, previewPreset, scheduleAfterBlur, userPresetItems]
+  );
 
   const packPresets = useMemo(
     () =>
@@ -346,14 +438,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [selectedCharacterId, selectedInstrumentId, selectedPackId, triggers]
   );
 
-  const handleCharacterChange = useCallback(
-    (characterId: string) => {
-      onSelectCharacter(characterId);
-      void previewStyle(characterId);
-    },
-    [onSelectCharacter, previewStyle]
-  );
-
   const sectionListStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -369,8 +453,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 6,
   };
 
+  const packSelectDisabled = handoffLock !== null && handoffLock !== "pack";
+
   const instrumentOptionsReady = Boolean(pack && instrumentOptions.length > 0);
-  const instrumentDisabled = !instrumentOptionsReady;
+  const instrumentBaseDisabled = !instrumentOptionsReady;
+  const instrumentSelectDisabled =
+    instrumentBaseDisabled || (handoffLock !== null && handoffLock !== "instrument");
 
   const styleOptionsReady =
     Boolean(
@@ -378,10 +466,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         selectedInstrumentId &&
         characterOptions.length > 0
     );
-  const styleDisabled = !styleOptionsReady;
-  const presetSelectionDisabled = styleDisabled || !selectedCharacterId;
-
-  const presetSelectDisabled = presetSelectionDisabled;
+  const styleBaseDisabled = !styleOptionsReady;
+  const styleSelectDisabled =
+    styleBaseDisabled || (handoffLock !== null && handoffLock !== "style");
+  const presetBaseDisabled = styleBaseDisabled || !selectedCharacterId;
+  const presetSelectDisabled =
+    presetBaseDisabled || (handoffLock !== null && handoffLock !== "preset");
   const hasAvailablePresets = packPresets.length + userPresetItems.length > 0;
 
   const presetSelectValue = selectedPresetId ?? "";
@@ -397,22 +487,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const presetDefaultOptionLabel = hasAvailablePresets
     ? "Start fresh (no saved loop)"
     : "No saved loops available";
-
-  const handlePresetChange = useCallback(
-    (presetId: string) => {
-      if (!presetId) {
-        onSelectPreset(null);
-        return;
-      }
-      onSelectPreset(presetId);
-      const allPresets = [...userPresetItems, ...packPresets];
-      const match = allPresets.find((item) => item.id === presetId);
-      if (match?.pattern) {
-        void previewPreset(match.pattern, match.characterId);
-      }
-    },
-    [onSelectPreset, packPresets, previewPreset, userPresetItems]
-  );
 
   return (
     <Modal
@@ -456,14 +530,24 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <label style={fieldLabelStyle}>
+        <label
+          aria-disabled={packSelectDisabled}
+          style={{
+            ...fieldLabelStyle,
+            opacity: packSelectDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
+          }}
+        >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
           <select
             value={selectedPackId || ""}
-            onChange={(event) => onSelectPack(event.target.value)}
+            onChange={handlePackSelectChange}
+            disabled={packSelectDisabled}
             style={{
               ...baseSelectStyle,
-              color: selectedPackId ? "#e6f2ff" : "#64748b",
+              ...(packSelectDisabled ? disabledSelectStyle : {}),
+              color:
+                selectedPackId && !packSelectDisabled ? "#e6f2ff" : "#64748b",
             }}
           >
             <option value="" disabled>
@@ -478,23 +562,23 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </label>
 
         <label
-          aria-disabled={instrumentDisabled}
+          aria-disabled={instrumentSelectDisabled}
           style={{
             ...fieldLabelStyle,
-            opacity: instrumentDisabled ? 0.6 : 1,
+            opacity: instrumentSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
           <select
             value={selectedInstrumentId || ""}
-            onChange={(event) => onSelectInstrument(event.target.value)}
-            disabled={instrumentDisabled}
+            onChange={handleInstrumentSelectChange}
+            disabled={instrumentSelectDisabled}
             style={{
               ...baseSelectStyle,
-              ...(instrumentDisabled ? disabledSelectStyle : {}),
+              ...(instrumentSelectDisabled ? disabledSelectStyle : {}),
               color:
-                selectedInstrumentId && !instrumentDisabled
+                selectedInstrumentId && !instrumentSelectDisabled
                   ? "#e6f2ff"
                   : "#64748b",
             }}
@@ -515,23 +599,23 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </label>
 
         <label
-          aria-disabled={styleDisabled}
+          aria-disabled={styleSelectDisabled}
           style={{
             ...fieldLabelStyle,
-            opacity: styleDisabled ? 0.6 : 1,
+            opacity: styleSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
           <select
             value={selectedCharacterId || ""}
-            onChange={(event) => handleCharacterChange(event.target.value)}
-            disabled={styleDisabled}
+            onChange={handleStyleSelectChange}
+            disabled={styleSelectDisabled}
             style={{
               ...baseSelectStyle,
-              ...(styleDisabled ? disabledSelectStyle : {}),
+              ...(styleSelectDisabled ? disabledSelectStyle : {}),
               color:
-                selectedCharacterId && !styleDisabled
+                selectedCharacterId && !styleSelectDisabled
                   ? "#e6f2ff"
                   : "#64748b",
             }}
@@ -565,7 +649,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Saved Loop</span>
             <select
               value={presetSelectValue}
-              onChange={(event) => handlePresetChange(event.target.value)}
+              onChange={handlePresetSelectChange}
               disabled={presetSelectDisabled}
               style={{
                 ...baseSelectStyle,
