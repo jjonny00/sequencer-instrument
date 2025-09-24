@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
   type FC,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 
@@ -240,6 +241,12 @@ export const Modal: FC<ModalProps> = ({
     boxSizing: "border-box",
   };
 
+  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -247,7 +254,7 @@ export const Modal: FC<ModalProps> = ({
       aria-labelledby={labelId}
       aria-describedby={hasSubtitle ? descriptionId : undefined}
       style={resolvedOverlayStyle}
-      onClick={onClose}
+      onClick={handleOverlayClick}
     >
       <div
         style={resolvedModalStyle}
