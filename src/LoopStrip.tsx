@@ -265,8 +265,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const labelLongPressRef = useRef<Map<number, boolean>>(new Map());
   const pack = packs[packIndex];
-  const instrumentOptions = Object.keys(pack.instruments);
-  const canAddTrack = instrumentOptions.length > 0;
+  const canAddTrack = packs.some(
+    (candidate) => Object.keys(candidate.instruments).length > 0
+  );
   const addTrackEnabled = canAddTrack;
   const isHeroAddTrack = tracks.length === 0;
 
@@ -435,7 +436,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       if (!addTrackEnabled) return;
       if (!instrumentId) return;
       const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
-      if (!activePack || activePack.id !== pack.id) {
+      if (!activePack) {
         return;
       }
       const resolvePreset = () => {
@@ -554,7 +555,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     ) => {
       if (!instrumentId) return;
       const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
-      if (!activePack || activePack.id !== pack.id) {
+      if (!activePack) {
         return;
       }
       const resolvePreset = () => {
@@ -994,7 +995,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const isMuted = t.muted;
           const isEditing = editing === t.id;
           const trackLabel = getTrackNumberLabel(tracks, t.id);
-
           const handleLabelPointerDown = (
             event: ReactPointerEvent<HTMLDivElement>
           ) => {

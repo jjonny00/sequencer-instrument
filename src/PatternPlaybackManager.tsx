@@ -12,7 +12,8 @@ import type {
   HarmoniaScaleDegree,
 } from "./instruments/harmonia";
 import { isScaleName, type ScaleName } from "./music/scales";
-import type { Track, TriggerMap } from "./tracks";
+import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
+import { packs } from "./packs";
 import type { PatternGroup, SongRow } from "./song";
 
 interface PatternPlaybackManagerProps {
@@ -39,6 +40,15 @@ export function PatternPlaybackManager({
     [patternGroups]
   );
 
+  const resolveTrigger = (instrument: string, packId?: string | null) => {
+    const resolvedPackId =
+      packId ??
+      packs.find((candidate) => candidate.instruments[instrument])?.id ??
+      null;
+    if (!resolvedPackId) return undefined;
+    return triggers[createTriggerKey(resolvedPackId, instrument)];
+  };
+
   if (viewMode === "song") {
     const players: JSX.Element[] = [];
     songRows.forEach((row, rowIndex) => {
@@ -53,7 +63,7 @@ export function PatternPlaybackManager({
         if (!track.pattern) return;
         const instrument = track.instrument;
         if (!instrument) return;
-        const trigger = triggers[instrument];
+        const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return;
         const scaledTrigger = (
           time: number,
@@ -99,7 +109,7 @@ export function PatternPlaybackManager({
         if (!track.pattern) return null;
         const instrument = track.instrument;
         if (!instrument) return null;
-        const trigger = triggers[instrument];
+        const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return null;
         const isTrackActive = () => !track.muted;
         return (

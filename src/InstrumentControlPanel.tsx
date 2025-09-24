@@ -74,6 +74,7 @@ interface InstrumentControlPanelProps {
     tone: number;
     dynamics: number;
     characterId?: string | null;
+    packId?: string | null;
   }) => void;
 }
 
@@ -652,6 +653,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         tone,
         dynamics,
         characterId: sourceCharacterId ?? patternCharacterId,
+        packId,
       });
     },
     [
@@ -661,6 +663,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       sourceCharacterId,
       patternCharacterId,
       harmoniaLastChordRef,
+      packId,
     ]
   );
 

@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
-import type { Track, TriggerMap } from "./tracks";
+import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
-import { packs, type InstrumentCharacter, type InstrumentDefinition } from "./packs";
+import { packs, type InstrumentCharacter } from "./packs";
 import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
@@ -38,7 +38,6 @@ import {
   type StoredProjectData,
 } from "./storage";
 import { isUserPresetId } from "./presets";
-import { applyKickMacrosToChunk, resolveInstrumentCharacterId } from "./instrumentCharacters";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -338,8 +337,12 @@ export default function App() {
   const pendingTransportStateRef = useRef<boolean | null>(null);
 
   const resolveInstrumentCharacter = useCallback(
-    (instrumentId: string, requestedId?: string | null): InstrumentCharacter | undefined => {
-      const pack = packs[packIndex];
+    (
+      packId: string,
+      instrumentId: string,
+      requestedId?: string | null
+    ): InstrumentCharacter | undefined => {
+      const pack = packs.find((candidate) => candidate.id === packId);
       const definition = pack?.instruments?.[instrumentId];
       if (!definition) return undefined;
       if (requestedId) {
@@ -360,14 +363,14 @@ export default function App() {
       }
       return definition.characters[0];
     },
-    [packIndex]
+    []
   );
 
   const resolveHarmoniaNodeKey = useCallback(
-    (requestedId?: string | null) => {
-      const character = resolveInstrumentCharacter("harmonia", requestedId);
+    (packId: string, requestedId?: string | null) => {
+      const character = resolveInstrumentCharacter(packId, "harmonia", requestedId);
       if (!character) return undefined;
-      return `harmonia:${character.id}`;
+      return `${packId}:harmonia:${character.id}`;
     },
     [resolveInstrumentCharacter]
   );
@@ -377,12 +380,17 @@ export default function App() {
       tone,
       dynamics,
       characterId,
+      packId,
     }: {
       tone: number;
       dynamics: number;
       characterId?: string | null;
+      packId?: string | null;
     }) => {
-      const key = resolveHarmoniaNodeKey(characterId);
+      const effectivePackId =
+        packId ?? packs[packIndex]?.id ?? packs[0]?.id ?? null;
+      if (!effectivePackId) return;
+      const key = resolveHarmoniaNodeKey(effectivePackId, characterId);
       if (!key) return;
       const nodes = harmoniaNodesRef.current[key];
       if (!nodes) return;
@@ -393,7 +401,7 @@ export default function App() {
       const gainDb = Tone.gainToDb(gain);
       nodes.volume.volume.rampTo(HARMONIA_BASE_VOLUME_DB + gainDb, 0.05);
     },
-    [resolveHarmoniaNodeKey]
+    [packIndex, resolveHarmoniaNodeKey]
   );
 
   useEffect(() => {
@@ -488,8 +496,14 @@ export default function App() {
 
   const handleRequestTrackModal = useCallback(
     (track: Track) => {
-      const pack = packs[packIndex];
+      const preferredPackId =
+        track.source?.packId ?? packs[packIndex]?.id ?? packs[0]?.id ?? "";
+      const pack = packs.find((candidate) => candidate.id === preferredPackId);
       if (!pack) return;
+      const packPosition = packs.findIndex((candidate) => candidate.id === pack.id);
+      if (packPosition >= 0 && packPosition !== packIndex) {
+        setPackIndex(packPosition);
+      }
       const instrumentOptions = Object.keys(pack.instruments);
       let instrumentId =
         track.source?.instrumentId ?? (track.instrument ? track.instrument : "");
@@ -530,7 +544,7 @@ export default function App() {
         presetId,
       });
     },
-    [packIndex]
+    [packIndex, setPackIndex]
   );
 
   useEffect(() => {
@@ -642,85 +656,6 @@ export default function App() {
   }, [bpm, started]);
 
   useEffect(() => {
-    const pack = packs[packIndex];
-    setTracks((prev) => {
-      const allowed = new Set(Object.keys(pack.instruments));
-      let changed = false;
-      const nextTracks: Track[] = [];
-      prev.forEach((track) => {
-        if (track.instrument && !allowed.has(track.instrument)) {
-          changed = true;
-          return;
-        }
-        if (!track.instrument) {
-          nextTracks.push(track);
-          return;
-        }
-        const instrumentDefinition = pack.instruments[
-          track.instrument
-        ] as InstrumentDefinition | undefined;
-        if (!instrumentDefinition) {
-          nextTracks.push(track);
-          return;
-        }
-        const previousPatternCharacterId = track.pattern?.characterId ?? null;
-        const resolvedCharacterId = resolveInstrumentCharacterId(
-          instrumentDefinition,
-          track.source?.characterId ?? null,
-          null,
-          previousPatternCharacterId
-        );
-        const nextSource = {
-          packId: pack.id,
-          instrumentId: track.instrument,
-          characterId: resolvedCharacterId,
-          presetId: track.source?.presetId ?? null,
-        };
-        let nextPattern = track.pattern;
-        if (track.pattern) {
-          const patternWithCharacter =
-            track.pattern.characterId === resolvedCharacterId
-              ? track.pattern
-              : { ...track.pattern, characterId: resolvedCharacterId };
-          nextPattern =
-            track.instrument === "kick"
-              ? applyKickMacrosToChunk(
-                  patternWithCharacter,
-                  instrumentDefinition,
-                  resolvedCharacterId,
-                  previousPatternCharacterId
-                )
-              : patternWithCharacter;
-        }
-        const sourceChanged =
-          !track.source ||
-          track.source.packId !== nextSource.packId ||
-          track.source.instrumentId !== nextSource.instrumentId ||
-          track.source.characterId !== nextSource.characterId ||
-          (track.source.presetId ?? null) !== nextSource.presetId;
-        const patternChanged = nextPattern !== track.pattern;
-        if (sourceChanged || patternChanged) {
-          changed = true;
-          nextTracks.push({
-            ...track,
-            source: nextSource,
-            pattern: nextPattern,
-          });
-        } else {
-          nextTracks.push(track);
-        }
-      });
-      return changed ? nextTracks : prev;
-    });
-    setEditing(null);
-    if (!restorationRef.current) {
-      const initialGroup = createInitialPatternGroup();
-      setPatternGroups([initialGroup]);
-      setSongRows([createSongRow()]);
-      setCurrentSectionIndex(0);
-      setSelectedGroupId(null);
-    }
-
     const disposeAll = () => {
       Object.values(instrumentRefs.current).forEach((inst) => {
         inst?.dispose?.();
@@ -857,57 +792,63 @@ export default function App() {
     };
 
     const newTriggers: TriggerMap = {};
-    Object.keys(pack.instruments).forEach((instrumentId) => {
-      newTriggers[instrumentId] = (
-        time: number,
-        velocity = 1,
-        pitch = 0,
-        noteArg?: string,
-        sustainArg?: number,
-        chunk?: Chunk,
-        characterId?: string
-      ) => {
-        void initAudioContext();
-        const character = resolveInstrumentCharacter(instrumentId, characterId);
-        if (!character) return;
-        const key = `${instrumentId}:${character.id}`;
-        let inst = instrumentRefs.current[key];
-        if (!inst) {
-          const created = createInstrumentInstance(instrumentId, character);
-          inst = created.instrument;
-          instrumentRefs.current[key] = inst;
-          if (created.keyboardFx) {
-            keyboardFxRefs.current[key] = created.keyboardFx;
-          }
-          if (created.harmoniaNodes) {
-            harmoniaNodesRef.current[key] = created.harmoniaNodes;
-          }
-        }
-        const sustainOverride =
-          sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
-        if (instrumentId === "harmonia") {
-          const nodes = harmoniaNodesRef.current[key];
-          if (!nodes) return;
-          if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
-            const envelope: Record<string, unknown> = {};
-            if (chunk.attack !== undefined) envelope.attack = chunk.attack;
-            if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
-            if (Object.keys(envelope).length > 0) {
-              (inst as unknown as { set?: (values: Record<string, unknown>) => void }).set?.({
-                envelope,
-              });
+    packs.forEach((pack) => {
+      Object.keys(pack.instruments).forEach((instrumentId) => {
+        const triggerKey = createTriggerKey(pack.id, instrumentId);
+        newTriggers[triggerKey] = (
+          time: number,
+          velocity = 1,
+          pitch = 0,
+          noteArg?: string,
+          sustainArg?: number,
+          chunk?: Chunk,
+          characterId?: string
+        ) => {
+          void initAudioContext();
+          const character = resolveInstrumentCharacter(
+            pack.id,
+            instrumentId,
+            characterId
+          );
+          if (!character) return;
+          const key = `${pack.id}:${instrumentId}:${character.id}`;
+          let inst = instrumentRefs.current[key];
+          if (!inst) {
+            const created = createInstrumentInstance(instrumentId, character);
+            inst = created.instrument;
+            instrumentRefs.current[key] = inst;
+            if (created.keyboardFx) {
+              keyboardFxRefs.current[key] = created.keyboardFx;
+            }
+            if (created.harmoniaNodes) {
+              harmoniaNodesRef.current[key] = created.harmoniaNodes;
             }
           }
-          triggerHarmoniaChord({
-            nodes,
-            time,
-            velocity,
-            sustain: sustainOverride,
-            chunk,
-            characterId: character.id,
-          });
-          return;
-        }
+          const sustainOverride =
+            sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+          if (instrumentId === "harmonia") {
+            const nodes = harmoniaNodesRef.current[key];
+            if (!nodes) return;
+            if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+              const envelope: Record<string, unknown> = {};
+              if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+              if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+              if (Object.keys(envelope).length > 0) {
+                (inst as unknown as { set?: (values: Record<string, unknown>) => void }).set?.({
+                  envelope,
+                });
+              }
+            }
+            triggerHarmoniaChord({
+              nodes,
+              time,
+              velocity,
+              sustain: sustainOverride,
+              chunk,
+              characterId: character.id,
+            });
+            return;
+          }
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
@@ -979,19 +920,17 @@ export default function App() {
         const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
         const duration = sustainOverride ?? (instrumentId === "keyboard" ? 0.3 : "8n");
         inst.triggerAttackRelease(targetNote, duration, time, velocity);
-      };
+        };
+      });
     });
 
     setTriggers(newTriggers);
-    restorationRef.current = false;
 
     return () => {
       disposeAll();
     };
   }, [
-    packIndex,
     started,
-    restorationRef,
     toneGraphVersion,
     resolveInstrumentCharacter,
   ]);
@@ -1560,7 +1499,7 @@ export default function App() {
   );
 
   const handleConfirmAddTrack = useCallback(() => {
-    if (!addTrackModalState.instrumentId) {
+    if (!addTrackModalState.instrumentId || !addTrackModalState.packId) {
       closeAddTrackModal();
       return;
     }
@@ -2368,8 +2307,13 @@ export default function App() {
                       allTracks={tracks}
                       trigger={(() => {
                         if (!selectedTrack.instrument) return undefined;
-                        const trigger =
-                          triggers[selectedTrack.instrument] ?? undefined;
+                        const packId = selectedTrack.source?.packId;
+                        const triggerKey = packId
+                          ? createTriggerKey(packId, selectedTrack.instrument)
+                          : null;
+                        const trigger = triggerKey
+                          ? triggers[triggerKey] ?? undefined
+                          : undefined;
                         if (!trigger) return undefined;
                         const characterId = selectedTrack.source?.characterId;
                         return (
