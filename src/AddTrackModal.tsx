@@ -369,9 +369,16 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 6,
   };
 
-  const instrumentDisabled = !pack || instrumentOptions.length === 0;
-  const styleDisabled =
-    instrumentDisabled || !selectedInstrumentId || characterOptions.length === 0;
+  const instrumentOptionsReady = Boolean(pack && instrumentOptions.length > 0);
+  const instrumentDisabled = !instrumentOptionsReady;
+
+  const styleOptionsReady =
+    Boolean(
+      instrumentOptionsReady &&
+        selectedInstrumentId &&
+        characterOptions.length > 0
+    );
+  const styleDisabled = !styleOptionsReady;
   const presetSelectionDisabled = styleDisabled || !selectedCharacterId;
 
   const presetSelectDisabled = presetSelectionDisabled;
@@ -496,18 +503,24 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     : "#64748b",
               }}
             >
-              <option value="" disabled>
-                {!selectedPackId
-                  ? "Select a sound pack first"
-                  : instrumentOptions.length === 0
-                  ? "No instruments available"
-                  : "Select an instrument"}
-              </option>
-              {instrumentOptions.map((instrument) => (
-                <option key={instrument} value={instrument}>
-                  {formatInstrumentLabel(instrument)}
+              {instrumentDisabled ? (
+                <option value="" disabled>
+                  {!selectedPackId
+                    ? "Select a sound pack first"
+                    : "Loading instruments..."}
                 </option>
-              ))}
+              ) : (
+                <>
+                  <option value="" disabled>
+                    Select an instrument
+                  </option>
+                  {instrumentOptions.map((instrument) => (
+                    <option key={instrument} value={instrument}>
+                      {formatInstrumentLabel(instrument)}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </label>
         </div>
@@ -536,18 +549,24 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     : "#64748b",
               }}
             >
-              <option value="" disabled>
-                {!selectedInstrumentId
-                  ? "Select an instrument first"
-                  : characterOptions.length === 0
-                  ? "No styles available"
-                  : "Select a style"}
-              </option>
-              {characterOptions.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
+              {styleDisabled ? (
+                <option value="" disabled>
+                  {!selectedInstrumentId
+                    ? "Select an instrument first"
+                    : "Loading styles..."}
                 </option>
-              ))}
+              ) : (
+                <>
+                  <option value="" disabled>
+                    Select a style
+                  </option>
+                  {characterOptions.map((character) => (
+                    <option key={character.id} value={character.id}>
+                      {character.name}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </label>
         </div>
