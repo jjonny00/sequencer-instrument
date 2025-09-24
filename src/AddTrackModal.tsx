@@ -2,12 +2,9 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
   type FC,
-  type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import * as Tone from "tone";
 
@@ -29,105 +26,20 @@ import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
 
-interface StepSectionProps {
-  visible: boolean;
-  delay?: number;
-  children: ReactNode;
-}
-
-const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => {
-  const [shouldRender, setShouldRender] = useState(visible);
-  const [isActive, setIsActive] = useState(visible);
-  const hideTimeoutRef = useRef<number | null>(null);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const win = typeof window !== "undefined" ? window : undefined;
-
-    if (visible) {
-      setShouldRender(true);
-      if (!win) {
-        setIsActive(true);
-        return () => undefined;
-      }
-
-      rafRef.current = win.requestAnimationFrame(() => {
-        setIsActive(true);
-      });
-
-      return () => {
-        if (rafRef.current !== null) {
-          win.cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
-      };
-    }
-
-    setIsActive(false);
-
-    if (!win) {
-      setShouldRender(false);
-      return () => undefined;
-    }
-
-    hideTimeoutRef.current = win.setTimeout(() => {
-      setShouldRender(false);
-      hideTimeoutRef.current = null;
-    }, 220);
-
-    return () => {
-      if (hideTimeoutRef.current !== null) {
-        win.clearTimeout(hideTimeoutRef.current);
-        hideTimeoutRef.current = null;
-      }
-    };
-  }, [visible]);
-
-  useEffect(() => {
-    return () => {
-      const win = typeof window !== "undefined" ? window : undefined;
-      if (!win) return;
-
-      if (rafRef.current !== null) {
-        win.cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-      if (hideTimeoutRef.current !== null) {
-        win.clearTimeout(hideTimeoutRef.current);
-        hideTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  if (!shouldRender) {
-    return null;
-  }
-
-  return (
-    <div
-      style={{
-        opacity: isActive ? 1 : 0,
-        transform: isActive ? "translateY(0)" : "translateY(12px)",
-        transition: `opacity 0.2s ease ${delay}s, transform 0.24s ease ${delay}s`,
-        willChange: "opacity, transform",
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        pointerEvents: isActive ? "auto" : "none",
-        width: "100%",
-      }}
-    >
-      {children}
-    </div>
-  );
+const baseSelectStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid #2f384a",
+  background: "#0f172a",
+  color: "#e6f2ff",
+  transition: "border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
 };
 
-interface PresetListItem {
-  id: string;
-  name: string;
-  characterId: string | null;
-  pattern?: Chunk;
-}
+const disabledSelectStyle: CSSProperties = {
+  opacity: 0.5,
+  color: "#64748b",
+  cursor: "not-allowed",
+};
 
 interface AddTrackModalProps {
   isOpen: boolean;
@@ -279,14 +191,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     refreshUserPresets,
   ]);
 
-  const characterLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    characterOptions.forEach((character) => {
-      map.set(character.id, character.name);
-    });
-    return map;
-  }, [characterOptions]);
-
   const packPresets = useMemo(
     () =>
       presetOptions.map((preset) => ({
@@ -350,21 +254,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     cursor: confirmDisabled ? "not-allowed" : "pointer",
     opacity: confirmDisabled ? 0.7 : 1,
   };
-
-  const handleTogglePresetSelection = useCallback(
-    (presetId: string | null) => {
-      if (presetId === null) {
-        onSelectPreset(null);
-        return;
-      }
-      if (selectedPresetId === presetId) {
-        onSelectPreset(null);
-        return;
-      }
-      onSelectPreset(presetId);
-    },
-    [onSelectPreset, selectedPresetId]
-  );
 
   const previewStyle = useCallback(
     async (characterId: string) => {
@@ -465,80 +354,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [onSelectCharacter, previewStyle]
   );
 
-  const renderPresetRow = (
-    item: PresetListItem,
-    source: "user" | "pack"
-  ) => {
-    const isSelected = selectedPresetId === item.id;
-    const characterLabel =
-      source === "user" && item.characterId
-        ? characterLabelMap.get(item.characterId) ?? undefined
-        : undefined;
-
-    const handleActivate = () => {
-      if (item.pattern) {
-        void previewPreset(item.pattern, item.characterId);
-      }
-      handleTogglePresetSelection(item.id);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        handleActivate();
-      }
-    };
-
-    return (
-      <div
-        key={`${source}-${item.id}`}
-        role="button"
-        tabIndex={0}
-        onClick={handleActivate}
-        onKeyDown={handleKeyDown}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: isSelected ? "1px solid #27E0B0" : "1px solid #1f2937",
-          background: isSelected ? "rgba(39, 224, 176, 0.12)" : "#0f172a",
-          cursor: "pointer",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</span>
-          {characterLabel ? (
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>{characterLabel}</span>
-          ) : null}
-        </div>
-        {source === "user" ? (
-          <IconButton
-            icon="delete"
-            label={`Delete preset ${item.name}`}
-            tone="danger"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleDeletePreset(item.id);
-            }}
-          />
-        ) : null}
-      </div>
-    );
-  };
-
-  const handleNoneKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        handleTogglePresetSelection(null);
-      }
-    },
-    [handleTogglePresetSelection]
-  );
-
   const sectionListStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -548,9 +363,56 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     paddingRight: 4,
   };
 
-  const instrumentVisible = Boolean(pack && selectedPackId);
-  const styleVisible = instrumentVisible && Boolean(selectedInstrumentId);
-  const presetVisible = styleVisible && Boolean(selectedCharacterId);
+  const fieldLabelStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  };
+
+  const instrumentOptionsReady = Boolean(pack && instrumentOptions.length > 0);
+  const instrumentDisabled = !instrumentOptionsReady;
+
+  const styleOptionsReady =
+    Boolean(
+      instrumentOptionsReady &&
+        selectedInstrumentId &&
+        characterOptions.length > 0
+    );
+  const styleDisabled = !styleOptionsReady;
+  const presetSelectionDisabled = styleDisabled || !selectedCharacterId;
+
+  const presetSelectDisabled = presetSelectionDisabled;
+  const hasAvailablePresets = packPresets.length + userPresetItems.length > 0;
+
+  const presetSelectValue = selectedPresetId ?? "";
+
+  const presetBlockedLabel = !selectedPackId
+    ? "Select a sound pack first"
+    : !selectedInstrumentId
+    ? "Select an instrument first"
+    : !selectedCharacterId
+    ? "Select a style first"
+    : "Saved loops unavailable";
+
+  const presetDefaultOptionLabel = hasAvailablePresets
+    ? "Start fresh (no saved loop)"
+    : "No saved loops available";
+
+  const handlePresetChange = useCallback(
+    (presetId: string) => {
+      if (!presetId) {
+        onSelectPreset(null);
+        return;
+      }
+      onSelectPreset(presetId);
+      const allPresets = [...userPresetItems, ...packPresets];
+      const match = allPresets.find((item) => item.id === presetId);
+      if (match?.pattern) {
+        void previewPreset(match.pattern, match.characterId);
+      }
+    },
+    [onSelectPreset, packPresets, previewPreset, userPresetItems]
+  );
 
   return (
     <Modal
@@ -594,17 +456,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <div>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div data-select-root>
+          <label style={fieldLabelStyle}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
             <select
-              value={selectedPackId}
+              value={selectedPackId || ""}
               onChange={(event) => onSelectPack(event.target.value)}
               style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
+                ...baseSelectStyle,
                 color: selectedPackId ? "#e6f2ff" : "#64748b",
               }}
             >
@@ -620,168 +479,181 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           </label>
         </div>
 
-        <StepSection visible={instrumentVisible}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div
+          aria-disabled={instrumentDisabled}
+          data-select-root
+          style={{
+            opacity: instrumentDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
+            pointerEvents: "auto",
+          }}
+        >
+          <label style={fieldLabelStyle}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
             <select
-              value={selectedInstrumentId}
+              value={selectedInstrumentId || ""}
               onChange={(event) => onSelectInstrument(event.target.value)}
-              disabled={instrumentOptions.length === 0}
+              disabled={instrumentDisabled}
               style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
+                ...baseSelectStyle,
+                ...(instrumentDisabled ? disabledSelectStyle : {}),
                 color:
-                  selectedInstrumentId && instrumentOptions.length > 0
+                  selectedInstrumentId && !instrumentDisabled
                     ? "#e6f2ff"
                     : "#64748b",
               }}
             >
-              <option value="" disabled>
-                {instrumentOptions.length === 0
-                  ? "No instruments available"
-                  : "Select an instrument"}
-              </option>
-              {instrumentOptions.map((instrument) => (
-                <option key={instrument} value={instrument}>
-                  {formatInstrumentLabel(instrument)}
+              {instrumentDisabled ? (
+                <option value="" disabled>
+                  {!selectedPackId
+                    ? "Select a sound pack first"
+                    : "Loading instruments..."}
                 </option>
-              ))}
+              ) : (
+                <>
+                  <option value="" disabled>
+                    Select an instrument
+                  </option>
+                  {instrumentOptions.map((instrument) => (
+                    <option key={instrument} value={instrument}>
+                      {formatInstrumentLabel(instrument)}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </label>
-        </StepSection>
+        </div>
 
-        <StepSection visible={styleVisible} delay={0.05}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div
+          aria-disabled={styleDisabled}
+          data-select-root
+          style={{
+            opacity: styleDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
+            pointerEvents: "auto",
+          }}
+        >
+          <label style={fieldLabelStyle}>
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
             <select
-              value={selectedCharacterId}
+              value={selectedCharacterId || ""}
               onChange={(event) => handleCharacterChange(event.target.value)}
-              disabled={characterOptions.length === 0}
+              disabled={styleDisabled}
               style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2f384a",
-                background: "#0f172a",
+                ...baseSelectStyle,
+                ...(styleDisabled ? disabledSelectStyle : {}),
                 color:
-                  selectedCharacterId && characterOptions.length > 0
+                  selectedCharacterId && !styleDisabled
                     ? "#e6f2ff"
                     : "#64748b",
               }}
             >
-              <option value="" disabled>
-                {characterOptions.length === 0 ? "No styles available" : "Select a style"}
-              </option>
-              {characterOptions.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
+              {styleDisabled ? (
+                <option value="" disabled>
+                  {!selectedInstrumentId
+                    ? "Select an instrument first"
+                    : "Loading styles..."}
                 </option>
-              ))}
+              ) : (
+                <>
+                  <option value="" disabled>
+                    Select a style
+                  </option>
+                  {characterOptions.map((character) => (
+                    <option key={character.id} value={character.id}>
+                      {character.name}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </label>
-        </StepSection>
+        </div>
 
-        <StepSection visible={presetVisible} delay={0.1}>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              padding: 16,
-              borderRadius: 16,
-              background: "#0b1624",
-              border: "1px solid #1f2937",
-            }}
-          >
-            <div
+        <div
+          aria-disabled={presetSelectDisabled}
+          data-select-root
+          style={{
+            opacity: presetSelectDisabled ? 0.6 : 1,
+            transition: "opacity 0.2s ease",
+            pointerEvents: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <label style={fieldLabelStyle}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>Saved Loop</span>
+            <select
+              value={presetSelectValue}
+              onChange={(event) => handlePresetChange(event.target.value)}
+              disabled={presetSelectDisabled}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
+                ...baseSelectStyle,
+                ...(presetSelectDisabled ? disabledSelectStyle : {}),
+                color:
+                  !presetSelectDisabled && selectedPresetId
+                    ? "#e6f2ff"
+                    : "#64748b",
               }}
             >
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 600 }}>Saved Loops</span>
-                <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                  Save the current loop or load one of your favorites.
-                </span>
-              </div>
-              {showSavePresetAction ? (
-                <IconButton
-                  icon="save"
-                  label="Save current loop"
-                  tone="accent"
-                  iconSize={20}
-                  style={compactIconButtonStyle}
-                  onClick={handleSavePresetPattern}
-                />
-              ) : null}
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
-                  Your Saved Loops
-                </span>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleTogglePresetSelection(null)}
-                    onKeyDown={handleNoneKeyDown}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      padding: "12px 14px",
-                      borderRadius: 12,
-                      border:
-                        selectedPresetId === null
-                          ? "1px solid #27E0B0"
-                          : "1px solid #1f2937",
-                      background:
-                        selectedPresetId === null
-                          ? "rgba(39, 224, 176, 0.12)"
-                          : "#0f172a",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>None</span>
-                  </div>
-                  {userPresetItems.length > 0 ? (
-                    userPresetItems.map((preset) => renderPresetRow(preset, "user"))
-                  ) : (
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#64748b",
-                        padding: "12px 0",
-                      }}
-                    >
-                      No saved loops yet
-                    </div>
-                  )}
-                </div>
-              </div>
-              {packPresets.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: "#cbd5f5", fontWeight: 600 }}>
-                    Pack Loops
-                  </span>
-                  <span style={{ fontSize: 11, color: "#64748b" }}>
-                    Tap to preview before adding.
-                  </span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {packPresets.map((preset) => renderPresetRow(preset, "pack"))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+              {presetSelectDisabled ? (
+                <option value="" disabled>
+                  {presetBlockedLabel}
+                </option>
+              ) : (
+                <>
+                  <option value="">{presetDefaultOptionLabel}</option>
+                  {hasAvailablePresets ? (
+                    <>
+                      {userPresetItems.length > 0 ? (
+                        <optgroup label="Your saved loops">
+                          {userPresetItems.map((preset) => (
+                            <option key={`user-${preset.id}`} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                      {packPresets.length > 0 ? (
+                        <optgroup label="Pack loops">
+                          {packPresets.map((preset) => (
+                            <option key={`pack-${preset.id}`} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                    </>
+                  ) : null}
+                </>
+              )}
+            </select>
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {showSavePresetAction ? (
+              <IconButton
+                icon="save"
+                label="Save current loop"
+                tone="accent"
+                iconSize={20}
+                style={compactIconButtonStyle}
+                onClick={handleSavePresetPattern}
+              />
+            ) : null}
+            {selectedPresetId && isUserPresetId(selectedPresetId) ? (
+              <IconButton
+                icon="delete"
+                label="Delete saved loop"
+                tone="danger"
+                iconSize={20}
+                style={compactIconButtonStyle}
+                onClick={() => handleDeletePreset(selectedPresetId)}
+              />
+            ) : null}
           </div>
-        </StepSection>
+        </div>
 
       </div>
     </Modal>

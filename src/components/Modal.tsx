@@ -5,7 +5,9 @@ import {
   useState,
   type CSSProperties,
   type FC,
+  type MouseEvent,
   type ReactNode,
+  type TouchEvent,
 } from "react";
 
 import { IconButton } from "./IconButton";
@@ -19,6 +21,7 @@ interface ModalProps {
   footer?: ReactNode;
   maxWidth?: number | string;
   fullScreen?: boolean;
+  disableOverlayClose?: boolean;
 }
 
 const overlayStyle: CSSProperties = {
@@ -58,6 +61,7 @@ export const Modal: FC<ModalProps> = ({
   footer,
   maxWidth = 420,
   fullScreen = false,
+  disableOverlayClose = false,
 }) => {
   const labelId = useId();
   const descriptionId = useId();
@@ -240,6 +244,62 @@ export const Modal: FC<ModalProps> = ({
     boxSizing: "border-box",
   };
 
+  const interactionStartsInSelect = (
+    event: MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>
+  ) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest("select")) {
+      return true;
+    }
+
+    const nativeEvent = event.nativeEvent as Event | undefined;
+    if (nativeEvent && typeof nativeEvent.composedPath === "function") {
+      for (const element of nativeEvent.composedPath()) {
+        if (!(element instanceof HTMLElement)) {
+          continue;
+        }
+        if (element.matches("select")) {
+          return true;
+        }
+      }
+    }
+
+    const activeElement =
+      typeof document !== "undefined" ? document.activeElement : null;
+    if (activeElement instanceof HTMLElement && activeElement.matches("select")) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const shouldCloseFromEvent = (
+    event: MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>
+  ) => {
+    if (disableOverlayClose) {
+      return false;
+    }
+    if (event.currentTarget !== event.target) {
+      return false;
+    }
+    if (interactionStartsInSelect(event)) {
+      return false;
+    }
+    return true;
+  };
+
+  const handleOverlayMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (shouldCloseFromEvent(event)) {
+      onClose();
+    }
+  };
+
+  const handleOverlayTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (shouldCloseFromEvent(event)) {
+      onClose();
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -247,11 +307,14 @@ export const Modal: FC<ModalProps> = ({
       aria-labelledby={labelId}
       aria-describedby={hasSubtitle ? descriptionId : undefined}
       style={resolvedOverlayStyle}
-      onClick={onClose}
+      onMouseDown={handleOverlayMouseDown}
+      onTouchStart={handleOverlayTouchStart}
     >
       <div
         style={resolvedModalStyle}
         onClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onTouchStart={(event) => event.stopPropagation()}
       >
         <div style={bodyWrapperStyle}>
           <div
