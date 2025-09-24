@@ -121,6 +121,13 @@ const StepSection: FC<StepSectionProps> = ({ visible, delay = 0, children }) => 
   );
 };
 
+const getDebugTimestamp = () => {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return Number(performance.now().toFixed(2));
+  }
+  return Date.now();
+};
+
 interface PresetListItem {
   id: string;
   name: string;
@@ -190,6 +197,69 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const [userPresets, setUserPresets] = useState<
     { id: string; name: string; characterId: string | null; pattern: Chunk | null }[]
   >([]);
+
+  const [isSelectSandboxActive, setIsSelectSandboxActive] = useState(false);
+  const [sandboxSelectValue, setSandboxSelectValue] = useState(selectedPackId);
+
+  const logDebugEvent = useCallback(
+    (context: string, eventName: string, detail: Record<string, unknown> = {}) => {
+      const timestamp = getDebugTimestamp();
+      console.log(`[AddTrackModal][${context}] ${eventName}`, {
+        ...detail,
+        timestamp,
+      });
+    },
+    []
+  );
+
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+  logDebugEvent("component", "render", {
+    renderCount: renderCountRef.current,
+    isOpen,
+    sandboxActive: isSelectSandboxActive,
+    selectedPackId,
+    selectedInstrumentId,
+    selectedCharacterId,
+    selectedPresetId,
+  });
+
+  useEffect(() => {
+    logDebugEvent("component", "isOpen changed", { isOpen });
+  }, [isOpen, logDebugEvent]);
+
+  useEffect(() => {
+    logDebugEvent("sandbox", "state changed", { sandboxActive: isSelectSandboxActive });
+  }, [isSelectSandboxActive, logDebugEvent]);
+
+  useEffect(() => {
+    if (!isSelectSandboxActive) {
+      setSandboxSelectValue(selectedPackId);
+    }
+  }, [isSelectSandboxActive, selectedPackId]);
+
+  const handleModalClose = useCallback(() => {
+    logDebugEvent("component", "onClose invoked", {
+      sandboxActive: isSelectSandboxActive,
+      renderCount: renderCountRef.current,
+    });
+    onCancel();
+  }, [isSelectSandboxActive, logDebugEvent, onCancel]);
+
+  const activateSelectSandbox = useCallback(() => {
+    logDebugEvent("sandbox", "activate requested", {
+      isOpen,
+      renderCount: renderCountRef.current,
+    });
+    setIsSelectSandboxActive(true);
+  }, [isOpen, logDebugEvent]);
+
+  const deactivateSelectSandbox = useCallback(() => {
+    logDebugEvent("sandbox", "deactivate requested", {
+      renderCount: renderCountRef.current,
+    });
+    setIsSelectSandboxActive(false);
+  }, [logDebugEvent]);
 
   const refreshUserPresets = useCallback(() => {
     if (!pack || !selectedInstrumentId) {
@@ -458,10 +528,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const handleCharacterChange = useCallback(
     (characterId: string) => {
+      logDebugEvent("style-select", "change handler", { characterId });
       onSelectCharacter(characterId);
       void previewStyle(characterId);
     },
-    [onSelectCharacter, previewStyle]
+    [logDebugEvent, onSelectCharacter, previewStyle]
   );
 
   const renderPresetRow = (
@@ -551,10 +622,149 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const styleVisible = instrumentVisible && Boolean(selectedInstrumentId);
   const presetVisible = styleVisible && Boolean(selectedCharacterId);
 
+  if (isSelectSandboxActive) {
+    const sandboxButtonStyle: CSSProperties = {
+      ...footerButtonBaseStyle,
+      background: "#1f2532",
+      color: "#e6f2ff",
+      border: "1px solid #334155",
+    };
+
+    const sandboxSelectStyle: CSSProperties = {
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: "1px solid #2f384a",
+      background: "#0f172a",
+      color: "#e6f2ff",
+    };
+
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={handleModalClose}
+        title={`${title} Debug Sandbox`}
+        subtitle="Minimal select-only environment without backdrop handlers or animations. Monitor console output while reproducing the dropdown dismissal."
+        fullScreen
+        disableOverlayClose
+        footer={
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              type="button"
+              onClick={deactivateSelectSandbox}
+              style={sandboxButtonStyle}
+            >
+              Return to full modal
+            </button>
+            <button
+              type="button"
+              onClick={handleModalClose}
+              style={{
+                ...sandboxButtonStyle,
+                background: "#2f2032",
+                border: "1px solid #3f2942",
+              }}
+            >
+              Close dialog
+            </button>
+          </div>
+        }
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+            padding: "12px 0",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
+            This sandbox renders a single native select without any surrounding animations or
+            backdrop-close logic. Use it to compare against the full Add Track flow and inspect
+            logged focus/blur events when the dropdown collapses unexpectedly.
+          </p>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#cbd5f5" }}>
+              Sandbox Select (options mirror packs for familiarity)
+            </span>
+            <select
+              value={sandboxSelectValue}
+              onFocus={(event) =>
+                logDebugEvent("sandbox-select", "focus", {
+                  value: event.target.value,
+                })
+              }
+              onBlur={(event) =>
+                logDebugEvent("sandbox-select", "blur", {
+                  value: event.target.value,
+                })
+              }
+              onMouseDown={(event) =>
+                logDebugEvent("sandbox-select", "mouse down", {
+                  button: event.button,
+                  targetTag:
+                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
+                })
+              }
+              onTouchStart={(event) =>
+                logDebugEvent("sandbox-select", "touch start", {
+                  touches: event.touches.length,
+                })
+              }
+              onClick={(event) =>
+                logDebugEvent("sandbox-select", "click", {
+                  value: event.currentTarget.value,
+                })
+              }
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                logDebugEvent("sandbox-select", "change", {
+                  value: nextValue,
+                });
+                setSandboxSelectValue(nextValue);
+              }}
+              style={sandboxSelectStyle}
+            >
+              <option value="" disabled>
+                Select an option
+              </option>
+              {packs.map((option) => (
+                <option key={`sandbox-${option.id}`} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div
+            style={{
+              border: "1px solid #1f2937",
+              borderRadius: 12,
+              background: "#0b1624",
+              padding: 12,
+              fontSize: 12,
+              color: "#94a3b8",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <strong style={{ fontSize: 13, color: "#e2e8f0" }}>
+              Console instrumentation
+            </strong>
+            <span>
+              Focus, blur, click, mouse down, touch start, and change events log with precise
+              timestamps. Compare these entries with the modal overlay logs to determine what fires
+              when the dropdown collapses.
+            </span>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onCancel}
+      onClose={handleModalClose}
       title={title}
       subtitle={description}
       fullScreen
@@ -575,7 +785,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           <div style={{ display: "flex", gap: 12 }}>
             <button
               type="button"
-              onClick={onCancel}
+              onClick={handleModalClose}
               style={cancelButtonStyle}
             >
               Cancel
@@ -593,6 +803,43 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px dashed #334155",
+            background: "#0b1624",
+            color: "#94a3b8",
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#cbd5f5", fontWeight: 600 }}>
+            Select instrumentation debug tools
+          </div>
+          <p style={{ margin: 0, fontSize: 12 }}>
+            Console logging is active for focus, blur, mouse, touch, and change events. Use the
+            sandbox view to isolate the dropdown without modal chrome.
+          </p>
+          <button
+            type="button"
+            onClick={activateSelectSandbox}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: "1px solid #334155",
+              background: "#1f2532",
+              color: "#e2e8f0",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              alignSelf: "flex-start",
+            }}
+          >
+            Open minimal select sandbox
+          </button>
+        </div>
         <div data-select-root>
           <label
             data-select-root
@@ -601,7 +848,33 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
             <select
               value={selectedPackId}
-              onChange={(event) => onSelectPack(event.target.value)}
+              onFocus={(event) =>
+                logDebugEvent("pack-select", "focus", { value: event.target.value })
+              }
+              onBlur={(event) =>
+                logDebugEvent("pack-select", "blur", { value: event.target.value })
+              }
+              onMouseDown={(event) =>
+                logDebugEvent("pack-select", "mouse down", {
+                  button: event.button,
+                  targetTag:
+                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
+                })
+              }
+              onTouchStart={(event) =>
+                logDebugEvent("pack-select", "touch start", {
+                  touches: event.touches.length,
+                })
+              }
+              onClick={(event) =>
+                logDebugEvent("pack-select", "click", {
+                  value: event.currentTarget.value,
+                })
+              }
+              onChange={(event) => {
+                logDebugEvent("pack-select", "change", { value: event.target.value });
+                onSelectPack(event.target.value);
+              }}
               style={{
                 padding: "10px 12px",
                 borderRadius: 12,
@@ -630,7 +903,39 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
             <select
               value={selectedInstrumentId}
-              onChange={(event) => onSelectInstrument(event.target.value)}
+              onFocus={(event) =>
+                logDebugEvent("instrument-select", "focus", {
+                  value: event.target.value,
+                })
+              }
+              onBlur={(event) =>
+                logDebugEvent("instrument-select", "blur", {
+                  value: event.target.value,
+                })
+              }
+              onMouseDown={(event) =>
+                logDebugEvent("instrument-select", "mouse down", {
+                  button: event.button,
+                  targetTag:
+                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
+                })
+              }
+              onTouchStart={(event) =>
+                logDebugEvent("instrument-select", "touch start", {
+                  touches: event.touches.length,
+                })
+              }
+              onClick={(event) =>
+                logDebugEvent("instrument-select", "click", {
+                  value: event.currentTarget.value,
+                })
+              }
+              onChange={(event) => {
+                logDebugEvent("instrument-select", "change", {
+                  value: event.target.value,
+                });
+                onSelectInstrument(event.target.value);
+              }}
               disabled={instrumentOptions.length === 0}
               style={{
                 padding: "10px 12px",
@@ -665,7 +970,33 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
             <select
               value={selectedCharacterId}
-              onChange={(event) => handleCharacterChange(event.target.value)}
+              onFocus={(event) =>
+                logDebugEvent("style-select", "focus", { value: event.target.value })
+              }
+              onBlur={(event) =>
+                logDebugEvent("style-select", "blur", { value: event.target.value })
+              }
+              onMouseDown={(event) =>
+                logDebugEvent("style-select", "mouse down", {
+                  button: event.button,
+                  targetTag:
+                    event.target instanceof HTMLElement ? event.target.tagName : undefined,
+                })
+              }
+              onTouchStart={(event) =>
+                logDebugEvent("style-select", "touch start", {
+                  touches: event.touches.length,
+                })
+              }
+              onClick={(event) =>
+                logDebugEvent("style-select", "click", {
+                  value: event.currentTarget.value,
+                })
+              }
+              onChange={(event) => {
+                logDebugEvent("style-select", "change", { value: event.target.value });
+                handleCharacterChange(event.target.value);
+              }}
               disabled={characterOptions.length === 0}
               style={{
                 padding: "10px 12px",

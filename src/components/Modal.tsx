@@ -21,7 +21,15 @@ interface ModalProps {
   footer?: ReactNode;
   maxWidth?: number | string;
   fullScreen?: boolean;
+  disableOverlayClose?: boolean;
 }
+
+const getDebugTimestamp = () => {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return Number(performance.now().toFixed(2));
+  }
+  return Date.now();
+};
 
 const overlayStyle: CSSProperties = {
   position: "fixed",
@@ -60,6 +68,7 @@ export const Modal: FC<ModalProps> = ({
   footer,
   maxWidth = 420,
   fullScreen = false,
+  disableOverlayClose = false,
 }) => {
   const labelId = useId();
   const descriptionId = useId();
@@ -280,7 +289,23 @@ export const Modal: FC<ModalProps> = ({
   };
 
   const handleOverlayMouseDown = (event: MouseEvent<HTMLDivElement>) => {
-    if (eventTargetsSelect(event)) {
+    const fromSelect = eventTargetsSelect(event);
+    const timestamp = getDebugTimestamp();
+    const activeElement =
+      typeof document !== "undefined" ? document.activeElement : null;
+    console.log("[Modal overlay] mousedown", {
+      timestamp,
+      fromSelect,
+      disableOverlayClose,
+      targetTag:
+        event.target instanceof HTMLElement ? event.target.tagName : undefined,
+      activeTag:
+        activeElement instanceof HTMLElement ? activeElement.tagName : undefined,
+    });
+    if (disableOverlayClose) {
+      return;
+    }
+    if (fromSelect) {
       return;
     }
     if (event.target !== event.currentTarget) {
@@ -290,7 +315,23 @@ export const Modal: FC<ModalProps> = ({
   };
 
   const handleOverlayTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (eventTargetsSelect(event)) {
+    const fromSelect = eventTargetsSelect(event);
+    const timestamp = getDebugTimestamp();
+    const activeElement =
+      typeof document !== "undefined" ? document.activeElement : null;
+    console.log("[Modal overlay] touchstart", {
+      timestamp,
+      fromSelect,
+      disableOverlayClose,
+      targetTag:
+        event.target instanceof HTMLElement ? event.target.tagName : undefined,
+      activeTag:
+        activeElement instanceof HTMLElement ? activeElement.tagName : undefined,
+    });
+    if (disableOverlayClose) {
+      return;
+    }
+    if (fromSelect) {
       return;
     }
     if (event.target !== event.currentTarget) {
