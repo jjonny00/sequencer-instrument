@@ -3,6 +3,7 @@ import type { PatternGroup, SongRow } from "./song";
 import type { Track } from "./tracks";
 
 const STORAGE_KEY = "sequencer_projects";
+const LOOP_DRAFT_STORAGE_KEY = "sequencer_loop_drafts";
 
 export interface StoredProjectData {
   packIndex: number;
@@ -16,6 +17,11 @@ export interface StoredProjectData {
   currentSectionIndex?: number;
 }
 
+export interface StoredLoopDraftData {
+  tracks: Track[];
+  patternGroups: PatternGroup[];
+}
+
 export interface StoredProjectPayload {
   version: number;
   updatedAt: number;
@@ -23,6 +29,13 @@ export interface StoredProjectPayload {
 }
 
 type StoredProjectMap = Record<string, StoredProjectPayload>;
+type StoredLoopDraftMap = Record<
+  string,
+  {
+    updatedAt: number;
+    data: StoredLoopDraftData;
+  }
+>;
 
 export const PROJECT_VERSION = 1;
 
@@ -64,6 +77,11 @@ const cloneProjectData = (project: StoredProjectData): StoredProjectData => ({
   songRows: project.songRows.map((row) => cloneSongRow(row)),
 });
 
+const cloneLoopDraftData = (draft: StoredLoopDraftData): StoredLoopDraftData => ({
+  tracks: draft.tracks.map((track) => cloneTrack(track)),
+  patternGroups: draft.patternGroups.map((group) => clonePatternGroup(group)),
+});
+
 const getStorage = (): Storage | null => {
   if (typeof window === "undefined") return null;
   try {
@@ -89,6 +107,21 @@ const readAllProjects = (): StoredProjectMap => {
   }
 };
 
+const readAllLoopDrafts = (): StoredLoopDraftMap => {
+  const storage = getStorage();
+  if (!storage) return {};
+  const raw = storage.getItem(LOOP_DRAFT_STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as StoredLoopDraftMap;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed;
+  } catch (error) {
+    console.warn("Failed to parse loop drafts", error);
+    return {};
+  }
+};
+
 const writeAllProjects = (projects: StoredProjectMap) => {
   const storage = getStorage();
   if (!storage) return;
@@ -96,6 +129,16 @@ const writeAllProjects = (projects: StoredProjectMap) => {
     storage.setItem(STORAGE_KEY, JSON.stringify(projects));
   } catch (error) {
     console.warn("Failed to persist projects", error);
+  }
+};
+
+const writeAllLoopDrafts = (drafts: StoredLoopDraftMap) => {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(LOOP_DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+  } catch (error) {
+    console.warn("Failed to persist loop drafts", error);
   }
 };
 
@@ -143,6 +186,38 @@ export const deleteProject = (name: string): void => {
     delete projects[trimmedName];
     writeAllProjects(projects);
   }
+};
+
+export const saveLoopDraft = (name: string, draft: StoredLoopDraftData): void => {
+  if (!name) return;
+  const trimmedName = name.trim();
+  if (!trimmedName) return;
+  const drafts = readAllLoopDrafts();
+  drafts[trimmedName] = {
+    updatedAt: Date.now(),
+    data: cloneLoopDraftData(draft),
+  };
+  writeAllLoopDrafts(drafts);
+};
+
+export const loadLoopDraft = (name: string): StoredLoopDraftData | null => {
+  if (!name) return null;
+  const trimmedName = name.trim();
+  if (!trimmedName) return null;
+  const drafts = readAllLoopDrafts();
+  const payload = drafts[trimmedName];
+  if (!payload) return null;
+  return cloneLoopDraftData(payload.data);
+};
+
+export const deleteLoopDraft = (name: string): void => {
+  if (!name) return;
+  const trimmedName = name.trim();
+  if (!trimmedName) return;
+  const drafts = readAllLoopDrafts();
+  if (!drafts[trimmedName]) return;
+  delete drafts[trimmedName];
+  writeAllLoopDrafts(drafts);
 };
 
 export const createStoredProjectPayload = (
