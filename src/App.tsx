@@ -1621,38 +1621,44 @@ export default function App() {
     return true;
   }, [initAudioGraph, started]);
 
-  const handleNewProjectClick = useCallback(async () => {
-    console.log("New song button clicked");
-    const ready = await ensureAudioReady();
-    if (!ready) {
-      console.warn("Audio graph not ready, continuing to load new project");
-    }
-    const emptyProject = createEmptyProjectData();
-    loadProjectIntoSequencer(emptyProject, "untitled");
+  const createNewProject = useCallback(() => {
+    void (async () => {
+      console.log("New song button clicked");
+      const ready = await ensureAudioReady();
+      if (!ready) {
+        console.warn("Audio graph not ready, continuing to load new project");
+      }
+      const emptyProject = createEmptyProjectData();
+      loadProjectIntoSequencer(emptyProject, "untitled");
+    })();
   }, [ensureAudioReady, loadProjectIntoSequencer]);
 
   useEffect(() => {
     refreshProjectList();
   }, [refreshProjectList]);
 
-  const handleLaunchProject = useCallback(
-    async (name: string) => {
-      const ready = await ensureAudioReady();
-      if (!ready) {
-        console.warn("Audio graph not ready, continuing to load project", name);
-      }
-      handleRequestLoadProject(name, { skipConfirmation: !started });
+  const loadProject = useCallback(
+    (name: string) => {
+      void (async () => {
+        const ready = await ensureAudioReady();
+        if (!ready) {
+          console.warn("Audio graph not ready, continuing to load project", name);
+        }
+        handleRequestLoadProject(name, { skipConfirmation: !started });
+      })();
     },
     [ensureAudioReady, handleRequestLoadProject, started]
   );
 
-  const handleLoadDemoSong = useCallback(async () => {
-    const ready = await ensureAudioReady();
-    if (!ready) {
-      console.warn("Audio graph not ready, continuing to load demo song");
-    }
-    const demoProject = createDemoProjectData();
-    loadProjectIntoSequencer(demoProject, "Demo Jam");
+  const handleLoadDemoSong = useCallback(() => {
+    void (async () => {
+      const ready = await ensureAudioReady();
+      if (!ready) {
+        console.warn("Audio graph not ready, continuing to load demo song");
+      }
+      const demoProject = createDemoProjectData();
+      loadProjectIntoSequencer(demoProject, "Demo Jam");
+    })();
   }, [ensureAudioReady, loadProjectIntoSequencer]);
 
   const handleReturnToSongSelection = useCallback(() => {
@@ -1995,9 +2001,7 @@ export default function App() {
                         icon="folder_open"
                         label={`Load song ${name}`}
                         tone="accent"
-                        onClick={() => {
-                          handleRequestLoadProject(name);
-                        }}
+                        onClick={() => loadProject(name)}
                       />
                       <IconButton
                         icon="delete"
@@ -2191,9 +2195,7 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={() => {
-                void handleNewProjectClick();
-              }}
+              onClick={createNewProject}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
@@ -2279,9 +2281,7 @@ export default function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        void handleLoadDemoSong();
-                      }}
+                      onClick={handleLoadDemoSong}
                       style={{
                         padding: "12px 20px",
                         borderRadius: 999,
@@ -2301,9 +2301,7 @@ export default function App() {
                   projectList.map((name) => (
                     <button
                       key={name}
-                      onClick={() => {
-                        void handleLaunchProject(name);
-                      }}
+                      onClick={() => loadProject(name)}
                       style={{
                         padding: "12px 16px",
                         borderRadius: 14,
