@@ -1588,19 +1588,6 @@ export default function App() {
     handleRequestLoadProject,
   ]);
 
-  const ensureAudioReady = useCallback(async () => {
-    if (started) {
-      return true;
-    }
-    try {
-      await initAudioContext();
-    } catch {
-      return false;
-    }
-    initAudioGraph();
-    return true;
-  }, [initAudioGraph, started]);
-
   const initAudioGraph = useCallback(() => {
     try {
       Tone.Transport.bpm.value = bpm;
@@ -1620,6 +1607,19 @@ export default function App() {
       console.warn("Failed to initialize audio graph:", error);
     }
   }, [bpm]);
+
+  const ensureAudioReady = useCallback(async () => {
+    if (started) {
+      return true;
+    }
+    try {
+      await initAudioContext();
+    } catch {
+      return false;
+    }
+    initAudioGraph();
+    return true;
+  }, [initAudioGraph, started]);
 
   const handleNewProjectClick = useCallback(async () => {
     console.log("New song button clicked");
