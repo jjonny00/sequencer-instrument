@@ -21,7 +21,14 @@ import {
 } from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
-import { initAudioContext, filterValueToFrequency, isIOSPWA } from "./utils/audio";
+import {
+  activateAudio,
+  initAudioContext,
+  filterValueToFrequency,
+  isIOSPWA,
+  refreshAudioReadyState,
+  audioReady,
+} from "./utils/audio";
 import type { PatternGroup, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
@@ -287,58 +294,6 @@ const createEmptyProjectData = (): StoredProjectData => {
   };
 };
 
-let activationPromise: Promise<boolean> | null = null;
-let hasActivatedApp = false;
-
-const activateApp = async (): Promise<boolean> => {
-  if (hasActivatedApp && Tone.getContext().state === "running") {
-    return true;
-  }
-
-  if (!activationPromise) {
-    activationPromise = (async () => {
-      try {
-        await initAudioContext();
-      } catch (error) {
-        console.warn("Tone.js failed to start during activation:", error);
-      }
-
-      const context = Tone.getContext();
-      if (context.state === "suspended") {
-        try {
-          await context.resume();
-        } catch (resumeError) {
-          console.warn("AudioContext.resume() failed:", resumeError);
-        }
-      }
-
-      const running = context.state === "running";
-      if (running) {
-        hasActivatedApp = true;
-      }
-
-      activationPromise = null;
-      return running;
-    })();
-  }
-
-  const unlocked = await activationPromise;
-  if (unlocked && Tone.getContext().state === "running") {
-    hasActivatedApp = true;
-  }
-  return unlocked;
-};
-
-declare global {
-  interface Window {
-    activateApp?: () => Promise<boolean>;
-  }
-}
-
-if (typeof window !== "undefined") {
-  window.activateApp = activateApp;
-}
-
 export default function App() {
   const [started, setStarted] = useState(false);
   const [bpm, setBpm] = useState(120);
@@ -346,18 +301,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [packIndex, setPackIndex] = useState(0);
   const [toneGraphVersion, setToneGraphVersion] = useState(0);
-  const [isAudioUnlocked, setIsAudioUnlocked] = useState(() => {
-    if (typeof window === "undefined") {
-      return true;
-    }
-    return Tone.getContext().state === "running";
-  });
-  const [hasAttemptedAudioUnlock, setHasAttemptedAudioUnlock] = useState(() => {
-    if (typeof window === "undefined") {
-      return true;
-    }
-    return Tone.getContext().state === "running";
-  });
+  const [showAudioUnlockPrompt, setShowAudioUnlockPrompt] = useState(false);
   const [handlerVersion, setHandlerVersion] = useState(0);
 
   // Instruments (kept across renders)
@@ -476,34 +420,56 @@ export default function App() {
 
   useEffect(() => {
     if (previousStartedRef.current && !started) {
-      if (typeof window !== "undefined") {
-        const running = Tone.getContext().state === "running";
-        setIsAudioUnlocked(running);
-        setHasAttemptedAudioUnlock(running);
-      }
       setHandlerVersion((version) => version + 1);
+      setShowAudioUnlockPrompt(false);
     }
     previousStartedRef.current = started;
+    refreshAudioReadyState();
   }, [started]);
 
-  const handleActivateApp = useCallback(async () => {
-    setHasAttemptedAudioUnlock(true);
-    if (!activationPromise) {
-      setHandlerVersion((version) => version + 1);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
     }
-    const unlocked = await activateApp();
-    const running = Tone.getContext().state === "running";
-    setIsAudioUnlocked(running);
-    if (!unlocked && !running) {
-      console.warn("Audio context is still locked after activation attempt.");
-    }
-  }, []);
 
-  const handleStartScreenPointerDown = useCallback(() => {
-    if (!isAudioUnlocked && !activationPromise) {
-      void handleActivateApp();
+    const toneContext = Tone.getContext();
+    const context =
+      "rawContext" in toneContext
+        ? (toneContext.rawContext as AudioContext)
+        : ((toneContext as unknown) as AudioContext);
+
+    const handleStateChange = () => {
+      const running = refreshAudioReadyState();
+      if (running) {
+        setShowAudioUnlockPrompt(false);
+      }
+    };
+
+    handleStateChange();
+
+    if (typeof context.addEventListener === "function") {
+      const listener = () => handleStateChange();
+      context.addEventListener("statechange", listener);
+      return () => {
+        context.removeEventListener("statechange", listener);
+      };
     }
-  }, [handleActivateApp, isAudioUnlocked]);
+
+    const previousHandler = context.onstatechange;
+    const handlerWrapper = (event: Event) => {
+      handleStateChange();
+      if (typeof previousHandler === "function") {
+        previousHandler.call(context, event);
+      }
+    };
+    context.onstatechange = handlerWrapper;
+
+    return () => {
+      if (context.onstatechange === handlerWrapper) {
+        context.onstatechange = previousHandler ?? null;
+      }
+    };
+  }, []);
 
   const updateLoopBaseline = useCallback(
     (tracksData: Track[], patternGroupData: PatternGroup[]) => {
@@ -1734,23 +1700,16 @@ export default function App() {
   }, [bpm]);
 
   const ensureAudioReady = useCallback(async () => {
-    if (started) {
-      const running = Tone.getContext().state === "running";
-      setIsAudioUnlocked(running);
-      if (!running) {
-        setHasAttemptedAudioUnlock(false);
-      }
-      return running;
-    }
-    const unlocked = await activateApp();
-    const running = Tone.getContext().state === "running";
-    setIsAudioUnlocked(running);
-    setHasAttemptedAudioUnlock(true);
+    const unlocked = await activateAudio();
+    const running = refreshAudioReadyState();
     if (!running) {
       console.warn("Audio context is not running; continuing to initialize graph.");
     }
-    initAudioGraph();
-    return unlocked && running;
+    if (!started) {
+      initAudioGraph();
+      return unlocked && running;
+    }
+    return running;
   }, [initAudioGraph, started]);
 
   const { createNewProject, loadProject, handleLoadDemoSong } = useMemo(() => {
@@ -1759,6 +1718,11 @@ export default function App() {
 
     const runProjectAction = (action: ProjectAction) => {
       void (async () => {
+        if (!audioReady) {
+          await activateAudio();
+        }
+        refreshAudioReadyState();
+
         const readyPromise = ensureAudioReady().catch((error) => {
           console.warn("Audio preparation failed:", error);
           return false;
@@ -1856,19 +1820,47 @@ export default function App() {
     updateLoopBaseline,
   ]);
 
-  const handlePlayStop = () => {
+  const handlePlayStop = async () => {
     if (isPlaying) {
       Tone.Transport.stop();
       setIsPlaying(false);
       setCurrentSectionIndex(0);
+      setShowAudioUnlockPrompt(false);
       return;
     }
+
+    let unlocked = true;
+    if (!audioReady) {
+      unlocked = await activateAudio();
+    } else if (!refreshAudioReadyState()) {
+      unlocked = await activateAudio();
+    }
+
+    const running = refreshAudioReadyState();
+
     if (Tone.Transport.state === "stopped") {
       setCurrentSectionIndex(0);
     }
     Tone.Transport.start();
     setIsPlaying(true);
+
+    if (!unlocked || !running) {
+      setShowAudioUnlockPrompt(true);
+    } else {
+      setShowAudioUnlockPrompt(false);
+    }
   };
+
+  const handleAudioUnlockPromptTap = useCallback(async () => {
+    const unlocked = await activateAudio();
+    const running = refreshAudioReadyState();
+    if (unlocked && running) {
+      setShowAudioUnlockPrompt(false);
+      if (isPlaying) {
+        Tone.Transport.start();
+      }
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     if (!started) return;
@@ -1890,7 +1882,16 @@ export default function App() {
       }
 
       console.log("Document visible, refreshing audio context state");
-      void initAudioContext();
+      void initAudioContext()
+        .then(() => {
+          refreshAudioReadyState();
+          if (Tone.getContext().state === "running") {
+            setShowAudioUnlockPrompt(false);
+          }
+        })
+        .catch((error) => {
+          console.warn("Failed to refresh audio context:", error);
+        });
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -1988,6 +1989,39 @@ export default function App() {
         flexDirection: "column"
       }}
     >
+      {started && showAudioUnlockPrompt ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 20, 32, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            pointerEvents: "auto",
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleAudioUnlockPromptTap}
+            style={{
+              padding: "14px 26px",
+              borderRadius: 999,
+              border: "1px solid #27E0B0",
+              background: "rgba(39, 224, 176, 0.15)",
+              color: "#27E0B0",
+              fontWeight: 600,
+              fontSize: 16,
+              cursor: "pointer",
+              boxShadow: "0 8px 24px rgba(39, 224, 176, 0.3)",
+            }}
+          >
+            Tap to enable sound
+          </button>
+        </div>
+      ) : null}
+
       <AddTrackModal
         isOpen={addTrackModalState.isOpen}
         mode={addTrackModalState.mode}
@@ -2336,46 +2370,13 @@ export default function App() {
       ) : null}
       {!started ? (
         <div
-          onPointerDown={handleStartScreenPointerDown}
           style={{
             display: "flex",
             flex: 1,
             justifyContent: "center",
             padding: 24,
-            position: "relative",
           }}
         >
-          {!isAudioUnlocked && !hasAttemptedAudioUnlock ? (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: "rgba(8, 15, 26, 0.9)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 10,
-              }}
-            >
-              <button
-                type="button"
-                onClick={handleActivateApp}
-                style={{
-                  padding: "16px 28px",
-                  borderRadius: 999,
-                  border: "1px solid #27E0B0",
-                  background: "rgba(39, 224, 176, 0.12)",
-                  color: "#27E0B0",
-                  fontWeight: 600,
-                  fontSize: 16,
-                  boxShadow: "0 8px 24px rgba(39, 224, 176, 0.35)",
-                  cursor: "pointer",
-                }}
-              >
-                Tap to enable sound
-              </button>
-            </div>
-          ) : null}
           <div
             style={{
               width: "min(440px, 100%)",
