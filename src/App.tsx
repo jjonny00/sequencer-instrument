@@ -287,6 +287,58 @@ const createEmptyProjectData = (): StoredProjectData => {
   };
 };
 
+let activationPromise: Promise<boolean> | null = null;
+let hasActivatedApp = false;
+
+const activateApp = async (): Promise<boolean> => {
+  if (hasActivatedApp && Tone.getContext().state === "running") {
+    return true;
+  }
+
+  if (!activationPromise) {
+    activationPromise = (async () => {
+      try {
+        await initAudioContext();
+      } catch (error) {
+        console.warn("Tone.js failed to start during activation:", error);
+      }
+
+      const context = Tone.getContext();
+      if (context.state === "suspended") {
+        try {
+          await context.resume();
+        } catch (resumeError) {
+          console.warn("AudioContext.resume() failed:", resumeError);
+        }
+      }
+
+      const running = context.state === "running";
+      if (running) {
+        hasActivatedApp = true;
+      }
+
+      activationPromise = null;
+      return running;
+    })();
+  }
+
+  const unlocked = await activationPromise;
+  if (unlocked && Tone.getContext().state === "running") {
+    hasActivatedApp = true;
+  }
+  return unlocked;
+};
+
+declare global {
+  interface Window {
+    activateApp?: () => Promise<boolean>;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.activateApp = activateApp;
+}
+
 export default function App() {
   const [started, setStarted] = useState(false);
   const [bpm, setBpm] = useState(120);
@@ -294,6 +346,13 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [packIndex, setPackIndex] = useState(0);
   const [toneGraphVersion, setToneGraphVersion] = useState(0);
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return Tone.getContext().state === "running";
+  });
+  const [handlerVersion, setHandlerVersion] = useState(0);
 
   // Instruments (kept across renders)
   type ToneInstrument = Tone.ToneAudioNode & {
@@ -367,6 +426,7 @@ export default function App() {
     [editing, tracks]
   );
   const restorationRef = useRef(false);
+  const previousStartedRef = useRef(started);
 
   useEffect(() => {
     latestTracksRef.current = tracks;
@@ -407,6 +467,34 @@ export default function App() {
     patternGroups,
     tracks,
   ]);
+
+  useEffect(() => {
+    if (previousStartedRef.current && !started) {
+      if (typeof window !== "undefined") {
+        setIsAudioUnlocked(Tone.getContext().state === "running");
+      }
+      setHandlerVersion((version) => version + 1);
+    }
+    previousStartedRef.current = started;
+  }, [started]);
+
+  const handleActivateApp = useCallback(async () => {
+    if (!activationPromise) {
+      setHandlerVersion((version) => version + 1);
+    }
+    const unlocked = await activateApp();
+    const running = Tone.getContext().state === "running";
+    setIsAudioUnlocked(running);
+    if (!unlocked && !running) {
+      console.warn("Audio context is still locked after activation attempt.");
+    }
+  }, []);
+
+  const handleStartScreenPointerDown = useCallback(() => {
+    if (!isAudioUnlocked && !activationPromise) {
+      void handleActivateApp();
+    }
+  }, [handleActivateApp, isAudioUnlocked]);
 
   const updateLoopBaseline = useCallback(
     (tracksData: Track[], patternGroupData: PatternGroup[]) => {
@@ -1638,37 +1726,38 @@ export default function App() {
 
   const ensureAudioReady = useCallback(async () => {
     if (started) {
-      return true;
+      const running = Tone.getContext().state === "running";
+      setIsAudioUnlocked(running);
+      return running;
     }
-    try {
-      await initAudioContext();
-    } catch {
-      return false;
+    const unlocked = await activateApp();
+    const running = Tone.getContext().state === "running";
+    setIsAudioUnlocked(running);
+    if (!running) {
+      console.warn("Audio context is not running; continuing to initialize graph.");
     }
     initAudioGraph();
-    return true;
-  }, [initAudioGraph, started]);
+    return unlocked && running;
+  }, [initAudioGraph, setIsAudioUnlocked, started]);
 
-  const createNewProject = useCallback(() => {
-    void (async () => {
-      console.log("New song button clicked");
-      const ready = await ensureAudioReady();
-      if (!ready) {
-        console.warn("Audio graph not ready, continuing to load new project");
-      }
-      requestProjectAction(
-        { kind: "new" },
-        { skipConfirmation: !started }
-      );
-    })();
-  }, [ensureAudioReady, requestProjectAction, started]);
+  const { createNewProject, loadProject, handleLoadDemoSong } = useMemo(() => {
+    // Touch handlerVersion so the memo recalculates after activation rebinding.
+    void handlerVersion;
+    const createNewProjectHandler = () => {
+      void (async () => {
+        console.log("New song button clicked");
+        const ready = await ensureAudioReady();
+        if (!ready) {
+          console.warn("Audio graph not ready, continuing to load new project");
+        }
+        requestProjectAction(
+          { kind: "new" },
+          { skipConfirmation: !started }
+        );
+      })();
+    };
 
-  useEffect(() => {
-    refreshProjectList();
-  }, [refreshProjectList]);
-
-  const loadProject = useCallback(
-    (name: string) => {
+    const loadProjectHandler = (name: string) => {
       void (async () => {
         const ready = await ensureAudioReady();
         if (!ready) {
@@ -1679,22 +1768,31 @@ export default function App() {
           { skipConfirmation: !started }
         );
       })();
-    },
-    [ensureAudioReady, requestProjectAction, started]
-  );
+    };
 
-  const handleLoadDemoSong = useCallback(() => {
-    void (async () => {
-      const ready = await ensureAudioReady();
-      if (!ready) {
-        console.warn("Audio graph not ready, continuing to load demo song");
-      }
-      requestProjectAction(
-        { kind: "demo" },
-        { skipConfirmation: !started }
-      );
-    })();
-  }, [ensureAudioReady, requestProjectAction, started]);
+    const handleLoadDemoSongHandler = () => {
+      void (async () => {
+        const ready = await ensureAudioReady();
+        if (!ready) {
+          console.warn("Audio graph not ready, continuing to load demo song");
+        }
+        requestProjectAction(
+          { kind: "demo" },
+          { skipConfirmation: !started }
+        );
+      })();
+    };
+
+    return {
+      createNewProject: createNewProjectHandler,
+      loadProject: loadProjectHandler,
+      handleLoadDemoSong: handleLoadDemoSongHandler,
+    };
+  }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
+
+  useEffect(() => {
+    refreshProjectList();
+  }, [refreshProjectList]);
 
   const handleReturnToSongSelection = useCallback(() => {
     try {
@@ -2213,13 +2311,46 @@ export default function App() {
       ) : null}
       {!started ? (
         <div
+          onPointerDown={handleStartScreenPointerDown}
           style={{
             display: "flex",
             flex: 1,
             justifyContent: "center",
             padding: 24,
+            position: "relative",
           }}
         >
+          {!isAudioUnlocked ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "rgba(8, 15, 26, 0.9)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleActivateApp}
+                style={{
+                  padding: "16px 28px",
+                  borderRadius: 999,
+                  border: "1px solid #27E0B0",
+                  background: "rgba(39, 224, 176, 0.12)",
+                  color: "#27E0B0",
+                  fontWeight: 600,
+                  fontSize: 16,
+                  boxShadow: "0 8px 24px rgba(39, 224, 176, 0.35)",
+                  cursor: "pointer",
+                }}
+              >
+                Tap to enable sound
+              </button>
+            </div>
+          ) : null}
           <div
             style={{
               width: "min(440px, 100%)",
