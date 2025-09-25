@@ -213,6 +213,7 @@ const createDemoProjectData = (): StoredProjectData => {
       instrument: "kick",
       pattern: kickPattern,
       muted: false,
+      style: "chip_square_thump",
       source: {
         packId: demoPack.id,
         instrumentId: "kick",
@@ -847,7 +848,10 @@ export default function App() {
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
-      if (instrumentId === "kick") {
+      if (
+        instrumentId === "kick" &&
+        (!character.type || character.type === "KickDesigner")
+      ) {
         const defaults = normalizeKickDesignerState(character.defaults);
         const instrument = createKickDesigner(defaults);
         instrument.toDestination();
@@ -892,6 +896,23 @@ export default function App() {
         }
       } else {
         instrument = new ctor(character.options ?? {});
+      }
+      if (instrumentId === "kick") {
+        if (instrument instanceof Tone.MembraneSynth) {
+          const current = instrument.get();
+          const envelope =
+            (current as { envelope?: { attack?: number; release?: number } })
+              .envelope ?? {};
+          instrument.set({
+            envelope: {
+              ...envelope,
+              attack: 0.005,
+              release: Math.max(0.05, envelope.release ?? 0.05),
+            },
+          });
+        } else if (instrument instanceof Tone.Player) {
+          instrument.set({ fadeIn: 0.005, fadeOut: 0.01 });
+        }
       }
       let node: Tone.ToneAudioNode = instrument;
       (character.effects ?? []).forEach((effect) => {
@@ -1241,6 +1262,13 @@ export default function App() {
             ...track,
             pattern: nextPattern,
             source: nextSource ?? track.source,
+            style:
+              track.instrument === "kick"
+                ? nextPattern.characterId ??
+                  track.style ??
+                  track.source?.characterId ??
+                  null
+                : track.style,
           };
         })
       );
@@ -1273,6 +1301,14 @@ export default function App() {
             ...track,
             name: name ?? track.name,
             source: nextSource ?? track.source,
+            style:
+              track.instrument === "kick"
+                ? characterId ??
+                  track.pattern?.characterId ??
+                  track.style ??
+                  track.source?.characterId ??
+                  null
+                : track.style,
           };
         })
       );
@@ -1476,7 +1512,37 @@ export default function App() {
       if (project.subdivision && ["16n", "8n", "4n"].includes(project.subdivision)) {
         setSubdiv(project.subdivision as Subdivision);
       }
-      const nextTracks = project.tracks;
+      const nextTracks = project.tracks.map((track) => {
+        if (track.instrument !== "kick") {
+          return track;
+        }
+        const styleId =
+          track.style ??
+          track.source?.characterId ??
+          track.pattern?.characterId ??
+          null;
+        let nextPattern = track.pattern;
+        if (nextPattern && styleId && nextPattern.characterId !== styleId) {
+          nextPattern = { ...nextPattern, characterId: styleId };
+        }
+        const nextSource =
+          track.source && styleId && track.source.characterId !== styleId
+            ? { ...track.source, characterId: styleId }
+            : track.source;
+        if (
+          track.style === styleId &&
+          nextPattern === track.pattern &&
+          nextSource === track.source
+        ) {
+          return track;
+        }
+        return {
+          ...track,
+          style: styleId,
+          pattern: nextPattern,
+          source: nextSource,
+        };
+      });
       setTracks(nextTracks);
       currentLoopDraftRef.current = nextTracks.map((track) =>
         cloneTrackState(track)

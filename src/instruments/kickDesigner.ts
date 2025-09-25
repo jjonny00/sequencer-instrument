@@ -84,7 +84,7 @@ export const createKickDesigner = (
   const body = new Tone.MembraneSynth({
     pitchDecay: 0.04,
     octaves: 4,
-    envelope: { attack: 0.001, decay: 0.3, sustain: 0.01, release: 0.2 },
+    envelope: { attack: 0.005, decay: 0.3, sustain: 0.01, release: 0.2 },
     volume: -4,
   });
   const bodyFilter = new Tone.Filter({ type: "lowpass", frequency: 5000, rolloff: -24 });
@@ -155,7 +155,12 @@ export const createKickDesigner = (
     body.set({
       pitchDecay: bodyPitchDecay,
       octaves: bodyOctaves,
-      envelope: { attack: 0.001, decay: bodyDecay, sustain: 0.01, release: bodyRelease },
+      envelope: {
+        attack: 0.005,
+        decay: bodyDecay,
+        sustain: 0.01,
+        release: Math.max(0.05, bodyRelease),
+      },
     });
     bodyFilter.frequency.rampTo(3500 + punch * 1500, 0.05);
 

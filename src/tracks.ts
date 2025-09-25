@@ -29,6 +29,7 @@ export interface Track {
   pattern: Chunk | null;
   muted: boolean;
   source?: TrackSource;
+  style?: string | null;
 }
 
 export const createTriggerKey = (packId: string, instrumentId: string) =>

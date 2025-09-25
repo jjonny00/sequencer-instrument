@@ -65,6 +65,13 @@ export function PatternPlaybackManager({
         if (!instrument) return;
         const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return;
+        const requestedCharacterId =
+          instrument === "kick"
+            ? track.source?.characterId ??
+              track.style ??
+              track.pattern?.characterId ??
+              undefined
+            : track.source?.characterId ?? undefined;
         const scaledTrigger = (
           time: number,
           velocity = 1,
@@ -84,7 +91,7 @@ export function PatternPlaybackManager({
             note,
             sustain,
             chunk,
-            track.source?.characterId
+            requestedCharacterId
           );
         };
         const isTrackActive = () => !row.muted && !track.muted;
@@ -112,6 +119,13 @@ export function PatternPlaybackManager({
         const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return null;
         const isTrackActive = () => !track.muted;
+        const requestedCharacterId =
+          instrument === "kick"
+            ? track.source?.characterId ??
+              track.style ??
+              track.pattern?.characterId ??
+              undefined
+            : track.source?.characterId ?? undefined;
         return (
           <PatternPlayer
             key={track.id}
@@ -124,7 +138,7 @@ export function PatternPlaybackManager({
                 note,
                 sustain,
                 chunk,
-                track.source?.characterId
+                requestedCharacterId
               )
             }
             started={started}

@@ -162,7 +162,10 @@ const createInstrumentInstance = (
   keyboardFx?: KeyboardFxNodes;
   harmoniaNodes?: HarmoniaNodes;
 } => {
-  if (instrumentId === "kick") {
+  if (
+    instrumentId === "kick" &&
+    (!character.type || character.type === "KickDesigner")
+  ) {
     const defaults = normalizeKickDesignerState(character.defaults);
     const instrument = createKickDesigner(defaults);
     instrument.toDestination();
@@ -218,6 +221,24 @@ const createInstrumentInstance = (
     }
   } else {
     instrument = new ctor(character.options ?? {});
+  }
+
+  if (instrumentId === "kick") {
+    if (instrument instanceof tone.MembraneSynth) {
+      const current = instrument.get();
+      const envelope =
+        (current as { envelope?: { attack?: number; release?: number } }).envelope ??
+        {};
+      instrument.set({
+        envelope: {
+          ...envelope,
+          attack: 0.005,
+          release: Math.max(0.05, envelope.release ?? 0.05),
+        },
+      });
+    } else if (instrument instanceof tone.Player) {
+      instrument.set({ fadeIn: 0.005, fadeOut: 0.01 });
+    }
   }
 
   let node: Tone.ToneAudioNode = instrument;

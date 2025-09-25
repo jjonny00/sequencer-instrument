@@ -527,6 +527,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             instrument: instrumentId as keyof TriggerMap,
             pattern,
             muted: false,
+            style: instrumentId === "kick" ? resolvedCharacterId : null,
             source: {
               packId,
               instrumentId,
@@ -645,6 +646,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             name: nextName,
             instrument: instrumentId as keyof TriggerMap,
             pattern: nextPattern,
+            style: instrumentId === "kick" ? resolvedCharacterId : null,
             source: {
               packId,
               instrumentId,
