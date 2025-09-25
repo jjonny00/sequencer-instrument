@@ -267,6 +267,21 @@ const createDemoProjectData = (): StoredProjectData => {
   };
 };
 
+const createEmptyProjectData = (): StoredProjectData => {
+  const group = createInitialPatternGroup();
+  return {
+    packIndex: 0,
+    bpm: 120,
+    subdivision: "16n",
+    isPlaying: false,
+    tracks: [],
+    patternGroups: [group],
+    songRows: [createSongRow()],
+    selectedGroupId: group.id,
+    currentSectionIndex: 0,
+  };
+};
+
 export default function App() {
   const [started, setStarted] = useState(false);
   const [bpm, setBpm] = useState(120);
@@ -1422,6 +1437,23 @@ export default function App() {
     [applyTransportState, updateLoopBaseline]
   );
 
+  const loadProjectIntoSequencer = useCallback(
+    (
+      project: StoredProjectData,
+      name: string,
+      options?: {
+        baseline?: { tracks: Track[]; patternGroups: PatternGroup[] };
+      }
+    ) => {
+      skipLoopDraftRestoreRef.current = true;
+      applyLoadedProject(project, options);
+      setActiveProjectName(name);
+      setViewMode("track");
+      setStarted(true);
+    },
+    [applyLoadedProject, setActiveProjectName, setStarted, setViewMode]
+  );
+
   const handleLoadProjectByName = useCallback(
     (name: string) => {
       const project = loadStoredProject(name);
@@ -1447,13 +1479,16 @@ export default function App() {
           patternGroups: project.patternGroups,
         };
       }
-      applyLoadedProject(projectToApply, baseline ? { baseline } : undefined);
-      setActiveProjectName(name);
+      loadProjectIntoSequencer(
+        projectToApply,
+        name,
+        baseline ? { baseline } : undefined
+      );
       setProjectModalMode(null);
       setProjectModalError(null);
       return true;
     },
-    [applyLoadedProject, setActiveProjectName]
+    [loadProjectIntoSequencer]
   );
 
   const handleRequestLoadProject = useCallback(
@@ -1553,6 +1588,19 @@ export default function App() {
     handleRequestLoadProject,
   ]);
 
+  const ensureAudioReady = useCallback(async () => {
+    if (started) {
+      return true;
+    }
+    try {
+      await initAudioContext();
+    } catch {
+      return false;
+    }
+    initAudioGraph();
+    return true;
+  }, [initAudioGraph, started]);
+
   const initAudioGraph = useCallback(() => {
     try {
       Tone.Transport.bpm.value = bpm;
@@ -1573,14 +1621,15 @@ export default function App() {
     }
   }, [bpm]);
 
-  const handleNewProjectClick = useCallback(() => {
+  const handleNewProjectClick = useCallback(async () => {
     console.log("New song button clicked");
-    setActiveProjectName("untitled");
-    setStarted(true);
-    skipLoopDraftRestoreRef.current = true;
-    currentLoopDraftRef.current = null;
-    setViewMode("track");
-  }, [setActiveProjectName, setStarted, setViewMode]);
+    const ready = await ensureAudioReady();
+    if (!ready) {
+      return;
+    }
+    const emptyProject = createEmptyProjectData();
+    loadProjectIntoSequencer(emptyProject, "untitled");
+  }, [ensureAudioReady, loadProjectIntoSequencer]);
 
   useEffect(() => {
     refreshProjectList();
@@ -1588,43 +1637,23 @@ export default function App() {
 
   const handleLaunchProject = useCallback(
     async (name: string) => {
-      if (!started) {
-        try {
-          await initAudioContext();
-        } catch {
-          return;
-        }
-        initAudioGraph();
+      const ready = await ensureAudioReady();
+      if (!ready) {
+        return;
       }
       handleRequestLoadProject(name, { skipConfirmation: !started });
     },
-    [handleRequestLoadProject, initAudioGraph, started]
+    [ensureAudioReady, handleRequestLoadProject, started]
   );
 
   const handleLoadDemoSong = useCallback(async () => {
-    if (!started) {
-      try {
-        await initAudioContext();
-      } catch {
-        return;
-      }
-      initAudioGraph();
+    const ready = await ensureAudioReady();
+    if (!ready) {
+      return;
     }
     const demoProject = createDemoProjectData();
-    applyLoadedProject(demoProject);
-    currentLoopDraftRef.current = demoProject.tracks.map((track) =>
-      cloneTrackState(track)
-    );
-    setActiveProjectName("Demo Jam");
-    skipLoopDraftRestoreRef.current = true;
-    setViewMode("track");
-  }, [
-    applyLoadedProject,
-    initAudioGraph,
-    setActiveProjectName,
-    setViewMode,
-    started,
-  ]);
+    loadProjectIntoSequencer(demoProject, "Demo Jam");
+  }, [ensureAudioReady, loadProjectIntoSequencer]);
 
   const handleReturnToSongSelection = useCallback(() => {
     try {
@@ -2162,7 +2191,9 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={() => handleNewProjectClick()}
+              onClick={() => {
+                void handleNewProjectClick();
+              }}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
@@ -2248,7 +2279,9 @@ export default function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={handleLoadDemoSong}
+                      onClick={() => {
+                        void handleLoadDemoSong();
+                      }}
                       style={{
                         padding: "12px 20px",
                         borderRadius: 999,
@@ -2268,7 +2301,9 @@ export default function App() {
                   projectList.map((name) => (
                     <button
                       key={name}
-                      onClick={() => handleLaunchProject(name)}
+                      onClick={() => {
+                        void handleLaunchProject(name);
+                      }}
                       style={{
                         padding: "12px 16px",
                         borderRadius: 14,
