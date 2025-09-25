@@ -1625,7 +1625,7 @@ export default function App() {
     console.log("New song button clicked");
     const ready = await ensureAudioReady();
     if (!ready) {
-      return;
+      console.warn("Audio graph not ready, continuing to load new project");
     }
     const emptyProject = createEmptyProjectData();
     loadProjectIntoSequencer(emptyProject, "untitled");
@@ -1639,7 +1639,7 @@ export default function App() {
     async (name: string) => {
       const ready = await ensureAudioReady();
       if (!ready) {
-        return;
+        console.warn("Audio graph not ready, continuing to load project", name);
       }
       handleRequestLoadProject(name, { skipConfirmation: !started });
     },
@@ -1649,7 +1649,7 @@ export default function App() {
   const handleLoadDemoSong = useCallback(async () => {
     const ready = await ensureAudioReady();
     if (!ready) {
-      return;
+      console.warn("Audio graph not ready, continuing to load demo song");
     }
     const demoProject = createDemoProjectData();
     loadProjectIntoSequencer(demoProject, "Demo Jam");
