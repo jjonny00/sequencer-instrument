@@ -2078,7 +2078,8 @@ export default function App() {
         <Modal
           isOpen={isUnsavedChangesModalOpen}
           onClose={handleCancelPendingProjectLoad}
-          ariaLabel="Unsaved changes"
+          title="Unsaved changes"
+          subtitle="You have unsaved changes. Do you want to save before loading this song?"
         >
           <div
             style={{
@@ -2089,15 +2090,6 @@ export default function App() {
               maxWidth: 360,
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 18, fontWeight: 600 }}>
-                Unsaved changes
-              </div>
-              <div style={{ fontSize: 14, color: "#cbd5f5", lineHeight: 1.5 }}>
-                You have unsaved changes. Do you want to save before loading this
-                song?
-              </div>
-            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <button
                 type="button"
