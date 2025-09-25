@@ -1756,44 +1756,56 @@ export default function App() {
   const { createNewProject, loadProject, handleLoadDemoSong } = useMemo(() => {
     // Touch handlerVersion so the memo recalculates after activation rebinding.
     void handlerVersion;
-    const createNewProjectHandler = () => {
+
+    const runProjectAction = (action: ProjectAction) => {
       void (async () => {
-        console.log("New song button clicked");
-        const ready = await ensureAudioReady();
-        if (!ready) {
-          console.warn("Audio graph not ready, continuing to load new project");
+        const readyPromise = ensureAudioReady().catch((error) => {
+          console.warn("Audio preparation failed:", error);
+          return false;
+        });
+
+        const triggered = requestProjectAction(action, {
+          skipConfirmation: !started,
+        });
+
+        if (!triggered) {
+          return;
         }
-        requestProjectAction(
-          { kind: "new" },
-          { skipConfirmation: !started }
-        );
+
+        const ready = await readyPromise;
+        if (!ready) {
+          switch (action.kind) {
+            case "stored":
+              console.warn(
+                "Audio graph not ready, continuing to load project",
+                action.name
+              );
+              break;
+            case "demo":
+              console.warn(
+                "Audio graph not ready, continuing to load demo song"
+              );
+              break;
+            default:
+              console.warn(
+                "Audio graph not ready, continuing to load new project"
+              );
+          }
+        }
       })();
+    };
+
+    const createNewProjectHandler = () => {
+      console.log("New song button clicked");
+      runProjectAction({ kind: "new" });
     };
 
     const loadProjectHandler = (name: string) => {
-      void (async () => {
-        const ready = await ensureAudioReady();
-        if (!ready) {
-          console.warn("Audio graph not ready, continuing to load project", name);
-        }
-        requestProjectAction(
-          { kind: "stored", name },
-          { skipConfirmation: !started }
-        );
-      })();
+      runProjectAction({ kind: "stored", name });
     };
 
     const handleLoadDemoSongHandler = () => {
-      void (async () => {
-        const ready = await ensureAudioReady();
-        if (!ready) {
-          console.warn("Audio graph not ready, continuing to load demo song");
-        }
-        requestProjectAction(
-          { kind: "demo" },
-          { skipConfirmation: !started }
-        );
-      })();
+      runProjectAction({ kind: "demo" });
     };
 
     return {
