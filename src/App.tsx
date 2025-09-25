@@ -352,6 +352,12 @@ export default function App() {
     }
     return Tone.getContext().state === "running";
   });
+  const [hasAttemptedAudioUnlock, setHasAttemptedAudioUnlock] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return Tone.getContext().state === "running";
+  });
   const [handlerVersion, setHandlerVersion] = useState(0);
 
   // Instruments (kept across renders)
@@ -471,7 +477,9 @@ export default function App() {
   useEffect(() => {
     if (previousStartedRef.current && !started) {
       if (typeof window !== "undefined") {
-        setIsAudioUnlocked(Tone.getContext().state === "running");
+        const running = Tone.getContext().state === "running";
+        setIsAudioUnlocked(running);
+        setHasAttemptedAudioUnlock(running);
       }
       setHandlerVersion((version) => version + 1);
     }
@@ -479,6 +487,7 @@ export default function App() {
   }, [started]);
 
   const handleActivateApp = useCallback(async () => {
+    setHasAttemptedAudioUnlock(true);
     if (!activationPromise) {
       setHandlerVersion((version) => version + 1);
     }
@@ -1728,17 +1737,21 @@ export default function App() {
     if (started) {
       const running = Tone.getContext().state === "running";
       setIsAudioUnlocked(running);
+      if (!running) {
+        setHasAttemptedAudioUnlock(false);
+      }
       return running;
     }
     const unlocked = await activateApp();
     const running = Tone.getContext().state === "running";
     setIsAudioUnlocked(running);
+    setHasAttemptedAudioUnlock(true);
     if (!running) {
       console.warn("Audio context is not running; continuing to initialize graph.");
     }
     initAudioGraph();
     return unlocked && running;
-  }, [initAudioGraph, setIsAudioUnlocked, started]);
+  }, [initAudioGraph, started]);
 
   const { createNewProject, loadProject, handleLoadDemoSong } = useMemo(() => {
     // Touch handlerVersion so the memo recalculates after activation rebinding.
@@ -2320,7 +2333,7 @@ export default function App() {
             position: "relative",
           }}
         >
-          {!isAudioUnlocked ? (
+          {!isAudioUnlocked && !hasAttemptedAudioUnlock ? (
             <div
               style={{
                 position: "absolute",
