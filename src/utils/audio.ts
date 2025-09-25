@@ -9,15 +9,66 @@ const clamp = (value: number, min: number, max: number) =>
 const minLog = Math.log(MIN_FILTER_FREQUENCY);
 const maxLog = Math.log(MAX_FILTER_FREQUENCY);
 
+let audioActivationPromise: Promise<boolean> | null = null;
+
+export let audioReady =
+  typeof window === "undefined"
+    ? true
+    : Tone.getContext().state === "running";
+
+const updateAudioReadyFlag = (): boolean => {
+  if (typeof window === "undefined") {
+    audioReady = true;
+    return true;
+  }
+
+  const running = Tone.getContext().state === "running";
+  audioReady = running;
+  return running;
+};
+
+export const activateAudio = async (): Promise<boolean> => {
+  if (updateAudioReadyFlag()) {
+    return true;
+  }
+
+  if (!audioActivationPromise) {
+    audioActivationPromise = (async () => {
+      try {
+        await Tone.start();
+        console.log("Tone.js audio started successfully");
+      } catch (error) {
+        console.warn("Tone.js failed to start:", error);
+      }
+
+      const context = Tone.getContext();
+      if (context.state === "suspended") {
+        try {
+          await context.resume();
+        } catch (resumeError) {
+          console.warn("AudioContext.resume() failed:", resumeError);
+        }
+      }
+
+      const running = updateAudioReadyFlag();
+      audioActivationPromise = null;
+      return running;
+    })();
+  }
+
+  const unlocked = await audioActivationPromise;
+  updateAudioReadyFlag();
+  return unlocked;
+};
+
 export const initAudioContext = async (): Promise<void> => {
-  try {
-    await Tone.start();
-    console.log("Tone.js audio started successfully");
-  } catch (error) {
-    console.warn("Tone.js failed to start:", error);
-    throw error;
+  const unlocked = await activateAudio();
+  if (!unlocked && !audioReady) {
+    throw new Error("Audio context is not running");
   }
 };
+
+export const refreshAudioReadyState = (): boolean => updateAudioReadyFlag();
 
 export const isIOSPWA = (): boolean => {
   if (typeof window === "undefined") {
@@ -45,3 +96,13 @@ export const frequencyToFilterValue = (frequency: number) => {
   const freqLog = Math.log(clamped);
   return (freqLog - minLog) / (maxLog - minLog);
 };
+
+declare global {
+  interface Window {
+    activateAudio?: () => Promise<boolean>;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.activateAudio = activateAudio;
+}
