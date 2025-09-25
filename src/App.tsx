@@ -112,8 +112,13 @@ interface AddTrackModalState {
   presetId: string | null;
 }
 
+type ProjectAction =
+  | { kind: "new" }
+  | { kind: "stored"; name: string }
+  | { kind: "demo" };
+
 interface PendingProjectLoad {
-  name: string;
+  action: ProjectAction;
   skipConfirmation: boolean;
 }
 
@@ -1491,16 +1496,16 @@ export default function App() {
     [loadProjectIntoSequencer]
   );
 
-  const handleRequestLoadProject = useCallback(
+  const requestProjectAction = useCallback(
     (
-      name: string,
+      action: ProjectAction,
       {
         skipConfirmation = false,
         bypassUnsavedCheck = false,
       }: { skipConfirmation?: boolean; bypassUnsavedCheck?: boolean } = {}
     ) => {
       if (!bypassUnsavedCheck && hasUnsavedLoopChanges) {
-        setPendingProjectLoad({ name, skipConfirmation });
+        setPendingProjectLoad({ action, skipConfirmation });
         setIsUnsavedChangesModalOpen(true);
         return false;
       }
@@ -1513,11 +1518,29 @@ export default function App() {
         }
       }
 
-      return handleLoadProjectByName(name);
+      switch (action.kind) {
+        case "new":
+          loadProjectIntoSequencer(createEmptyProjectData(), "untitled");
+          setProjectModalMode(null);
+          setProjectModalError(null);
+          return true;
+        case "stored":
+          return handleLoadProjectByName(action.name);
+        case "demo":
+          loadProjectIntoSequencer(createDemoProjectData(), "Demo Jam");
+          setProjectModalMode(null);
+          setProjectModalError(null);
+          return true;
+        default:
+          return false;
+      }
     },
     [
       handleLoadProjectByName,
       hasUnsavedLoopChanges,
+      loadProjectIntoSequencer,
+      setProjectModalError,
+      setProjectModalMode,
       started,
     ]
   );
@@ -1540,7 +1563,7 @@ export default function App() {
 
   const handleSaveAndLoadPendingProject = useCallback(() => {
     if (!pendingProjectLoad) return;
-    const { name, skipConfirmation } = pendingProjectLoad;
+    const { action, skipConfirmation } = pendingProjectLoad;
     const snapshot = buildProjectSnapshot();
     const trimmedName = activeProjectName.trim();
     const targetName = trimmedName.length > 0 ? trimmedName : "untitled";
@@ -1552,7 +1575,7 @@ export default function App() {
       deleteLoopDraft(targetName);
       setIsUnsavedChangesModalOpen(false);
       setPendingProjectLoad(null);
-      handleRequestLoadProject(name, {
+      requestProjectAction(action, {
         skipConfirmation,
         bypassUnsavedCheck: true,
       });
@@ -1566,18 +1589,18 @@ export default function App() {
     activeProjectName,
     refreshProjectList,
     updateLoopBaseline,
-    handleRequestLoadProject,
+    requestProjectAction,
   ]);
 
   const handleDiscardAndLoadPendingProject = useCallback(() => {
     if (!pendingProjectLoad) return;
-    const { name, skipConfirmation } = pendingProjectLoad;
+    const { action, skipConfirmation } = pendingProjectLoad;
     lastPersistedLoopSnapshotRef.current = loopStateSignature;
     setHasUnsavedLoopChanges(false);
     deleteLoopDraft(activeProjectName);
     setIsUnsavedChangesModalOpen(false);
     setPendingProjectLoad(null);
-    handleRequestLoadProject(name, {
+    requestProjectAction(action, {
       skipConfirmation,
       bypassUnsavedCheck: true,
     });
@@ -1585,8 +1608,13 @@ export default function App() {
     pendingProjectLoad,
     loopStateSignature,
     activeProjectName,
-    handleRequestLoadProject,
+    requestProjectAction,
   ]);
+
+  const unsavedChangesSubtitle =
+    pendingProjectLoad?.action.kind === "new"
+      ? "You have unsaved changes. Do you want to save before starting a new song?"
+      : "You have unsaved changes. Do you want to save before loading this song?";
 
   const initAudioGraph = useCallback(() => {
     try {
@@ -1628,10 +1656,12 @@ export default function App() {
       if (!ready) {
         console.warn("Audio graph not ready, continuing to load new project");
       }
-      const emptyProject = createEmptyProjectData();
-      loadProjectIntoSequencer(emptyProject, "untitled");
+      requestProjectAction(
+        { kind: "new" },
+        { skipConfirmation: !started }
+      );
     })();
-  }, [ensureAudioReady, loadProjectIntoSequencer]);
+  }, [ensureAudioReady, requestProjectAction, started]);
 
   useEffect(() => {
     refreshProjectList();
@@ -1644,10 +1674,13 @@ export default function App() {
         if (!ready) {
           console.warn("Audio graph not ready, continuing to load project", name);
         }
-        handleRequestLoadProject(name, { skipConfirmation: !started });
+        requestProjectAction(
+          { kind: "stored", name },
+          { skipConfirmation: !started }
+        );
       })();
     },
-    [ensureAudioReady, handleRequestLoadProject, started]
+    [ensureAudioReady, requestProjectAction, started]
   );
 
   const handleLoadDemoSong = useCallback(() => {
@@ -1656,10 +1689,12 @@ export default function App() {
       if (!ready) {
         console.warn("Audio graph not ready, continuing to load demo song");
       }
-      const demoProject = createDemoProjectData();
-      loadProjectIntoSequencer(demoProject, "Demo Jam");
+      requestProjectAction(
+        { kind: "demo" },
+        { skipConfirmation: !started }
+      );
     })();
-  }, [ensureAudioReady, loadProjectIntoSequencer]);
+  }, [ensureAudioReady, requestProjectAction, started]);
 
   const handleReturnToSongSelection = useCallback(() => {
     try {
@@ -2112,7 +2147,7 @@ export default function App() {
           isOpen={isUnsavedChangesModalOpen}
           onClose={handleCancelPendingProjectLoad}
           title="Unsaved changes"
-          subtitle="You have unsaved changes. Do you want to save before loading this song?"
+          subtitle={unsavedChangesSubtitle}
         >
           <div
             style={{
