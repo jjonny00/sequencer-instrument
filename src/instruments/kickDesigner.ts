@@ -19,6 +19,8 @@ export interface KickStyleParameters {
   };
 }
 
+type EnvelopeSettings = Omit<Tone.EnvelopeOptions, "context">;
+
 interface KickSynthMapping {
   sub: Pick<
     Tone.MembraneSynthOptions,
@@ -26,7 +28,7 @@ interface KickSynthMapping {
   >;
   noise: {
     type: Tone.NoiseType;
-    envelope: Tone.EnvelopeOptions;
+    envelope: EnvelopeSettings;
     volume: number;
   };
 }
@@ -37,7 +39,7 @@ export const DEFAULT_KICK_STATE: KickDesignerState = {
   tight: 0.5,
 };
 
-const DEFAULT_NOISE_ENVELOPE: Tone.EnvelopeOptions = {
+const DEFAULT_NOISE_ENVELOPE: EnvelopeSettings = {
   attack: 0.001,
   decay: 0.02,
   sustain: 0,
@@ -47,10 +49,13 @@ const DEFAULT_NOISE_ENVELOPE: Tone.EnvelopeOptions = {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+const MEMBRANE_DEFAULTS = Tone.MembraneSynth.getDefaults();
+const NOISE_DEFAULTS = Tone.NoiseSynth.getDefaults();
+
 const mergeEnvelope = (
-  base: Tone.EnvelopeOptions,
-  overrides?: Partial<Tone.EnvelopeOptions>
-): Tone.EnvelopeOptions => ({
+  base: EnvelopeSettings,
+  overrides?: Partial<EnvelopeSettings>
+): EnvelopeSettings => ({
   attack: overrides?.attack ?? base.attack,
   decay: overrides?.decay ?? base.decay,
   sustain: overrides?.sustain ?? base.sustain,
@@ -168,17 +173,23 @@ export const createKickDesigner = (
   const applyState = () => {
     const mapping = mapKickParams(state);
 
+    const mergedSubEnvelope = {
+      ...MEMBRANE_DEFAULTS.envelope,
+      ...mergeEnvelope(mapping.sub.envelope, style?.sub?.envelope),
+    };
     const subOptions: Tone.MembraneSynthOptions = {
+      ...MEMBRANE_DEFAULTS,
       ...mapping.sub,
       ...(style?.sub ?? {}),
-      envelope: mergeEnvelope(mapping.sub.envelope, style?.sub?.envelope),
+      envelope: mergedSubEnvelope,
     };
+    const { context: _subContext, ...subConfig } = subOptions;
 
     if (!sub) {
-      sub = new Tone.MembraneSynth(subOptions);
+      sub = new Tone.MembraneSynth(subConfig);
       sub.connect(sharedGain);
     } else {
-      sub.set(subOptions);
+      sub.set(subConfig);
       if (typeof subOptions.volume === "number") {
         sub.volume.value = subOptions.volume;
       }
@@ -192,22 +203,29 @@ export const createKickDesigner = (
       mapping.noise.envelope,
       style?.noise?.envelope
     );
+    const mergedNoiseEnvelope = {
+      ...NOISE_DEFAULTS.envelope,
+      ...resolvedNoiseEnvelope,
+    };
     const noiseType = style?.noise?.type ?? mapping.noise.type;
     const shouldEnableNoise =
       (style?.noise?.enabled ?? true) && noiseVolume > MIN_NOISE_VOLUME;
 
     if (shouldEnableNoise) {
       if (!noise) {
-        noise = new Tone.NoiseSynth({
-          noise: { type: noiseType },
-          envelope: { ...resolvedNoiseEnvelope },
+        const noiseOptions: Tone.NoiseSynthOptions = {
+          ...NOISE_DEFAULTS,
+          noise: { ...NOISE_DEFAULTS.noise, type: noiseType },
+          envelope: mergedNoiseEnvelope,
           volume: noiseVolume,
-        });
+        };
+        const { context: _noiseContext, ...noiseConfig } = noiseOptions;
+        noise = new Tone.NoiseSynth(noiseConfig);
         noise.connect(sharedGain);
       } else {
         noise.set({
-          noise: { type: noiseType },
-          envelope: { ...resolvedNoiseEnvelope },
+          noise: { ...NOISE_DEFAULTS.noise, type: noiseType },
+          envelope: mergedNoiseEnvelope,
         });
         noise.volume.value = noiseVolume;
       }
