@@ -1,4 +1,5 @@
 import * as Tone from "tone";
+import type { Time } from "tone/build/esm/core/type/Units";
 
 import type { Chunk } from "../chunks";
 
@@ -54,12 +55,12 @@ export const applyKickDefaultsToChunk = (
 
 type KickSubOscillatorConfig =
   Partial<Omit<Tone.FatOscillatorOptions, "type">> & {
-    type?: Tone.FatOscillatorType | "pulse";
+    type?: Tone.FatOscillatorOptions["type"] | "pulse";
     width?: number;
   };
 
 export interface KickSubStyleConfig {
-  pitchDecay?: number;
+  pitchDecay?: Time;
   octaves?: number;
   oscillator?: KickSubOscillatorConfig;
   envelope?: Partial<Tone.MembraneSynthOptions["envelope"]>;
@@ -83,7 +84,7 @@ export type KickDesignerInstrument = Tone.Gain & {
   triggerAttackRelease: (
     note?: Tone.Unit.Frequency,
     duration?: Tone.Unit.Time,
-    time?: Tone.Unit.Time,
+    time?: Time,
     velocity?: number
   ) => void;
   setMacroState: (state: Partial<KickDesignerState>) => void;
@@ -94,6 +95,20 @@ export type KickDesignerInstrument = Tone.Gain & {
 
 const resolveNumber = (value: number | undefined, fallback: number): number =>
   typeof value === "number" && !Number.isNaN(value) ? value : fallback;
+
+const resolveTimeSeconds = (value: Time | undefined, fallback: number): number => {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
+  }
+  try {
+    return Tone.Time(value).toSeconds();
+  } catch (error) {
+    return fallback;
+  }
+};
 
 const resolveFrequencyHz = (
   value: Tone.Unit.Frequency | undefined,
@@ -207,21 +222,24 @@ export const createKickDesigner = (
     const resolvedNoise = resolveNoiseStyle(style.noise);
 
     const pitchDecay =
-      resolveNumber(resolvedSub.pitchDecay, defaultSubStyle.pitchDecay) *
+      resolveTimeSeconds(
+        resolvedSub.pitchDecay,
+        resolveTimeSeconds(defaultSubStyle.pitchDecay, 0.05)
+      ) *
       (0.7 + (1 - tight) * 0.65 + punch * 0.2);
     const octaves =
       resolveNumber(resolvedSub.octaves, defaultSubStyle.octaves) +
       punch * 0.7 -
       (tight - 0.5) * 0.6;
-    const baseEnvelopeDecay = resolveNumber(
+    const baseEnvelopeDecay = resolveTimeSeconds(
       resolvedSub.envelope.decay,
-      resolveNumber(defaultSubStyle.envelope.decay, 0.3)
+      resolveTimeSeconds(defaultSubStyle.envelope.decay, 0.3)
     );
     const envelopeDecay =
       baseEnvelopeDecay * (0.8 + (1 - tight) * 0.9 + (1 - clean) * 0.25);
-    const baseEnvelopeRelease = resolveNumber(
+    const baseEnvelopeRelease = resolveTimeSeconds(
       resolvedSub.envelope.release,
-      resolveNumber(defaultSubStyle.envelope.release, 0.1)
+      resolveTimeSeconds(defaultSubStyle.envelope.release, 0.1)
     );
     const envelopeRelease =
       baseEnvelopeRelease * (0.7 + (1 - tight) * 1.1 + (1 - clean) * 0.3);
@@ -235,10 +253,14 @@ export const createKickDesigner = (
       requestedType === "pulse"
         ? "square"
         : requestedType ?? defaultSubStyle.oscillator.type;
-    kickSub.oscillator.set({
+    const oscillatorPayload: Partial<Tone.MembraneSynthOptions["oscillator"]> = {
       ...(oscillatorRest as Tone.MembraneSynthOptions["oscillator"]),
-      ...(oscillatorType ? { type: oscillatorType } : {}),
-    });
+    };
+    if (oscillatorType) {
+      oscillatorPayload.type =
+        oscillatorType as Tone.MembraneSynthOptions["oscillator"]["type"];
+    }
+    kickSub.oscillator.set(oscillatorPayload);
     if (typeof width === "number") {
       const maybeOscillator = kickSub.oscillator as unknown as {
         width?: { value: number };
@@ -250,9 +272,9 @@ export const createKickDesigner = (
     kickSub.oscillator.phase = 0;
 
     kickSub.envelope.set({
-      attack: resolveNumber(
+      attack: resolveTimeSeconds(
         resolvedSub.envelope.attack,
-        resolveNumber(defaultSubStyle.envelope.attack, 0.005)
+        resolveTimeSeconds(defaultSubStyle.envelope.attack, 0.005)
       ),
       decay: Math.max(0.02, envelopeDecay),
       sustain:
@@ -287,18 +309,18 @@ export const createKickDesigner = (
       (0.7 + (1 - clean) * 0.35 + (1 - punch) * 0.2);
     subGain.gain.rampTo(subLevel, 0.05);
 
-    const noiseAttack = resolveNumber(
+    const noiseAttack = resolveTimeSeconds(
       resolvedNoise.envelope.attack,
-      resolveNumber(defaultNoiseStyle.envelope.attack, 0.001)
+      resolveTimeSeconds(defaultNoiseStyle.envelope.attack, 0.001)
     );
-    const baseNoiseDecay = resolveNumber(
+    const baseNoiseDecay = resolveTimeSeconds(
       resolvedNoise.envelope.decay,
-      resolveNumber(defaultNoiseStyle.envelope.decay, 0.02)
+      resolveTimeSeconds(defaultNoiseStyle.envelope.decay, 0.02)
     );
     const noiseDecay = baseNoiseDecay * (0.6 + (1 - tight) * 1.1);
-    const baseNoiseRelease = resolveNumber(
+    const baseNoiseRelease = resolveTimeSeconds(
       resolvedNoise.envelope.release,
-      resolveNumber(defaultNoiseStyle.envelope.release, 0.01)
+      resolveTimeSeconds(defaultNoiseStyle.envelope.release, 0.01)
     );
     const noiseRelease = baseNoiseRelease * (0.7 + (1 - tight) * 0.8);
 
@@ -375,10 +397,10 @@ export const createKickDesigner = (
   kickOut.triggerAttackRelease = (
     note = "C2",
     duration: Tone.Unit.Time = "8n",
-    time?: Tone.Unit.Time,
+    time?: Time,
     velocity = 1
   ) => {
-    const when = time ?? Tone.now();
+    const when: Time = time ?? Tone.now();
     const tight = state.tight;
     const baseNote = typeof note === "number" ? note : note || "C2";
 
