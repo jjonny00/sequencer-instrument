@@ -64,10 +64,9 @@ const mergeEnvelope = (
     ...(first ?? {}),
     ...(second ?? {}),
   };
-  if ("context" in merged) {
-    delete (merged as Tone.EnvelopeOptions).context;
-  }
-  return merged;
+  const { context: _context, ...cleaned } =
+    merged as Tone.EnvelopeOptions & EnvelopeSettings;
+  return cleaned;
 };
 
 export const mapKickParams = ({
