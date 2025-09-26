@@ -1,6 +1,7 @@
 import * as Tone from "tone";
 
 import type { Chunk } from "../chunks";
+import { packs } from "../packs";
 
 export interface KickDesignerState {
   punch: number;
@@ -34,6 +35,33 @@ export const mergeKickDesignerState = (
     clean: overrides?.clean ?? defaults?.clean,
     tight: overrides?.tight ?? defaults?.tight,
   });
+
+const findKickCharacter = (packId: string, characterId?: string | null) => {
+  const pack = packs.find((candidate) => candidate.id === packId);
+  const kick = pack?.instruments?.kick;
+  if (!kick) return undefined;
+  const characters = kick.characters ?? [];
+  if (characterId) {
+    const specific = characters.find((candidate) => candidate.id === characterId);
+    if (specific) return specific;
+  }
+  if (kick.defaultCharacterId) {
+    const preferred = characters.find(
+      (candidate) => candidate.id === kick.defaultCharacterId
+    );
+    if (preferred) return preferred;
+  }
+  return characters[0];
+};
+
+export const resolveKickCharacterDefaults = (
+  packId: string,
+  characterId?: string | null
+): KickDesignerState | null => {
+  const character = findKickCharacter(packId, characterId);
+  if (!character) return null;
+  return normalizeKickDesignerState(character.defaults);
+};
 
 export const applyKickDefaultsToChunk = (
   chunk: Chunk,
@@ -256,4 +284,13 @@ export const createKickDesigner = (
 
   return output;
 };
+
+export function createKick(packId: string, characterId: string) {
+  const defaults = resolveKickCharacterDefaults(packId, characterId);
+  if (!defaults) {
+    return createKickDesigner();
+  }
+
+  return createKickDesigner(defaults);
+}
 
