@@ -36,6 +36,33 @@ export const mergeKickDesignerState = (
     tight: overrides?.tight ?? defaults?.tight,
   });
 
+const findKickCharacter = (packId: string, characterId?: string | null) => {
+  const pack = packs.find((candidate) => candidate.id === packId);
+  const kick = pack?.instruments?.kick;
+  if (!kick) return undefined;
+  const characters = kick.characters ?? [];
+  if (characterId) {
+    const specific = characters.find((candidate) => candidate.id === characterId);
+    if (specific) return specific;
+  }
+  if (kick.defaultCharacterId) {
+    const preferred = characters.find(
+      (candidate) => candidate.id === kick.defaultCharacterId
+    );
+    if (preferred) return preferred;
+  }
+  return characters[0];
+};
+
+export const resolveKickCharacterDefaults = (
+  packId: string,
+  characterId?: string | null
+): KickDesignerState | null => {
+  const character = findKickCharacter(packId, characterId);
+  if (!character) return null;
+  return normalizeKickDesignerState(character.defaults);
+};
+
 export const applyKickDefaultsToChunk = (
   chunk: Chunk,
   defaults: Partial<KickDesignerState> | null | undefined
@@ -259,21 +286,11 @@ export const createKickDesigner = (
 };
 
 export function createKick(packId: string, characterId: string) {
-  const pack = packs.find((candidate) => candidate.id === packId);
-  if (!pack) {
+  const defaults = resolveKickCharacterDefaults(packId, characterId);
+  if (!defaults) {
     return createKickDesigner();
   }
 
-  const kickInstrument = pack.instruments.kick;
-  if (!kickInstrument) {
-    return createKickDesigner();
-  }
-
-  const character = kickInstrument.characters?.find((c) => c.id === characterId);
-  if (!character || !character.defaults) {
-    return createKickDesigner();
-  }
-
-  return createKickDesigner(character.defaults);
+  return createKickDesigner(defaults);
 }
 

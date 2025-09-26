@@ -17,7 +17,8 @@ import {
 import {
   createKick,
   mergeKickDesignerState,
-  normalizeKickDesignerState,
+  resolveKickCharacterDefaults,
+  DEFAULT_KICK_STATE,
   type KickDesignerInstrument,
 } from "./instruments/kickDesigner";
 
@@ -349,7 +350,8 @@ const createOfflineTriggerMap = (
       if (instrumentId === "kick") {
         const kick = inst as unknown as KickDesignerInstrument;
         if (kick.setMacroState) {
-          const defaults = normalizeKickDesignerState(character.defaults);
+          const defaults =
+            resolveKickCharacterDefaults(pack.id, character.id) ?? DEFAULT_KICK_STATE;
           const merged = mergeKickDesignerState(defaults, {
             punch: chunk?.punch,
             clean: chunk?.clean,
