@@ -26,6 +26,7 @@ import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
+import { createKick } from "./instruments/kickDesigner";
 
 type SelectField = "pack" | "instrument" | "style" | "preset";
 
@@ -339,15 +340,27 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const previewStyle = useCallback(
     async (characterId: string) => {
       if (!characterId || !selectedInstrumentId || !selectedPackId) return;
-      const trigger =
-        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
-      if (!trigger) return;
       try {
         await initAudioContext();
       } catch {
         return;
       }
       const start = Tone.now() + 0.05;
+
+      if (selectedInstrumentId === "kick") {
+        const kick = createKick(selectedPackId, characterId);
+        kick.triggerAttackRelease("C2", "8n", start, 0.9);
+        const releaseDelaySeconds = Math.max(0, start - Tone.now() + 1.5);
+        setTimeout(() => {
+          kick.dispose();
+        }, releaseDelaySeconds * 1000);
+        return;
+      }
+
+      const trigger =
+        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
+      if (!trigger) return;
+
       const previewChunk: Chunk = {
         id: "style-preview",
         name: "Style Preview",

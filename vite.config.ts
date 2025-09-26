@@ -12,6 +12,11 @@ export default defineConfig({
   define: {
     __BUILD_TIME__: JSON.stringify(buildTimestamp),
   },
+  resolve: {
+    alias: {
+      '@': resolve(rootDir, 'src'),
+    },
+  },
   build: {
     rollupOptions: {
       input: {
