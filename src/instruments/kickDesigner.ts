@@ -1,5 +1,7 @@
 import * as Tone from "tone";
 
+import { packs } from "@/soundpacks";
+
 import type { Chunk } from "../chunks";
 
 export interface KickDesignerState {
@@ -255,5 +257,25 @@ export const createKickDesigner = (
   };
 
   return output;
+};
+
+export const createKick = (
+  packId: string,
+  characterId: string
+): KickDesignerInstrument => {
+  const pack = packs[packId];
+  const instrument = pack?.instruments?.kick;
+  let character = instrument?.characters.find((candidate) => candidate.id === characterId);
+  if (!character && instrument?.defaultCharacterId) {
+    character = instrument.characters.find(
+      (candidate) => candidate.id === instrument.defaultCharacterId
+    );
+  }
+  if (!character && instrument?.characters.length) {
+    character = instrument.characters[0];
+  }
+  const kick = createKickDesigner(character?.defaults);
+  kick.toDestination();
+  return kick;
 };
 
