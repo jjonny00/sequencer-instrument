@@ -1,10 +1,7 @@
 import * as Tone from "tone";
 
-import { packs } from "../packs";
-import {
-  DEFAULT_KICK_STATE,
-  normalizeKickDesignerState,
-} from "./kickState";
+import { packs } from "@/soundpacks";
+import { DEFAULT_KICK_STATE } from "./kickState";
 
 export interface KickInstrument {
   triggerAttackRelease: (
@@ -17,89 +14,44 @@ export interface KickInstrument {
 }
 
 export function createKick(packId: string, characterId: string): KickInstrument {
-  const pack = packs.find((candidate) => candidate.id === packId);
+  const pack = packs[packId];
   if (!pack) {
-    console.warn(`[kick] Pack '${packId}' not found; using default kick voice.`);
+    console.warn("[kick] pack not found", { packId, characterId });
+    return createKickFromParams(mapKickParams(DEFAULT_KICK_STATE));
   }
 
-  const instrument = pack?.instruments?.kick;
+  const instrument = pack.instruments?.kick;
   if (!instrument) {
-    console.warn(
-      `[kick] Pack '${packId}' is missing a kick instrument; using default kick voice.`
+    console.warn("[kick] kick instrument missing", { packId, characterId });
+    return createKickFromParams(mapKickParams(DEFAULT_KICK_STATE));
+  }
+
+  let character = instrument.characters.find((candidate) => candidate.id === characterId);
+
+  if (!character && instrument.defaultCharacterId) {
+    character = instrument.characters.find(
+      (candidate) => candidate.id === instrument.defaultCharacterId
     );
   }
 
-  let character = instrument?.characters.find((candidate) => candidate.id === characterId);
   if (!character) {
-    if (characterId) {
-      console.warn(
-        `[kick] Character '${characterId}' not found in pack '${packId}', falling back to defaults.`
-      );
-    }
-    const fallbackId = instrument?.defaultCharacterId;
-    if (fallbackId) {
-      character = instrument?.characters.find((candidate) => candidate.id === fallbackId);
-    }
-    if (!character && instrument?.characters.length) {
-      character = instrument.characters[0];
-    }
+    console.warn("[kick] could not resolve character", { packId, characterId });
+    return createKickFromParams(mapKickParams(DEFAULT_KICK_STATE));
   }
 
-  const defaults = normalizeKickDesignerState(character?.defaults ?? DEFAULT_KICK_STATE);
-  const params = mapKickParams(defaults);
+  const {
+    punch = DEFAULT_KICK_STATE.punch,
+    clean = DEFAULT_KICK_STATE.clean,
+    tight = DEFAULT_KICK_STATE.tight,
+  } = character.defaults ?? {};
 
-  const sub = new Tone.MembraneSynth({
-    pitchDecay: params.sub.pitchDecay,
-    octaves: params.sub.octaves,
-    oscillator: params.sub.oscillator ?? { type: "sine" },
-    envelope: {
-      attack: 0.005,
-      decay: params.sub.decay,
-      sustain: 0,
-      release: params.sub.release,
-    },
-  }).toDestination();
-
-  let noise: Tone.NoiseSynth | null = null;
-  let noiseGain: Tone.Gain | null = null;
-
-  if (params.noiseDb > -30) {
-    noise = new Tone.NoiseSynth({
-      envelope: {
-        attack: 0.001,
-        decay: 0.02,
-        sustain: 0,
-        release: 0.01,
-      },
-    });
-    noiseGain = new Tone.Gain({ gain: Tone.dbToGain(params.noiseDb) }).toDestination();
-    noise.connect(noiseGain);
-  }
-
-  return {
-    triggerAttackRelease(_note, duration, time, velocity) {
-      if (time === undefined) {
-        console.warn(
-          "[kick] triggerAttackRelease called without a scheduled time; defaulting to immediate playback."
-        );
-      }
-      const scheduledTime = time ?? Tone.now();
-      const resolvedDuration = duration ?? "8n";
-      const resolvedVelocity = velocity ?? 0.9;
-
-      sub.oscillator.phase = 0;
-      sub.triggerAttackRelease("C1", resolvedDuration, scheduledTime, resolvedVelocity);
-
-      if (noise) {
-        noise.triggerAttackRelease("8n", scheduledTime, resolvedVelocity);
-      }
-    },
-    dispose() {
-      sub.dispose();
-      noise?.dispose();
-      noiseGain?.dispose();
-    },
-  };
+  return createKickFromParams(
+    mapKickParams({
+      punch,
+      clean,
+      tight,
+    })
+  );
 }
 
 function mapKickParams({
@@ -124,4 +76,58 @@ function mapKickParams({
     },
     noiseDb: -30 + (1 - t) * 10,
   } as const;
+}
+
+function createKickFromParams(params: ReturnType<typeof mapKickParams>): KickInstrument {
+  const output = new Tone.Gain().toDestination();
+
+  const sub = new Tone.MembraneSynth({
+    pitchDecay: params.sub.pitchDecay,
+    octaves: params.sub.octaves,
+    oscillator: params.sub.oscillator ?? { type: "sine" },
+    envelope: {
+      attack: 0.005,
+      decay: params.sub.decay,
+      sustain: 0,
+      release: params.sub.release,
+    },
+  }).connect(output);
+
+  let noise: Tone.NoiseSynth | null = null;
+  let noiseGain: Tone.Gain | null = null;
+
+  if (params.noiseDb > -30) {
+    noise = new Tone.NoiseSynth({
+      envelope: {
+        attack: 0.001,
+        decay: 0.02,
+        sustain: 0,
+        release: 0.01,
+      },
+    });
+
+    noiseGain = new Tone.Gain({ gain: Tone.dbToGain(params.noiseDb) });
+    noise.connect(noiseGain);
+    noiseGain.connect(output);
+  }
+
+  return {
+    triggerAttackRelease(_note, duration, time, velocity) {
+      const resolvedDuration = duration ?? "8n";
+      const resolvedVelocity = velocity ?? 0.9;
+
+      sub.oscillator.phase = 0;
+      sub.triggerAttackRelease("C1", resolvedDuration, time, resolvedVelocity);
+
+      if (noise) {
+        noise.triggerAttackRelease("8n", time, resolvedVelocity);
+      }
+    },
+    dispose() {
+      sub.dispose();
+      noise?.dispose();
+      noiseGain?.dispose();
+      output.dispose();
+    },
+  };
 }
