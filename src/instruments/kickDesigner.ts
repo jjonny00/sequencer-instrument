@@ -51,17 +51,35 @@ export function createKick(packId: string, characterId: string): KickInstrument 
   return buildKickInstrument(defaults);
 }
 
-const NOISE_DISABLE_THRESHOLD_DB = -30;
-
 interface KickSynthesisParams {
   sub: {
     pitchDecay: number;
     octaves: number;
     decay: number;
     release: number;
-    oscillator: { type: "sine" };
+    gain: number;
   };
-  noiseDb: number;
+  body: {
+    pitchDecay: number;
+    octaves: number;
+    decay: number;
+    release: number;
+    gain: number;
+  };
+  click: {
+    decay: number;
+    release: number;
+    gain: number;
+    highpassFrequency: number;
+  };
+  distortion: {
+    amount: number;
+    wet: number;
+  };
+  filter: {
+    frequency: number;
+    q: number;
+  };
 }
 
 function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
@@ -70,50 +88,62 @@ function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
 
   const output = new Tone.Gain(0.9).toDestination();
 
+  const mix = new Tone.Gain(1);
+  const distortion = new Tone.Distortion({
+    distortion: currentParams.distortion.amount,
+    wet: currentParams.distortion.wet,
+  });
+  const filter = new Tone.Filter({
+    type: "lowpass",
+    frequency: currentParams.filter.frequency,
+    Q: currentParams.filter.q,
+  });
+
+  mix.connect(distortion);
+  distortion.connect(filter);
+  filter.connect(output);
+
+  const subGain = new Tone.Gain(currentParams.sub.gain).connect(mix);
   const sub = new Tone.MembraneSynth({
     pitchDecay: currentParams.sub.pitchDecay,
     octaves: currentParams.sub.octaves,
-    oscillator: currentParams.sub.oscillator,
+    oscillator: { type: "sine" },
     envelope: {
       attack: 0.005,
       decay: currentParams.sub.decay,
       sustain: 0,
       release: currentParams.sub.release,
     },
-  }).connect(output);
+  }).connect(subGain);
 
-  type NoiseNodes = {
-    synth: Tone.NoiseSynth;
-    gain: Tone.Gain;
-  };
+  const bodyGain = new Tone.Gain(currentParams.body.gain).connect(mix);
+  const body = new Tone.MembraneSynth({
+    pitchDecay: currentParams.body.pitchDecay,
+    octaves: currentParams.body.octaves,
+    oscillator: { type: "sine" },
+    envelope: {
+      attack: 0.004,
+      decay: currentParams.body.decay,
+      sustain: 0,
+      release: currentParams.body.release,
+    },
+  }).connect(bodyGain);
 
-  let noise: NoiseNodes | null = null;
-
-  const ensureNoise = () => {
-    if (noise) return noise;
-    const synth = new Tone.NoiseSynth({
-      envelope: {
-        attack: 0.001,
-        decay: 0.02,
-        sustain: 0,
-        release: 0.01,
-      },
-    });
-    const gain = new Tone.Gain({
-      gain: Tone.dbToGain(currentParams.noiseDb),
-    });
-    synth.connect(gain);
-    gain.connect(output);
-    noise = { synth, gain };
-    return noise;
-  };
-
-  const disposeNoise = () => {
-    if (!noise) return;
-    noise.synth.dispose();
-    noise.gain.dispose();
-    noise = null;
-  };
+  const clickGain = new Tone.Gain(currentParams.click.gain).connect(mix);
+  const clickFilter = new Tone.Filter({
+    type: "highpass",
+    frequency: currentParams.click.highpassFrequency,
+    Q: 0.9,
+  }).connect(clickGain);
+  const click = new Tone.NoiseSynth({
+    noise: { type: "white" },
+    envelope: {
+      attack: 0.001,
+      decay: currentParams.click.decay,
+      sustain: 0,
+      release: currentParams.click.release,
+    },
+  }).connect(clickFilter);
 
   const applyParams = (params: KickSynthesisParams) => {
     currentParams = params;
@@ -126,16 +156,36 @@ function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
         sustain: 0,
         release: params.sub.release,
       },
-      oscillator: params.sub.oscillator,
     });
+    subGain.gain.rampTo(params.sub.gain, 0.02);
 
-    if (params.noiseDb <= NOISE_DISABLE_THRESHOLD_DB) {
-      disposeNoise();
-      return;
-    }
+    body.set({
+      pitchDecay: params.body.pitchDecay,
+      octaves: params.body.octaves,
+      envelope: {
+        attack: 0.004,
+        decay: params.body.decay,
+        sustain: 0,
+        release: params.body.release,
+      },
+    });
+    bodyGain.gain.rampTo(params.body.gain, 0.02);
 
-    const nodes = ensureNoise();
-    nodes.gain.gain.value = Tone.dbToGain(params.noiseDb);
+    click.set({
+      envelope: {
+        attack: 0.001,
+        decay: params.click.decay,
+        sustain: 0,
+        release: params.click.release,
+      },
+    });
+    clickGain.gain.rampTo(params.click.gain, 0.02);
+    clickFilter.frequency.rampTo(params.click.highpassFrequency, 0.02);
+
+    distortion.distortion = params.distortion.amount;
+    distortion.wet.value = params.distortion.wet;
+    filter.frequency.rampTo(params.filter.frequency, 0.02);
+    filter.Q.rampTo(params.filter.q, 0.02);
   };
 
   applyParams(currentParams);
@@ -146,11 +196,13 @@ function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
       const resolvedVelocity = velocity ?? 0.9;
 
       sub.oscillator.phase = 0;
-      sub.triggerAttackRelease("C1", resolvedDuration, time, resolvedVelocity);
+      body.oscillator.phase = 0;
 
-      if (currentParams.noiseDb > NOISE_DISABLE_THRESHOLD_DB) {
-        const nodes = ensureNoise();
-        nodes.synth.triggerAttackRelease("8n", time, resolvedVelocity);
+      sub.triggerAttackRelease("C1", resolvedDuration, time, resolvedVelocity);
+      body.triggerAttackRelease("C2", resolvedDuration, time, Math.min(1, resolvedVelocity * 0.9));
+
+      if (currentParams.click.gain > 0.001) {
+        click.triggerAttackRelease("16n", time, Math.min(1, resolvedVelocity * 0.8));
       }
     },
     setStyle(style) {
@@ -159,7 +211,15 @@ function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
     },
     dispose() {
       sub.dispose();
-      disposeNoise();
+      subGain.dispose();
+      body.dispose();
+      bodyGain.dispose();
+      click.dispose();
+      clickFilter.dispose();
+      clickGain.dispose();
+      mix.dispose();
+      distortion.dispose();
+      filter.dispose();
       output.dispose();
     },
   };
@@ -173,12 +233,32 @@ function mapKickParams({ punch, clean, tight }: KickDesignerState): KickSynthesi
 
   return {
     sub: {
-      pitchDecay: 0.01 + p * 0.02,
-      octaves: 2 + Math.round(p * 2),
-      decay: 0.25 + (1 - c) * 0.25,
-      release: 0.05 + (1 - c) * 0.1,
-      oscillator: { type: "sine" as const },
+      pitchDecay: 0.015 + p * 0.035,
+      octaves: 3 + p * 2,
+      decay: 0.35 + (1 - c) * 0.35,
+      release: 0.1 + (1 - c) * 0.35,
+      gain: 0.6 + p * 0.35,
     },
-    noiseDb: -30 + (1 - t) * 10,
+    body: {
+      pitchDecay: 0.006 + p * 0.01,
+      octaves: 1.5 + p * 1.2,
+      decay: 0.12 + (1 - t) * 0.18,
+      release: 0.08 + (1 - t) * 0.12,
+      gain: 0.25 + (1 - c) * 0.35,
+    },
+    click: {
+      decay: 0.01 + (1 - t) * 0.03,
+      release: 0.01 + (1 - t) * 0.05,
+      gain: 0.05 + (1 - t) * 0.45,
+      highpassFrequency: 2000 + t * 2500,
+    },
+    distortion: {
+      amount: 0.15 + (1 - c) * 0.45,
+      wet: 0.05 + (1 - c) * 0.55,
+    },
+    filter: {
+      frequency: 180 + c * 420,
+      q: 0.9 + (1 - c) * 0.6,
+    },
   };
 }
