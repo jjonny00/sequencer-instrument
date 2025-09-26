@@ -498,12 +498,9 @@ export default function App() {
       const definition = pack?.instruments?.[instrumentId];
       if (!definition) return undefined;
       if (requestedId) {
-        const specific = definition.characters.find(
+        return definition.characters.find(
           (character) => character.id === requestedId
         );
-        if (specific) {
-          return specific;
-        }
       }
       if (definition.defaultCharacterId) {
         const preferred = definition.characters.find(
@@ -665,16 +662,7 @@ export default function App() {
       if (!instrumentId && instrumentOptions.length > 0) {
         instrumentId = instrumentOptions[0];
       }
-      const characters = instrumentId
-        ? getCharacterOptions(pack.id, instrumentId)
-        : [];
-      let characterId = track.source?.characterId ?? (characters[0]?.id ?? "");
-      if (
-        characters.length > 0 &&
-        !characters.some((character) => character.id === characterId)
-      ) {
-        characterId = characters[0].id;
-      }
+      const characterId = track.source?.characterId ?? "";
       const presetOptions = pack.chunks.filter(
         (chunk) => chunk.instrument === instrumentId
       );
@@ -762,13 +750,16 @@ export default function App() {
         (character) => character.id === addTrackModalState.characterId
       )
     ) {
-      const fallbackCharacter =
-        addTrackModalState.mode === "edit" && characters.length > 0
-          ? characters[0].id
-          : "";
+      if (addTrackModalState.mode === "edit") {
+        setAddTrackModalState((state) => ({
+          ...state,
+          presetId: null,
+        }));
+        return;
+      }
       setAddTrackModalState((state) => ({
         ...state,
-        characterId: fallbackCharacter,
+        characterId: "",
         presetId: null,
       }));
       return;
@@ -957,16 +948,19 @@ export default function App() {
             characterId?: string
           ) => {
             void initAudioContext();
+            const resolvedCharacterId =
+              characterId ?? chunk?.characterId ?? null;
+            if (!resolvedCharacterId) return;
             const character = resolveInstrumentCharacter(
               pack.id,
               instrumentId,
-              characterId
+              resolvedCharacterId
             );
             if (!character) return;
             const sustainOverride =
               sustainArg ??
               (chunk?.sustain !== undefined ? chunk.sustain : undefined);
-            const kick = createKick(character.id);
+            const kick = createKick(resolvedCharacterId);
             kick.toDestination();
             const baseNote = noteArg ?? chunk?.note ?? character.note ?? "C1";
             const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
