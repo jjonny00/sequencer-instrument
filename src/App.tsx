@@ -15,9 +15,7 @@ import {
 } from "./instruments/harmonia";
 import {
   createKick,
-  mergeKickDesignerState,
   normalizeKickDesignerState,
-  type KickDesignerInstrument,
 } from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
@@ -953,6 +951,55 @@ export default function App() {
     packs.forEach((pack) => {
       Object.keys(pack.instruments).forEach((instrumentId) => {
         const triggerKey = createTriggerKey(pack.id, instrumentId);
+        if (instrumentId === "kick") {
+          newTriggers[triggerKey] = (
+            time: number,
+            velocity = 1,
+            pitch = 0,
+            noteArg?: string,
+            sustainArg?: number,
+            chunk?: Chunk,
+            characterId?: string
+          ) => {
+            void initAudioContext();
+            const character = resolveInstrumentCharacter(
+              pack.id,
+              instrumentId,
+              characterId
+            );
+            if (!character) return;
+            const sustainOverride =
+              sustainArg ??
+              (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+            const kick = createKick(character.id);
+            kick.toDestination();
+            kick.setMacroState({
+              punch: chunk?.punch,
+              clean: chunk?.clean,
+              tight: chunk?.tight,
+            });
+            const baseNote = noteArg ?? chunk?.note ?? character.note ?? "C1";
+            const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
+            const duration: Tone.Unit.Time = sustainOverride ?? "8n";
+            const startTime = Math.max(time, Tone.now());
+            const resolvedVelocity = velocity ?? 0.9;
+            kick.triggerAttackRelease(
+              targetNote,
+              duration,
+              startTime,
+              resolvedVelocity
+            );
+            const releaseSeconds = Tone.Time(duration).toSeconds();
+            const cleanupDelay = Math.max(
+              0,
+              (startTime - Tone.now() + releaseSeconds + 0.1) * 1000
+            );
+            window.setTimeout(() => {
+              kick.dispose();
+            }, cleanupDelay);
+          };
+          return;
+        }
         newTriggers[triggerKey] = (
           time: number,
           velocity = 1,
@@ -1010,18 +1057,6 @@ export default function App() {
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
-        if (instrumentId === "kick") {
-          const kick = inst as unknown as KickDesignerInstrument;
-          if (kick.setMacroState) {
-            const defaults = normalizeKickDesignerState(character.defaults);
-            const merged = mergeKickDesignerState(defaults, {
-              punch: chunk?.punch,
-              clean: chunk?.clean,
-              tight: chunk?.tight,
-            });
-            kick.setMacroState(merged);
-          }
-        }
 
         if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
           const envelope: Record<string, unknown> = {};

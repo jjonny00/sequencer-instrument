@@ -24,6 +24,7 @@ import {
 import type { Chunk } from "./chunks";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
+import { createKick } from "./instruments/kickDesigner";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
 
@@ -339,14 +340,33 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const previewStyle = useCallback(
     async (characterId: string) => {
       if (!characterId || !selectedInstrumentId || !selectedPackId) return;
-      const trigger =
-        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
-      if (!trigger) return;
       try {
         await initAudioContext();
       } catch {
         return;
       }
+
+      if (selectedInstrumentId === "kick") {
+        const kick = createKick(characterId);
+        kick.toDestination();
+        const duration: Tone.Unit.Time = "8n";
+        const start = Tone.now() + 0.05;
+        kick.triggerAttackRelease("C1", duration, start, 0.9);
+        const releaseSeconds = Tone.Time(duration).toSeconds();
+        const cleanupDelay = Math.max(
+          0,
+          (start - Tone.now() + releaseSeconds + 0.1) * 1000
+        );
+        window.setTimeout(() => {
+          kick.dispose();
+        }, cleanupDelay);
+        return;
+      }
+
+      const trigger =
+        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
+      if (!trigger) return;
+
       const start = Tone.now() + 0.05;
       const previewChunk: Chunk = {
         id: "style-preview",
