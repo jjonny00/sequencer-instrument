@@ -8,11 +8,28 @@ export interface InstrumentSpec {
   effects?: EffectSpec[];
 }
 
+export interface KickLayerSpec extends InstrumentSpec {
+  duration?: string | number;
+  velocity?: number;
+  volume?: number;
+  transpose?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+  envelope?: {
+    attack?: number;
+    decay?: number;
+    sustain?: number;
+    release?: number;
+  };
+  startOffset?: number;
+}
+
 export interface InstrumentCharacter extends InstrumentSpec {
   id: string;
   name: string;
   description?: string;
   defaults?: Partial<KickDesignerState>;
+  layers?: KickLayerSpec[];
 }
 
 export interface InstrumentDefinition {

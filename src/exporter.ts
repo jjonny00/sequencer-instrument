@@ -20,6 +20,7 @@ import {
   normalizeKickDesignerState,
   type KickDesignerInstrument,
 } from "./instruments/kickDesigner";
+import { createLayeredKick } from "./instruments/layeredKick";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -162,14 +163,32 @@ const createInstrumentInstance = (
   keyboardFx?: KeyboardFxNodes;
   harmoniaNodes?: HarmoniaNodes;
 } => {
-  if (
-    instrumentId === "kick" &&
-    (!character.type || character.type === "KickDesigner")
-  ) {
-    const defaults = normalizeKickDesignerState(character.defaults);
-    const instrument = createKickDesigner(defaults);
-    instrument.toDestination();
-    return { instrument: instrument as ToneInstrument };
+  if (instrumentId === "kick") {
+    if (character.layers && character.layers.length > 0) {
+      const instrument = createLayeredKick(tone, character.layers);
+      let node: Tone.ToneAudioNode = instrument;
+      (character.effects ?? []).forEach((effect) => {
+        const EffectCtor = (
+          tone as unknown as Record<
+            string,
+            new (opts?: Record<string, unknown>) => Tone.ToneAudioNode
+          >
+        )[effect.type];
+        if (!EffectCtor) return;
+        const eff = new EffectCtor(effect.options ?? {});
+        node.connect(eff);
+        node = eff;
+      });
+      node.connect(tone.Destination);
+      return { instrument: instrument as ToneInstrument };
+    }
+
+    if (!character.type || character.type === "KickDesigner") {
+      const defaults = normalizeKickDesignerState(character.defaults);
+      const instrument = createKickDesigner(defaults);
+      instrument.toDestination();
+      return { instrument: instrument as ToneInstrument };
+    }
   }
 
   if (character.type === "Harmonia") {

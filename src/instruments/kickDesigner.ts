@@ -203,7 +203,7 @@ export const createKickDesigner = (
     time?: Tone.Unit.Time,
     velocity = 1
   ) => {
-    const when = time ?? Tone.now();
+    const when = time ?? Tone.Transport.seconds;
     const tight = state.tight;
     const punch = state.punch;
     const whenSeconds = Tone.Time(when).toSeconds();

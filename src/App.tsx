@@ -19,6 +19,7 @@ import {
   normalizeKickDesignerState,
   type KickDesignerInstrument,
 } from "./instruments/kickDesigner";
+import { createLayeredKick } from "./instruments/layeredKick";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -848,14 +849,32 @@ export default function App() {
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
-      if (
-        instrumentId === "kick" &&
-        (!character.type || character.type === "KickDesigner")
-      ) {
-        const defaults = normalizeKickDesignerState(character.defaults);
-        const instrument = createKickDesigner(defaults);
-        instrument.toDestination();
-        return { instrument: instrument as ToneInstrument };
+      if (instrumentId === "kick") {
+        if (character.layers && character.layers.length > 0) {
+          const instrument = createLayeredKick(Tone, character.layers);
+          let node: Tone.ToneAudioNode = instrument;
+          (character.effects ?? []).forEach((effect) => {
+            const EffectCtor = (
+              Tone as unknown as Record<
+                string,
+                new (opts?: Record<string, unknown>) => Tone.ToneAudioNode
+              >
+            )[effect.type];
+            if (!EffectCtor) return;
+            const eff = new EffectCtor(effect.options ?? {});
+            node.connect(eff);
+            node = eff;
+          });
+          node.connect(Tone.Destination);
+          return { instrument: instrument as ToneInstrument };
+        }
+
+        if (!character.type || character.type === "KickDesigner") {
+          const defaults = normalizeKickDesignerState(character.defaults);
+          const instrument = createKickDesigner(defaults);
+          instrument.toDestination();
+          return { instrument: instrument as ToneInstrument };
+        }
       }
 
       if (character.type === "Harmonia") {
