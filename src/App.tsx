@@ -1764,26 +1764,6 @@ export default function App() {
       ? "You have unsaved changes. Do you want to save before starting a new song?"
       : "You have unsaved changes. Do you want to save before loading this song?";
 
-  const initAudioGraph = useCallback(() => {
-    try {
-      Tone.Transport.bpm.value = bpm;
-      Tone.Transport.start();
-      setStarted(true);
-      setIsPlaying(true);
-      setCurrentSectionIndex(0);
-
-      if (pendingTransportStateRef.current === false) {
-        Tone.Transport.stop();
-        setIsPlaying(false);
-        pendingTransportStateRef.current = null;
-      }
-
-      console.log("Audio graph initialized successfully");
-    } catch (error) {
-      console.warn("Failed to initialize audio graph:", error);
-    }
-  }, [bpm]);
-
   const ensureAudioReady = useCallback(async () => {
     const unlocked = await activateAudio();
     const running = refreshAudioReadyState();
@@ -1791,11 +1771,27 @@ export default function App() {
       console.warn("Audio context is not running; continuing to initialize graph.");
     }
     if (!started) {
-      initAudioGraph();
+      try {
+        Tone.Transport.bpm.value = bpm;
+        Tone.Transport.start();
+        setStarted(true);
+        setIsPlaying(true);
+        setCurrentSectionIndex(0);
+
+        if (pendingTransportStateRef.current === false) {
+          Tone.Transport.stop();
+          setIsPlaying(false);
+          pendingTransportStateRef.current = null;
+        }
+
+        console.log("Audio graph initialized successfully");
+      } catch (error) {
+        console.warn("Failed to initialize audio graph:", error);
+      }
       return unlocked && running;
     }
     return running;
-  }, [initAudioGraph, started]);
+  }, [bpm, started]);
 
   const { createNewProject, loadProject, handleLoadDemoSong } = useMemo(() => {
     // Touch handlerVersion so the memo recalculates after activation rebinding.
