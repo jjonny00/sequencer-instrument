@@ -1,259 +1,134 @@
 import * as Tone from "tone";
 
-import type { Chunk } from "../chunks";
+import { packs } from "../packs";
+import {
+  DEFAULT_KICK_STATE,
+  normalizeKickDesignerState,
+} from "./kickState";
 
-export interface KickDesignerState {
-  punch: number;
-  clean: number;
-  tight: number;
-}
-
-export const DEFAULT_KICK_STATE: KickDesignerState = {
-  punch: 0.5,
-  clean: 0.5,
-  tight: 0.5,
-};
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, value));
-
-export const normalizeKickDesignerState = (
-  state?: Partial<KickDesignerState> | null
-): KickDesignerState => ({
-  punch: clamp(state?.punch ?? DEFAULT_KICK_STATE.punch, 0, 1),
-  clean: clamp(state?.clean ?? DEFAULT_KICK_STATE.clean, 0, 1),
-  tight: clamp(state?.tight ?? DEFAULT_KICK_STATE.tight, 0, 1),
-});
-
-export const mergeKickDesignerState = (
-  defaults: Partial<KickDesignerState> | null | undefined,
-  overrides: Partial<KickDesignerState> | null | undefined
-): KickDesignerState =>
-  normalizeKickDesignerState({
-    punch: overrides?.punch ?? defaults?.punch,
-    clean: overrides?.clean ?? defaults?.clean,
-    tight: overrides?.tight ?? defaults?.tight,
-  });
-
-export const applyKickDefaultsToChunk = (
-  chunk: Chunk,
-  defaults: Partial<KickDesignerState> | null | undefined
-): Chunk => {
-  const state = mergeKickDesignerState(defaults, {
-    punch: chunk.punch,
-    clean: chunk.clean,
-    tight: chunk.tight,
-  });
-  return {
-    ...chunk,
-    punch: state.punch,
-    clean: state.clean,
-    tight: state.tight,
-  };
-};
-
-export type KickDesignerInstrument = Tone.Gain & {
+export type KickInstrument = Tone.Gain & {
   triggerAttackRelease: (
     note?: Tone.Unit.Frequency,
     duration?: Tone.Unit.Time,
     time?: Tone.Unit.Time,
     velocity?: number
   ) => void;
-  setMacroState: (state: Partial<KickDesignerState>) => void;
-  getMacroState: () => KickDesignerState;
+  dispose: () => void;
 };
 
-export const createKickDesigner = (
-  initialState?: Partial<KickDesignerState>
-): KickDesignerInstrument => {
-  const state = normalizeKickDesignerState(initialState);
+export function createKick(packId: string, characterId: string): KickInstrument {
+  const pack = packs.find((candidate) => candidate.id === packId);
+  if (!pack) {
+    console.warn(`createKick: pack '${packId}' not found.`);
+  }
 
-  const output = new Tone.Gain(1) as KickDesignerInstrument;
+  const instrument = pack?.instruments?.kick;
+  if (!instrument) {
+    console.warn(`createKick: kick instrument missing for pack '${packId}'.`);
+  }
 
-  const transient = new Tone.NoiseSynth({
-    noise: { type: "white" },
-    envelope: { attack: 0, decay: 0.015, sustain: 0, release: 0.02 },
+  let character = instrument?.characters.find((c) => c.id === characterId);
+  if (!character) {
+    if (characterId) {
+      console.warn(
+        `createKick: character '${characterId}' not found in pack '${packId}', using default.`
+      );
+    }
+    if (instrument?.defaultCharacterId) {
+      character = instrument.characters.find(
+        (candidate) => candidate.id === instrument.defaultCharacterId
+      );
+    }
+    if (!character && instrument?.characters.length) {
+      character = instrument.characters[0];
+    }
+  }
+
+  const defaults = normalizeKickDesignerState(character?.defaults ?? DEFAULT_KICK_STATE);
+  const params = mapKickParams(defaults);
+
+  const output = new Tone.Gain(1) as KickInstrument;
+
+  const sub = new Tone.MembraneSynth({
+    pitchDecay: params.sub.pitchDecay,
+    octaves: params.sub.octaves,
+    oscillator: params.sub.oscillator ?? { type: "sine" },
+    envelope: {
+      attack: 0.005,
+      decay: params.sub.decay,
+      sustain: 0,
+      release: params.sub.release,
+    },
   });
-  const transientFilter = new Tone.Filter({
-    type: "highpass",
-    frequency: 2000,
-    rolloff: -24,
-  });
-  const transientGain = new Tone.Gain(0.5);
+  sub.connect(output);
 
-  const body = new Tone.MembraneSynth({
-    pitchDecay: 0.04,
-    octaves: 4,
-    envelope: { attack: 0.001, decay: 0.3, sustain: 0.01, release: 0.2 },
-    volume: -4,
-  });
-  const bodyFilter = new Tone.Filter({ type: "lowpass", frequency: 5000, rolloff: -24 });
-  const bodyGain = new Tone.Gain(0.75);
+  let click: Tone.NoiseSynth | null = null;
+  let clickGain: Tone.Gain | null = null;
 
-  const sub = new Tone.Synth({
-    oscillator: { type: "sine" },
-    envelope: { attack: 0, decay: 0.6, sustain: 0, release: 0.8 },
-    volume: -2,
-  });
-  const subFilter = new Tone.Filter({ type: "lowpass", frequency: 180, rolloff: -24 });
-  const subGain = new Tone.Gain(0.7);
-
-  const mix = new Tone.Gain(1);
-  const saturation = new Tone.Distortion({ distortion: 0.1, oversample: "4x", wet: 0.2 });
-  const eq = new Tone.EQ3({ low: 0, mid: 0, high: 0 });
-  const compressor = new Tone.Compressor({
-    threshold: -20,
-    ratio: 3,
-    attack: 0.01,
-    release: 0.25,
-  });
-  const limiter = new Tone.Limiter({ threshold: -6 });
-  const outputGain = new Tone.Gain(0.9);
-
-  transient.connect(transientFilter);
-  transientFilter.connect(transientGain);
-  transientGain.connect(mix);
-
-  body.connect(bodyFilter);
-  bodyFilter.connect(bodyGain);
-  bodyGain.connect(mix);
-
-  sub.connect(subFilter);
-  subFilter.connect(subGain);
-  subGain.connect(mix);
-
-  mix.connect(saturation);
-  saturation.connect(eq);
-  eq.connect(compressor);
-  compressor.connect(limiter);
-  limiter.connect(outputGain);
-  outputGain.connect(output);
-
-  const applyState = () => {
-    const punch = clamp(state.punch, 0, 1);
-    const clean = clamp(state.clean, 0, 1);
-    const tight = clamp(state.tight, 0, 1);
-
-    const transientLevel = Math.sqrt(1 - punch);
-    const subLevel = Math.sqrt(punch);
-    const bodyLevel = 0.8 + (1 - punch) * 0.15;
-
-    transientGain.gain.rampTo(0.75 * transientLevel, 0.05);
-    subGain.gain.rampTo(1.1 * subLevel, 0.05);
-    bodyGain.gain.rampTo(bodyLevel, 0.05);
-
-    const transientDecay = 0.01 + (1 - tight) * 0.02;
-    transient.set({
-      envelope: { attack: 0, decay: transientDecay, sustain: 0, release: 0.015 + (1 - tight) * 0.02 },
+  if (params.noiseDb > -30) {
+    click = new Tone.NoiseSynth({
+      envelope: {
+        attack: 0.001,
+        decay: 0.02,
+        sustain: 0,
+        release: 0.01,
+      },
     });
-    transientFilter.frequency.rampTo(1800 + (1 - punch) * 1800 + (1 - tight) * 600, 0.05);
-
-    const bodyDecay = 0.18 + tight * 0.45;
-    const bodyRelease = 0.12 + tight * 0.4;
-    const bodyPitchDecay = 0.018 + (1 - tight) * 0.05;
-    const bodyOctaves = 3.5 + (1 - tight) * 1.5;
-    body.set({
-      pitchDecay: bodyPitchDecay,
-      octaves: bodyOctaves,
-      envelope: { attack: 0.001, decay: bodyDecay, sustain: 0.01, release: bodyRelease },
-    });
-    bodyFilter.frequency.rampTo(3500 + punch * 1500, 0.05);
-
-    const subDecay = 0.35 + tight * 0.8;
-    const subRelease = 0.45 + tight * 1.1;
-    sub.set({
-      envelope: { attack: 0, decay: subDecay, sustain: 0, release: subRelease },
-    });
-    subFilter.frequency.rampTo(120 + tight * 80 + punch * 30, 0.05);
-
-    saturation.distortion = 0.08 + (1 - clean) * 0.75;
-    saturation.wet.value = 0.1 + (1 - clean) * 0.85;
-
-    eq.high.value = (1 - punch) * 5 - 2;
-    eq.mid.value = -1 - (1 - clean) * 2 + (0.5 - punch) * 1.2;
-    eq.low.value = punch * 6 - 1.5;
-
-    outputGain.gain.rampTo(0.85 + (1 - clean) * 0.12, 0.05);
-  };
-
-  applyState();
-
-  output.setMacroState = (partial) => {
-    const next = normalizeKickDesignerState({
-      punch: partial.punch ?? state.punch,
-      clean: partial.clean ?? state.clean,
-      tight: partial.tight ?? state.tight,
-    });
-    state.punch = next.punch;
-    state.clean = next.clean;
-    state.tight = next.tight;
-    applyState();
-  };
-
-  output.getMacroState = () => ({ ...state });
+    clickGain = new Tone.Gain({ gain: Tone.dbToGain(params.noiseDb) });
+    click.connect(clickGain);
+    clickGain.connect(output);
+  }
 
   output.triggerAttackRelease = (
-    note = "C2",
-    duration: Tone.Unit.Time = "8n",
+    _note?: Tone.Unit.Frequency,
+    duration?: Tone.Unit.Time,
     time?: Tone.Unit.Time,
-    velocity = 1
+    velocity?: number
   ) => {
-    const when = time ?? Tone.now();
-    const tight = state.tight;
-    const punch = state.punch;
-    const whenSeconds = Tone.Time(when).toSeconds();
+    const scheduledTime = time;
+    const resolvedDuration = duration ?? "16n";
+    const resolvedVelocity = velocity ?? 1;
 
-    const baseNote = typeof note === "number" ? note : note || "C2";
-    const baseFrequency = Tone.Frequency(baseNote).toFrequency();
+    // reset oscillator phase for consistent attack
+    sub.oscillator.phase = 0;
+    sub.triggerAttackRelease("C1", resolvedDuration, scheduledTime, resolvedVelocity);
 
-    const transientVelocity = Math.min(1, velocity * (0.85 + (1 - punch) * 0.3));
-    transient.triggerAttackRelease("32n", when, transientVelocity);
-
-    const bodyDuration = Math.max(0.15, 0.35 + tight * 0.4);
-    const bodyStart = baseFrequency * (1 + (1 - tight) * 1.4);
-    body.frequency.setValueAtTime(bodyStart, whenSeconds);
-    body.frequency.exponentialRampToValueAtTime(
-      Math.max(30, baseFrequency),
-      whenSeconds + 0.08 + (1 - tight) * 0.05
-    );
-    body.triggerAttackRelease(baseNote, bodyDuration, when, Math.min(1, velocity * 0.95));
-
-    const subNote = Tone.Frequency(baseNote).transpose(-12 + punch * -2).toNote();
-    const subDuration = Math.max(0.4, 0.6 + tight * 1.2);
-    sub.frequency.setValueAtTime(baseFrequency * 0.5, whenSeconds);
-    sub.frequency.exponentialRampToValueAtTime(
-      Math.max(20, baseFrequency * 0.5),
-      whenSeconds + 0.12 + tight * 0.2
-    );
-    sub.triggerAttackRelease(subNote, subDuration, when, Math.min(1, velocity * (0.7 + punch * 0.4)));
-
-    const releaseTime = Tone.Time(duration).toSeconds();
-    const totalRelease = whenSeconds + releaseTime;
-    mix.gain.cancelAndHoldAtTime(totalRelease);
-    mix.gain.rampTo(0, 0.2, totalRelease);
-    mix.gain.rampTo(1, 0.001, whenSeconds);
+    if (click) {
+      click.triggerAttackRelease(0.02, scheduledTime, resolvedVelocity);
+    }
   };
 
   const originalDispose = output.dispose.bind(output);
   output.dispose = () => {
-    transient.dispose();
-    transientFilter.dispose();
-    transientGain.dispose();
-    body.dispose();
-    bodyFilter.dispose();
-    bodyGain.dispose();
     sub.dispose();
-    subFilter.dispose();
-    subGain.dispose();
-    mix.dispose();
-    saturation.dispose();
-    eq.dispose();
-    compressor.dispose();
-    limiter.dispose();
-    outputGain.dispose();
+    click?.dispose();
+    clickGain?.dispose();
     return originalDispose();
   };
 
   return output;
-};
+}
 
+function mapKickParams({
+  punch,
+  clean,
+  tight,
+}: {
+  punch: number;
+  clean: number;
+  tight: number;
+}) {
+  const p = Math.max(0, Math.min(1, punch));
+  const c = Math.max(0, Math.min(1, clean));
+  const t = Math.max(0, Math.min(1, tight));
+  return {
+    sub: {
+      pitchDecay: 0.01 + p * 0.02,
+      octaves: 2 + Math.round(p * 2),
+      decay: 0.25 + (1 - c) * 0.25,
+      release: 0.05 + (1 - c) * 0.1,
+      oscillator: { type: "sine" as const },
+    },
+    noiseDb: -30 + (1 - t) * 10,
+  } as const;
+}

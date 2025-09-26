@@ -36,7 +36,7 @@ import {
   DEFAULT_KICK_STATE,
   mergeKickDesignerState,
   normalizeKickDesignerState,
-} from "./instruments/kickDesigner";
+} from "./instruments/kickState";
 import type {
   HarmoniaComplexity,
   HarmoniaPatternId,

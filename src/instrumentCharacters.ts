@@ -3,7 +3,7 @@ import {
   DEFAULT_KICK_STATE,
   mergeKickDesignerState,
   normalizeKickDesignerState,
-} from "./instruments/kickDesigner";
+} from "./instruments/kickState";
 import type { InstrumentDefinition } from "./packs";
 
 export const resolveInstrumentCharacterId = (
