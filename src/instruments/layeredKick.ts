@@ -67,6 +67,26 @@ const toSeconds = (tone: ToneLike, time: ToneUnitTime | undefined) => {
   }
 };
 
+const ensureMinimumSeconds = (
+  tone: ToneLike,
+  value: ToneUnitTime | undefined,
+  minimum: number
+) => {
+  if (value === undefined) {
+    return minimum;
+  }
+  if (typeof value === "number") {
+    return Math.max(value, minimum);
+  }
+  try {
+    const seconds = tone.Time(value).toSeconds();
+    return Math.max(seconds, minimum);
+  } catch (error) {
+    console.warn("Invalid kick envelope time", { value, error });
+    return minimum;
+  }
+};
+
 export type LayeredKickInstrument = import("tone").Gain & {
   triggerAttackRelease: (
     note?: ToneUnitFrequency,
@@ -176,22 +196,27 @@ export const createLayeredKick = (
 
     const settable = instance as { set?: (values: Record<string, unknown>) => void };
 
-    if (
-      typeof tone.MembraneSynth !== "undefined" &&
-      instance instanceof tone.MembraneSynth
-    ) {
-      const current = instance.get() as import("tone").MembraneSynthOptions;
-      const envelopeSettings: Partial<
-        import("tone").MembraneSynthOptions["envelope"]
-      > = {
-        ...(current.envelope ?? {}),
-        attack: 0.005,
-        release: Math.max(0.05, current.envelope?.release ?? 0.05),
-      };
-      instance.set?.({
-        envelope: envelopeSettings,
-      });
-    }
+      if (
+        typeof tone.MembraneSynth !== "undefined" &&
+        instance instanceof tone.MembraneSynth
+      ) {
+        const current = instance.get() as import("tone").MembraneSynthOptions;
+        const releaseSeconds = ensureMinimumSeconds(
+          tone,
+          current.envelope?.release,
+          0.05
+        );
+        const envelopeSettings: Partial<
+          import("tone").MembraneSynthOptions["envelope"]
+        > = {
+          ...(current.envelope ?? {}),
+          attack: 0.005,
+          release: releaseSeconds,
+        };
+        instance.set?.({
+          envelope: envelopeSettings,
+        });
+      }
 
     if (instance instanceof tone.Player) {
       instance.set({
