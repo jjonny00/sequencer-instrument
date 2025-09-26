@@ -18,6 +18,7 @@ import {
   mergeKickDesignerState,
   normalizeKickDesignerState,
   type KickDesignerInstrument,
+  type KickStyleParameters,
 } from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
@@ -968,6 +969,7 @@ export default function App() {
             characterId
           );
           if (!character) return;
+          const definition = pack.instruments[instrumentId];
           const key = `${pack.id}:${instrumentId}:${character.id}`;
           let inst = instrumentRefs.current[key];
           if (!inst) {
@@ -1011,6 +1013,17 @@ export default function App() {
         };
         if (instrumentId === "kick") {
           const kick = inst as unknown as KickDesignerInstrument;
+          if (kick.setStyle) {
+            const styleId = chunk?.style ?? definition?.defaultStyleId ?? null;
+            let style: KickStyleParameters | null = null;
+            if (styleId && definition?.styles) {
+              const matched = definition.styles.find((candidate) => candidate.id === styleId);
+              if (matched && matched.parameters !== undefined) {
+                style = (matched.parameters ?? null) as KickStyleParameters | null;
+              }
+            }
+            kick.setStyle(style);
+          }
           if (kick.setMacroState) {
             const defaults = normalizeKickDesignerState(character.defaults);
             const merged = mergeKickDesignerState(defaults, {
