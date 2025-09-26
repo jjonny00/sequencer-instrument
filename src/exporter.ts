@@ -165,7 +165,10 @@ const createInstrumentInstance = (
 } => {
   if (instrumentId === "kick") {
     if (character.layers && character.layers.length > 0) {
-      const instrument = createLayeredKick(tone, character.layers);
+      const instrument = createLayeredKick(
+        tone as unknown as typeof Tone,
+        character.layers
+      );
       let node: Tone.ToneAudioNode = instrument;
       (character.effects ?? []).forEach((effect) => {
         const EffectCtor = (

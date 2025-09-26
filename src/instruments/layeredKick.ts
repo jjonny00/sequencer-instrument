@@ -81,7 +81,10 @@ export const createLayeredKick = (
   layers: KickLayerSpec[]
 ): LayeredKickInstrument => {
   const output = new tone.Gain(1) as LayeredKickInstrument;
-  const validLayers = layers.filter((layer) => Boolean(layer?.type));
+  const validLayers = layers.filter(
+    (layer): layer is KickLayerSpec & { type: string } =>
+      typeof layer?.type === "string"
+  );
   if (validLayers.length === 0) {
     return output;
   }
@@ -93,12 +96,21 @@ export const createLayeredKick = (
     const layerGain = new tone.Gain(1);
     const layerDb = (layer.volume ?? 0) + normalizationDb;
     const normalizedGain = tone.dbToGain(layerDb);
-    layerGain.gain.value = Number.isFinite(normalizedGain) ? normalizedGain : 1;
+    const baseGain = Number.isFinite(normalizedGain) ? normalizedGain : 1;
+    layerGain.gain.value = baseGain;
     layerGain.connect(output);
 
     const velocityScale = layer.velocity ?? 1;
     const durationOverride = layer.duration as ToneUnitTime | undefined;
     const transpose = layer.transpose ?? 0;
+
+    const setVelocityGain = (whenSeconds: number, velocityValue: number) => {
+      const targetGain = baseGain * velocityValue;
+      if (Number.isFinite(targetGain)) {
+        layerGain.gain.cancelScheduledValues(whenSeconds);
+        layerGain.gain.setValueAtTime(targetGain, whenSeconds);
+      }
+    };
 
     if (layer.type === "Oscillator") {
       const oscillator = new tone.Oscillator(layer.options ?? {});
@@ -168,14 +180,16 @@ export const createLayeredKick = (
       typeof tone.MembraneSynth !== "undefined" &&
       instance instanceof tone.MembraneSynth
     ) {
-      const current = instance.get();
-      const envelope = (current as { envelope?: Record<string, number> }).envelope ?? {};
+      const current = instance.get() as import("tone").MembraneSynthOptions;
+      const envelopeSettings: Partial<
+        import("tone").MembraneSynthOptions["envelope"]
+      > = {
+        ...(current.envelope ?? {}),
+        attack: 0.005,
+        release: Math.max(0.05, current.envelope?.release ?? 0.05),
+      };
       instance.set?.({
-        envelope: {
-          ...envelope,
-          attack: 0.005,
-          release: Math.max(0.05, envelope.release ?? 0.05),
-        },
+        envelope: envelopeSettings,
       });
     }
 
@@ -189,11 +203,13 @@ export const createLayeredKick = (
     layerInstances.push({
       trigger: (note, duration, time, velocity) => {
         const when = time ?? tone.Transport.seconds;
+        const whenSeconds = toSeconds(tone, when);
         const targetDuration = durationOverride ?? duration ?? "8n";
         const velocityValue = clamp(velocity * velocityScale, 0, 1);
 
         if (instance instanceof tone.Player) {
-          instance.start(when, layer.startOffset ?? 0, targetDuration, velocityValue);
+          setVelocityGain(whenSeconds, velocityValue);
+          instance.start(when, layer.startOffset ?? 0, targetDuration);
           return;
         }
 
@@ -230,12 +246,17 @@ export const createLayeredKick = (
           typeof (instance as { start?: (time?: ToneUnitTime) => void }).start ===
           "function"
         ) {
+          setVelocityGain(whenSeconds, velocityValue);
           (instance as { start: (time?: ToneUnitTime) => void }).start(when);
           if (
             typeof (instance as { stop?: (time?: ToneUnitTime) => void }).stop ===
             "function"
           ) {
-            const stopTime = tone.Time(when).add(targetDuration).toSeconds();
+            const durationSeconds =
+              typeof targetDuration === "number"
+                ? targetDuration
+                : tone.Time(targetDuration).toSeconds();
+            const stopTime = whenSeconds + durationSeconds;
             (instance as { stop: (time?: ToneUnitTime) => void }).stop(stopTime);
           }
         }
