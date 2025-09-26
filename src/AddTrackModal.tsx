@@ -349,13 +349,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       if (selectedInstrumentId === "kick") {
         const kick = createKick(characterId);
         kick.toDestination();
-        const duration: Tone.Unit.Time = "8n";
-        const start = Tone.now() + 0.05;
-        kick.triggerAttackRelease("C1", duration, start, 0.9);
-        const releaseSeconds = Tone.Time(duration).toSeconds();
+        const time = Tone.now() + 0.05;
+        kick.triggerAttackRelease("C1", "8n", time, 0.9);
+        const releaseSeconds = Tone.Time("8n").toSeconds();
         const cleanupDelay = Math.max(
           0,
-          (start - Tone.now() + releaseSeconds + 0.1) * 1000
+          (time - Tone.now() + releaseSeconds + 0.1) * 1000
         );
         window.setTimeout(() => {
           kick.dispose();

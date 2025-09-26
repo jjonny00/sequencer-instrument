@@ -1,6 +1,7 @@
 import * as Tone from "tone";
 
 import { packs } from "../packs";
+import type { InstrumentCharacter } from "../packs";
 
 export interface KickDesignerState {
   punch: number;
@@ -41,27 +42,40 @@ export const mapKickParams = ({
   tight,
 }: KickDesignerState) => ({
   sub: {
-    pitchDecay: 0.01 + punch * 0.04,
-    octaves: 2 + Math.round(punch * 4),
+    pitchDecay: 0.01 + punch * 0.02, // 0.01–0.03
+    octaves: 2 + Math.round(punch * 2), // 2–4
     envelope: {
       attack: 0.005,
-      decay: 0.2 + (1 - clean) * 0.4,
+      decay: 0.25 + (1 - clean) * 0.25, // 0.25–0.5
       sustain: 0,
-      release: 0.05 + (1 - clean) * 0.15,
+      release: 0.05 + (1 - clean) * 0.1, // 0.05–0.15
     },
   },
   noise: {
-    volume: -30 + (1 - tight) * 15,
+    volume: -30 + (1 - tight) * 10, // -30 to -20 dB
   },
 });
+
+const getInstrumentCharacter = (
+  packId: string,
+  instrumentId: string,
+  characterId: string
+): InstrumentCharacter | null => {
+  const pack = packs.find((candidate) => candidate.id === packId);
+  if (!pack) return null;
+  const definition = pack.instruments?.[instrumentId];
+  if (!definition) return null;
+  return (
+    definition.characters.find((character) => character.id === characterId) ??
+    null
+  );
+};
 
 const resolveKickCharacterDefaults = (
   characterId: string
 ): KickDesignerState => {
   for (const pack of packs) {
-    const definition = pack.instruments?.kick;
-    if (!definition) continue;
-    const character = definition.characters.find((c) => c.id === characterId);
+    const character = getInstrumentCharacter(pack.id, "kick", characterId);
     if (character) {
       return normalizeKickDesignerState(character.defaults);
     }
@@ -90,10 +104,13 @@ export const createKick = (characterId: string): KickDesignerInstrument => {
   let currentState = baseState;
 
   const output = new Tone.Gain(1) as KickDesignerInstrument;
-  const sub = new Tone.MembraneSynth();
+  const sub = new Tone.MembraneSynth({
+    oscillator: { phase: 0 },
+  });
   sub.connect(output);
 
   let noiseNodes: KickNoiseNodes | null = null;
+  let noiseActive = false;
 
   const ensureNoiseNodes = (): KickNoiseNodes => {
     if (noiseNodes) return noiseNodes;
@@ -120,9 +137,14 @@ export const createKick = (characterId: string): KickDesignerInstrument => {
 
     if (params.noise.volume > -30) {
       const { gain } = ensureNoiseNodes();
-      gain.gain.rampTo(Tone.dbToGain(params.noise.volume), 0.02);
-    } else if (noiseNodes) {
-      noiseNodes.gain.gain.rampTo(0, 0.02);
+      noiseActive = true;
+      const target = Tone.dbToGain(params.noise.volume);
+      gain.gain.rampTo(target, 0.03);
+    } else {
+      noiseActive = false;
+      if (noiseNodes) {
+        noiseNodes.gain.gain.rampTo(0, 0.03);
+      }
     }
   };
 
@@ -135,8 +157,9 @@ export const createKick = (characterId: string): KickDesignerInstrument => {
     velocity = 1
   ) => {
     const when = time ?? Tone.now();
+    sub.oscillator.set({ phase: 0 });
     sub.triggerAttackRelease(note, duration, when, velocity);
-    if (noiseNodes) {
+    if (noiseActive && noiseNodes) {
       noiseNodes.synth.triggerAttackRelease(duration, when, velocity);
     }
   };
