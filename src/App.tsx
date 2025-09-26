@@ -13,7 +13,7 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import { createKick, type KickInstrument } from "./instruments/kickDesigner";
+import { createKick, type KickInstrument } from "@/instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -304,7 +304,8 @@ export default function App() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     triggerAttackRelease: (...args: any[]) => any;
   };
-  const instrumentRefs = useRef<Record<string, ToneInstrument>>({});
+  type InstrumentHandle = ToneInstrument | KickInstrument;
+  const instrumentRefs = useRef<Record<string, InstrumentHandle>>({});
   const keyboardFxRefs = useRef<
     Record<
       string,
@@ -974,21 +975,35 @@ export default function App() {
       packId: string,
       instrumentId: string,
       character: InstrumentCharacter
-    ) => {
+    ): {
+      handle: InstrumentHandle;
+      keyboardFx?: {
+        reverb: Tone.Reverb;
+        delay: Tone.FeedbackDelay;
+        distortion: Tone.Distortion;
+        bitCrusher: Tone.BitCrusher;
+        panner: Tone.Panner;
+        chorus: Tone.Chorus;
+        tremolo: Tone.Tremolo;
+        filter: Tone.Filter;
+      };
+      harmoniaNodes?: HarmoniaNodes;
+    } => {
       if (instrumentId === "kick") {
-        const instrument = createKick(packId, character.id);
-        instrument.toDestination();
-        return { instrument: instrument as ToneInstrument };
+        const kick = createKick(packId, character.id);
+        return { handle: kick };
       }
 
       if (character.type === "Harmonia") {
         const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
-        return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+        return { handle: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
       }
+
       if (!character.type) {
         throw new Error(`Unknown instrument type for character ${character.id}`);
       }
+
       const ctor = (
         Tone as unknown as Record<
           string,
@@ -1020,6 +1035,7 @@ export default function App() {
       } else {
         instrument = new ctor(character.options ?? {});
       }
+
       let node: Tone.ToneAudioNode = instrument;
       (character.effects ?? []).forEach((effect) => {
         const EffectCtor = (
@@ -1032,6 +1048,7 @@ export default function App() {
         node.connect(eff);
         node = eff;
       });
+
       if (instrumentId === "keyboard") {
         const reverb = new Tone.Reverb({ decay: 3, wet: 0 });
         const delay = new Tone.FeedbackDelay({
@@ -1058,7 +1075,7 @@ export default function App() {
         delay.connect(panner);
         panner.connect(Tone.Destination);
         return {
-          instrument,
+          handle: instrument,
           keyboardFx: {
             reverb,
             delay,
@@ -1071,8 +1088,9 @@ export default function App() {
           },
         };
       }
+
       node.toDestination();
-      return { instrument };
+      return { handle: instrument };
     };
 
     const newTriggers: TriggerMap = {};
@@ -1099,7 +1117,7 @@ export default function App() {
           let inst = instrumentRefs.current[key];
           if (!inst) {
             const created = createInstrumentInstance(pack.id, instrumentId, character);
-            inst = created.instrument;
+            inst = created.handle;
             instrumentRefs.current[key] = inst;
             if (created.keyboardFx) {
               keyboardFxRefs.current[key] = created.keyboardFx;
@@ -1108,6 +1126,7 @@ export default function App() {
               harmoniaNodesRef.current[key] = created.harmoniaNodes;
             }
           }
+          if (!inst) return;
           const sustainOverride =
             sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
           if (instrumentId === "kick") {

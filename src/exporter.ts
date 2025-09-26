@@ -14,7 +14,7 @@ import {
   triggerHarmoniaChord,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import { createKick } from "./instruments/kickDesigner";
+import { createKick, type KickInstrument } from "@/instruments/kickDesigner";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -32,6 +32,8 @@ type ToneInstrument = Tone.ToneAudioNode & {
   triggerAttackRelease: (...args: any[]) => any;
   dispose?: () => void;
 };
+
+type InstrumentHandle = ToneInstrument | KickInstrument;
 
 interface PatternSchedule {
   pattern: Chunk;
@@ -154,20 +156,19 @@ const createInstrumentInstance = (
   instrumentId: string,
   character: InstrumentCharacter
 ): {
-  instrument: ToneInstrument;
+  handle: InstrumentHandle;
   keyboardFx?: KeyboardFxNodes;
   harmoniaNodes?: HarmoniaNodes;
 } => {
   if (instrumentId === "kick") {
-    const instrument = createKick(packId, character.id);
-    instrument.toDestination();
-    return { instrument: instrument as ToneInstrument };
+    const kick = createKick(packId, character.id);
+    return { handle: kick };
   }
 
   if (character.type === "Harmonia") {
     const nodes = createHarmoniaNodes(tone, character);
     nodes.volume.connect(tone.Destination);
-    return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+    return { handle: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
   }
 
   if (!character.type) {
@@ -253,7 +254,7 @@ const createInstrumentInstance = (
     delay.connect(panner);
     panner.connect(tone.Destination);
     return {
-      instrument,
+      handle: instrument,
       keyboardFx: {
         reverb,
         delay,
@@ -268,14 +269,14 @@ const createInstrumentInstance = (
   }
 
   node.connect(tone.Destination);
-  return { instrument };
+  return { handle: instrument };
 };
 
 const createOfflineTriggerMap = (
   tone: BoundTone,
   pack: Pack
 ): { triggerMap: TriggerMap; dispose: () => void } => {
-  const instrumentRefs: Record<string, ToneInstrument> = {};
+  const instrumentRefs: Record<string, InstrumentHandle> = {};
   const keyboardFxRefs: Record<string, KeyboardFxNodes> = {};
   const harmoniaFxRefs: Record<string, HarmoniaNodes> = {};
 
@@ -301,7 +302,7 @@ const createOfflineTriggerMap = (
       let inst = instrumentRefs[key];
       if (!inst) {
         const created = createInstrumentInstance(tone, pack.id, instrumentId, character);
-        inst = created.instrument;
+        inst = created.handle;
         instrumentRefs[key] = inst;
         if (created.keyboardFx) {
           keyboardFxRefs[key] = created.keyboardFx;
@@ -310,9 +311,18 @@ const createOfflineTriggerMap = (
           harmoniaFxRefs[key] = created.harmoniaNodes;
         }
       }
+      if (!inst) return;
 
       const sustainOverride =
         sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+
+      if (instrumentId === "kick") {
+        const kick = inst as KickInstrument;
+        const duration = sustainOverride ?? "8n";
+        const resolvedVelocity = velocity ?? 0.9;
+        kick.triggerAttackRelease("C1", duration, time, resolvedVelocity);
+        return;
+      }
 
       if (instrumentId === "harmonia") {
         const nodes = harmoniaFxRefs[key];
@@ -384,8 +394,9 @@ const createOfflineTriggerMap = (
           }
         }
       }
-      if (inst instanceof Tone.NoiseSynth) {
-        inst.triggerAttackRelease(
+      const toneInstrument = inst as ToneInstrument;
+      if (toneInstrument instanceof Tone.NoiseSynth) {
+        toneInstrument.triggerAttackRelease(
           sustainOverride ?? character.note ?? "8n",
           time,
           velocity
@@ -395,7 +406,7 @@ const createOfflineTriggerMap = (
       const baseNote = noteArg ?? chunk?.note ?? character.note ?? "C2";
       const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
       const duration = sustainOverride ?? (instrumentId === "keyboard" ? 0.3 : "8n");
-      inst.triggerAttackRelease(targetNote, duration, time, velocity);
+      toneInstrument.triggerAttackRelease(targetNote, duration, time, velocity);
     };
   });
 
