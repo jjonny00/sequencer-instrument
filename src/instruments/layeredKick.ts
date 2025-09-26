@@ -24,7 +24,7 @@ const MASTER_ENVELOPE_SETTINGS = {
   attack: 0.005,
   decay: 0.3,
   sustain: 0.01,
-  release: 0.05,
+  release: 0.1,
 } as const;
 
 const resolveNote = (
@@ -59,7 +59,27 @@ const toSeconds = (tone: ToneLike, time: ToneUnitTime | undefined) => {
   }
 };
 
-export type LayeredKickInstrument = import("tone").Gain & {
+const resetPhaseIfAvailable = (target: unknown) => {
+  if (
+    target &&
+    typeof target === "object" &&
+    "phase" in target &&
+    typeof (target as { phase?: unknown }).phase === "number"
+  ) {
+    (target as { phase: number }).phase = 0;
+  }
+
+  if (
+    target &&
+    typeof target === "object" &&
+    "oscillator" in target &&
+    (target as { oscillator?: unknown }).oscillator
+  ) {
+    resetPhaseIfAvailable((target as { oscillator: unknown }).oscillator);
+  }
+};
+
+export type LayeredKickInstrument = import("tone").Filter & {
   triggerAttackRelease: (
     note?: ToneUnitFrequency,
     duration?: ToneUnitTime,
@@ -72,12 +92,15 @@ export const createLayeredKick = (
   tone: ToneLike,
   layers: KickLayerSpec[]
 ): LayeredKickInstrument => {
-  const output = new tone.Gain(0) as LayeredKickInstrument;
-  output.gain.value = 0;
+  const outputGain = new tone.Gain(0);
+  outputGain.gain.value = 0;
+  const dcFilter = new tone.Filter({ type: "highpass", frequency: 30 });
+  outputGain.connect(dcFilter);
+  const output = dcFilter as LayeredKickInstrument;
 
   const masterEnvelope = new tone.Envelope(MASTER_ENVELOPE_SETTINGS);
   const masterReleaseSeconds = MASTER_ENVELOPE_SETTINGS.release;
-  masterEnvelope.connect(output.gain);
+  masterEnvelope.connect(outputGain.gain);
   const validLayers = layers.filter(
     (layer): layer is KickLayerSpec & { type: string } =>
       typeof layer?.type === "string"
@@ -95,7 +118,7 @@ export const createLayeredKick = (
     const normalizedGain = tone.dbToGain(layerDb);
     const baseGain = Number.isFinite(normalizedGain) ? normalizedGain : 1;
     layerGain.gain.value = baseGain * (layer.velocity ?? 1);
-    layerGain.connect(output);
+    layerGain.connect(outputGain);
 
     const durationOverride = layer.duration as ToneUnitTime | undefined;
     const transpose = layer.transpose ?? 0;
@@ -129,6 +152,7 @@ export const createLayeredKick = (
             .Frequency(resolveNote(tone, layer.note ?? note, transpose))
             .toFrequency();
           void velocity;
+          resetPhaseIfAvailable(oscillator);
           oscillator.frequency.setValueAtTime(resolvedFrequency, whenSeconds);
           const requestedDuration = durationOverride ?? duration ?? "8n";
           const durationSeconds = toSecondsWithFallback(
@@ -215,6 +239,7 @@ export const createLayeredKick = (
             ) => void;
           }).triggerAttackRelease
         ) {
+          resetPhaseIfAvailable(instance);
           (
             instance as {
               triggerAttackRelease: (
@@ -237,6 +262,7 @@ export const createLayeredKick = (
           typeof (instance as { start?: (time?: ToneUnitTime) => void }).start ===
           "function"
         ) {
+          resetPhaseIfAvailable(instance);
           (instance as { start: (time?: ToneUnitTime) => void }).start(whenSeconds);
           if (
             typeof (instance as { stop?: (time?: ToneUnitTime) => void }).stop ===
@@ -277,7 +303,7 @@ export const createLayeredKick = (
       clampedVelocity
     );
     layerInstances.forEach((layer) =>
-      layer.trigger(note, duration, when, clampedVelocity)
+      layer.trigger(note, duration, whenSeconds, clampedVelocity)
     );
   };
 
@@ -287,6 +313,7 @@ export const createLayeredKick = (
       layer.dispose()
     );
     masterEnvelope.dispose();
+    outputGain.dispose();
     return originalDispose();
   };
 
