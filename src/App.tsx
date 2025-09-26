@@ -13,7 +13,7 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import { createKick } from "./instruments/kickDesigner";
+import { createKick, type KickInstrument } from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -808,6 +808,48 @@ export default function App() {
   }, [bpm, started]);
 
   useEffect(() => {
+    const fallbackAssignments: { trackId: number; characterId: string }[] = [];
+    tracks.forEach((track) => {
+      if (track.instrument !== "kick") return;
+      const source = track.source;
+      if (!source || source.characterId) return;
+      const fallback = resolveInstrumentCharacter(source.packId, "kick", undefined);
+      if (!fallback) return;
+      console.warn(
+        `Track ${track.id} is missing a kick characterId; assigning '${fallback.id}'.`
+      );
+      fallbackAssignments.push({ trackId: track.id, characterId: fallback.id });
+    });
+    if (fallbackAssignments.length === 0) {
+      return;
+    }
+    setTracks((current) => {
+      if (!current.length) {
+        return current;
+      }
+      const fallbackMap = new Map(
+        fallbackAssignments.map(({ trackId, characterId }) => [trackId, characterId])
+      );
+      let changed = false;
+      const next = current.map((track) => {
+        const fallbackId = fallbackMap.get(track.id);
+        if (!fallbackId || !track.source) {
+          return track;
+        }
+        changed = true;
+        const updatedSource = { ...track.source, characterId: fallbackId };
+        const updatedPattern = track.pattern
+          ? track.pattern.characterId
+            ? track.pattern
+            : { ...track.pattern, characterId: fallbackId }
+          : null;
+        return { ...track, source: updatedSource, pattern: updatedPattern };
+      });
+      return changed ? next : current;
+    });
+  }, [tracks, resolveInstrumentCharacter, setTracks]);
+
+  useEffect(() => {
     const disposeAll = () => {
       Object.values(instrumentRefs.current).forEach((inst) => {
         inst?.dispose?.();
@@ -978,6 +1020,13 @@ export default function App() {
           }
           const sustainOverride =
             sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+          if (instrumentId === "kick") {
+            const kick = inst as KickInstrument;
+            const duration = sustainOverride ?? "8n";
+            const resolvedVelocity = velocity ?? 0.9;
+            kick.triggerAttackRelease("C1", duration, time, resolvedVelocity);
+            return;
+          }
           if (instrumentId === "harmonia") {
             const nodes = harmoniaNodesRef.current[key];
             if (!nodes) return;
