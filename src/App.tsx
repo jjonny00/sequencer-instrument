@@ -338,6 +338,7 @@ export default function App() {
   const loopStripRef = useRef<LoopStripHandle | null>(null);
   const currentLoopDraftRef = useRef<Track[] | null>(null);
   const skipLoopDraftRestoreRef = useRef(false);
+  const repairedKickTracksRef = useRef<Set<number>>(new Set());
   const previousViewModeRef = useRef<"track" | "song">(viewMode);
   const latestTracksRef = useRef<Track[]>(tracks);
   const lastPersistedLoopSnapshotRef = useRef<string | null>(null);
@@ -525,6 +526,78 @@ export default function App() {
       return `${packId}:harmonia:${character.id}`;
     },
     [resolveInstrumentCharacter]
+  );
+
+  const handleRepairKickSource = useCallback(
+    (track: Track) => {
+      if (track.instrument !== "kick") return;
+      if (repairedKickTracksRef.current.has(track.id)) {
+        return;
+      }
+      console.warn("[kick] Missing packId/characterId; fixing…", track.id);
+      repairedKickTracksRef.current.add(track.id);
+      setTracks((current) => {
+        let updated = false;
+        const next = current.map((candidate) => {
+          if (candidate.id !== track.id) return candidate;
+          const existingSource = candidate.source ?? {
+            packId: undefined,
+            instrumentId: candidate.instrument ?? "kick",
+            characterId: undefined,
+            presetId: null,
+          };
+          const instrumentId =
+            existingSource.instrumentId ?? candidate.instrument ?? "kick";
+          let packId = existingSource.packId;
+          if (!packId) {
+            const fallbackPack = packs.find((packCandidate) =>
+              Boolean(packCandidate.instruments[instrumentId])
+            );
+            if (!fallbackPack) {
+              return candidate;
+            }
+            packId = fallbackPack.id;
+          }
+          const resolved = resolveInstrumentCharacter(
+            packId,
+            instrumentId,
+            existingSource.characterId ?? null
+          );
+          if (!resolved) {
+            return candidate;
+          }
+          const nextSource = {
+            ...existingSource,
+            packId,
+            instrumentId,
+            characterId: resolved.id,
+          };
+          const sourceChanged =
+            !candidate.source ||
+            candidate.source.packId !== nextSource.packId ||
+            candidate.source.instrumentId !== nextSource.instrumentId ||
+            candidate.source.characterId !== nextSource.characterId;
+          const patternNeedsUpdate =
+            candidate.pattern !== null &&
+            candidate.pattern?.characterId !== resolved.id;
+          if (!sourceChanged && !patternNeedsUpdate) {
+            return candidate;
+          }
+          updated = true;
+          const nextPattern =
+            candidate.pattern && patternNeedsUpdate
+              ? { ...candidate.pattern, characterId: resolved.id }
+              : candidate.pattern;
+          return { ...candidate, source: nextSource, pattern: nextPattern };
+        });
+        if (!updated) {
+          repairedKickTracksRef.current.delete(track.id);
+          return current;
+        }
+        return next;
+      });
+    },
+    [setTracks, resolveInstrumentCharacter]
   );
 
   const handleHarmoniaRealtimeChange = useCallback(
@@ -848,6 +921,23 @@ export default function App() {
       return changed ? next : current;
     });
   }, [tracks, resolveInstrumentCharacter, setTracks]);
+
+  useEffect(() => {
+    const removable: number[] = [];
+    repairedKickTracksRef.current.forEach((id) => {
+      const candidate = tracks.find((track) => track.id === id);
+      if (
+        !candidate ||
+        candidate.instrument !== "kick" ||
+        (candidate.source?.packId && candidate.source.characterId)
+      ) {
+        removable.push(id);
+      }
+    });
+    removable.forEach((id) => {
+      repairedKickTracksRef.current.delete(id);
+    });
+  }, [tracks]);
 
   useEffect(() => {
     const disposeAll = () => {
@@ -2952,6 +3042,7 @@ export default function App() {
             patternGroups={patternGroups}
             songRows={songRows}
             currentSectionIndex={currentSectionIndex}
+            onRepairKickSource={handleRepairKickSource}
           />
         </>
       )}

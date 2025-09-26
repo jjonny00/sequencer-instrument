@@ -24,6 +24,7 @@ interface PatternPlaybackManagerProps {
   patternGroups: PatternGroup[];
   songRows: SongRow[];
   currentSectionIndex: number;
+  onRepairKickSource?: (track: Track) => void;
 }
 
 export function PatternPlaybackManager({
@@ -34,6 +35,7 @@ export function PatternPlaybackManager({
   patternGroups,
   songRows,
   currentSectionIndex,
+  onRepairKickSource,
 }: PatternPlaybackManagerProps) {
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -63,6 +65,13 @@ export function PatternPlaybackManager({
         if (!track.pattern) return;
         const instrument = track.instrument;
         if (!instrument) return;
+        if (
+          instrument === "kick" &&
+          (!track.source?.packId || !track.source.characterId)
+        ) {
+          onRepairKickSource?.(track);
+          return;
+        }
         const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return;
         const scaledTrigger = (
@@ -109,6 +118,13 @@ export function PatternPlaybackManager({
         if (!track.pattern) return null;
         const instrument = track.instrument;
         if (!instrument) return null;
+        if (
+          instrument === "kick" &&
+          (!track.source?.packId || !track.source.characterId)
+        ) {
+          onRepairKickSource?.(track);
+          return null;
+        }
         const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return null;
         const isTrackActive = () => !track.muted;
