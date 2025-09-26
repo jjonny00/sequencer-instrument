@@ -113,7 +113,7 @@ export const createKickDesigner = (
   const defaultSubStyle: Required<KickSubStyleConfig> = {
     pitchDecay: 0.05,
     octaves: 6,
-    oscillator: { type: "sine", phase: 0 },
+    oscillator: { type: "sine" },
     envelope: {
       attack: 0.005,
       decay: 0.3,
@@ -144,7 +144,6 @@ export const createKickDesigner = (
     oscillator: {
       ...defaultSubStyle.oscillator,
       ...(overrides?.oscillator ?? {}),
-      phase: 0,
     },
     envelope: {
       ...defaultSubStyle.envelope,
@@ -172,12 +171,9 @@ export const createKickDesigner = (
     gain: overrides?.gain ?? defaultNoiseStyle.gain,
   });
 
-  let style: {
-    sub: Required<KickSubStyleConfig>;
-    noise: Required<KickNoiseStyleConfig>;
-  } = {
-    sub: resolveSubStyle(initialStyle?.sub ?? null),
-    noise: resolveNoiseStyle(initialStyle?.noise ?? null),
+  let style: KickDesignerStyleConfig = {
+    sub: initialStyle?.sub ?? undefined,
+    noise: initialStyle?.noise ?? undefined,
   };
 
   const applyState = () => {
@@ -199,16 +195,21 @@ export const createKickDesigner = (
       (resolvedSub.envelope.release ?? defaultSubStyle.envelope.release) *
       (0.7 + (1 - tight) * 1.1 + (1 - clean) * 0.3);
 
-    kickSub.set({
-      pitchDecay: Math.max(0.005, pitchDecay),
-      octaves: Math.max(1, octaves),
-      oscillator: resolvedSub.oscillator,
-      envelope: {
-        attack: resolvedSub.envelope.attack ?? defaultSubStyle.envelope.attack,
-        decay: Math.max(0.02, envelopeDecay),
-        sustain: resolvedSub.envelope.sustain ?? defaultSubStyle.envelope.sustain,
-        release: Math.max(0.02, envelopeRelease),
-      },
+    kickSub.pitchDecay = Math.max(0.005, pitchDecay);
+    kickSub.octaves = Math.max(1, octaves);
+
+    const oscillatorOptions = resolvedSub.oscillator;
+    kickSub.oscillator.set(
+      oscillatorOptions as Tone.MembraneSynthOptions["oscillator"]
+    );
+    kickSub.oscillator.phase = 0;
+
+    kickSub.envelope.set({
+      attack: resolvedSub.envelope.attack ?? defaultSubStyle.envelope.attack,
+      decay: Math.max(0.02, envelopeDecay),
+      sustain:
+        resolvedSub.envelope.sustain ?? defaultSubStyle.envelope.sustain,
+      release: Math.max(0.02, envelopeRelease),
     });
 
     toneFilter.set({
@@ -216,14 +217,18 @@ export const createKickDesigner = (
       Q: resolvedSub.filter.Q ?? defaultSubStyle.filter.Q,
       rolloff: resolvedSub.filter.rolloff ?? defaultSubStyle.filter.rolloff,
     });
-    const baseFilterFrequency = resolvedSub.filter.frequency ?? defaultSubStyle.filter.frequency;
+    const fallbackFilterFrequency =
+      defaultSubStyle.filter.frequency ?? 4500;
+    const baseFilterFrequency =
+      resolvedSub.filter.frequency ?? fallbackFilterFrequency;
     const filterFrequency =
       baseFilterFrequency *
       (0.65 + clean * 0.9 + punch * 0.15 - (1 - tight) * 0.2);
     toneFilter.frequency.rampTo(clamp(filterFrequency, 80, 20000), 0.05);
 
+    const fallbackSubGain = defaultSubStyle.gain ?? 1;
     const subLevel =
-      (resolvedSub.gain ?? defaultSubStyle.gain) *
+      (resolvedSub.gain ?? fallbackSubGain) *
       (0.7 + (1 - clean) * 0.35 + (1 - punch) * 0.2);
     subGain.gain.rampTo(subLevel, 0.05);
 
@@ -236,14 +241,16 @@ export const createKickDesigner = (
       (resolvedNoise.envelope.release ?? defaultNoiseStyle.envelope.release) *
       (0.7 + (1 - tight) * 0.8);
 
-    kickClick.set({
-      noise: { type: resolvedNoise.type ?? defaultNoiseStyle.type },
-      envelope: {
-        attack: noiseAttack,
-        decay: Math.max(0.005, noiseDecay),
-        sustain: resolvedNoise.envelope.sustain ?? defaultNoiseStyle.envelope.sustain,
-        release: Math.max(0.005, noiseRelease),
-      },
+    kickClick.noise.set({
+      type: resolvedNoise.type ?? defaultNoiseStyle.type,
+    });
+
+    kickClick.envelope.set({
+      attack: noiseAttack,
+      decay: Math.max(0.005, noiseDecay),
+      sustain:
+        resolvedNoise.envelope.sustain ?? defaultNoiseStyle.envelope.sustain,
+      release: Math.max(0.005, noiseRelease),
     });
 
     noiseFilter.set({
@@ -251,15 +258,18 @@ export const createKickDesigner = (
       Q: resolvedNoise.filter.Q ?? defaultNoiseStyle.filter.Q,
       rolloff: resolvedNoise.filter.rolloff ?? defaultNoiseStyle.filter.rolloff,
     });
+    const fallbackNoiseFrequency =
+      defaultNoiseStyle.filter.frequency ?? 8000;
     const baseNoiseFrequency =
-      resolvedNoise.filter.frequency ?? defaultNoiseStyle.filter.frequency;
+      resolvedNoise.filter.frequency ?? fallbackNoiseFrequency;
     const noiseFrequency =
       baseNoiseFrequency *
       (0.7 + clean * 0.6 + punch * 0.25 - (1 - tight) * 0.25);
     noiseFilter.frequency.rampTo(clamp(noiseFrequency, 80, 20000), 0.02);
 
+    const fallbackNoiseGain = defaultNoiseStyle.gain ?? 0.12;
     const clickLevel =
-      (resolvedNoise.gain ?? defaultNoiseStyle.gain) *
+      (resolvedNoise.gain ?? fallbackNoiseGain) *
       (0.4 + punch * 0.6 - (1 - tight) * 0.3);
     clickGain.gain.rampTo(Math.max(0, clickLevel), 0.02);
 
@@ -270,8 +280,8 @@ export const createKickDesigner = (
 
   kickOut.setStyle = (nextStyle) => {
     style = {
-      sub: resolveSubStyle(nextStyle?.sub ?? null),
-      noise: resolveNoiseStyle(nextStyle?.noise ?? null),
+      sub: nextStyle?.sub ?? undefined,
+      noise: nextStyle?.noise ?? undefined,
     };
     applyState();
   };
