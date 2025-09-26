@@ -230,8 +230,8 @@ export const createKickDesigner = (
     const releaseTime = Tone.Time(duration).toSeconds();
     const totalRelease = whenSeconds + releaseTime;
     mix.gain.cancelAndHoldAtTime(totalRelease);
-    mix.gain.rampTo(0, 0.2, totalRelease);
-    mix.gain.rampTo(1, 0.001, whenSeconds);
+    mix.gain.rampTo(0, 0.05, totalRelease);
+    mix.gain.rampTo(1, 0.01, whenSeconds);
   };
 
   const originalDispose = output.dispose.bind(output);
