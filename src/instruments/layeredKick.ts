@@ -137,7 +137,7 @@ export const createLayeredKick = (
             typeof duration === "number" ? duration : tone.Time("8n").toSeconds()
           );
           const velocityValue = clamp(velocity * velocityScale, 0, 1);
-          envelope.triggerAttackRelease(targetDuration, when, velocityValue);
+          envelope.triggerAttackRelease(targetDuration, whenSeconds, velocityValue);
         },
         dispose: () => {
           oscillator.dispose();
@@ -209,7 +209,7 @@ export const createLayeredKick = (
 
         if (instance instanceof tone.Player) {
           setVelocityGain(whenSeconds, velocityValue);
-          instance.start(when, layer.startOffset ?? 0, targetDuration);
+          instance.start(whenSeconds, layer.startOffset ?? 0, targetDuration);
           return;
         }
 
@@ -238,7 +238,12 @@ export const createLayeredKick = (
                 velocity?: number
               ) => void;
             }
-          ).triggerAttackRelease(resolvedNote, targetDuration, when, velocityValue);
+          ).triggerAttackRelease(
+            resolvedNote,
+            targetDuration,
+            whenSeconds,
+            velocityValue
+          );
           return;
         }
 
@@ -247,7 +252,7 @@ export const createLayeredKick = (
           "function"
         ) {
           setVelocityGain(whenSeconds, velocityValue);
-          (instance as { start: (time?: ToneUnitTime) => void }).start(when);
+          (instance as { start: (time?: ToneUnitTime) => void }).start(whenSeconds);
           if (
             typeof (instance as { stop?: (time?: ToneUnitTime) => void }).stop ===
             "function"
