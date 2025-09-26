@@ -42,17 +42,17 @@ export const mapKickParams = ({
   tight,
 }: KickDesignerState) => ({
   sub: {
-    pitchDecay: 0.01 + punch * 0.02, // 0.01–0.03
-    octaves: 2 + Math.round(punch * 2), // 2–4
+    pitchDecay: 0.01 + punch * 0.04, // 0.01–0.05
+    octaves: 2 + Math.round(punch * 4), // 2–6
     envelope: {
       attack: 0.005,
-      decay: 0.25 + (1 - clean) * 0.25, // 0.25–0.5
+      decay: 0.2 + (1 - clean) * 0.4, // 0.2–0.6
       sustain: 0,
-      release: 0.05 + (1 - clean) * 0.1, // 0.05–0.15
+      release: 0.05 + (1 - clean) * 0.15, // 0.05–0.2
     },
   },
   noise: {
-    volume: -30 + (1 - tight) * 10, // -30 to -20 dB
+    volume: -30 + (1 - tight) * 15, // -30 to -15 dB
   },
 });
 
@@ -71,16 +71,14 @@ const getInstrumentCharacter = (
   );
 };
 
-const resolveKickCharacterDefaults = (
-  characterId: string
-): KickDesignerState => {
+const resolveKickCharacter = (characterId: string): InstrumentCharacter => {
   for (const pack of packs) {
     const character = getInstrumentCharacter(pack.id, "kick", characterId);
     if (character) {
-      return normalizeKickDesignerState(character.defaults);
+      return character;
     }
   }
-  return DEFAULT_KICK_STATE;
+  throw new Error(`Unknown kick character: ${characterId}`);
 };
 
 type KickNoiseNodes = {
@@ -95,60 +93,35 @@ export type KickDesignerInstrument = Tone.Gain & {
     time?: Tone.Unit.Time,
     velocity?: number
   ) => void;
-  setMacroState: (state: Partial<KickDesignerState>) => void;
-  getMacroState: () => KickDesignerState;
 };
 
-export const createKick = (characterId: string): KickDesignerInstrument => {
-  const baseState = resolveKickCharacterDefaults(characterId);
-  let currentState = baseState;
+export function createKick(characterId: string): KickDesignerInstrument {
+  const character = resolveKickCharacter(characterId);
+  const defaults = normalizeKickDesignerState(character.defaults);
+  const params = mapKickParams(defaults);
 
   const output = new Tone.Gain(1) as KickDesignerInstrument;
+
   const sub = new Tone.MembraneSynth({
     oscillator: { phase: 0 },
+    pitchDecay: params.sub.pitchDecay,
+    octaves: params.sub.octaves,
+    envelope: params.sub.envelope,
   });
   sub.connect(output);
 
   let noiseNodes: KickNoiseNodes | null = null;
-  let noiseActive = false;
 
-  const ensureNoiseNodes = (): KickNoiseNodes => {
-    if (noiseNodes) return noiseNodes;
+  if (params.noise.volume > -30) {
     const synth = new Tone.NoiseSynth({
       noise: { type: "white" },
       envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
     });
-    const gain = new Tone.Gain(0);
+    const gain = new Tone.Gain(Tone.dbToGain(params.noise.volume));
     synth.connect(gain);
     gain.connect(output);
     noiseNodes = { synth, gain };
-    return noiseNodes;
-  };
-
-  const applyState = (state: KickDesignerState) => {
-    currentState = { ...state };
-    const params = mapKickParams(currentState);
-
-    sub.set({
-      pitchDecay: params.sub.pitchDecay,
-      octaves: params.sub.octaves,
-      envelope: params.sub.envelope,
-    });
-
-    if (params.noise.volume > -30) {
-      const { gain } = ensureNoiseNodes();
-      noiseActive = true;
-      const target = Tone.dbToGain(params.noise.volume);
-      gain.gain.rampTo(target, 0.03);
-    } else {
-      noiseActive = false;
-      if (noiseNodes) {
-        noiseNodes.gain.gain.rampTo(0, 0.03);
-      }
-    }
-  };
-
-  applyState(baseState);
+  }
 
   output.triggerAttackRelease = (
     note = "C1",
@@ -159,17 +132,10 @@ export const createKick = (characterId: string): KickDesignerInstrument => {
     const when = time ?? Tone.now();
     sub.oscillator.set({ phase: 0 });
     sub.triggerAttackRelease(note, duration, when, velocity);
-    if (noiseActive && noiseNodes) {
+    if (noiseNodes) {
       noiseNodes.synth.triggerAttackRelease(duration, when, velocity);
     }
   };
-
-  output.setMacroState = (state) => {
-    const merged = mergeKickDesignerState(baseState, state);
-    applyState(merged);
-  };
-
-  output.getMacroState = () => ({ ...currentState });
 
   const originalDispose = output.dispose.bind(output);
   output.dispose = () => {
@@ -182,4 +148,4 @@ export const createKick = (characterId: string): KickDesignerInstrument => {
   };
 
   return output;
-};
+}

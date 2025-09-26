@@ -13,10 +13,7 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import {
-  createKick,
-  normalizeKickDesignerState,
-} from "./instruments/kickDesigner";
+import { createKick } from "./instruments/kickDesigner";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -846,9 +843,7 @@ export default function App() {
       character: InstrumentCharacter
     ) => {
       if (instrumentId === "kick") {
-        const defaults = normalizeKickDesignerState(character.defaults);
         const instrument = createKick(character.id);
-        instrument.setMacroState(defaults);
         instrument.toDestination();
         return { instrument: instrument as ToneInstrument };
       }
@@ -973,11 +968,6 @@ export default function App() {
               (chunk?.sustain !== undefined ? chunk.sustain : undefined);
             const kick = createKick(character.id);
             kick.toDestination();
-            kick.setMacroState({
-              punch: chunk?.punch,
-              clean: chunk?.clean,
-              tight: chunk?.tight,
-            });
             const baseNote = noteArg ?? chunk?.note ?? character.note ?? "C1";
             const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
             const duration: Tone.Unit.Time = sustainOverride ?? "8n";

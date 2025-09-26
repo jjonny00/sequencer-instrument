@@ -14,12 +14,7 @@ import {
   triggerHarmoniaChord,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import {
-  createKick,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-  type KickDesignerInstrument,
-} from "./instruments/kickDesigner";
+import { createKick } from "./instruments/kickDesigner";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -163,9 +158,7 @@ const createInstrumentInstance = (
   harmoniaNodes?: HarmoniaNodes;
 } => {
   if (instrumentId === "kick") {
-    const defaults = normalizeKickDesignerState(character.defaults);
     const instrument = createKick(character.id);
-    instrument.setMacroState(defaults);
     instrument.toDestination();
     return { instrument: instrument as ToneInstrument };
   }
@@ -347,18 +340,6 @@ const createOfflineTriggerMap = (
       const settable = inst as unknown as {
         set?: (values: Record<string, unknown>) => void;
       };
-      if (instrumentId === "kick") {
-        const kick = inst as unknown as KickDesignerInstrument;
-        if (kick.setMacroState) {
-          const defaults = normalizeKickDesignerState(character.defaults);
-          const merged = mergeKickDesignerState(defaults, {
-            punch: chunk?.punch,
-            clean: chunk?.clean,
-            tight: chunk?.tight,
-          });
-          kick.setMacroState(merged);
-        }
-      }
       if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
         const envelope: Record<string, unknown> = {};
         if (chunk.attack !== undefined) envelope.attack = chunk.attack;
