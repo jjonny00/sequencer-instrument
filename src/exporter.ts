@@ -15,7 +15,7 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import {
-  createKickDesigner,
+  createKick,
   mergeKickDesignerState,
   normalizeKickDesignerState,
   type KickDesignerInstrument,
@@ -155,6 +155,7 @@ type BoundTone = ReturnType<typeof fromContext>;
 
 const createInstrumentInstance = (
   tone: BoundTone,
+  packId: string,
   instrumentId: string,
   character: InstrumentCharacter
 ): {
@@ -163,8 +164,7 @@ const createInstrumentInstance = (
   harmoniaNodes?: HarmoniaNodes;
 } => {
   if (instrumentId === "kick") {
-    const defaults = normalizeKickDesignerState(character.defaults);
-    const instrument = createKickDesigner(defaults);
+    const instrument = createKick(packId, character.id);
     instrument.toDestination();
     return { instrument: instrument as ToneInstrument };
   }
@@ -305,7 +305,7 @@ const createOfflineTriggerMap = (
       const key = `${instrumentId}:${character.id}`;
       let inst = instrumentRefs[key];
       if (!inst) {
-        const created = createInstrumentInstance(tone, instrumentId, character);
+        const created = createInstrumentInstance(tone, pack.id, instrumentId, character);
         inst = created.instrument;
         instrumentRefs[key] = inst;
         if (created.keyboardFx) {
