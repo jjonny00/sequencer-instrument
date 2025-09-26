@@ -11,7 +11,7 @@ import * as Tone from "tone";
 
 import type { Pack } from "./packs";
 import { getCharacterOptions } from "./addTrackOptions";
-import { createKick } from "@/instruments/kickDesigner";
+import { createKick } from "./instruments/kickDesigner";
 import { formatInstrumentLabel } from "./utils/instrument";
 import {
   deleteInstrumentPreset,
