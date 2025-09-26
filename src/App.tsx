@@ -14,6 +14,10 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick, type KickInstrument } from "@/instruments/kickDesigner";
+import {
+  mergeKickDesignerState,
+  normalizeKickDesignerState,
+} from "./instruments/kickState";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -1131,6 +1135,15 @@ export default function App() {
             sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
           if (instrumentId === "kick") {
             const kick = inst as KickInstrument;
+            const baseStyle = normalizeKickDesignerState(character.defaults);
+            const style = chunk
+              ? mergeKickDesignerState(baseStyle, {
+                  punch: chunk.punch,
+                  clean: chunk.clean,
+                  tight: chunk.tight,
+                })
+              : baseStyle;
+            kick.setStyle(style);
             const duration = sustainOverride ?? "8n";
             const resolvedVelocity = velocity ?? 0.9;
             kick.triggerAttackRelease("C1", duration, time, resolvedVelocity);
