@@ -19,13 +19,15 @@ export interface KickStyleParameters {
   };
 }
 
-type EnvelopeSettings = Omit<Tone.EnvelopeOptions, "context">;
+type EnvelopeSettings = Partial<Omit<Tone.EnvelopeOptions, "context">>;
 
 interface KickSynthMapping {
   sub: Pick<
     Tone.MembraneSynthOptions,
-    "pitchDecay" | "octaves" | "envelope" | "volume"
-  >;
+    "pitchDecay" | "octaves" | "volume"
+  > & {
+    envelope: EnvelopeSettings;
+  };
   noise: {
     type: Tone.NoiseType;
     envelope: EnvelopeSettings;
@@ -53,14 +55,18 @@ const MEMBRANE_DEFAULTS = Tone.MembraneSynth.getDefaults();
 const NOISE_DEFAULTS = Tone.NoiseSynth.getDefaults();
 
 const mergeEnvelope = (
-  base: EnvelopeSettings,
-  overrides?: Partial<EnvelopeSettings>
-): EnvelopeSettings => ({
-  attack: overrides?.attack ?? base.attack,
-  decay: overrides?.decay ?? base.decay,
-  sustain: overrides?.sustain ?? base.sustain,
-  release: overrides?.release ?? base.release,
-});
+  defaults: Tone.EnvelopeOptions,
+  first?: EnvelopeSettings,
+  second?: EnvelopeSettings
+): Omit<Tone.EnvelopeOptions, "context"> => {
+  const merged = {
+    ...defaults,
+    ...(first ?? {}),
+    ...(second ?? {}),
+  };
+  const { context: _context, ...envelope } = merged;
+  return envelope;
+};
 
 export const mapKickParams = ({
   punch,
@@ -173,10 +179,11 @@ export const createKickDesigner = (
   const applyState = () => {
     const mapping = mapKickParams(state);
 
-    const mergedSubEnvelope = {
-      ...MEMBRANE_DEFAULTS.envelope,
-      ...mergeEnvelope(mapping.sub.envelope, style?.sub?.envelope),
-    };
+    const mergedSubEnvelope = mergeEnvelope(
+      MEMBRANE_DEFAULTS.envelope,
+      mapping.sub.envelope,
+      style?.sub?.envelope
+    );
     const subOptions: Tone.MembraneSynthOptions = {
       ...MEMBRANE_DEFAULTS,
       ...mapping.sub,
@@ -199,14 +206,11 @@ export const createKickDesigner = (
       style?.noise?.volume !== undefined
         ? style.noise.volume
         : mapping.noise.volume;
-    const resolvedNoiseEnvelope = mergeEnvelope(
+    const mergedNoiseEnvelope = mergeEnvelope(
+      NOISE_DEFAULTS.envelope,
       mapping.noise.envelope,
       style?.noise?.envelope
     );
-    const mergedNoiseEnvelope = {
-      ...NOISE_DEFAULTS.envelope,
-      ...resolvedNoiseEnvelope,
-    };
     const noiseType = style?.noise?.type ?? mapping.noise.type;
     const shouldEnableNoise =
       (style?.noise?.enabled ?? true) && noiseVolume > MIN_NOISE_VOLUME;
