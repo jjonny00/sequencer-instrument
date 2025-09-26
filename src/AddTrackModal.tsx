@@ -11,6 +11,7 @@ import * as Tone from "tone";
 
 import type { Pack } from "./packs";
 import { getCharacterOptions } from "./addTrackOptions";
+import { createKick } from "@/instruments/kickDesigner";
 import { formatInstrumentLabel } from "./utils/instrument";
 import {
   deleteInstrumentPreset,
@@ -339,15 +340,26 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const previewStyle = useCallback(
     async (characterId: string) => {
       if (!characterId || !selectedInstrumentId || !selectedPackId) return;
-      const trigger =
-        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
-      if (!trigger) return;
       try {
         await initAudioContext();
       } catch {
         return;
       }
-      const start = Tone.now() + 0.05;
+
+      const when = Tone.now() + 0.05;
+
+      if (selectedInstrumentId === "kick") {
+        const voice = createKick(selectedPackId, characterId);
+        voice.triggerAttackRelease("C1", "8n", when, 0.9);
+        setTimeout(() => {
+          voice.dispose();
+        }, 600);
+        return;
+      }
+
+      const trigger =
+        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
+      if (!trigger) return;
       const previewChunk: Chunk = {
         id: "style-preview",
         name: "Style Preview",
@@ -355,7 +367,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         characterId: characterId,
         steps: [],
       };
-      trigger(start, 0.9, 0, undefined, 0.5, previewChunk, characterId);
+      trigger(when, 0.9, 0, undefined, 0.5, previewChunk, characterId);
     },
     [selectedInstrumentId, selectedPackId, triggers]
   );
