@@ -14,7 +14,7 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import {
-  createKickDesigner,
+  createKick,
   mergeKickDesignerState,
   normalizeKickDesignerState,
   type KickDesignerInstrument,
@@ -849,7 +849,8 @@ export default function App() {
     ) => {
       if (instrumentId === "kick") {
         const defaults = normalizeKickDesignerState(character.defaults);
-        const instrument = createKickDesigner(defaults);
+        const instrument = createKick(character.id);
+        instrument.setMacroState(defaults);
         instrument.toDestination();
         return { instrument: instrument as ToneInstrument };
       }
