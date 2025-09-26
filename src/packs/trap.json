@@ -10,12 +10,38 @@
         {
           "id": "trap_808_boom",
           "name": "808 Boom",
-          "defaults": { "punch": 0.18, "clean": 0.45, "tight": 0.35 }
+          "defaults": { "punch": 0.18, "clean": 0.45, "tight": 0.35 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.058,
+              "octaves": 5.4,
+              "envelope": { "decay": 0.55, "release": 0.65 },
+              "filter": { "type": "lowpass", "frequency": 3000, "Q": 0.9, "rolloff": -24 },
+              "gain": 1.1
+            },
+            "noise": {
+              "gain": 0.04,
+              "filter": { "type": "highpass", "frequency": 6500, "Q": 0.8 }
+            }
+          }
         },
         {
           "id": "trap_hard_clip",
           "name": "Hard Clip",
-          "defaults": { "punch": 0.48, "clean": 0.35, "tight": 0.55 }
+          "defaults": { "punch": 0.48, "clean": 0.35, "tight": 0.55 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.045,
+              "octaves": 6.2,
+              "envelope": { "decay": 0.38, "release": 0.32 },
+              "filter": { "type": "lowpass", "frequency": 3600, "Q": 0.95, "rolloff": -12 },
+              "gain": 0.95
+            },
+            "noise": {
+              "gain": 0.18,
+              "filter": { "type": "highpass", "frequency": 9000, "Q": 0.9 }
+            }
+          }
         }
       ],
       "patterns": [

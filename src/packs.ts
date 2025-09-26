@@ -1,5 +1,8 @@
 import type { Chunk } from "./chunks";
-import type { KickDesignerState } from "./instruments/kickDesigner";
+import type {
+  KickDesignerState,
+  KickDesignerStyleConfig,
+} from "./instruments/kickDesigner";
 
 export interface InstrumentSpec {
   type?: string;
@@ -13,6 +16,7 @@ export interface InstrumentCharacter extends InstrumentSpec {
   name: string;
   description?: string;
   defaults?: Partial<KickDesignerState>;
+  kick?: KickDesignerStyleConfig;
 }
 
 export interface InstrumentDefinition {

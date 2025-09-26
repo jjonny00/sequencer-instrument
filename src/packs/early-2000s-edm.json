@@ -10,12 +10,38 @@
         {
           "id": "edm_club_punch",
           "name": "Club Punch",
-          "defaults": { "punch": 0.85, "clean": 0.85, "tight": 0.75 }
+          "defaults": { "punch": 0.85, "clean": 0.85, "tight": 0.75 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.032,
+              "octaves": 6.5,
+              "envelope": { "decay": 0.24, "release": 0.18 },
+              "filter": { "type": "lowpass", "frequency": 5200, "Q": 0.8 },
+              "gain": 0.9
+            },
+            "noise": {
+              "gain": 0.24,
+              "filter": { "type": "highpass", "frequency": 10500, "Q": 0.85 }
+            }
+          }
         },
         {
           "id": "edm_trance_boom",
           "name": "Trance Boom",
-          "defaults": { "punch": 0.6, "clean": 0.7, "tight": 0.5 }
+          "defaults": { "punch": 0.6, "clean": 0.7, "tight": 0.5 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.04,
+              "octaves": 6,
+              "envelope": { "decay": 0.32, "release": 0.28 },
+              "filter": { "type": "lowpass", "frequency": 4200, "Q": 0.75 },
+              "gain": 1
+            },
+            "noise": {
+              "gain": 0.14,
+              "filter": { "type": "highpass", "frequency": 9000, "Q": 0.8 }
+            }
+          }
         }
       ],
       "patterns": [

@@ -849,7 +849,7 @@ export default function App() {
     ) => {
       if (instrumentId === "kick") {
         const defaults = normalizeKickDesignerState(character.defaults);
-        const instrument = createKickDesigner(defaults);
+        const instrument = createKickDesigner(defaults, character.kick);
         instrument.toDestination();
         return { instrument: instrument as ToneInstrument };
       }
@@ -1011,6 +1011,7 @@ export default function App() {
         };
         if (instrumentId === "kick") {
           const kick = inst as unknown as KickDesignerInstrument;
+          kick.setStyle?.(character.kick);
           if (kick.setMacroState) {
             const defaults = normalizeKickDesignerState(character.defaults);
             const merged = mergeKickDesignerState(defaults, {

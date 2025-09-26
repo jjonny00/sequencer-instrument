@@ -10,12 +10,40 @@
         {
           "id": "phonk_memphis_distorted",
           "name": "Memphis Distorted",
-          "defaults": { "punch": 0.4, "clean": 0.15, "tight": 0.25 }
+          "defaults": { "punch": 0.4, "clean": 0.15, "tight": 0.25 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.052,
+              "octaves": 5.2,
+              "envelope": { "decay": 0.6, "release": 0.7 },
+              "filter": { "type": "lowpass", "frequency": 2600, "Q": 0.7, "rolloff": -24 },
+              "gain": 1.1
+            },
+            "noise": {
+              "type": "pink",
+              "gain": 0.12,
+              "filter": { "type": "bandpass", "frequency": 3500, "Q": 1.2 }
+            }
+          }
         },
         {
           "id": "phonk_tape_slam",
           "name": "Tape Slam",
-          "defaults": { "punch": 0.35, "clean": 0.25, "tight": 0.35 }
+          "defaults": { "punch": 0.35, "clean": 0.25, "tight": 0.35 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.048,
+              "octaves": 5,
+              "envelope": { "decay": 0.5, "release": 0.6 },
+              "filter": { "type": "lowpass", "frequency": 2800, "Q": 0.8, "rolloff": -24 },
+              "gain": 1.05
+            },
+            "noise": {
+              "type": "pink",
+              "gain": 0.1,
+              "filter": { "type": "bandpass", "frequency": 3200, "Q": 1 }
+            }
+          }
         }
       ],
       "patterns": [

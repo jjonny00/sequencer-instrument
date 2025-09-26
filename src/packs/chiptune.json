@@ -10,12 +10,40 @@
         {
           "id": "chip_square_thump",
           "name": "Square Thump",
-          "defaults": { "punch": 0.6, "clean": 0.8, "tight": 0.5 }
+          "defaults": { "punch": 0.6, "clean": 0.8, "tight": 0.5 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.06,
+              "octaves": 4.5,
+              "oscillator": { "type": "square" },
+              "envelope": { "decay": 0.22, "release": 0.18 },
+              "filter": { "type": "lowpass", "frequency": 2800, "Q": 0.9 },
+              "gain": 0.9
+            },
+            "noise": {
+              "gain": 0.08,
+              "filter": { "type": "highpass", "frequency": 7000, "Q": 0.8 }
+            }
+          }
         },
         {
           "id": "chip_noise_pop",
           "name": "Noise Pop",
-          "defaults": { "punch": 0.7, "clean": 0.9, "tight": 0.4 }
+          "defaults": { "punch": 0.7, "clean": 0.9, "tight": 0.4 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.052,
+              "octaves": 4,
+              "oscillator": { "type": "square" },
+              "envelope": { "decay": 0.18, "release": 0.16 },
+              "filter": { "type": "lowpass", "frequency": 2600, "Q": 0.7 },
+              "gain": 0.8
+            },
+            "noise": {
+              "gain": 0.16,
+              "filter": { "type": "bandpass", "frequency": 5000, "Q": 1.2 }
+            }
+          }
         }
       ],
       "patterns": [

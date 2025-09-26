@@ -164,7 +164,7 @@ const createInstrumentInstance = (
 } => {
   if (instrumentId === "kick") {
     const defaults = normalizeKickDesignerState(character.defaults);
-    const instrument = createKickDesigner(defaults);
+    const instrument = createKickDesigner(defaults, character.kick);
     instrument.toDestination();
     return { instrument: instrument as ToneInstrument };
   }

@@ -10,12 +10,40 @@
         {
           "id": "kraftwerk_motor_drive",
           "name": "Motor Drive",
-          "defaults": { "punch": 0.5, "clean": 0.8, "tight": 0.55 }
+          "defaults": { "punch": 0.5, "clean": 0.8, "tight": 0.55 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.048,
+              "octaves": 5.6,
+              "oscillator": { "type": "triangle" },
+              "envelope": { "decay": 0.3, "release": 0.25 },
+              "filter": { "type": "lowpass", "frequency": 4000, "Q": 0.7 },
+              "gain": 0.9
+            },
+            "noise": {
+              "gain": 0.12,
+              "filter": { "type": "highpass", "frequency": 9500, "Q": 0.9 }
+            }
+          }
         },
         {
           "id": "kraftwerk_robotic_snap",
           "name": "Robotic Snap",
-          "defaults": { "punch": 0.35, "clean": 0.6, "tight": 0.45 }
+          "defaults": { "punch": 0.35, "clean": 0.6, "tight": 0.45 },
+          "kick": {
+            "sub": {
+              "pitchDecay": 0.04,
+              "octaves": 5.2,
+              "oscillator": { "type": "triangle" },
+              "envelope": { "decay": 0.24, "release": 0.2 },
+              "filter": { "type": "lowpass", "frequency": 3600, "Q": 0.8 },
+              "gain": 0.85
+            },
+            "noise": {
+              "gain": 0.18,
+              "filter": { "type": "bandpass", "frequency": 6500, "Q": 1 }
+            }
+          }
         }
       ],
       "patterns": [
