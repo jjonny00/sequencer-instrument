@@ -19,7 +19,7 @@ export interface KickStyleParameters {
   };
 }
 
-type EnvelopeSettings = Partial<Omit<Tone.EnvelopeOptions, "context">>;
+type EnvelopeSettings = Partial<Tone.EnvelopeOptions>;
 
 interface KickSynthMapping {
   sub: Pick<
@@ -55,17 +55,19 @@ const MEMBRANE_DEFAULTS = Tone.MembraneSynth.getDefaults();
 const NOISE_DEFAULTS = Tone.NoiseSynth.getDefaults();
 
 const mergeEnvelope = (
-  defaults: Tone.EnvelopeOptions,
+  defaults: EnvelopeSettings,
   first?: EnvelopeSettings,
   second?: EnvelopeSettings
-): Omit<Tone.EnvelopeOptions, "context"> => {
-  const merged = {
+): EnvelopeSettings => {
+  const merged: EnvelopeSettings = {
     ...defaults,
     ...(first ?? {}),
     ...(second ?? {}),
   };
-  const { context: _context, ...envelope } = merged;
-  return envelope;
+  if ("context" in merged) {
+    delete (merged as Tone.EnvelopeOptions).context;
+  }
+  return merged;
 };
 
 export const mapKickParams = ({
@@ -184,7 +186,7 @@ export const createKickDesigner = (
       mapping.sub.envelope,
       style?.sub?.envelope
     );
-    const subOptions: Tone.MembraneSynthOptions = {
+    const subOptions = {
       ...MEMBRANE_DEFAULTS,
       ...mapping.sub,
       ...(style?.sub ?? {}),
@@ -217,7 +219,7 @@ export const createKickDesigner = (
 
     if (shouldEnableNoise) {
       if (!noise) {
-        const noiseOptions: Tone.NoiseSynthOptions = {
+        const noiseOptions = {
           ...NOISE_DEFAULTS,
           noise: { ...NOISE_DEFAULTS.noise, type: noiseType },
           envelope: mergedNoiseEnvelope,
