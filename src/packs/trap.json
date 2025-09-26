@@ -10,12 +10,12 @@
         {
           "id": "trap_808_boom",
           "name": "808 Boom",
-          "defaults": { "punch": 0.2, "clean": 0.6, "tight": 0.7 }
+          "defaults": { "punch": 0.18, "clean": 0.45, "tight": 0.35 }
         },
         {
           "id": "trap_hard_clip",
           "name": "Hard Clip",
-          "defaults": { "punch": 0.4, "clean": 0.2, "tight": 0.6 }
+          "defaults": { "punch": 0.48, "clean": 0.35, "tight": 0.55 }
         }
       ],
       "patterns": [
