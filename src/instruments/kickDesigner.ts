@@ -51,122 +51,91 @@ export function createKick(packId: string, characterId: string): KickInstrument 
   return buildKickInstrument(defaults);
 }
 
-const CLICK_DISABLE_THRESHOLD_DB = -55;
+const NOISE_DISABLE_THRESHOLD_DB = -30;
 
 interface KickSynthesisParams {
   sub: {
     pitchDecay: number;
     octaves: number;
-    attack: number;
     decay: number;
     release: number;
-    filterFrequency: number;
-    filterQ: number;
-    outputDb: number;
     oscillator: { type: "sine" };
   };
-  click: {
-    gainDb: number;
-    decay: number;
-    filterFrequency: number;
-  };
+  noiseDb: number;
 }
 
 function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
   let currentStyle = normalizeKickDesignerState(initialStyle);
   let currentParams = mapKickParams(currentStyle);
 
-  const output = new Tone.Gain({
-    gain: Tone.dbToGain(currentParams.sub.outputDb),
-  }).toDestination();
-
-  const subFilter = new Tone.Filter({
-    type: "lowpass",
-    frequency: currentParams.sub.filterFrequency,
-    Q: currentParams.sub.filterQ,
-    rolloff: -24,
-  }).connect(output);
+  const output = new Tone.Gain(0.9).toDestination();
 
   const sub = new Tone.MembraneSynth({
     pitchDecay: currentParams.sub.pitchDecay,
     octaves: currentParams.sub.octaves,
     oscillator: currentParams.sub.oscillator,
     envelope: {
-      attack: currentParams.sub.attack,
+      attack: 0.005,
       decay: currentParams.sub.decay,
       sustain: 0,
       release: currentParams.sub.release,
     },
-  }).connect(subFilter);
+  }).connect(output);
 
-  type ClickNodes = {
+  type NoiseNodes = {
     synth: Tone.NoiseSynth;
-    filter: Tone.Filter;
     gain: Tone.Gain;
   };
 
-  let click: ClickNodes | null = null;
+  let noise: NoiseNodes | null = null;
 
-  const ensureClick = () => {
-    if (click) return;
-    const noise = new Tone.NoiseSynth({
+  const ensureNoise = () => {
+    if (noise) return noise;
+    const synth = new Tone.NoiseSynth({
       envelope: {
         attack: 0.001,
-        decay: currentParams.click.decay,
+        decay: 0.02,
         sustain: 0,
-        release: 0.02,
+        release: 0.01,
       },
     });
-    const filter = new Tone.Filter({
-      type: "highpass",
-      frequency: currentParams.click.filterFrequency,
-      rolloff: -24,
-    });
     const gain = new Tone.Gain({
-      gain: Tone.dbToGain(currentParams.click.gainDb),
+      gain: Tone.dbToGain(currentParams.noiseDb),
     });
-    noise.connect(filter);
-    filter.connect(gain);
+    synth.connect(gain);
     gain.connect(output);
-    click = { synth: noise, filter, gain };
+    noise = { synth, gain };
+    return noise;
   };
 
-  const disposeClick = () => {
-    if (!click) return;
-    click.synth.dispose();
-    click.filter.dispose();
-    click.gain.dispose();
-    click = null;
+  const disposeNoise = () => {
+    if (!noise) return;
+    noise.synth.dispose();
+    noise.gain.dispose();
+    noise = null;
   };
 
   const applyParams = (params: KickSynthesisParams) => {
     currentParams = params;
-    output.gain.value = Tone.dbToGain(params.sub.outputDb);
-    sub.octaves = params.sub.octaves;
-    sub.pitchDecay = params.sub.pitchDecay;
-    sub.envelope.attack = params.sub.attack;
-    sub.envelope.decay = params.sub.decay;
-    sub.envelope.release = params.sub.release;
-    subFilter.frequency.value = params.sub.filterFrequency;
-    subFilter.Q.value = params.sub.filterQ;
+    sub.set({
+      pitchDecay: params.sub.pitchDecay,
+      octaves: params.sub.octaves,
+      envelope: {
+        attack: 0.005,
+        decay: params.sub.decay,
+        sustain: 0,
+        release: params.sub.release,
+      },
+      oscillator: params.sub.oscillator,
+    });
 
-    if (params.click.gainDb <= CLICK_DISABLE_THRESHOLD_DB) {
-      disposeClick();
+    if (params.noiseDb <= NOISE_DISABLE_THRESHOLD_DB) {
+      disposeNoise();
       return;
     }
 
-    ensureClick();
-    if (!click) return;
-    click.gain.gain.value = Tone.dbToGain(params.click.gainDb);
-    click.filter.frequency.value = params.click.filterFrequency;
-    click.synth.set({
-      envelope: {
-        attack: 0.001,
-        decay: params.click.decay,
-        sustain: 0,
-        release: 0.02,
-      },
-    });
+    const nodes = ensureNoise();
+    nodes.gain.gain.value = Tone.dbToGain(params.noiseDb);
   };
 
   applyParams(currentParams);
@@ -179,8 +148,9 @@ function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
       sub.oscillator.phase = 0;
       sub.triggerAttackRelease("C1", resolvedDuration, time, resolvedVelocity);
 
-      if (click) {
-        click.synth.triggerAttackRelease("8n", time, resolvedVelocity);
+      if (currentParams.noiseDb > NOISE_DISABLE_THRESHOLD_DB) {
+        const nodes = ensureNoise();
+        nodes.synth.triggerAttackRelease("8n", time, resolvedVelocity);
       }
     },
     setStyle(style) {
@@ -189,8 +159,7 @@ function buildKickInstrument(initialStyle: KickDesignerState): KickInstrument {
     },
     dispose() {
       sub.dispose();
-      subFilter.dispose();
-      disposeClick();
+      disposeNoise();
       output.dispose();
     },
   };
@@ -202,34 +171,14 @@ function mapKickParams({ punch, clean, tight }: KickDesignerState): KickSynthesi
   const c = clamp(clean);
   const t = clamp(tight);
 
-  const pitchDecay = 0.006 + p * 0.07;
-  const octaves = 1.5 + p * 3.5;
-  const attack = 0.001 + (1 - p) * 0.004;
-  const decay = 0.2 + (1 - c) * 0.5;
-  const release = 0.05 + (1 - c) * 0.35;
-  const filterFrequency = 90 + c * 160;
-  const filterQ = 0.7 + (1 - c) * 2.3;
-  const outputDb = -10 + p * 5 + c * 2;
-  const clickGainDb = -46 + (1 - t) * 20 - (1 - c) * 4;
-  const clickDecay = 0.012 + (1 - t) * 0.035;
-  const clickFilterFrequency = 2500 + t * 4500;
-
   return {
     sub: {
-      pitchDecay,
-      octaves,
-      attack,
-      decay,
-      release,
-      filterFrequency,
-      filterQ,
-      outputDb,
+      pitchDecay: 0.01 + p * 0.02,
+      octaves: 2 + Math.round(p * 2),
+      decay: 0.25 + (1 - c) * 0.25,
+      release: 0.05 + (1 - c) * 0.1,
       oscillator: { type: "sine" as const },
     },
-    click: {
-      gainDb: clickGainDb,
-      decay: clickDecay,
-      filterFrequency: clickFilterFrequency,
-    },
+    noiseDb: -30 + (1 - t) * 10,
   };
 }
