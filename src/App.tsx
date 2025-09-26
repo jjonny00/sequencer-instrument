@@ -950,7 +950,10 @@ export default function App() {
             void initAudioContext();
             const resolvedCharacterId =
               characterId ?? chunk?.characterId ?? null;
-            if (!resolvedCharacterId) return;
+            if (!resolvedCharacterId) {
+              console.warn("Missing characterId for kick");
+              return;
+            }
             const character = resolveInstrumentCharacter(
               pack.id,
               instrumentId,

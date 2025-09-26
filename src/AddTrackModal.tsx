@@ -339,7 +339,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const previewStyle = useCallback(
     async (characterId: string) => {
-      if (!characterId || !selectedInstrumentId || !selectedPackId) return;
+      if (!selectedInstrumentId || !selectedPackId) return;
       try {
         await initAudioContext();
       } catch {
@@ -347,6 +347,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
 
       if (selectedInstrumentId === "kick") {
+        if (!characterId) {
+          console.warn("Missing characterId for kick");
+          return;
+        }
         const kick = createKick(characterId);
         kick.toDestination();
         const time = Tone.now() + 0.05;
