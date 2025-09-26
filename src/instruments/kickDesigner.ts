@@ -1,6 +1,7 @@
 import * as Tone from "tone";
 
 import type { Chunk } from "../chunks";
+import { packs } from "../packs";
 
 export interface KickDesignerState {
   punch: number;
@@ -255,5 +256,29 @@ export const createKickDesigner = (
   };
 
   return output;
+};
+
+export const createKick = (
+  packId: string,
+  characterId: string
+): KickDesignerInstrument => {
+  const pack = packs.find((candidate) => candidate.id === packId);
+  if (!pack) {
+    return createKickDesigner();
+  }
+
+  const kickInstrument = pack.instruments?.kick;
+  if (!kickInstrument) {
+    return createKickDesigner();
+  }
+
+  const character = kickInstrument.characters?.find(
+    (candidate) => candidate.id === characterId
+  );
+  if (!character || !character.defaults) {
+    return createKickDesigner();
+  }
+
+  return createKickDesigner(character.defaults);
 };
 
