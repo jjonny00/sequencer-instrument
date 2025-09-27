@@ -3,7 +3,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ChangeEvent,
   type CSSProperties,
   type FC,
 } from "react";
@@ -27,25 +26,16 @@ import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
+import {
+  FALLBACK_INSTRUMENT_COLOR,
+  getInstrumentColor,
+  hexToRgba,
+  lightenColor,
+} from "./utils/color";
 
 type SelectField = "pack" | "instrument" | "style" | "preset";
 
 const ENABLE_DELAY_MS = 180;
-
-const baseSelectStyle: CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid #2f384a",
-  background: "#0f172a",
-  color: "#e6f2ff",
-  transition: "border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
-};
-
-const disabledSelectStyle: CSSProperties = {
-  opacity: 0.5,
-  color: "#64748b",
-  cursor: "not-allowed",
-};
 
 const statusTextStyle: CSSProperties = {
   fontSize: 12,
@@ -149,6 +139,36 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         pattern: preset.pattern ?? undefined,
       })),
     [userPresets]
+  );
+
+  type PresetSource = "none" | "user" | "pack";
+  type PresetSelectionItem = {
+    id: string | null;
+    name: string;
+    source: PresetSource;
+    characterId: string | null;
+    pattern?: Chunk;
+  };
+
+  const presetSelectionItems = useMemo<PresetSelectionItem[]>(
+    () =>
+      [
+        {
+          id: null,
+          name: "None",
+          source: "none",
+          characterId: null,
+        },
+        ...userPresetItems.map((preset) => ({
+          ...preset,
+          source: "user" as PresetSource,
+        })),
+        ...packPresets.map((preset) => ({
+          ...preset,
+          source: "pack" as PresetSource,
+        })),
+      ],
+    [packPresets, userPresetItems]
   );
 
   const scheduleAfterBlur = useCallback((task: () => void) => {
@@ -336,6 +356,35 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     setLoading,
     setReady,
   ]);
+
+  useEffect(() => {
+    if (!selectedInstrumentId || characterOptions.length === 0) return;
+    const hasSelection = characterOptions.some(
+      (option) => option.id === selectedCharacterId
+    );
+    if (hasSelection) return;
+    const first = characterOptions[0];
+    if (!first) return;
+    startLoadingSelect("preset");
+    onSelectCharacter(first.id);
+    onSelectPreset(null);
+  }, [
+    characterOptions,
+    selectedCharacterId,
+    selectedInstrumentId,
+    onSelectCharacter,
+    onSelectPreset,
+    startLoadingSelect,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPresetId) return;
+    const hasSelection = presetSelectionItems.some(
+      (preset) => preset.id === selectedPresetId
+    );
+    if (hasSelection) return;
+    onSelectPreset(null);
+  }, [presetSelectionItems, selectedPresetId, onSelectPreset]);
 
   const previewStyle = useCallback(
     async (characterId: string) => {
@@ -540,15 +589,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     refreshUserPresets,
   ]);
 
-  const handlePackSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handlePackSelect = useCallback(
+    (nextValue: string) => {
+      if (nextValue === selectedPackId) return;
       setHandoffLock("pack");
       startLoadingSelect("instrument");
       resetSelectStatus("style");
@@ -571,19 +614,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       onSelectPreset,
       resetSelectStatus,
       scheduleAfterBlur,
+      selectedPackId,
       startLoadingSelect,
     ]
   );
 
-  const handleInstrumentSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handleInstrumentSelect = useCallback(
+    (nextValue: string) => {
+      if (nextValue === selectedInstrumentId) return;
       setHandoffLock("instrument");
       startLoadingSelect("style");
       resetSelectStatus("preset");
@@ -603,19 +641,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       onSelectPreset,
       resetSelectStatus,
       scheduleAfterBlur,
+      selectedInstrumentId,
       startLoadingSelect,
     ]
   );
 
-  const handleStyleSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handleStyleSelect = useCallback(
+    (nextValue: string) => {
+      if (nextValue === selectedCharacterId) return;
       setHandoffLock("style");
       startLoadingSelect("preset");
       scheduleAfterBlur(() => {
@@ -635,19 +668,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       onSelectPreset,
       previewStyle,
       scheduleAfterBlur,
+      selectedCharacterId,
       startLoadingSelect,
     ]
   );
 
-  const handlePresetSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handlePresetSelect = useCallback(
+    (nextValue: string | null) => {
+      if (nextValue === (selectedPresetId ?? null)) return;
       setHandoffLock("preset");
       scheduleAfterBlur(() => {
         try {
@@ -656,8 +684,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             return;
           }
           onSelectPreset(nextValue);
-          const allPresets = [...userPresetItems, ...packPresets];
-          const match = allPresets.find((item) => item.id === nextValue);
+          const match = presetSelectionItems.find((item) => item.id === nextValue);
           if (match?.pattern) {
             void previewPreset(match.pattern, match.characterId);
           }
@@ -666,7 +693,13 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         }
       });
     },
-    [onSelectPreset, packPresets, previewPreset, scheduleAfterBlur, userPresetItems]
+    [
+      onSelectPreset,
+      presetSelectionItems,
+      previewPreset,
+      scheduleAfterBlur,
+      selectedPresetId,
+    ]
   );
 
   const confirmDisabled = !pack || !selectedInstrumentId || !selectedCharacterId;
@@ -756,6 +789,105 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 12,
   };
 
+  const horizontalScrollAreaStyle: CSSProperties = {
+    display: "flex",
+    gap: 16,
+    overflowX: "auto",
+    padding: "6px 2px 12px",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
+    scrollSnapType: "x proximity",
+  };
+
+  const createPadButtonStyle = (
+    accentColor: string,
+    {
+      isActive,
+      isDisabled,
+      minWidth = 124,
+      minHeight = 74,
+    }: {
+      isActive: boolean;
+      isDisabled?: boolean;
+      minWidth?: number;
+      minHeight?: number;
+    }
+  ): CSSProperties => {
+    const safeAccentColor = accentColor || FALLBACK_INSTRUMENT_COLOR;
+    const activeBackground = `radial-gradient(circle, ${hexToRgba(
+      lightenColor(safeAccentColor, 0.18),
+      0.85
+    )}, ${hexToRgba(safeAccentColor, 0.85)})`;
+    const activeBorderColor = hexToRgba(safeAccentColor, 0.65);
+    const activeGlowColor = hexToRgba(safeAccentColor, 0.55);
+
+    return {
+      minWidth,
+      minHeight,
+      padding: "12px 16px 14px",
+      borderRadius: 12,
+      border: isActive ? `1px solid ${activeBorderColor}` : "1px solid #273144",
+      background: isActive
+        ? activeBackground
+        : "radial-gradient(circle at center, #1e293b 0%, #101726 72%)",
+      color: isActive ? "#0e151f" : "#e2e8f0",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      gap: 8,
+      position: "relative",
+      textAlign: "left",
+      flex: "0 0 auto",
+      boxShadow: isActive
+        ? `0 0 12px ${activeGlowColor}, 0 6px 14px rgba(2, 12, 23, 0.45)`
+        : "none",
+      transform: isActive ? "translateY(2px)" : "translateY(0)",
+      transition:
+        "transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+      cursor: isDisabled ? "not-allowed" : "pointer",
+      opacity: isDisabled ? 0.55 : 1,
+      filter: isDisabled ? "saturate(0.6)" : "none",
+      scrollSnapAlign: "start",
+      touchAction: "manipulation",
+      boxSizing: "border-box",
+    };
+  };
+
+  const createPadTitleStyle = (isActive: boolean): CSSProperties => ({
+    fontSize: 14,
+    fontWeight: 700,
+    letterSpacing: 0.2,
+    color: isActive ? "#0e151f" : "#e2e8f0",
+    transition: "color 0.2s ease",
+  });
+
+  const createPadBadgeStyle = (
+    accentColor: string,
+    isActive: boolean
+  ): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    padding: "2px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    border: `1px solid ${hexToRgba(accentColor || FALLBACK_INSTRUMENT_COLOR, isActive ? 0.55 : 0.35)}`,
+    background: isActive
+      ? hexToRgba(accentColor || FALLBACK_INSTRUMENT_COLOR, 0.25)
+      : "rgba(148, 163, 184, 0.16)",
+    color: isActive ? "#0e151f" : "#94a3b8",
+    transition: "border-color 0.2s ease, background 0.2s ease, color 0.2s ease",
+  });
+
+  const emptyStateTextStyle: CSSProperties = {
+    fontSize: 13,
+    color: "#94a3b8",
+  };
+
   const packSelectDisabled = handoffLock !== null && handoffLock !== "pack";
 
   const instrumentSelectDisabled =
@@ -780,13 +912,23 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Loading presets..."
     : "Saved loops unavailable";
 
-  const userPresetSelectValue =
-    selectedPresetId && isUserPresetId(selectedPresetId) ? selectedPresetId : "";
-  const packPresetSelectValue =
-    selectedPresetId && !isUserPresetId(selectedPresetId) ? selectedPresetId : "";
+  const instrumentHelperText = loadingState.instrument
+    ? "Loading instruments..."
+    : !selectedPackId
+    ? "Select a sound pack first."
+    : instrumentOptions.length === 0
+    ? "No instruments available."
+    : null;
 
-  const userPresetSelectDisabled = presetSelectDisabled;
-  const packPresetSelectDisabled = presetSelectDisabled || packPresets.length === 0;
+  const styleHelperText = loadingState.style
+    ? "Loading styles..."
+    : !selectedPackId
+    ? "Select a sound pack first."
+    : !selectedInstrumentId
+    ? "Select an instrument first."
+    : characterOptions.length === 0
+    ? "No styles available yet."
+    : null;
 
   const savedLoopsHelperText = loadingState.preset
     ? "Loading presets..."
@@ -795,6 +937,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     : userPresetItems.length === 0 && packPresets.length === 0
     ? "No saved loops available yet."
     : null;
+
+  const selectedInstrumentAccent = getInstrumentColor(selectedInstrumentId);
 
   return (
     <Modal
@@ -838,124 +982,142 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <label
+        <section
+          aria-label="Sound pack selection"
           aria-disabled={packSelectDisabled}
           style={{
             ...fieldLabelStyle,
+            gap: 10,
             opacity: packSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-          <select
-            value={selectedPackId || ""}
-            onChange={handlePackSelectChange}
-            disabled={packSelectDisabled}
-            style={{
-              ...baseSelectStyle,
-              ...(packSelectDisabled ? disabledSelectStyle : {}),
-              color:
-                selectedPackId && !packSelectDisabled ? "#e6f2ff" : "#64748b",
-            }}
-          >
-            <option value="" disabled>
-              Select a sound pack
-            </option>
-            {packs.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          {packs.length > 0 ? (
+            <div style={horizontalScrollAreaStyle}>
+              {packs.map((option) => {
+                const isActive = option.id === selectedPackId;
+                const accentColor = FALLBACK_INSTRUMENT_COLOR;
+                const buttonStyle = createPadButtonStyle(accentColor, {
+                  isActive,
+                  isDisabled: packSelectDisabled,
+                });
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={packSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handlePackSelect(option.id)}
+                    style={buttonStyle}
+                  >
+                    <span style={createPadTitleStyle(isActive)}>
+                      {option.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <span style={emptyStateTextStyle}>No sound packs available.</span>
+          )}
+        </section>
 
-        <label
+        <section
+          aria-label="Instrument selection"
           aria-disabled={instrumentSelectDisabled}
           style={{
             ...fieldLabelStyle,
+            gap: 10,
             opacity: instrumentSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-          <select
-            value={selectedInstrumentId || ""}
-            onChange={handleInstrumentSelectChange}
-            disabled={instrumentSelectDisabled}
-            style={{
-              ...baseSelectStyle,
-              ...(instrumentSelectDisabled ? disabledSelectStyle : {}),
-              color:
-                selectedInstrumentId && !instrumentSelectDisabled
-                  ? "#e6f2ff"
-                  : "#64748b",
-            }}
-          >
-            <option value="" disabled>
-              {!selectedPackId
-                ? "Select a sound pack first"
-                : loadingState.instrument
-                ? "Loading instruments..."
-                : readyState.instrument
-                ? "Select an instrument"
-                : "Select a sound pack first"}
-            </option>
-            {instrumentOptions.map((instrument) => (
-              <option key={instrument} value={instrument}>
-                {formatInstrumentLabel(instrument)}
-              </option>
-            ))}
-          </select>
-          {loadingState.instrument ? (
-            <span role="status" aria-live="polite" style={statusTextStyle}>
-              Loading instruments...
+          {instrumentOptions.length > 0 ? (
+            <div style={horizontalScrollAreaStyle}>
+              {instrumentOptions.map((instrument) => {
+                const isActive = instrument === selectedInstrumentId;
+                const accentColor = getInstrumentColor(instrument);
+                const buttonStyle = createPadButtonStyle(accentColor, {
+                  isActive,
+                  isDisabled: instrumentSelectDisabled,
+                });
+                return (
+                  <button
+                    key={instrument}
+                    type="button"
+                    disabled={instrumentSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handleInstrumentSelect(instrument)}
+                    style={buttonStyle}
+                  >
+                    <span style={createPadTitleStyle(isActive)}>
+                      {formatInstrumentLabel(instrument)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : instrumentHelperText ? (
+            <span
+              role={loadingState.instrument ? "status" : undefined}
+              aria-live={loadingState.instrument ? "polite" : undefined}
+              style={
+                loadingState.instrument ? statusTextStyle : emptyStateTextStyle
+              }
+            >
+              {instrumentHelperText}
             </span>
           ) : null}
-        </label>
+        </section>
 
-        <label
+        <section
+          aria-label="Style selection"
           aria-disabled={styleSelectDisabled}
           style={{
             ...fieldLabelStyle,
+            gap: 10,
             opacity: styleSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
-          <select
-            value={selectedCharacterId || ""}
-            onChange={handleStyleSelectChange}
-            disabled={styleSelectDisabled}
-            style={{
-              ...baseSelectStyle,
-              ...(styleSelectDisabled ? disabledSelectStyle : {}),
-              color:
-                selectedCharacterId && !styleSelectDisabled
-                  ? "#e6f2ff"
-                  : "#64748b",
-            }}
-          >
-            <option value="" disabled>
-              {!selectedInstrumentId
-                ? "Select an instrument first"
-                : loadingState.style
-                ? "Loading styles..."
-                : readyState.style
-                ? "Select a style"
-                : "Select an instrument first"}
-            </option>
-            {characterOptions.map((character) => (
-              <option key={character.id} value={character.id}>
-                {character.name}
-              </option>
-            ))}
-          </select>
-          {loadingState.style ? (
-            <span role="status" aria-live="polite" style={statusTextStyle}>
-              Loading styles...
+          {characterOptions.length > 0 ? (
+            <div style={horizontalScrollAreaStyle}>
+              {characterOptions.map((character) => {
+                const isActive = character.id === selectedCharacterId;
+                const accentColor = selectedInstrumentAccent;
+                const buttonStyle = createPadButtonStyle(accentColor, {
+                  isActive,
+                  isDisabled: styleSelectDisabled,
+                });
+                return (
+                  <button
+                    key={character.id}
+                    type="button"
+                    disabled={styleSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handleStyleSelect(character.id)}
+                    style={buttonStyle}
+                  >
+                    <span style={createPadTitleStyle(isActive)}>
+                      {character.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : styleHelperText ? (
+            <span
+              role={loadingState.style ? "status" : undefined}
+              aria-live={loadingState.style ? "polite" : undefined}
+              style={loadingState.style ? statusTextStyle : emptyStateTextStyle}
+            >
+              {styleHelperText}
             </span>
           ) : null}
-        </label>
+        </section>
 
         <section
           aria-disabled={presetSelectDisabled}
@@ -972,68 +1134,50 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             </p>
           </div>
           <div style={savedLoopsFieldsStyle}>
-            <label style={fieldLabelStyle}>
-              <span style={{ fontSize: 13, color: "#cbd5f5" }}>Your Saved Loops</span>
-              <select
-                value={userPresetSelectValue}
-                onChange={handlePresetSelectChange}
-                disabled={userPresetSelectDisabled}
-                style={{
-                  ...baseSelectStyle,
-                  ...(userPresetSelectDisabled ? disabledSelectStyle : {}),
-                  color:
-                    !userPresetSelectDisabled && userPresetSelectValue
-                      ? "#e6f2ff"
-                      : "#64748b",
-                }}
-              >
-                <option value="">Start fresh (no saved loop)</option>
-                {userPresetItems.map((preset) => (
-                  <option key={`user-${preset.id}`} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label style={fieldLabelStyle}>
-              <span style={{ fontSize: 13, color: "#cbd5f5" }}>Pack Loops</span>
-              <select
-                value={packPresetSelectValue}
-                onChange={handlePresetSelectChange}
-                disabled={packPresetSelectDisabled}
-                style={{
-                  ...baseSelectStyle,
-                  ...(packPresetSelectDisabled ? disabledSelectStyle : {}),
-                  color:
-                    !packPresetSelectDisabled && packPresetSelectValue
-                      ? "#e6f2ff"
-                      : "#64748b",
-                }}
-              >
-                {packPresetSelectDisabled ? (
-                  <option value="" disabled>
-                    {packPresets.length === 0
-                      ? "No pack loops available"
-                      : presetBlockedLabel}
-                  </option>
-                ) : (
-                  <>
-                    <option value="">Select a pack loop</option>
-                    {packPresets.map((preset) => (
-                      <option key={`pack-${preset.id}`} value={preset.id}>
-                        {preset.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-            </label>
+            <div style={horizontalScrollAreaStyle}>
+              {presetSelectionItems.map((preset) => {
+                const isNone = preset.id === null;
+                const isActive = isNone
+                  ? selectedPresetId === null
+                  : preset.id === selectedPresetId;
+                const presetKey = preset.id ?? "preset-none";
+                const accentColor = selectedInstrumentAccent;
+                const buttonStyle = createPadButtonStyle(accentColor, {
+                  isActive,
+                  isDisabled: presetSelectDisabled,
+                  minWidth: 148,
+                });
+                const badgeStyle =
+                  preset.source === "user" || preset.source === "pack"
+                    ? createPadBadgeStyle(accentColor, isActive)
+                    : null;
+                return (
+                  <button
+                    key={presetKey}
+                    type="button"
+                    disabled={presetSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handlePresetSelect(preset.id)}
+                    style={buttonStyle}
+                  >
+                    <span style={createPadTitleStyle(isActive)}>
+                      {preset.name}
+                    </span>
+                    {badgeStyle ? (
+                      <span style={badgeStyle}>
+                        {preset.source === "user" ? "Saved" : "Pack"}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {savedLoopsHelperText ? (
             <span
               role={loadingState.preset ? "status" : undefined}
               aria-live={loadingState.preset ? "polite" : undefined}
-              style={statusTextStyle}
+              style={loadingState.preset ? statusTextStyle : emptyStateTextStyle}
             >
               {savedLoopsHelperText}
             </span>
