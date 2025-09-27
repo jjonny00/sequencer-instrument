@@ -1,7 +1,7 @@
 import * as Tone from "tone";
 
-import { packs } from "../packs";
-import type { InstrumentCharacter, Pack } from "../packs";
+import { packs } from "@/packs";
+import type { InstrumentCharacter, Pack } from "@/packs";
 
 type KickMacroDefaults = {
   punch: number;
@@ -39,7 +39,12 @@ function mapKickParams({ punch, clean, tight }: KickMacroDefaults) {
 
 export function createKick(packId: string, characterId: string) {
   const char = resolveKickCharacter(packId, characterId);
-  const params = mapKickParams(char.defaults as KickMacroDefaults);
+  const macroDefaults: KickMacroDefaults = {
+    punch: char.defaults?.punch ?? 0.5,
+    clean: char.defaults?.clean ?? 0.5,
+    tight: char.defaults?.tight ?? 0.5,
+  };
+  const params = mapKickParams(macroDefaults);
 
   const sub = new Tone.MembraneSynth({
     pitchDecay: params.pitchDecay,
