@@ -3,9 +3,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
-import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
+import {
+  createTriggerKey,
+  type Track,
+  type TrackInstrument,
+  type TriggerMap,
+} from "./tracks";
 import type { Chunk } from "./chunks";
-import { packs, type InstrumentCharacter } from "./packs";
+import {
+  packs,
+  type InstrumentCharacter,
+  type InstrumentDefinition,
+  type Pack,
+} from "./packs";
 import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
@@ -48,6 +58,10 @@ import {
   type StoredProjectData,
 } from "./storage";
 import { isUserPresetId } from "./presets";
+import {
+  applyKickMacrosToChunk,
+  resolveInstrumentCharacterId,
+} from "./instrumentCharacters";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -164,6 +178,110 @@ const clonePatternGroupState = (group: PatternGroup): PatternGroup => ({
   ...group,
   tracks: group.tracks.map((track) => cloneTrackState(track)),
 });
+
+const getPackById = (packId: string | null | undefined): Pack | null => {
+  if (!packId) return null;
+  return packs.find((candidate) => candidate.id === packId) ?? null;
+};
+
+const resolveLoadedTrack = (track: Track, fallbackPack: Pack): Track => {
+  const cloned = cloneTrackState(track);
+  const instrumentId =
+    cloned.source?.instrumentId ??
+    (cloned.instrument && cloned.instrument.length > 0
+      ? cloned.instrument
+      : cloned.pattern?.instrument ?? "");
+
+  if (!instrumentId) {
+    if (!cloned.source) return cloned;
+    const pack = getPackById(cloned.source.packId) ?? fallbackPack;
+    return {
+      ...cloned,
+      source: {
+        packId: pack.id,
+        instrumentId: cloned.source.instrumentId,
+        characterId: cloned.source.characterId ?? "",
+        presetId: cloned.source.presetId ?? null,
+      },
+    };
+  }
+
+  const packFromSource = getPackById(cloned.source?.packId);
+  const packWithInstrument =
+    packs.find((candidate) => candidate.instruments[instrumentId]) ?? null;
+  const trackPack =
+    packFromSource && packFromSource.instruments[instrumentId]
+      ? packFromSource
+      : packWithInstrument ?? packFromSource ?? fallbackPack;
+
+  const instrumentDefinition =
+    (trackPack.instruments[instrumentId] as InstrumentDefinition | undefined) ??
+    undefined;
+
+  const previousCharacterId = cloned.pattern?.characterId ?? null;
+  const fallbackCharacterId =
+    instrumentDefinition?.defaultCharacterId ??
+    instrumentDefinition?.characters[0]?.id ??
+    "";
+  const resolvedCharacterCandidate = instrumentDefinition
+    ? resolveInstrumentCharacterId(
+        instrumentDefinition,
+        cloned.source?.characterId ?? null,
+        null,
+        previousCharacterId
+      )
+    : cloned.source?.characterId ?? previousCharacterId ?? "";
+  const resolvedCharacterId =
+    resolvedCharacterCandidate ||
+    cloned.source?.characterId ||
+    previousCharacterId ||
+    fallbackCharacterId ||
+    "";
+
+  let nextPattern = cloned.pattern ? { ...cloned.pattern } : null;
+  if (nextPattern) {
+    if (nextPattern.instrument !== instrumentId) {
+      nextPattern = { ...nextPattern, instrument: instrumentId };
+    }
+    if (resolvedCharacterId && nextPattern.characterId !== resolvedCharacterId) {
+      nextPattern = { ...nextPattern, characterId: resolvedCharacterId };
+    } else if (!nextPattern.characterId && resolvedCharacterId) {
+      nextPattern = { ...nextPattern, characterId: resolvedCharacterId };
+    }
+    if (instrumentId === "kick") {
+      nextPattern = applyKickMacrosToChunk(
+        nextPattern,
+        instrumentDefinition,
+        resolvedCharacterId || null,
+        previousCharacterId
+      );
+    }
+  }
+
+  return {
+    ...cloned,
+    instrument: instrumentId as TrackInstrument,
+    pattern: nextPattern,
+    source: {
+      packId: trackPack.id,
+      instrumentId,
+      characterId: resolvedCharacterId,
+      presetId: cloned.source?.presetId ?? null,
+    },
+  };
+};
+
+const normalizeLoadedTracks = (tracks: Track[], fallbackPack: Pack): Track[] =>
+  tracks.map((track) => resolveLoadedTrack(track, fallbackPack));
+
+const normalizeLoadedPatternGroups = (
+  groups: PatternGroup[],
+  fallbackPack: Pack
+): PatternGroup[] =>
+  groups.map((group) => ({
+    ...group,
+    tracks: normalizeLoadedTracks(group.tracks, fallbackPack),
+  }));
 
 const createDemoProjectData = (): StoredProjectData => {
   const fallbackPack = packs[0];
@@ -1476,14 +1594,22 @@ export default function App() {
       if (project.subdivision && ["16n", "8n", "4n"].includes(project.subdivision)) {
         setSubdiv(project.subdivision as Subdivision);
       }
-      const nextTracks = project.tracks;
-      setTracks(nextTracks);
-      currentLoopDraftRef.current = nextTracks.map((track) =>
+      const fallbackPack = packs[nextPackIndex] ?? packs[0];
+      const normalizedTracks = normalizeLoadedTracks(
+        project.tracks,
+        fallbackPack
+      );
+      setTracks(normalizedTracks);
+      currentLoopDraftRef.current = normalizedTracks.map((track) =>
         cloneTrackState(track)
       );
+      const normalizedPatternGroups = normalizeLoadedPatternGroups(
+        project.patternGroups,
+        fallbackPack
+      );
       const nextPatternGroups =
-        project.patternGroups.length > 0
-          ? project.patternGroups
+        normalizedPatternGroups.length > 0
+          ? normalizedPatternGroups
           : [createInitialPatternGroup()];
       setPatternGroups(nextPatternGroups);
       setSongRows(
@@ -1496,9 +1622,12 @@ export default function App() {
       setEditing(null);
       setIsRecording(false);
       applyTransportState(project.isPlaying ?? false);
-      const baselineTracks = options?.baseline?.tracks ?? nextTracks;
-      const baselinePatternGroups =
-        options?.baseline?.patternGroups ?? nextPatternGroups;
+      const baselineTracks = options?.baseline?.tracks
+        ? normalizeLoadedTracks(options.baseline.tracks, fallbackPack)
+        : normalizedTracks;
+      const baselinePatternGroups = options?.baseline?.patternGroups
+        ? normalizeLoadedPatternGroups(options.baseline.patternGroups, fallbackPack)
+        : nextPatternGroups;
       updateLoopBaseline(baselineTracks, baselinePatternGroups);
       setToneGraphVersion((value) => value + 1);
     },
