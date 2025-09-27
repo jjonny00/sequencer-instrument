@@ -434,15 +434,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     setEditing,
   ]);
 
-  useEffect(() => {
-    if (editing === null) return;
-    const active = tracks.find((track) => track.id === editing);
-    if (!active || active.pattern || !active.instrument) {
-      return;
-    }
-    addPattern(editing);
-  }, [addPattern, editing, tracks]);
-
   const handleAddTrackWithOptions = useCallback(
     ({ packId, instrumentId, characterId, presetId }: AddTrackRequest) => {
       if (!addTrackEnabled) return;

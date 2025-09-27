@@ -48,6 +48,28 @@ import { packs } from "./packs";
 import type { KickDefaults } from "./instruments/kickInstrument";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 
+const pickNumber = (primary: unknown, secondary: unknown, fallback: number): number => {
+  if (typeof primary === "number" && !Number.isNaN(primary)) return primary;
+  if (typeof secondary === "number" && !Number.isNaN(secondary)) return secondary;
+  return fallback;
+};
+
+const pickBoolean = (primary: unknown, secondary: unknown, fallback: boolean): boolean => {
+  if (typeof primary === "boolean") return primary;
+  if (typeof secondary === "boolean") return secondary;
+  return fallback;
+};
+
+const pickString = (
+  primary: unknown,
+  secondary: unknown,
+  fallback: string
+): string => {
+  if (typeof primary === "string") return primary;
+  if (typeof secondary === "string") return secondary;
+  return fallback;
+};
+
 interface InstrumentControlPanelProps {
   track: Track;
   allTracks: Track[];
@@ -327,6 +349,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   onHarmoniaRealtimeChange,
 }) => {
   const pattern = track.pattern;
+  const [previewControls, setPreviewControls] = useState<Partial<Chunk>>({});
   const patternCharacterId = pattern?.characterId ?? null;
   const instrumentLabel = formatInstrumentLabel(track.instrument ?? "");
   const isKick = track.instrument === "kick";
@@ -353,6 +376,19 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     >
   >(new Map());
 
+  useEffect(() => {
+    if (pattern) {
+      setPreviewControls({});
+    }
+  }, [pattern]);
+
+  if (import.meta.env.DEV) {
+    console.info("[InstrumentControlPanel] rendering controls", {
+      instrumentId: track.instrument ?? null,
+      hasPattern: Boolean(pattern),
+    });
+  }
+
   const updatePattern = useMemo(() => {
     if (!onUpdatePattern || !pattern) {
       return undefined;
@@ -364,6 +400,35 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       }));
     };
   }, [onUpdatePattern, pattern]);
+
+  const handleControlChange = useCallback(
+    (partial: Partial<Chunk>, context?: string) => {
+      if (updatePattern) {
+        updatePattern(partial);
+        return;
+      }
+      setPreviewControls((prev) => ({
+        ...prev,
+        ...partial,
+      }));
+      if (import.meta.env.DEV) {
+        console.info("[controls] no pattern, showing defaults only", {
+          instrumentId: track.instrument ?? null,
+          updates: partial,
+          context,
+        });
+      }
+    },
+    [updatePattern, track.instrument]
+  );
+
+  const createControlUpdater = useCallback(
+    (field: keyof Chunk, context?: string) =>
+      (value: unknown) => {
+        handleControlChange({ [field]: value } as Partial<Chunk>, context ?? String(field));
+      },
+    [handleControlChange]
+  );
 
   const harmoniaCharacterPreset = useMemo(() => {
     if (!isHarmonia) return null;
@@ -378,15 +443,36 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     () =>
       normalizeHarmoniaControlState({
         complexity:
-          (pattern?.harmoniaComplexity as HarmoniaComplexity | undefined) ??
+          ((pattern?.harmoniaComplexity as HarmoniaComplexity | undefined) ||
+            (previewControls.harmoniaComplexity as HarmoniaComplexity | undefined)) ??
           harmoniaCharacterPreset?.complexity,
-        tone: pattern?.harmoniaTone,
-        dynamics: pattern?.harmoniaDynamics,
-        bassEnabled: pattern?.harmoniaBass,
-        arpEnabled: pattern?.harmoniaArp,
-        patternId: pattern?.harmoniaPatternId as HarmoniaPatternId | undefined,
+        tone:
+          pickNumber(
+            pattern?.harmoniaTone,
+            previewControls.harmoniaTone,
+            HARMONIA_DEFAULT_CONTROLS.tone
+          ),
+        dynamics:
+          pickNumber(
+            pattern?.harmoniaDynamics,
+            previewControls.harmoniaDynamics,
+            HARMONIA_DEFAULT_CONTROLS.dynamics
+          ),
+        bassEnabled: pickBoolean(
+          pattern?.harmoniaBass,
+          previewControls.harmoniaBass,
+          HARMONIA_DEFAULT_CONTROLS.bassEnabled
+        ),
+        arpEnabled: pickBoolean(
+          pattern?.harmoniaArp,
+          previewControls.harmoniaArp,
+          HARMONIA_DEFAULT_CONTROLS.arpEnabled
+        ),
+        patternId:
+          (pattern?.harmoniaPatternId as HarmoniaPatternId | undefined) ??
+          (previewControls.harmoniaPatternId as HarmoniaPatternId | undefined),
       }),
-    [pattern, harmoniaCharacterPreset]
+    [pattern, previewControls, harmoniaCharacterPreset]
   );
 
   const packId = track.source?.packId ?? "";
@@ -448,28 +534,33 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   >(() => {
     if (!isKick || !kickDefaults) return null;
     return {
-      pitchDecay:
-        typeof pattern?.kickPitchDecay === "number"
-          ? pattern.kickPitchDecay
-          : kickDefaults.pitchDecay,
-      octaves:
-        typeof pattern?.kickOctaves === "number"
-          ? pattern.kickOctaves
-          : kickDefaults.octaves,
-      decay:
-        typeof pattern?.kickDecay === "number"
-          ? pattern.kickDecay
-          : kickDefaults.decay,
-      release:
-        typeof pattern?.kickRelease === "number"
-          ? pattern.kickRelease
-          : kickDefaults.release,
-      noiseDb:
-        typeof pattern?.kickNoiseDb === "number"
-          ? pattern.kickNoiseDb
-          : kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb,
+      pitchDecay: pickNumber(
+        pattern?.kickPitchDecay,
+        previewControls.kickPitchDecay,
+        kickDefaults.pitchDecay
+      ),
+      octaves: pickNumber(
+        pattern?.kickOctaves,
+        previewControls.kickOctaves,
+        kickDefaults.octaves
+      ),
+      decay: pickNumber(
+        pattern?.kickDecay,
+        previewControls.kickDecay,
+        kickDefaults.decay
+      ),
+      release: pickNumber(
+        pattern?.kickRelease,
+        previewControls.kickRelease,
+        kickDefaults.release
+      ),
+      noiseDb: pickNumber(
+        pattern?.kickNoiseDb,
+        previewControls.kickNoiseDb,
+        kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb
+      ),
     };
-  }, [isKick, pattern, kickDefaults]);
+  }, [isKick, pattern, previewControls, kickDefaults]);
 
   useEffect(() => {
     if (!isKick || !pattern || !updatePattern || !kickDefaults) return;
@@ -496,16 +587,18 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   }, [isKick, pattern, updatePattern, kickDefaults]);
 
   const resetKickToDefaults = useCallback(() => {
-    if (!updatePattern || !kickDefaults) return;
-    updatePattern({
-      kickPitchDecay: kickDefaults.pitchDecay,
-      kickOctaves: kickDefaults.octaves,
-      kickDecay: kickDefaults.decay,
-      kickRelease: kickDefaults.release,
-      kickNoiseDb:
-        kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb,
-    });
-  }, [updatePattern, kickDefaults]);
+    if (!kickDefaults) return;
+    handleControlChange(
+      {
+        kickPitchDecay: kickDefaults.pitchDecay,
+        kickOctaves: kickDefaults.octaves,
+        kickDecay: kickDefaults.decay,
+        kickRelease: kickDefaults.release,
+        kickNoiseDb: kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb,
+      },
+      "kickReset"
+    );
+  }, [kickDefaults, handleControlChange]);
 
   const harmoniaPatternPresets = useMemo(() => {
     if (!packId) {
@@ -655,7 +748,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     }
   }, [isArp, isKeyboard, pattern, updatePattern]);
 
-  const activeVelocity = pattern?.velocityFactor ?? 1;
+  const activeVelocity = pickNumber(
+    pattern?.velocityFactor,
+    previewControls.velocityFactor,
+    1
+  );
   const manualVelocity = Math.max(0, Math.min(1, activeVelocity));
   const canTrigger = Boolean(trigger && pattern);
   const updateRecording = useCallback(
@@ -665,7 +762,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     [onRecordingChange]
   );
 
-  const arpRoot = pattern?.note ?? "C4";
+  const arpRoot = pickString(pattern?.note, previewControls.note, "C4");
   const arpRateOptions = ["1/32", "1/16", "1/8", "1/4"] as const;
 
   const availableNotes = useMemo(() => {
@@ -711,12 +808,15 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           filter: tone,
         };
       }
-      updatePattern?.({
-        harmoniaTone: tone,
-        harmoniaDynamics: dynamics,
-        filter: tone,
-        velocityFactor: dynamics,
-      });
+      handleControlChange(
+        {
+          harmoniaTone: tone,
+          harmoniaDynamics: dynamics,
+          filter: tone,
+          velocityFactor: dynamics,
+        },
+        "harmoniaPad"
+      );
       onHarmoniaRealtimeChange?.({
         tone,
         dynamics,
@@ -726,7 +826,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     },
     [
       isHarmonia,
-      updatePattern,
+      handleControlChange,
       onHarmoniaRealtimeChange,
       sourceCharacterId,
       patternCharacterId,
@@ -985,17 +1085,45 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     };
   }, [pattern, tonalCenter, scaleName, selectedDegree, extensionsEnabled]);
 
-  const timingMode = pattern?.timingMode === "free" ? "free" : "sync";
-  const autopilotEnabled = pattern?.autopilot ?? false;
-  const arpStyle = pattern?.style ?? "up";
-  const arpRate = normalizeArpRate(pattern?.arpRate);
-  const arpFreeRate = pattern?.arpFreeRate ?? DEFAULT_FREE_RATE;
-  const arpGate = pattern?.arpGate ?? 0.6;
-  const arpOctaves = pattern?.arpOctaves ?? 1;
-  const latchEnabled = pattern?.arpLatch ?? false;
-  const reverbAmount = pattern?.reverb ?? 0;
-  const distortionAmount = pattern?.distortion ?? 0;
-  const bitcrusherAmount = pattern?.bitcrusher ?? 0;
+  const timingModeSource = pickString(
+    pattern?.timingMode,
+    previewControls.timingMode,
+    "sync"
+  );
+  const timingMode = timingModeSource === "free" ? "free" : "sync";
+  const autopilotEnabled = pickBoolean(
+    pattern?.autopilot,
+    previewControls.autopilot,
+    false
+  );
+  const arpStyle = pickString(pattern?.style, previewControls.style, "up");
+  const arpMode = pickString(pattern?.mode, previewControls.mode, "manual");
+  const arpRate = normalizeArpRate(
+    pickString(pattern?.arpRate, previewControls.arpRate, "1/16")
+  );
+  const arpFreeRate = pickNumber(
+    pattern?.arpFreeRate,
+    previewControls.arpFreeRate,
+    DEFAULT_FREE_RATE
+  );
+  const arpGate = pickNumber(pattern?.arpGate, previewControls.arpGate, 0.6);
+  const arpOctaves = pickNumber(pattern?.arpOctaves, previewControls.arpOctaves, 1);
+  const latchEnabled = pickBoolean(
+    pattern?.arpLatch,
+    previewControls.arpLatch,
+    false
+  );
+  const reverbAmount = pickNumber(pattern?.reverb, previewControls.reverb, 0);
+  const distortionAmount = pickNumber(
+    pattern?.distortion,
+    previewControls.distortion,
+    0
+  );
+  const bitcrusherAmount = pickNumber(
+    pattern?.bitcrusher,
+    previewControls.bitcrusher,
+    0
+  );
 
   const chordDefinition = useMemo(
     () =>
@@ -2208,14 +2336,18 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   );
 
   const updatePatternAndReschedule = useCallback(
-    (partial: Partial<Chunk>) => {
-      if (!updatePattern) return;
-      updatePattern(partial);
-      if (autopilotEnabled || latchEnabled || activeDegree !== null) {
+    (partial: Partial<Chunk>, context?: string) => {
+      const hadPattern = Boolean(updatePattern);
+      handleControlChange(partial, context ?? "updatePatternAndReschedule");
+      if (
+        hadPattern &&
+        (autopilotEnabled || latchEnabled || activeDegree !== null)
+      ) {
         scheduleArpPlayback(selectedDegree);
       }
     },
     [
+      handleControlChange,
       updatePattern,
       autopilotEnabled,
       latchEnabled,
@@ -2227,7 +2359,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
   const applyPresetSettings = useCallback(
     (presetId: string) => {
-      if (!updatePattern) return;
       const preset = ARP_PRESETS.find((candidate) => candidate.id === presetId);
       if (!preset) return;
       const settings = preset.settings;
@@ -2248,9 +2379,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         payload.distortion = settings.distortion;
       if (settings.bitcrusher !== undefined)
         payload.bitcrusher = settings.bitcrusher;
-      updatePatternAndReschedule(payload);
+      updatePatternAndReschedule(payload, `arpPreset:${presetId}`);
     },
-    [updatePattern, updatePatternAndReschedule]
+    [updatePatternAndReschedule]
   );
 
   if (isArp) {
@@ -2580,7 +2711,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                         latchedDegreeRef.current = null;
                         if (!autopilotEnabled) stopArpPlayback();
                       }
-                      updatePattern?.({ arpLatch: !latchEnabled });
+                      handleControlChange(
+                        { arpLatch: !latchEnabled },
+                        "arpLatchToggle"
+                      );
                     }}
                     style={{
                       padding: "6px 12px",
@@ -2717,7 +2851,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   step={0.01}
                   value={reverbAmount}
                   formatValue={(value) => `${Math.round(value * 100)}%`}
-                  onChange={updatePattern ? (value) => updatePattern({ reverb: value }) : undefined}
+                  onChange={createControlUpdater("reverb", "reverbFx")}
                 />
                 <Slider
                   label="Grit"
@@ -2726,7 +2860,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   step={0.01}
                   value={distortionAmount}
                   formatValue={(value) => `${Math.round(value * 100)}%`}
-                  onChange={updatePattern ? (value) => updatePattern({ distortion: value }) : undefined}
+                  onChange={createControlUpdater("distortion", "distortionFx")}
                 />
                 <Slider
                   label="Lo-fi"
@@ -2735,7 +2869,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   step={0.01}
                   value={bitcrusherAmount}
                   formatValue={(value) => `${Math.round(value * 100)}%`}
-                  onChange={updatePattern ? (value) => updatePattern({ bitcrusher: value }) : undefined}
+                  onChange={createControlUpdater("bitcrusher", "bitcrusherFx")}
                 />
               </div>
             </CollapsibleSection>
@@ -2799,7 +2933,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 borderRadius: 14,
                 border: "1px solid #1f2a3d",
                 background: "linear-gradient(135deg, #17253a 0%, #0c1524 100%)",
-                cursor: updatePattern ? "pointer" : "default",
+                cursor: "pointer",
                 touchAction: "none",
                 overflow: "hidden",
                 userSelect: "none",
@@ -3337,17 +3471,13 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           step={0.01}
           value={isHarmonia ? harmoniaControls.dynamics : activeVelocity}
           formatValue={(value) => `${Math.round(value * 100)}%`}
-          onChange={
-            updatePattern
-              ? (value) => {
-                  const payload: Partial<Chunk> = { velocityFactor: value };
-                  if (isHarmonia) {
-                    payload.harmoniaDynamics = value;
-                  }
-                  updatePattern(payload);
-                }
-              : undefined
-          }
+          onChange={(value) => {
+            const payload: Partial<Chunk> = { velocityFactor: value };
+            if (isHarmonia) {
+              payload.harmoniaDynamics = value;
+            }
+            handleControlChange(payload, "velocityFactor");
+          }}
         />
       </Section>
 
@@ -3358,27 +3488,31 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={-12}
             max={12}
             step={1}
-            value={pattern?.pitchOffset ?? 0}
+            value={pickNumber(
+              pattern?.pitchOffset,
+              previewControls.pitchOffset,
+              0
+            )}
             formatValue={(value) => `${value > 0 ? "+" : ""}${value} st`}
-            onChange={updatePattern ? (value) => updatePattern({ pitchOffset: value }) : undefined}
+            onChange={createControlUpdater("pitchOffset")}
           />
           <Slider
             label="Swing"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.swing ?? 0}
+            value={pickNumber(pattern?.swing, previewControls.swing, 0)}
             formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ swing: value }) : undefined}
+            onChange={createControlUpdater("swing")}
           />
           <Slider
             label="Humanize"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.humanize ?? 0}
+            value={pickNumber(pattern?.humanize, previewControls.humanize, 0)}
             formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ humanize: value }) : undefined}
+            onChange={createControlUpdater("humanize")}
           />
         </Section>
       ) : null}
@@ -3395,24 +3529,22 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             <span style={{ color: "#94a3b8", fontSize: 12, fontWeight: 600 }}>
               Kick Designer
             </span>
-            {updatePattern ? (
-              <button
-                type="button"
-                onClick={resetKickToDefaults}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  border: "1px solid #2a3344",
-                  background: "#121a2b",
-                  color: "#cbd5f5",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Reset to Character
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={resetKickToDefaults}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: "1px solid #2a3344",
+                background: "#121a2b",
+                color: "#cbd5f5",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Reset to Character
+            </button>
           </div>
           <Slider
             label="Pitch Decay"
@@ -3421,11 +3553,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             step={0.001}
             value={kickControlValues.pitchDecay}
             formatValue={(value) => `${value.toFixed(3)} s`}
-            onChange={
-              updatePattern
-                ? (value) => updatePattern({ kickPitchDecay: value })
-                : undefined
-            }
+            onChange={createControlUpdater("kickPitchDecay")}
           />
           <Slider
             label="Octave Sweep"
@@ -3434,11 +3562,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             step={0.1}
             value={kickControlValues.octaves}
             formatValue={(value) => `${value.toFixed(1)}x`}
-            onChange={
-              updatePattern
-                ? (value) => updatePattern({ kickOctaves: value })
-                : undefined
-            }
+            onChange={createControlUpdater("kickOctaves")}
           />
           <Slider
             label="Body Decay"
@@ -3447,11 +3571,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             step={0.01}
             value={kickControlValues.decay}
             formatValue={(value) => `${value.toFixed(2)} s`}
-            onChange={
-              updatePattern
-                ? (value) => updatePattern({ kickDecay: value })
-                : undefined
-            }
+            onChange={createControlUpdater("kickDecay")}
           />
           <Slider
             label="Release"
@@ -3460,11 +3580,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             step={0.01}
             value={kickControlValues.release}
             formatValue={(value) => `${value.toFixed(2)} s`}
-            onChange={
-              updatePattern
-                ? (value) => updatePattern({ kickRelease: value })
-                : undefined
-            }
+            onChange={createControlUpdater("kickRelease")}
           />
           <Slider
             label="Noise Level"
@@ -3473,11 +3589,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             step={1}
             value={kickControlValues.noiseDb}
             formatValue={(value) => `${Math.round(value)} dB`}
-            onChange={
-              updatePattern
-                ? (value) => updatePattern({ kickNoiseDb: value })
-                : undefined
-            }
+            onChange={createControlUpdater("kickNoiseDb")}
           />
         </Section>
       ) : null}
@@ -3489,38 +3601,38 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={0.5}
             step={0.005}
-            value={pattern?.attack ?? 0.01}
+            value={pickNumber(pattern?.attack, previewControls.attack, 0.01)}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
-            onChange={updatePattern ? (value) => updatePattern({ attack: value }) : undefined}
+            onChange={createControlUpdater("attack")}
           />
           <Slider
             label="Release"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.sustain ?? 0.2}
+            value={pickNumber(pattern?.sustain, previewControls.sustain, 0.2)}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
-            onChange={updatePattern ? (value) => updatePattern({ sustain: value }) : undefined}
+            onChange={createControlUpdater("sustain")}
           />
           <Slider
             label="Glide"
             min={0}
             max={0.5}
             step={0.01}
-            value={pattern?.glide ?? 0}
+            value={pickNumber(pattern?.glide, previewControls.glide, 0)}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
-            onChange={updatePattern ? (value) => updatePattern({ glide: value }) : undefined}
+            onChange={createControlUpdater("glide")}
           />
           <Slider
             label="Filter"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.filter ?? 1}
+            value={pickNumber(pattern?.filter, previewControls.filter, 1)}
             formatValue={(value) =>
               `${Math.round(filterValueToFrequency(value))} Hz`
             }
-            onChange={updatePattern ? (value) => updatePattern({ filter: value }) : undefined}
+            onChange={createControlUpdater("filter")}
           />
         </Section>
       ) : null}
@@ -3570,16 +3682,16 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 {["up", "down", "up-down", "random", "unfold"].map((style) => (
                   <button
                     key={style}
-                    onClick={() => updatePattern?.({ style })}
+                    onClick={() =>
+                      handleControlChange({ style }, "arpStyleSelect")
+                    }
                     style={{
                       flex: "1 1 48%",
                       padding: "8px 12px",
                       borderRadius: 8,
                       border: "1px solid #2a3344",
-                      background:
-                        pattern?.style === style ? "#27E0B0" : "#1f2532",
-                      color:
-                        pattern?.style === style ? "#1F2532" : "#e6f2ff",
+                      background: arpStyle === style ? "#27E0B0" : "#1f2532",
+                      color: arpStyle === style ? "#1F2532" : "#e6f2ff",
                       cursor: "pointer",
                       textTransform: "capitalize",
                     }}
@@ -3595,16 +3707,16 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 {["manual", "continuous"].map((mode) => (
                   <button
                     key={mode}
-                    onClick={() => updatePattern?.({ mode })}
+                    onClick={() =>
+                      handleControlChange({ mode }, "arpModeSelect")
+                    }
                     style={{
                       flex: 1,
                       padding: "8px 12px",
                       borderRadius: 8,
                       border: "1px solid #2a3344",
-                      background:
-                        pattern?.mode === mode ? "#27E0B0" : "#1f2532",
-                      color:
-                        pattern?.mode === mode ? "#1F2532" : "#e6f2ff",
+                      background: arpMode === mode ? "#27E0B0" : "#1f2532",
+                      color: arpMode === mode ? "#1F2532" : "#e6f2ff",
                       cursor: "pointer",
                       textTransform: "capitalize",
                     }}
@@ -3617,9 +3729,12 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>Rate</span>
               <select
-                value={pattern?.arpRate ?? "1/16"}
+                value={arpRate}
                 onChange={(event) =>
-                  updatePattern?.({ arpRate: event.target.value })
+                  updatePatternAndReschedule(
+                    { arpRate: event.target.value },
+                    "arpRateSelect"
+                  )
                 }
                 style={{
                   padding: 8,
@@ -3677,36 +3792,40 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               min={0.1}
               max={1}
               step={0.01}
-              value={pattern?.arpGate ?? 0.6}
+              value={arpGate}
               formatValue={(value) => `${Math.round(value * 100)}%`}
-              onChange={updatePattern ? (value) => updatePattern({ arpGate: value }) : undefined}
+              onChange={(value) =>
+                updatePatternAndReschedule({ arpGate: value }, "arpGate")
+              }
             />
             <Slider
               label="Octaves"
               min={1}
               max={4}
               step={1}
-              value={pattern?.arpOctaves ?? 1}
+              value={arpOctaves}
               formatValue={(value) => `${value}x`}
-              onChange={updatePattern ? (value) => updatePattern({ arpOctaves: value }) : undefined}
+              onChange={(value) =>
+                updatePatternAndReschedule({ arpOctaves: value }, "arpOctaves")
+              }
             />
             <Slider
               label="Pitch Bend"
               min={-5}
               max={5}
               step={0.5}
-              value={pattern?.pitchBend ?? 0}
+              value={pickNumber(pattern?.pitchBend, previewControls.pitchBend, 0)}
               formatValue={(value) => `${value > 0 ? "+" : ""}${value} st`}
-              onChange={updatePattern ? (value) => updatePattern({ pitchBend: value }) : undefined}
+              onChange={createControlUpdater("pitchBend")}
             />
             <Slider
               label="Sustain"
               min={0}
               max={1.5}
               step={0.01}
-              value={pattern?.sustain ?? 0.2}
+              value={pickNumber(pattern?.sustain, previewControls.sustain, 0.2)}
               formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
-              onChange={updatePattern ? (value) => updatePattern({ sustain: value }) : undefined}
+              onChange={createControlUpdater("sustain")}
             />
             <div
               style={{
@@ -3720,18 +3839,18 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               <span style={{ fontWeight: 600 }}>Latch</span>
               <button
                 onClick={() =>
-                  updatePattern?.({ arpLatch: !(pattern?.arpLatch ?? false) })
+                  handleControlChange({ arpLatch: !latchEnabled }, "arpLatch")
                 }
                 style={{
                   padding: "6px 12px",
                   borderRadius: 8,
                   border: "1px solid #2a3344",
-                  background: pattern?.arpLatch ? "#27E0B0" : "#1f2532",
-                  color: pattern?.arpLatch ? "#1F2532" : "#e6f2ff",
+                  background: latchEnabled ? "#27E0B0" : "#1f2532",
+                  color: latchEnabled ? "#1F2532" : "#e6f2ff",
                   cursor: "pointer",
                 }}
               >
-                {pattern?.arpLatch ? "On" : "Off"}
+                {latchEnabled ? "On" : "Off"}
               </button>
             </div>
           </div>
@@ -3744,92 +3863,92 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={2}
             step={0.01}
-            value={pattern?.attack ?? 0.05}
+            value={pickNumber(pattern?.attack, previewControls.attack, 0.05)}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
-            onChange={updatePattern ? (value) => updatePattern({ attack: value }) : undefined}
+            onChange={createControlUpdater("attack")}
           />
           <Slider
             label="Sustain"
             min={0}
             max={3}
             step={0.01}
-            value={pattern?.sustain ?? 0.8}
+            value={pickNumber(pattern?.sustain, previewControls.sustain, 0.8)}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
-            onChange={updatePattern ? (value) => updatePattern({ sustain: value }) : undefined}
+            onChange={createControlUpdater("sustain")}
           />
           <Slider
             label="Glide"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.glide ?? 0}
+            value={pickNumber(pattern?.glide, previewControls.glide, 0)}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
-            onChange={updatePattern ? (value) => updatePattern({ glide: value }) : undefined}
+            onChange={createControlUpdater("glide")}
           />
           <Slider
             label="Pan"
             min={-1}
             max={1}
             step={0.01}
-            value={pattern?.pan ?? 0}
+            value={pickNumber(pattern?.pan, previewControls.pan, 0)}
             formatValue={(value) => `${(value * 100).toFixed(0)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ pan: value }) : undefined}
+            onChange={createControlUpdater("pan")}
           />
           <Slider
             label="Reverb"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.reverb ?? 0}
+            value={pickNumber(pattern?.reverb, previewControls.reverb, 0)}
             formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ reverb: value }) : undefined}
+            onChange={createControlUpdater("reverb")}
           />
           <Slider
             label="Delay"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.delay ?? 0}
+            value={pickNumber(pattern?.delay, previewControls.delay, 0)}
             formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ delay: value }) : undefined}
+            onChange={createControlUpdater("delay")}
           />
           <Slider
             label="Distortion"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.distortion ?? 0}
+            value={pickNumber(pattern?.distortion, previewControls.distortion, 0)}
             formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ distortion: value }) : undefined}
+            onChange={createControlUpdater("distortion")}
           />
           <Slider
             label="Bitcrusher"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.bitcrusher ?? 0}
+            value={pickNumber(pattern?.bitcrusher, previewControls.bitcrusher, 0)}
             formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ bitcrusher: value }) : undefined}
+            onChange={createControlUpdater("bitcrusher")}
           />
           <Slider
             label="Chorus"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.chorus ?? 0}
+            value={pickNumber(pattern?.chorus, previewControls.chorus, 0)}
             formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ chorus: value }) : undefined}
+            onChange={createControlUpdater("chorus")}
           />
           <Slider
             label="Filter"
             min={0}
             max={1}
             step={0.01}
-            value={pattern?.filter ?? 1}
+            value={pickNumber(pattern?.filter, previewControls.filter, 1)}
             formatValue={(value) =>
               `${Math.round(filterValueToFrequency(value))} Hz`
             }
-            onChange={updatePattern ? (value) => updatePattern({ filter: value }) : undefined}
+            onChange={createControlUpdater("filter")}
           />
         </Section>
       ) : null}
