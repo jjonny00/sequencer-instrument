@@ -10,12 +10,24 @@
         {
           "id": "trap_808_boom",
           "name": "808 Boom",
-          "defaults": { "punch": 0.2, "clean": 0.6, "tight": 0.7 }
+          "defaults": {
+            "pitchDecay": 0.05,
+            "octaves": 5.5,
+            "decay": 0.95,
+            "release": 0.22,
+            "noiseDb": -40
+          }
         },
         {
           "id": "trap_hard_clip",
           "name": "Hard Clip",
-          "defaults": { "punch": 0.4, "clean": 0.2, "tight": 0.6 }
+          "defaults": {
+            "pitchDecay": 0.035,
+            "octaves": 4.8,
+            "decay": 0.8,
+            "release": 0.18,
+            "noiseDb": -34
+          }
         }
       ],
       "patterns": [

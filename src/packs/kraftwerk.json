@@ -10,12 +10,24 @@
         {
           "id": "kraftwerk_motor_drive",
           "name": "Motor Drive",
-          "defaults": { "punch": 0.5, "clean": 0.8, "tight": 0.55 }
+          "defaults": {
+            "pitchDecay": 0.025,
+            "octaves": 3.8,
+            "decay": 0.55,
+            "release": 0.12,
+            "noiseDb": -30
+          }
         },
         {
           "id": "kraftwerk_robotic_snap",
           "name": "Robotic Snap",
-          "defaults": { "punch": 0.35, "clean": 0.6, "tight": 0.45 }
+          "defaults": {
+            "pitchDecay": 0.018,
+            "octaves": 3.2,
+            "decay": 0.4,
+            "release": 0.1,
+            "noiseDb": -26
+          }
         }
       ],
       "patterns": [
