@@ -6,19 +6,11 @@ export interface InstrumentSpec {
   effects?: EffectSpec[];
 }
 
-export interface KickCharacterDefaults {
-  pitchDecay: number;
-  octaves: number;
-  decay: number;
-  release: number;
-  noiseDb?: number;
-}
-
 export interface InstrumentCharacter extends InstrumentSpec {
   id: string;
   name: string;
   description?: string;
-  defaults?: KickCharacterDefaults;
+  defaults?: Record<string, unknown>;
 }
 
 export interface InstrumentDefinition {

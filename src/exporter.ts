@@ -14,7 +14,7 @@ import {
   triggerHarmoniaChord,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import { createKick } from "./instruments/kickInstrument";
+import { createKick, extractKickOverrides } from "./instruments/kickInstrument";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -294,7 +294,8 @@ const createOfflineTriggerMap = (
         sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
 
       if (instrumentId === "kick") {
-        const voice = createKick(pack.id, character.id, tone);
+        const overrides = extractKickOverrides(chunk);
+        const voice = createKick(pack.id, character.id, { tone, overrides });
         const duration = sustainOverride ?? "8n";
         const hitVelocity = velocity ?? 0.9;
         voice.triggerAttackRelease(duration, time, hitVelocity);

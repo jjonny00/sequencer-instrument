@@ -13,7 +13,7 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import { createKick } from "./instruments/kickInstrument";
+import { createKick, extractKickOverrides } from "./instruments/kickInstrument";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -956,7 +956,8 @@ export default function App() {
           const sustainOverride =
             sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
           if (instrumentId === "kick") {
-            const voice = createKick(pack.id, character.id);
+            const overrides = extractKickOverrides(chunk);
+            const voice = createKick(pack.id, character.id, { overrides });
             const duration = sustainOverride ?? "8n";
             const hitVelocity = velocity ?? 0.9;
             voice.triggerAttackRelease(duration, time, hitVelocity);

@@ -110,6 +110,36 @@
       "minimum": 0,
       "maximum": 1
     },
+    "kickPitchDecay": {
+      "type": "number",
+      "description": "Kick oscillator pitch decay in seconds",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "kickOctaves": {
+      "type": "number",
+      "description": "Kick oscillator octave sweep",
+      "minimum": 0,
+      "maximum": 8
+    },
+    "kickDecay": {
+      "type": "number",
+      "description": "Kick amplitude decay time in seconds",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "kickRelease": {
+      "type": "number",
+      "description": "Kick release tail in seconds",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "kickNoiseDb": {
+      "type": "number",
+      "description": "Kick transient noise level (dB)",
+      "minimum": -80,
+      "maximum": 6
+    },
     "timingMode": {
       "type": "string",
       "description": "Whether the pattern follows BPM sync or free timing",

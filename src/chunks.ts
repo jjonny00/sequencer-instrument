@@ -24,6 +24,11 @@ export interface Chunk {
   bitcrusher?: number;
   filter?: number;
   chorus?: number;
+  kickPitchDecay?: number;
+  kickOctaves?: number;
+  kickDecay?: number;
+  kickRelease?: number;
+  kickNoiseDb?: number;
   timingMode?: "sync" | "free";
   tonalCenter?: string;
   scale?: string;

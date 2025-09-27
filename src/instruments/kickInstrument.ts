@@ -1,5 +1,6 @@
 import * as Tone from "tone";
 import type { fromContext } from "tone/build/esm/fromContext";
+import type { Chunk } from "@/chunks";
 import type { InstrumentCharacter, Pack } from "@/packs";
 import { packs } from "@/packs";
 
@@ -13,6 +14,41 @@ export type KickDefaults = {
 
 type BoundTone = ReturnType<typeof fromContext>;
 type ToneLike = typeof Tone | BoundTone;
+
+type KickOverrideSource = Pick<
+  Chunk,
+  "kickPitchDecay" | "kickOctaves" | "kickDecay" | "kickRelease" | "kickNoiseDb"
+>;
+
+export interface CreateKickOptions {
+  tone?: ToneLike;
+  overrides?: Partial<KickDefaults>;
+}
+
+const NOISE_MUTE_THRESHOLD_DB = -60;
+
+export function extractKickOverrides(
+  source?: Partial<KickOverrideSource> | null
+): Partial<KickDefaults> | undefined {
+  if (!source) return undefined;
+  const overrides: Partial<KickDefaults> = {};
+  if (typeof source.kickPitchDecay === "number") {
+    overrides.pitchDecay = source.kickPitchDecay;
+  }
+  if (typeof source.kickOctaves === "number") {
+    overrides.octaves = source.kickOctaves;
+  }
+  if (typeof source.kickDecay === "number") {
+    overrides.decay = source.kickDecay;
+  }
+  if (typeof source.kickRelease === "number") {
+    overrides.release = source.kickRelease;
+  }
+  if (typeof source.kickNoiseDb === "number") {
+    overrides.noiseDb = source.kickNoiseDb;
+  }
+  return Object.keys(overrides).length > 0 ? overrides : undefined;
+}
 
 function resolveKickCharacter(packId: string, characterId: string): InstrumentCharacter {
   const pack = packs.find((packDef: Pack) => packDef.id === packId);
@@ -49,11 +85,16 @@ function resolveKickDefaults(character: InstrumentCharacter): KickDefaults {
 export function createKick(
   packId: string,
   characterId: string,
-  tone: ToneLike = Tone
+  options?: CreateKickOptions
 ) {
   const char = resolveKickCharacter(packId, characterId);
   const defaults = resolveKickDefaults(char);
-  const { pitchDecay, octaves, decay, release, noiseDb } = defaults;
+  const tone = options?.tone ?? Tone;
+  const params: KickDefaults = {
+    ...defaults,
+    ...(options?.overrides ?? {}),
+  };
+  const { pitchDecay, octaves, decay, release, noiseDb } = params;
 
   const sub = new tone.MembraneSynth({
     pitchDecay,
@@ -64,7 +105,7 @@ export function createKick(
 
   let noise: Tone.NoiseSynth | null = null;
   let noiseGain: Tone.Gain | null = null;
-  if (typeof noiseDb === "number" && noiseDb > -36) {
+  if (typeof noiseDb === "number" && noiseDb > NOISE_MUTE_THRESHOLD_DB) {
     noise = new tone.NoiseSynth({
       envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 },
     });
@@ -73,7 +114,12 @@ export function createKick(
   }
 
   if (import.meta.env.DEV) {
-    console.info("[kick:create]", { packId, characterId: char.id, params: defaults });
+    console.info("[kick:create]", {
+      packId,
+      characterId: char.id,
+      params,
+      overrides: options?.overrides ?? null,
+    });
   }
 
   return {

@@ -45,6 +45,8 @@ import {
   USER_PRESET_PREFIX,
 } from "./presets";
 import { packs } from "./packs";
+import type { KickDefaults } from "./instruments/kickInstrument";
+import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 
 interface InstrumentControlPanelProps {
   track: Track;
@@ -248,6 +250,16 @@ const SYNC_RATE_OPTIONS = [
 
 const DEFAULT_FREE_RATE = 240;
 
+type ResolvedKickDefaults = KickDefaults & { noiseDb: number };
+
+const FALLBACK_KICK_DEFAULTS: ResolvedKickDefaults = {
+  pitchDecay: 0.05,
+  octaves: 4,
+  decay: 0.8,
+  release: 0.2,
+  noiseDb: -40,
+};
+
 const normalizeArpRate = (value: string | undefined | null): string => {
   if (!value) return "8n";
   const normalized = value.toLowerCase();
@@ -317,6 +329,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const pattern = track.pattern;
   const patternCharacterId = pattern?.characterId ?? null;
   const instrumentLabel = formatInstrumentLabel(track.instrument ?? "");
+  const isKick = track.instrument === "kick";
   const isPercussive = isPercussiveInstrument(track.instrument ?? "");
   const isBass = track.instrument === "bass";
   const isArp = track.instrument === "arp";
@@ -377,6 +390,122 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   );
 
   const packId = track.source?.packId ?? "";
+
+  const kickCharacter = useMemo(() => {
+    if (!isKick || !packId) return null;
+    const pack = packs.find((candidate) => candidate.id === packId);
+    const instrument = pack?.instruments?.kick;
+    if (!instrument) return null;
+    const resolvedCharacterId = resolveInstrumentCharacterId(
+      instrument,
+      sourceCharacterId,
+      null,
+      patternCharacterId
+    );
+    if (!resolvedCharacterId) {
+      return instrument.characters[0] ?? null;
+    }
+    return (
+      instrument.characters.find((candidate) => candidate.id === resolvedCharacterId) ??
+      instrument.characters[0] ??
+      null
+    );
+  }, [isKick, packId, sourceCharacterId, patternCharacterId]);
+
+  const kickDefaults = useMemo<ResolvedKickDefaults | null>(() => {
+    if (!isKick) return null;
+    if (!kickCharacter) return FALLBACK_KICK_DEFAULTS;
+    const defaults = kickCharacter.defaults as Partial<KickDefaults> | undefined;
+    if (!defaults) return FALLBACK_KICK_DEFAULTS;
+    const { pitchDecay, octaves, decay, release, noiseDb } = defaults;
+    if (
+      typeof pitchDecay !== "number" ||
+      typeof octaves !== "number" ||
+      typeof decay !== "number" ||
+      typeof release !== "number"
+    ) {
+      return FALLBACK_KICK_DEFAULTS;
+    }
+    return {
+      pitchDecay,
+      octaves,
+      decay,
+      release,
+      noiseDb:
+        typeof noiseDb === "number" ? noiseDb : FALLBACK_KICK_DEFAULTS.noiseDb,
+    };
+  }, [isKick, kickCharacter]);
+
+  const kickControlValues = useMemo<
+    | {
+        pitchDecay: number;
+        octaves: number;
+        decay: number;
+        release: number;
+        noiseDb: number;
+      }
+    | null
+  >(() => {
+    if (!isKick || !pattern || !kickDefaults) return null;
+    return {
+      pitchDecay:
+        typeof pattern.kickPitchDecay === "number"
+          ? pattern.kickPitchDecay
+          : kickDefaults.pitchDecay,
+      octaves:
+        typeof pattern.kickOctaves === "number"
+          ? pattern.kickOctaves
+          : kickDefaults.octaves,
+      decay:
+        typeof pattern.kickDecay === "number"
+          ? pattern.kickDecay
+          : kickDefaults.decay,
+      release:
+        typeof pattern.kickRelease === "number"
+          ? pattern.kickRelease
+          : kickDefaults.release,
+      noiseDb:
+        typeof pattern.kickNoiseDb === "number"
+          ? pattern.kickNoiseDb
+          : kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb,
+    };
+  }, [isKick, pattern, kickDefaults]);
+
+  useEffect(() => {
+    if (!isKick || !pattern || !updatePattern || !kickDefaults) return;
+    const updates: Partial<Chunk> = {};
+    if (typeof pattern.kickPitchDecay !== "number") {
+      updates.kickPitchDecay = kickDefaults.pitchDecay;
+    }
+    if (typeof pattern.kickOctaves !== "number") {
+      updates.kickOctaves = kickDefaults.octaves;
+    }
+    if (typeof pattern.kickDecay !== "number") {
+      updates.kickDecay = kickDefaults.decay;
+    }
+    if (typeof pattern.kickRelease !== "number") {
+      updates.kickRelease = kickDefaults.release;
+    }
+    if (typeof pattern.kickNoiseDb !== "number") {
+      updates.kickNoiseDb =
+        kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb;
+    }
+    if (Object.keys(updates).length > 0) {
+      updatePattern(updates);
+    }
+  }, [isKick, pattern, updatePattern, kickDefaults]);
+
+  const resetKickToDefaults = useCallback(() => {
+    if (!updatePattern || !kickDefaults) return;
+    updatePattern({
+      kickPitchDecay: kickDefaults.pitchDecay,
+      kickOctaves: kickDefaults.octaves,
+      kickDecay: kickDefaults.decay,
+      kickRelease: kickDefaults.release,
+      kickNoiseDb:
+        kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb,
+    });
+  }, [updatePattern, kickDefaults]);
 
   const harmoniaPatternPresets = useMemo(() => {
     if (!packId) {
@@ -3268,6 +3397,105 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             value={pattern.humanize ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ humanize: value }) : undefined}
+          />
+        </Section>
+      ) : null}
+
+      {isKick && kickControlValues ? (
+        <Section>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span style={{ color: "#94a3b8", fontSize: 12, fontWeight: 600 }}>
+              Kick Designer
+            </span>
+            {updatePattern ? (
+              <button
+                type="button"
+                onClick={resetKickToDefaults}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  border: "1px solid #2a3344",
+                  background: "#121a2b",
+                  color: "#cbd5f5",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Reset to Character
+              </button>
+            ) : null}
+          </div>
+          <Slider
+            label="Pitch Decay"
+            min={0.01}
+            max={0.12}
+            step={0.001}
+            value={kickControlValues.pitchDecay}
+            formatValue={(value) => `${value.toFixed(3)} s`}
+            onChange={
+              updatePattern
+                ? (value) => updatePattern({ kickPitchDecay: value })
+                : undefined
+            }
+          />
+          <Slider
+            label="Octave Sweep"
+            min={1}
+            max={6}
+            step={0.1}
+            value={kickControlValues.octaves}
+            formatValue={(value) => `${value.toFixed(1)}x`}
+            onChange={
+              updatePattern
+                ? (value) => updatePattern({ kickOctaves: value })
+                : undefined
+            }
+          />
+          <Slider
+            label="Body Decay"
+            min={0.1}
+            max={1.5}
+            step={0.01}
+            value={kickControlValues.decay}
+            formatValue={(value) => `${value.toFixed(2)} s`}
+            onChange={
+              updatePattern
+                ? (value) => updatePattern({ kickDecay: value })
+                : undefined
+            }
+          />
+          <Slider
+            label="Release"
+            min={0.05}
+            max={0.6}
+            step={0.01}
+            value={kickControlValues.release}
+            formatValue={(value) => `${value.toFixed(2)} s`}
+            onChange={
+              updatePattern
+                ? (value) => updatePattern({ kickRelease: value })
+                : undefined
+            }
+          />
+          <Slider
+            label="Noise Level"
+            min={-60}
+            max={0}
+            step={1}
+            value={kickControlValues.noiseDb}
+            formatValue={(value) => `${Math.round(value)} dB`}
+            onChange={
+              updatePattern
+                ? (value) => updatePattern({ kickNoiseDb: value })
+                : undefined
+            }
           />
         </Section>
       ) : null}

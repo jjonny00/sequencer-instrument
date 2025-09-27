@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { JSX } from "react";
 import * as Tone from "tone";
 
-import { createKick } from "@/instruments/kickInstrument";
+import { createKick, extractKickOverrides } from "@/instruments/kickInstrument";
 
 import type { Chunk } from "./chunks";
 import {
@@ -66,12 +66,19 @@ export function PatternPlaybackManager({
       if (instrument === "kick") {
         if (!source) return;
         const { packId, characterId } = source;
+        const overrides = extractKickOverrides(chunk);
         if (import.meta.env.DEV) {
-          console.info("[kick:play]", { packId, characterId, trackId: track.id });
+          console.info("[kick:play]", {
+            packId,
+            characterId,
+            trackId: track.id,
+            overrides: overrides ?? null,
+          });
         }
-        const voice = createKick(packId, characterId);
+        const voice = createKick(packId, characterId, { overrides });
         const resolvedVelocity = velocity ?? 0.9;
-        voice.triggerAttackRelease("8n", time, resolvedVelocity);
+        const duration = sustain ?? "8n";
+        voice.triggerAttackRelease(duration, time, resolvedVelocity);
         setTimeout(() => voice.dispose(), 600);
         return;
       }
