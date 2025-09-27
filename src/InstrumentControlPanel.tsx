@@ -2404,13 +2404,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         ) : null}
         <div
           style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 20,
             paddingTop: presetControls ? 12 : 0,
             paddingBottom: 8,
-            background:
-              "linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(11, 18, 32, 0.88) 65%, rgba(11, 18, 32, 0) 100%)",
           }}
         >
           <div
@@ -3216,15 +3211,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       {stickySections.length ? (
         <div
           style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 20,
             display: "flex",
             flexDirection: "column",
             gap: 8,
             paddingBottom: 8,
-            background:
-              "linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(11, 18, 32, 0.88) 60%, rgba(11, 18, 32, 0) 100%)",
           }}
         >
           {stickySections}
