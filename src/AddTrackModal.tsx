@@ -26,6 +26,12 @@ import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
+import {
+  FALLBACK_INSTRUMENT_COLOR,
+  getInstrumentColor,
+  hexToRgba,
+  lightenColor,
+} from "./utils/color";
 
 type SelectField = "pack" | "instrument" | "style" | "preset";
 
@@ -785,69 +791,111 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const horizontalScrollAreaStyle: CSSProperties = {
     display: "flex",
-    gap: 12,
+    gap: 16,
     overflowX: "auto",
-    padding: "4px 0 8px",
+    padding: "6px 2px 12px",
     WebkitOverflowScrolling: "touch",
     scrollbarWidth: "none",
+    msOverflowStyle: "none",
+    scrollSnapType: "x proximity",
   };
 
-  const optionButtonBaseStyle: CSSProperties = {
-    minWidth: 120,
-    padding: "12px 16px",
-    borderRadius: 14,
-    border: "1px solid #1d2636",
-    background: "#10192c",
-    color: "#e6f2ff",
+  const createPadButtonStyle = (
+    accentColor: string,
+    {
+      isActive,
+      isDisabled,
+      minWidth = 132,
+      minHeight = 92,
+    }: {
+      isActive: boolean;
+      isDisabled?: boolean;
+      minWidth?: number;
+      minHeight?: number;
+    }
+  ): CSSProperties => {
+    const safeColor = accentColor || FALLBACK_INSTRUMENT_COLOR;
+    const activeBorder = hexToRgba(lightenColor(safeColor, 0.1), 0.9);
+    const restingBorder = "rgba(17, 26, 44, 0.9)";
+    return {
+      minWidth,
+      minHeight,
+      padding: "16px 18px",
+      borderRadius: 18,
+      border: `1px solid ${isActive ? activeBorder : restingBorder}`,
+      background: isActive
+        ? `radial-gradient(circle at 30% 20%, ${hexToRgba(
+            lightenColor(safeColor, 0.45),
+            0.95
+          )} 0%, ${hexToRgba(lightenColor(safeColor, 0.15), 0.9)} 42%, rgba(12, 19, 32, 0.92) 100%)`
+        : "linear-gradient(145deg, #111a2e, #0a111f)",
+      color: isActive ? "#04121c" : "#e2e8f0",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "flex-start",
+      gap: 6,
+      position: "relative",
+      textAlign: "left",
+      flex: "0 0 auto",
+      boxShadow: isActive
+        ? `0 0 12px ${hexToRgba(safeColor, 0.55)}, 0 0 28px ${hexToRgba(
+            lightenColor(safeColor, 0.35),
+            0.5
+          )}, inset 0 0 18px ${hexToRgba(lightenColor(safeColor, 0.25), 0.45)}, inset 0 2px 6px rgba(255, 255, 255, 0.15)`
+        : "inset 0 6px 12px rgba(6, 10, 20, 0.78), inset 0 -6px 10px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(2, 5, 12, 0.65)",
+      transform: isActive ? "translateY(3px)" : "translateY(0)",
+      transition:
+        "transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+      cursor: isDisabled ? "not-allowed" : "pointer",
+      opacity: isDisabled ? 0.55 : 1,
+      filter: isDisabled ? "saturate(0.6)" : "none",
+      scrollSnapAlign: "start",
+      touchAction: "manipulation",
+    };
+  };
+
+  const createPadTitleStyle = (isActive: boolean): CSSProperties => ({
     fontSize: 15,
-    fontWeight: 500,
-    flex: "0 0 auto",
-    textAlign: "left",
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    transition:
-      "border-color 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
-  };
+    fontWeight: 700,
+    letterSpacing: 0.2,
+    color: isActive ? "#04121c" : "#e2e8f0",
+    textShadow: isActive
+      ? `0 0 12px ${hexToRgba("#ffffff", 0.55)}`
+      : "0 1px 0 rgba(4, 7, 14, 0.65)",
+    transition: "color 0.2s ease, text-shadow 0.2s ease",
+  });
 
-  const optionButtonActiveStyle: CSSProperties = {
-    borderColor: "#27E0B0",
-    background: "rgba(39, 224, 176, 0.12)",
-  };
-
-  const optionButtonDisabledStyle: CSSProperties = {
-    opacity: 0.5,
-    cursor: "not-allowed",
-  };
-
-  const optionNameStyle: CSSProperties = {
-    fontSize: 15,
-    fontWeight: 600,
-    color: "inherit",
-  };
-
-  const optionBadgeStyle: CSSProperties = {
+  const createPadBadgeStyle = (
+    accentColor: string,
+    isActive: boolean,
+    variant: "user" | "pack"
+  ): CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
     alignSelf: "flex-start",
     borderRadius: 999,
-    border: "1px solid #273247",
-    background: "rgba(148, 163, 184, 0.14)",
-    color: "#94a3b8",
+    padding: "2px 10px",
     fontSize: 11,
-    fontWeight: 600,
+    fontWeight: 700,
     letterSpacing: 0.5,
-    padding: "2px 8px",
     textTransform: "uppercase",
-  };
+    border: `1px solid ${
+      isActive ? hexToRgba(lightenColor(accentColor, 0.05), 0.7) : "rgba(148, 163, 184, 0.32)"
+    }`,
+    background: isActive
+      ? hexToRgba(
+          lightenColor(accentColor, variant === "user" ? 0.35 : 0.2),
+          variant === "user" ? 0.4 : 0.3
+        )
+      : "rgba(148, 163, 184, 0.08)",
+    color: isActive ? "#04121c" : "#94a3b8",
+    transition: "border-color 0.2s ease, background 0.2s ease, color 0.2s ease",
+  });
 
   const emptyStateTextStyle: CSSProperties = {
     fontSize: 13,
     color: "#94a3b8",
   };
-
-  const optionNameDefaultColor = "#e2e8f0";
-  const optionNameActiveColor = "#27E0B0";
 
   const packSelectDisabled = handoffLock !== null && handoffLock !== "pack";
 
@@ -898,6 +946,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     : userPresetItems.length === 0 && packPresets.length === 0
     ? "No saved loops available yet."
     : null;
+
+  const selectedInstrumentAccent = getInstrumentColor(selectedInstrumentId);
 
   return (
     <Modal
@@ -956,6 +1006,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <div style={horizontalScrollAreaStyle}>
               {packs.map((option) => {
                 const isActive = option.id === selectedPackId;
+                const buttonStyle = createPadButtonStyle(selectedInstrumentAccent, {
+                  isActive,
+                  isDisabled: packSelectDisabled,
+                });
                 return (
                   <button
                     key={option.id}
@@ -963,20 +1017,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     disabled={packSelectDisabled}
                     aria-pressed={isActive}
                     onClick={() => handlePackSelect(option.id)}
-                    style={{
-                      ...optionButtonBaseStyle,
-                      ...(isActive ? optionButtonActiveStyle : {}),
-                      ...(packSelectDisabled ? optionButtonDisabledStyle : {}),
-                    }}
+                    style={buttonStyle}
                   >
-                    <span
-                      style={{
-                        ...optionNameStyle,
-                        color: isActive
-                          ? optionNameActiveColor
-                          : optionNameDefaultColor,
-                      }}
-                    >
+                    <span style={createPadTitleStyle(isActive)}>
                       {option.name}
                     </span>
                   </button>
@@ -1003,6 +1046,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <div style={horizontalScrollAreaStyle}>
               {instrumentOptions.map((instrument) => {
                 const isActive = instrument === selectedInstrumentId;
+                const accentColor = getInstrumentColor(instrument);
+                const buttonStyle = createPadButtonStyle(accentColor, {
+                  isActive,
+                  isDisabled: instrumentSelectDisabled,
+                });
                 return (
                   <button
                     key={instrument}
@@ -1010,22 +1058,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     disabled={instrumentSelectDisabled}
                     aria-pressed={isActive}
                     onClick={() => handleInstrumentSelect(instrument)}
-                    style={{
-                      ...optionButtonBaseStyle,
-                      ...(isActive ? optionButtonActiveStyle : {}),
-                      ...(instrumentSelectDisabled
-                        ? optionButtonDisabledStyle
-                        : {}),
-                    }}
+                    style={buttonStyle}
                   >
-                    <span
-                      style={{
-                        ...optionNameStyle,
-                        color: isActive
-                          ? optionNameActiveColor
-                          : optionNameDefaultColor,
-                      }}
-                    >
+                    <span style={createPadTitleStyle(isActive)}>
                       {formatInstrumentLabel(instrument)}
                     </span>
                   </button>
@@ -1060,6 +1095,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <div style={horizontalScrollAreaStyle}>
               {characterOptions.map((character) => {
                 const isActive = character.id === selectedCharacterId;
+                const buttonStyle = createPadButtonStyle(selectedInstrumentAccent, {
+                  isActive,
+                  isDisabled: styleSelectDisabled,
+                });
                 return (
                   <button
                     key={character.id}
@@ -1067,20 +1106,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     disabled={styleSelectDisabled}
                     aria-pressed={isActive}
                     onClick={() => handleStyleSelect(character.id)}
-                    style={{
-                      ...optionButtonBaseStyle,
-                      ...(isActive ? optionButtonActiveStyle : {}),
-                      ...(styleSelectDisabled ? optionButtonDisabledStyle : {}),
-                    }}
+                    style={buttonStyle}
                   >
-                    <span
-                      style={{
-                        ...optionNameStyle,
-                        color: isActive
-                          ? optionNameActiveColor
-                          : optionNameDefaultColor,
-                      }}
-                    >
+                    <span style={createPadTitleStyle(isActive)}>
                       {character.name}
                     </span>
                   </button>
@@ -1120,15 +1148,15 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                   ? selectedPresetId === null
                   : preset.id === selectedPresetId;
                 const presetKey = preset.id ?? "preset-none";
+                const accentColor = selectedInstrumentAccent;
+                const buttonStyle = createPadButtonStyle(accentColor, {
+                  isActive,
+                  isDisabled: presetSelectDisabled,
+                  minWidth: 148,
+                });
                 const badgeStyle =
-                  preset.source === "user"
-                    ? {
-                        ...optionBadgeStyle,
-                        borderColor: optionNameActiveColor,
-                        color: optionNameActiveColor,
-                      }
-                    : preset.source === "pack"
-                    ? optionBadgeStyle
+                  preset.source === "user" || preset.source === "pack"
+                    ? createPadBadgeStyle(accentColor, isActive, preset.source)
                     : null;
                 return (
                   <button
@@ -1137,20 +1165,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     disabled={presetSelectDisabled}
                     aria-pressed={isActive}
                     onClick={() => handlePresetSelect(preset.id)}
-                    style={{
-                      ...optionButtonBaseStyle,
-                      ...(isActive ? optionButtonActiveStyle : {}),
-                      ...(presetSelectDisabled ? optionButtonDisabledStyle : {}),
-                    }}
+                    style={buttonStyle}
                   >
-                    <span
-                      style={{
-                        ...optionNameStyle,
-                        color: isActive
-                          ? optionNameActiveColor
-                          : optionNameDefaultColor,
-                      }}
-                    >
+                    <span style={createPadTitleStyle(isActive)}>
                       {preset.name}
                     </span>
                     {badgeStyle ? (

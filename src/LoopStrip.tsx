@@ -30,40 +30,7 @@ import { createPatternGroupId } from "./song";
 import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { isIOSPWA } from "./utils/audio";
-
-const baseInstrumentColors: Record<string, string> = {
-  kick: "#e74c3c",
-  snare: "#3498db",
-  hihat: "#f1c40f",
-  bass: "#1abc9c",
-  keyboard: "#2ecc71",
-  arp: "#9b59b6",
-};
-
-const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";
-
-const lightenColor = (hex: string, amount: number) => {
-  const normalized = hex.replace("#", "");
-  if (!/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(normalized)) {
-    return hex;
-  }
-  const value =
-    normalized.length === 3
-      ? normalized
-          .split("")
-          .map((char) => char + char)
-          .join("")
-      : normalized;
-  const num = parseInt(value, 16);
-  const clamp = (component: number) => Math.max(0, Math.min(255, component));
-  const r = clamp(((num >> 16) & 0xff) + Math.round(255 * amount));
-  const g = clamp(((num >> 8) & 0xff) + Math.round(255 * amount));
-  const b = clamp((num & 0xff) + Math.round(255 * amount));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-};
-
-const getInstrumentColor = (instrument: string) =>
-  baseInstrumentColors[instrument] ?? FALLBACK_INSTRUMENT_COLOR;
+import { getInstrumentColor, lightenColor } from "./utils/color";
 
 const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   const index = tracks.findIndex((track) => track.id === trackId);
