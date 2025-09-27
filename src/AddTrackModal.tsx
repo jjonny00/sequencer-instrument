@@ -10,6 +10,7 @@ import {
 import * as Tone from "tone";
 
 import type { Pack } from "./packs";
+import { createKick } from "@/instruments/kickInstrument";
 import { getCharacterOptions } from "./addTrackOptions";
 import { formatInstrumentLabel } from "./utils/instrument";
 import {
@@ -339,14 +340,26 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const previewStyle = useCallback(
     async (characterId: string) => {
       if (!characterId || !selectedInstrumentId || !selectedPackId) return;
-      const trigger =
-        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
-      if (!trigger) return;
       try {
         await initAudioContext();
       } catch {
         return;
       }
+
+      if (selectedInstrumentId === "kick") {
+        const voice = createKick(selectedPackId, characterId);
+        const when = Tone.now() + 0.05;
+        voice.triggerAttackRelease("8n", when, 0.9);
+        if (import.meta.env.DEV)
+          console.info("[kick:preview]", { packId: selectedPackId, characterId });
+        setTimeout(() => voice.dispose(), 600);
+        return;
+      }
+
+      const trigger =
+        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
+      if (!trigger) return;
+
       const start = Tone.now() + 0.05;
       const previewChunk: Chunk = {
         id: "style-preview",
