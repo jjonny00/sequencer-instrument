@@ -32,11 +32,7 @@ import {
   normalizeControlState as normalizeHarmoniaControlState,
   resolveHarmoniaChord,
 } from "./instruments/harmonia";
-import {
-  DEFAULT_KICK_STATE,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-} from "./instruments/kickDesigner";
+import { mergeKickDesignerState } from "./instruments/kickDesigner";
 import type {
   HarmoniaComplexity,
   HarmoniaPatternId,
@@ -50,6 +46,7 @@ import {
   USER_PRESET_PREFIX,
 } from "./presets";
 import { packs } from "./packs";
+import { resolveKickDefaults } from "./instrumentCharacters";
 
 interface InstrumentControlPanelProps {
   track: Track;
@@ -385,23 +382,18 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const packId = track.source?.packId ?? "";
 
   const kickDefaults = useMemo(() => {
-    if (!isKick) return DEFAULT_KICK_STATE;
-    if (!packId) return DEFAULT_KICK_STATE;
     const pack = packs.find((candidate) => candidate.id === packId);
     const instrument = pack?.instruments?.kick;
-    if (!instrument) return DEFAULT_KICK_STATE;
-    const activeCharacterId =
-      patternCharacterId ??
-      sourceCharacterId ??
-      instrument.defaultCharacterId ??
-      instrument.characters[0]?.id ??
-      null;
-    const character = activeCharacterId
-      ? instrument.characters.find((candidate) => candidate.id === activeCharacterId) ?? null
-      : instrument.characters[0] ?? null;
-    return character
-      ? normalizeKickDesignerState(character.defaults)
-      : DEFAULT_KICK_STATE;
+    return resolveKickDefaults(
+      instrument,
+      isKick
+        ? patternCharacterId ??
+          sourceCharacterId ??
+          instrument?.defaultCharacterId ??
+          instrument?.characters[0]?.id ??
+          null
+        : null
+    );
   }, [
     isKick,
     packId,
