@@ -13,12 +13,7 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import {
-  createKickDesigner,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-  type KickDesignerInstrument,
-} from "./instruments/kickDesigner";
+import { createKick, extractKickOverrides } from "./instruments/kickInstrument";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -183,9 +178,6 @@ const createDemoProjectData = (): StoredProjectData => {
     velocities: [
       0.95, 0, 0, 0, 0.9, 0, 0.82, 0, 0.9, 0, 0, 0, 0.88, 0, 0.8, 0,
     ],
-    punch: 0.62,
-    clean: 0.82,
-    tight: 0.48,
   };
 
   const snarePattern: Chunk = {
@@ -847,13 +839,6 @@ export default function App() {
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
-      if (instrumentId === "kick") {
-        const defaults = normalizeKickDesignerState(character.defaults);
-        const instrument = createKickDesigner(defaults);
-        instrument.toDestination();
-        return { instrument: instrument as ToneInstrument };
-      }
-
       if (character.type === "Harmonia") {
         const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
@@ -968,6 +953,19 @@ export default function App() {
             characterId
           );
           if (!character) return;
+          const sustainOverride =
+            sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+          if (instrumentId === "kick") {
+            const overrides = extractKickOverrides(chunk);
+            const voice = createKick(pack.id, character.id, { overrides });
+            const duration = sustainOverride ?? "8n";
+            const hitVelocity = velocity ?? 0.9;
+            voice.triggerAttackRelease(duration, time, hitVelocity);
+            Tone.context.setTimeout(() => {
+              voice.dispose();
+            }, 0.6);
+            return;
+          }
           const key = `${pack.id}:${instrumentId}:${character.id}`;
           let inst = instrumentRefs.current[key];
           if (!inst) {
@@ -981,8 +979,6 @@ export default function App() {
               harmoniaNodesRef.current[key] = created.harmoniaNodes;
             }
           }
-          const sustainOverride =
-            sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
           if (instrumentId === "harmonia") {
             const nodes = harmoniaNodesRef.current[key];
             if (!nodes) return;
@@ -1009,19 +1005,6 @@ export default function App() {
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
-        if (instrumentId === "kick") {
-          const kick = inst as unknown as KickDesignerInstrument;
-          if (kick.setMacroState) {
-            const defaults = normalizeKickDesignerState(character.defaults);
-            const merged = mergeKickDesignerState(defaults, {
-              punch: chunk?.punch,
-              clean: chunk?.clean,
-              tight: chunk?.tight,
-            });
-            kick.setMacroState(merged);
-          }
-        }
-
         if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
           const envelope: Record<string, unknown> = {};
           if (chunk.attack !== undefined) envelope.attack = chunk.attack;
@@ -1134,6 +1117,15 @@ export default function App() {
   }, [tracks]);
 
   useEffect(() => {
+    if (viewMode !== "track") return;
+    if (editing !== null) return;
+    const fallbackTrack =
+      tracks.find((track) => Boolean(track.instrument)) ?? tracks[0] ?? null;
+    if (!fallbackTrack) return;
+    setEditing(fallbackTrack.id);
+  }, [editing, tracks, viewMode]);
+
+  useEffect(() => {
     const previousMode = previousViewModeRef.current;
     if (previousMode === "track" && viewMode === "song") {
       currentLoopDraftRef.current = latestTracksRef.current.map((track) =>
@@ -1200,6 +1192,45 @@ export default function App() {
       setCurrentSectionIndex(0);
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    if (editing === null) return;
+    const activeTrack = tracks.find((track) => track.id === editing);
+    if (!activeTrack || activeTrack.pattern || !activeTrack.instrument) {
+      return;
+    }
+
+    setTracks((previousTracks) => {
+      const index = previousTracks.findIndex((track) => track.id === editing);
+      if (index === -1) {
+        return previousTracks;
+      }
+      const track = previousTracks[index];
+      if (!track.instrument || track.pattern) {
+        return previousTracks;
+      }
+
+      const label = (index + 1).toString().padStart(2, "0");
+      const pattern: Chunk = {
+        id: `track-${track.id}-${Date.now()}`,
+        name: `Track ${label} Pattern`,
+        instrument: track.instrument,
+        steps: Array(16).fill(0),
+        velocities: Array(16).fill(1),
+        pitches: Array(16).fill(0),
+        ...(track.source?.characterId
+          ? { characterId: track.source.characterId }
+          : {}),
+      };
+
+      const nextTracks = previousTracks.slice();
+      nextTracks[index] = {
+        ...track,
+        pattern,
+      };
+      return nextTracks;
+    });
+  }, [editing, tracks, setTracks]);
 
   useEffect(() => {
     if (viewMode !== "track") return;
@@ -2881,20 +2912,7 @@ export default function App() {
                       onRecordingChange={setIsRecording}
                       onPresetApplied={handlePresetApplied}
                     />
-                  ) : (
-                    <div
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #2a3344",
-                        padding: 24,
-                        textAlign: "center",
-                        color: "#94a3b8",
-                        fontSize: 13,
-                      }}
-                    >
-                      Select a track above to adjust its instrument settings.
-                    </div>
-                  )}
+                  ) : null}
                 </div>
               </>
             ) : (

@@ -9,6 +9,11 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': resolve(rootDir, 'src'),
+    },
+  },
   define: {
     __BUILD_TIME__: JSON.stringify(buildTimestamp),
   },

@@ -28,10 +28,7 @@ import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
 import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
-import {
-  applyKickMacrosToChunk,
-  resolveInstrumentCharacterId,
-} from "./instrumentCharacters";
+import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { isIOSPWA } from "./utils/audio";
 
 const baseInstrumentColors: Record<string, string> = {
@@ -378,31 +375,37 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     if (!isPlaying) setStep(-1);
   }, [isPlaying]);
 
-  const addPattern = (trackId: number) => {
-    let created = false;
-    setTracks((ts) =>
-      ts.map((t) => {
-        if (t.id !== trackId) return t;
-        if (!t.instrument) return t;
-        const label = getTrackNumberLabel(ts, trackId);
-        created = true;
-        return {
-          ...t,
-          pattern: {
-            id: `track-${trackId}-${Date.now()}`,
-            name: `Track ${label} Pattern`,
-            instrument: t.instrument,
-            steps: Array(16).fill(0),
-            velocities: Array(16).fill(1),
-            pitches: Array(16).fill(0),
-          },
-        };
-      })
-    );
-    if (created) {
-      setEditing(trackId);
-    }
-  };
+  const addPattern = useCallback(
+    (trackId: number) => {
+      let created = false;
+      setTracks((ts) =>
+        ts.map((t) => {
+          if (t.id !== trackId) return t;
+          if (!t.instrument || t.pattern) return t;
+          const label = getTrackNumberLabel(ts, trackId);
+          created = true;
+          return {
+            ...t,
+            pattern: {
+              id: `track-${trackId}-${Date.now()}`,
+              name: `Track ${label} Pattern`,
+              instrument: t.instrument,
+              steps: Array(16).fill(0),
+              velocities: Array(16).fill(1),
+              pitches: Array(16).fill(0),
+              ...(t.source?.characterId
+                ? { characterId: t.source.characterId }
+                : {}),
+            },
+          };
+        })
+      );
+      if (created) {
+        setEditing(trackId);
+      }
+    },
+    [setTracks, setEditing]
+  );
 
   const handleAddTrack = useCallback(() => {
     if (!addTrackEnabled) return;
@@ -498,19 +501,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           presetPayload?.characterId ?? null,
           basePattern.characterId ?? null
         );
-        const previousCharacterId = basePattern.characterId ?? null;
         let pattern: Chunk = {
           ...basePattern,
           characterId: resolvedCharacterId,
         };
-        if (instrumentId === "kick") {
-          pattern = applyKickMacrosToChunk(
-            pattern,
-            instrumentDefinition,
-            resolvedCharacterId,
-            previousCharacterId
-          );
-        }
         if (instrumentId === "harmonia") {
           pattern = initializeHarmoniaPattern(
             pattern,
@@ -624,14 +618,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
-          if (instrumentId === "kick" && nextPattern) {
-            nextPattern = applyKickMacrosToChunk(
-              nextPattern,
-              instrumentDefinition,
-              resolvedCharacterId,
-              previousCharacterId
-            );
-          }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
             nextPattern = initializeHarmoniaPattern(
               nextPattern,
@@ -1031,15 +1017,16 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               style={{ display: "flex", flexDirection: "column", gap: 8 }}
             >
               <div
-                onPointerDown={(event) => {
+                onPointerDownCapture={(event) => {
                   swipeRef.current = event.clientX;
+                  if (!isEditing) {
+                    setEditing(t.id);
+                  }
                 }}
                 onPointerUp={(event) => {
                   const dx = event.clientX - swipeRef.current;
                   if (isEditing && dx > 50) {
                     setEditing(null);
-                  } else if (!isEditing && Math.abs(dx) < 10) {
-                    setEditing(t.id);
                   }
                 }}
                 style={{

@@ -24,6 +24,11 @@ export interface Chunk {
   bitcrusher?: number;
   filter?: number;
   chorus?: number;
+  kickPitchDecay?: number;
+  kickOctaves?: number;
+  kickDecay?: number;
+  kickRelease?: number;
+  kickNoiseDb?: number;
   timingMode?: "sync" | "free";
   tonalCenter?: string;
   scale?: string;
@@ -54,8 +59,5 @@ export interface Chunk {
   harmoniaPatternId?: string;
   harmoniaBorrowedLabel?: string;
   harmoniaStepDegrees?: (number | null)[];
-  punch?: number;
-  clean?: number;
-  tight?: number;
 }
 
