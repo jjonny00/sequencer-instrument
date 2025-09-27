@@ -136,3 +136,16 @@ export function createKick(
 
   return output;
 }
+
+// @ts-ignore
+if (import.meta.env.DEV) {
+  // Debug helper for console
+  // Usage: __debugKick("trap", "trap_808_boom")
+  // @ts-ignore
+  window.__debugKick = (packId: string, characterId: string) => {
+    const v = createKick(packId, characterId);
+    v.triggerAttackRelease("8n", Tone.now() + 0.05, 0.9);
+    setTimeout(() => v.dispose(), 600);
+    return "Triggered kick for " + packId + ":" + characterId;
+  };
+}
