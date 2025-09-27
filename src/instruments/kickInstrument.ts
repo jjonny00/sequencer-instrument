@@ -90,10 +90,10 @@ export const createKick = (packId: string, characterId?: string) => {
   }
 
   const triggerAttackRelease = (
-    note?: Tone.Unit.Frequency,
     duration?: Tone.Unit.Time,
     time?: Tone.Unit.Time,
-    velocity?: number
+    velocity?: number,
+    note?: Tone.Unit.Frequency
   ) => {
     const resolvedTime = time ?? Tone.now();
     const resolvedDuration = duration ?? decay;
