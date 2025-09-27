@@ -2903,20 +2903,7 @@ export default function App() {
                       onRecordingChange={setIsRecording}
                       onPresetApplied={handlePresetApplied}
                     />
-                  ) : (
-                    <div
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #2a3344",
-                        padding: 24,
-                        textAlign: "center",
-                        color: "#94a3b8",
-                        fontSize: 13,
-                      }}
-                    >
-                      Select a track above to adjust its instrument settings.
-                    </div>
-                  )}
+                  ) : null}
                 </div>
               </>
             ) : (
