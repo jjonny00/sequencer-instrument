@@ -14,6 +14,7 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick } from "@/instruments/kickInstrument";
+import { DebugPanel } from "@/components/DebugPanel";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -1958,19 +1959,20 @@ export default function App() {
   );
 
   return (
-    <div
-      style={{
-        height: "var(--app-height)",
-        minHeight: "var(--app-height)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-        boxSizing: "border-box",
-        background: "#0f1420",
-        color: "#e6f2ff",
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-        display: "flex",
-        flexDirection: "column"
-      }}
-    >
+    <>
+      <div
+        style={{
+          height: "var(--app-height)",
+          minHeight: "var(--app-height)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          boxSizing: "border-box",
+          background: "#0f1420",
+          color: "#e6f2ff",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
       {started && showAudioUnlockPrompt ? (
         <div
           style={{
@@ -2906,6 +2908,8 @@ export default function App() {
           />
         </>
       )}
-    </div>
+      </div>
+      {import.meta.env.DEV && <DebugPanel />}
+    </>
   );
 }
