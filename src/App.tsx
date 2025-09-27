@@ -5,7 +5,7 @@ import * as Tone from "tone";
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
 import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
-import { packs, type InstrumentCharacter } from "./packs";
+import { packs, type InstrumentCharacter, type Pack } from "./packs";
 import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
@@ -13,12 +13,7 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import {
-  createKickDesigner,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-  type KickDesignerInstrument,
-} from "./instruments/kickDesigner";
+import { createKick } from "@/instruments/kickInstrument";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -183,9 +178,6 @@ const createDemoProjectData = (): StoredProjectData => {
     velocities: [
       0.95, 0, 0, 0, 0.9, 0, 0.82, 0, 0.9, 0, 0, 0, 0.88, 0, 0.8, 0,
     ],
-    punch: 0.62,
-    clean: 0.82,
-    tight: 0.48,
   };
 
   const snarePattern: Chunk = {
@@ -844,13 +836,15 @@ export default function App() {
     disposeAll();
 
     const createInstrumentInstance = (
+      packDefinition: Pack,
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
       if (instrumentId === "kick") {
-        const defaults = normalizeKickDesignerState(character.defaults);
-        const instrument = createKickDesigner(defaults);
-        instrument.toDestination();
+        const instrument = createKick(packDefinition.id, character.id, {
+          tone: Tone,
+          pack: packDefinition,
+        });
         return { instrument: instrument as ToneInstrument };
       }
 
@@ -971,7 +965,7 @@ export default function App() {
           const key = `${pack.id}:${instrumentId}:${character.id}`;
           let inst = instrumentRefs.current[key];
           if (!inst) {
-            const created = createInstrumentInstance(instrumentId, character);
+            const created = createInstrumentInstance(pack, instrumentId, character);
             inst = created.instrument;
             instrumentRefs.current[key] = inst;
             if (created.keyboardFx) {
@@ -1009,18 +1003,6 @@ export default function App() {
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
-        if (instrumentId === "kick") {
-          const kick = inst as unknown as KickDesignerInstrument;
-          if (kick.setMacroState) {
-            const defaults = normalizeKickDesignerState(character.defaults);
-            const merged = mergeKickDesignerState(defaults, {
-              punch: chunk?.punch,
-              clean: chunk?.clean,
-              tight: chunk?.tight,
-            });
-            kick.setMacroState(merged);
-          }
-        }
 
         if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
           const envelope: Record<string, unknown> = {};

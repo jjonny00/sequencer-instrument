@@ -28,10 +28,7 @@ import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
 import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
-import {
-  applyKickMacrosToChunk,
-  resolveInstrumentCharacterId,
-} from "./instrumentCharacters";
+import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { isIOSPWA } from "./utils/audio";
 
 const baseInstrumentColors: Record<string, string> = {
@@ -517,14 +514,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           ...basePattern,
           characterId: nextCharacterId,
         };
-        if (instrumentId === "kick") {
-          pattern = applyKickMacrosToChunk(
-            pattern,
-            instrumentDefinition,
-            nextCharacterId,
-            previousCharacterId
-          );
-        }
         if (instrumentId === "harmonia") {
           pattern = initializeHarmoniaPattern(
             pattern,
@@ -652,14 +641,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: nextCharacterId }
             : null;
-          if (instrumentId === "kick" && nextPattern) {
-            nextPattern = applyKickMacrosToChunk(
-              nextPattern,
-              instrumentDefinition,
-              nextCharacterId,
-              previousCharacterId
-            );
-          }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
             nextPattern = initializeHarmoniaPattern(
               nextPattern,

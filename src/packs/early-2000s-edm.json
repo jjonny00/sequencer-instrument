@@ -10,32 +10,142 @@
         {
           "id": "edm_club_punch",
           "name": "Club Punch",
-          "defaults": { "punch": 0.7, "clean": 0.9, "tight": 0.4 }
+          "defaults": {
+            "punch": 0.7,
+            "clean": 0.9,
+            "tight": 0.4
+          }
         },
         {
           "id": "edm_trance_boom",
           "name": "Trance Boom",
-          "defaults": { "punch": 0.5, "clean": 0.7, "tight": 0.5 }
+          "defaults": {
+            "punch": 0.5,
+            "clean": 0.7,
+            "tight": 0.5
+          }
         }
       ],
       "patterns": [
         {
           "id": "edm_four_floor",
           "name": "Four on the Floor",
-          "steps": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-          "velocities": [1, 0, 0, 0, 0.95, 0, 0, 0, 0.98, 0, 0, 0, 0.94, 0, 0, 0]
+          "steps": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "velocities": [
+            1,
+            0,
+            0,
+            0,
+            0.95,
+            0,
+            0,
+            0,
+            0.98,
+            0,
+            0,
+            0,
+            0.94,
+            0,
+            0,
+            0
+          ]
         },
         {
           "id": "edm_offbeat_drive",
           "name": "Offbeat Drive",
-          "steps": [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0],
-          "velocities": [1, 0, 0, 0, 0.85, 0, 0.7, 0, 0.9, 0, 0, 0, 0.88, 0, 0.72, 0]
+          "steps": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          "velocities": [
+            1,
+            0,
+            0,
+            0,
+            0.85,
+            0,
+            0.7,
+            0,
+            0.9,
+            0,
+            0,
+            0,
+            0.88,
+            0,
+            0.72,
+            0
+          ]
         },
         {
           "id": "edm_build_roll",
           "name": "Build-Up Roll",
-          "steps": [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1],
-          "velocities": [1, 0, 0, 0, 0.9, 0, 0.75, 0, 0.85, 0, 0.8, 0, 0.78, 0.85, 0.9, 1]
+          "steps": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1
+          ],
+          "velocities": [
+            1,
+            0,
+            0,
+            0,
+            0.9,
+            0,
+            0.75,
+            0,
+            0.85,
+            0,
+            0.8,
+            0,
+            0.78,
+            0.85,
+            0.9,
+            1
+          ]
         }
       ]
     },
@@ -48,14 +158,20 @@
           "type": "NoiseSynth",
           "note": "16n",
           "options": {
-            "noise": { "type": "white" },
+            "noise": {
+              "type": "white"
+            },
             "envelope": {
               "attack": 0.001,
               "decay": 0.2,
               "sustain": 0,
               "release": 0.1
             },
-            "filter": { "type": "highpass", "frequency": 2600, "Q": 1.2 }
+            "filter": {
+              "type": "highpass",
+              "frequency": 2600,
+              "Q": 1.2
+            }
           }
         },
         {
@@ -64,7 +180,9 @@
           "type": "NoiseSynth",
           "note": "16n",
           "options": {
-            "noise": { "type": "pink" },
+            "noise": {
+              "type": "pink"
+            },
             "envelope": {
               "attack": 0.001,
               "decay": 0.35,
@@ -73,7 +191,13 @@
             }
           },
           "effects": [
-            { "type": "Reverb", "options": { "decay": 2, "wet": 0.25 } }
+            {
+              "type": "Reverb",
+              "options": {
+                "decay": 2,
+                "wet": 0.25
+              }
+            }
           ]
         },
         {
@@ -82,17 +206,29 @@
           "type": "NoiseSynth",
           "note": "16n",
           "options": {
-            "noise": { "type": "white" },
+            "noise": {
+              "type": "white"
+            },
             "envelope": {
               "attack": 0.001,
               "decay": 0.45,
               "sustain": 0,
               "release": 0.4
             },
-            "filter": { "type": "bandpass", "frequency": 3200, "Q": 0.8 }
+            "filter": {
+              "type": "bandpass",
+              "frequency": 3200,
+              "Q": 0.8
+            }
           },
           "effects": [
-            { "type": "Reverb", "options": { "decay": 3, "wet": 0.3 } }
+            {
+              "type": "Reverb",
+              "options": {
+                "decay": 3,
+                "wet": 0.3
+              }
+            }
           ]
         }
       ]
@@ -148,7 +284,12 @@
             }
           },
           "effects": [
-            { "type": "EQ3", "options": { "high": 3 } }
+            {
+              "type": "EQ3",
+              "options": {
+                "high": 3
+              }
+            }
           ]
         }
       ]
@@ -162,8 +303,14 @@
           "type": "MonoSynth",
           "note": "C2",
           "options": {
-            "oscillator": { "type": "sawtooth" },
-            "filter": { "type": "lowpass", "frequency": 200, "Q": 1.1 },
+            "oscillator": {
+              "type": "sawtooth"
+            },
+            "filter": {
+              "type": "lowpass",
+              "frequency": 200,
+              "Q": 1.1
+            },
             "envelope": {
               "attack": 0.01,
               "decay": 0.4,
@@ -186,9 +333,15 @@
           "type": "MonoSynth",
           "note": "C2",
           "options": {
-            "oscillator": { "type": "sine" },
+            "oscillator": {
+              "type": "sine"
+            },
             "portamento": 0.05,
-            "filter": { "type": "lowpass", "frequency": 140, "Q": 1.2 },
+            "filter": {
+              "type": "lowpass",
+              "frequency": 140,
+              "Q": 1.2
+            },
             "envelope": {
               "attack": 0.02,
               "decay": 0.6,
@@ -203,8 +356,14 @@
           "type": "MonoSynth",
           "note": "C2",
           "options": {
-            "oscillator": { "type": "sawtooth" },
-            "filter": { "type": "lowpass", "frequency": 220, "Q": 1.3 },
+            "oscillator": {
+              "type": "sawtooth"
+            },
+            "filter": {
+              "type": "lowpass",
+              "frequency": 220,
+              "Q": 1.3
+            },
             "envelope": {
               "attack": 0.005,
               "decay": 0.35,
@@ -221,7 +380,15 @@
             }
           },
           "effects": [
-            { "type": "Chorus", "options": { "frequency": 4, "delayTime": 2.5, "depth": 0.5, "wet": 0.3 } }
+            {
+              "type": "Chorus",
+              "options": {
+                "frequency": 4,
+                "delayTime": 2.5,
+                "depth": 0.5,
+                "wet": 0.3
+              }
+            }
           ]
         }
       ]
@@ -235,7 +402,9 @@
           "type": "Synth",
           "note": "C4",
           "options": {
-            "oscillator": { "type": "square" },
+            "oscillator": {
+              "type": "square"
+            },
             "envelope": {
               "attack": 0.005,
               "decay": 0.25,
@@ -244,7 +413,14 @@
             }
           },
           "effects": [
-            { "type": "FeedbackDelay", "options": { "delayTime": 0.25, "feedback": 0.35, "wet": 0.25 } }
+            {
+              "type": "FeedbackDelay",
+              "options": {
+                "delayTime": 0.25,
+                "feedback": 0.35,
+                "wet": 0.25
+              }
+            }
           ]
         },
         {
@@ -255,7 +431,9 @@
           "options": {
             "harmonicity": 2,
             "modulationIndex": 6,
-            "oscillator": { "type": "square" },
+            "oscillator": {
+              "type": "square"
+            },
             "envelope": {
               "attack": 0.01,
               "decay": 0.2,
@@ -264,7 +442,14 @@
             }
           },
           "effects": [
-            { "type": "FeedbackDelay", "options": { "delayTime": 0.2, "feedback": 0.4, "wet": 0.4 } }
+            {
+              "type": "FeedbackDelay",
+              "options": {
+                "delayTime": 0.2,
+                "feedback": 0.4,
+                "wet": 0.4
+              }
+            }
           ]
         }
       ]
@@ -281,7 +466,9 @@
             "voice": "Synth",
             "maxPolyphony": 8,
             "voiceOptions": {
-              "oscillator": { "type": "sawtooth" },
+              "oscillator": {
+                "type": "sawtooth"
+              },
               "envelope": {
                 "attack": 0.1,
                 "decay": 0.5,
@@ -291,7 +478,13 @@
             }
           },
           "effects": [
-            { "type": "Reverb", "options": { "decay": 2.5, "wet": 0.35 } }
+            {
+              "type": "Reverb",
+              "options": {
+                "decay": 2.5,
+                "wet": 0.35
+              }
+            }
           ]
         },
         {
@@ -312,8 +505,22 @@
             }
           },
           "effects": [
-            { "type": "Chorus", "options": { "frequency": 1.2, "delayTime": 4, "depth": 0.45, "wet": 0.3 } },
-            { "type": "Reverb", "options": { "decay": 2.8, "wet": 0.28 } }
+            {
+              "type": "Chorus",
+              "options": {
+                "frequency": 1.2,
+                "delayTime": 4,
+                "depth": 0.45,
+                "wet": 0.3
+              }
+            },
+            {
+              "type": "Reverb",
+              "options": {
+                "decay": 2.8,
+                "wet": 0.28
+              }
+            }
           ]
         },
         {
@@ -325,7 +532,9 @@
             "voice": "Synth",
             "maxPolyphony": 10,
             "voiceOptions": {
-              "oscillator": { "type": "sawtooth" },
+              "oscillator": {
+                "type": "sawtooth"
+              },
               "envelope": {
                 "attack": 0.15,
                 "decay": 0.6,
@@ -335,8 +544,22 @@
             }
           },
           "effects": [
-            { "type": "Chorus", "options": { "frequency": 0.8, "delayTime": 3.2, "depth": 0.6, "wet": 0.5 } },
-            { "type": "Reverb", "options": { "decay": 3.2, "wet": 0.35 } }
+            {
+              "type": "Chorus",
+              "options": {
+                "frequency": 0.8,
+                "delayTime": 3.2,
+                "depth": 0.6,
+                "wet": 0.5
+              }
+            },
+            {
+              "type": "Reverb",
+              "options": {
+                "decay": 3.2,
+                "wet": 0.35
+              }
+            }
           ]
         }
       ]
@@ -352,7 +575,9 @@
           "type": "Harmonia",
           "options": {
             "synth": {
-              "oscillator": { "type": "sawtooth" },
+              "oscillator": {
+                "type": "sawtooth"
+              },
               "spread": 12,
               "envelope": {
                 "attack": 0.03,
@@ -361,13 +586,22 @@
                 "release": 0.95
               }
             },
-            "filter": { "type": "lowpass", "frequency": 3600, "Q": 1.1 },
+            "filter": {
+              "type": "lowpass",
+              "frequency": 3600,
+              "Q": 1.1
+            },
             "volume": -9
           },
           "effects": [
             {
               "type": "Chorus",
-              "options": { "frequency": 1.2, "delayTime": 3, "depth": 0.45, "wet": 0.4 }
+              "options": {
+                "frequency": 1.2,
+                "delayTime": 3,
+                "depth": 0.45,
+                "wet": 0.4
+              }
             }
           ]
         },
@@ -378,7 +612,9 @@
           "type": "Harmonia",
           "options": {
             "synth": {
-              "oscillator": { "type": "fatsawtooth" },
+              "oscillator": {
+                "type": "fatsawtooth"
+              },
               "spread": 28,
               "envelope": {
                 "attack": 0.04,
@@ -387,15 +623,30 @@
                 "release": 1.4
               }
             },
-            "filter": { "type": "lowpass", "frequency": 3200, "Q": 1.2 },
+            "filter": {
+              "type": "lowpass",
+              "frequency": 3200,
+              "Q": 1.2
+            },
             "volume": -7
           },
           "effects": [
             {
               "type": "Chorus",
-              "options": { "frequency": 0.9, "delayTime": 3.8, "depth": 0.6, "wet": 0.45 }
+              "options": {
+                "frequency": 0.9,
+                "delayTime": 3.8,
+                "depth": 0.6,
+                "wet": 0.45
+              }
             },
-            { "type": "Reverb", "options": { "decay": 2.6, "wet": 0.32 } }
+            {
+              "type": "Reverb",
+              "options": {
+                "decay": 2.6,
+                "wet": 0.32
+              }
+            }
           ]
         },
         {
@@ -405,7 +656,11 @@
           "type": "Harmonia",
           "options": {
             "synth": {
-              "oscillator": { "type": "fmsawtooth", "modulationIndex": 12, "harmonicity": 1.5 },
+              "oscillator": {
+                "type": "fmsawtooth",
+                "modulationIndex": 12,
+                "harmonicity": 1.5
+              },
               "spread": 32,
               "envelope": {
                 "attack": 0.08,
@@ -414,14 +669,29 @@
                 "release": 2.2
               }
             },
-            "filter": { "type": "lowpass", "frequency": 2600, "Q": 1.5 },
+            "filter": {
+              "type": "lowpass",
+              "frequency": 2600,
+              "Q": 1.5
+            },
             "volume": -6
           },
           "effects": [
-            { "type": "Reverb", "options": { "decay": 3.2, "wet": 0.5 } },
+            {
+              "type": "Reverb",
+              "options": {
+                "decay": 3.2,
+                "wet": 0.5
+              }
+            },
             {
               "type": "Chorus",
-              "options": { "frequency": 0.6, "delayTime": 4, "depth": 0.7, "wet": 0.5 }
+              "options": {
+                "frequency": 0.6,
+                "delayTime": 4,
+                "depth": 0.7,
+                "wet": 0.5
+              }
             }
           ]
         },
@@ -432,7 +702,9 @@
           "type": "Harmonia",
           "options": {
             "synth": {
-              "oscillator": { "type": "fatsquare" },
+              "oscillator": {
+                "type": "fatsquare"
+              },
               "spread": 24,
               "envelope": {
                 "attack": 0.02,
@@ -441,17 +713,30 @@
                 "release": 1.6
               }
             },
-            "filter": { "type": "bandpass", "frequency": 3000, "Q": 1.6 },
+            "filter": {
+              "type": "bandpass",
+              "frequency": 3000,
+              "Q": 1.6
+            },
             "volume": -7
           },
           "effects": [
             {
               "type": "Chorus",
-              "options": { "frequency": 1.5, "delayTime": 3.4, "depth": 0.5, "wet": 0.42 }
+              "options": {
+                "frequency": 1.5,
+                "delayTime": 3.4,
+                "depth": 0.5,
+                "wet": 0.42
+              }
             },
             {
               "type": "FeedbackDelay",
-              "options": { "delayTime": 0.25, "feedback": 0.35, "wet": 0.3 }
+              "options": {
+                "delayTime": 0.25,
+                "feedback": 0.35,
+                "wet": 0.3
+              }
             }
           ]
         }
@@ -460,20 +745,39 @@
         {
           "id": "basic-progression",
           "name": "Hands Up Hook",
-          "description": "Signature I–vi–IV–V lift for euphoric choruses.",
-          "degrees": [0, 5, 3, 4]
+          "description": "Signature I\u2013vi\u2013IV\u2013V lift for euphoric choruses.",
+          "degrees": [
+            0,
+            5,
+            3,
+            4
+          ]
         },
         {
           "id": "descending-line",
           "name": "Trance Plunge",
-          "description": "Descending vi–V–IV–ii tension builder.",
-          "degrees": [5, 4, 3, 1]
+          "description": "Descending vi\u2013V\u2013IV\u2013ii tension builder.",
+          "degrees": [
+            5,
+            4,
+            3,
+            1
+          ]
         },
         {
           "id": "circle-of-fifths",
           "name": "Club Cycle",
           "description": "Extended build cycling dominant energy back to tonic.",
-          "degrees": [0, 4, 5, 1, 2, 6, 4, 0]
+          "degrees": [
+            0,
+            4,
+            5,
+            1,
+            2,
+            6,
+            4,
+            0
+          ]
         }
       ]
     }
@@ -484,49 +788,210 @@
       "name": "Four on the Floor",
       "instrument": "kick",
       "characterId": "edm_club_punch",
-      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [1,0,0,0,0.95,0,0,0,0.98,0,0,0,0.95,0,0,0],
-      "punch": 0.7,
-      "clean": 0.9,
-      "tight": 0.4
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "velocities": [
+        1,
+        0,
+        0,
+        0,
+        0.95,
+        0,
+        0,
+        0,
+        0.98,
+        0,
+        0,
+        0,
+        0.95,
+        0,
+        0,
+        0
+      ]
     },
     {
       "id": "edm-kick-drop",
       "name": "Festival Drop",
       "instrument": "kick",
       "characterId": "edm_trance_boom",
-      "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
-      "velocities": [1,0,0,0,0.95,0,0.85,0,0.92,0,0,0,0.96,0,0.82,0],
-      "punch": 0.55,
-      "clean": 0.72,
-      "tight": 0.48
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        1,
+        0,
+        0,
+        0,
+        0.95,
+        0,
+        0.85,
+        0,
+        0.92,
+        0,
+        0,
+        0,
+        0.96,
+        0,
+        0.82,
+        0
+      ]
     },
     {
       "id": "edm-kick-sync",
       "name": "Sync Pump",
       "instrument": "kick",
       "characterId": "edm_club_punch",
-      "steps": [1,0,0,0,1,0,0,1,1,0,0,0,1,0,0,1],
-      "velocities": [1,0,0,0,0.95,0,0,0.75,0.9,0,0,0,0.92,0,0,0.78],
-      "punch": 0.68,
-      "clean": 0.85,
-      "tight": 0.42
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      "velocities": [
+        1,
+        0,
+        0,
+        0,
+        0.95,
+        0,
+        0,
+        0.75,
+        0.9,
+        0,
+        0,
+        0,
+        0.92,
+        0,
+        0,
+        0.78
+      ]
     },
     {
       "id": "edm-snare-offbeat",
       "name": "Offbeat Snare",
       "instrument": "snare",
       "characterId": "digital-snap",
-      "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-      "velocities": [0,0,0,0,0.95,0,0,0,0,0,0,0,0.95,0,0,0]
+      "steps": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "velocities": [
+        0,
+        0,
+        0,
+        0,
+        0.95,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.95,
+        0,
+        0,
+        0
+      ]
     },
     {
       "id": "edm-snare-build",
       "name": "Build Clap",
       "instrument": "snare",
       "characterId": "reverb-clap",
-      "steps": [0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1],
-      "velocities": [0,0,0,0.7,0,0,0,0.8,0,0,0,0.85,0,0,0,0.9],
+      "steps": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1
+      ],
+      "velocities": [
+        0,
+        0,
+        0,
+        0.7,
+        0,
+        0,
+        0,
+        0.8,
+        0,
+        0,
+        0,
+        0.85,
+        0,
+        0,
+        0,
+        0.9
+      ],
       "humanize": 0.02
     },
     {
@@ -534,32 +999,168 @@
       "name": "Drop Swell",
       "instrument": "snare",
       "characterId": "reverb-snare",
-      "steps": [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1],
-      "velocities": [0,0,0,0,0,0,0,0,0.6,0.65,0.7,0.75,0.8,0.85,0.9,1]
+      "steps": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "velocities": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.6,
+        0.65,
+        0.7,
+        0.75,
+        0.8,
+        0.85,
+        0.9,
+        1
+      ]
     },
     {
       "id": "edm-hat-16ths",
       "name": "Trance 16ths",
       "instrument": "hihat",
       "characterId": "sparkle-tick",
-      "steps": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      "velocities": [0.8,0.5,0.75,0.5,0.82,0.5,0.76,0.5,0.8,0.5,0.75,0.5,0.82,0.5,0.76,0.5]
+      "steps": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "velocities": [
+        0.8,
+        0.5,
+        0.75,
+        0.5,
+        0.82,
+        0.5,
+        0.76,
+        0.5,
+        0.8,
+        0.5,
+        0.75,
+        0.5,
+        0.82,
+        0.5,
+        0.76,
+        0.5
+      ]
     },
     {
       "id": "edm-hat-open",
       "name": "Open Pulse",
       "instrument": "hihat",
       "characterId": "bright-hat",
-      "steps": [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
-      "velocities": [0.9,0,0,0,0,0,0.85,0,0.88,0,0,0,0,0,0.84,0]
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        0.9,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.85,
+        0,
+        0.88,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.84,
+        0
+      ]
     },
     {
       "id": "edm-hat-drive",
       "name": "Driver Shuffle",
       "instrument": "hihat",
       "characterId": "driver-hat",
-      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-      "velocities": [0.85,0,0.7,0,0.82,0,0.68,0,0.84,0,0.7,0,0.82,0,0.68,0],
+      "steps": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        0.85,
+        0,
+        0.7,
+        0,
+        0.82,
+        0,
+        0.68,
+        0,
+        0.84,
+        0,
+        0.7,
+        0,
+        0.82,
+        0,
+        0.68,
+        0
+      ],
       "swing": 0.08
     },
     {
@@ -567,8 +1168,42 @@
       "name": "Drive Bass",
       "instrument": "bass",
       "characterId": "rolling-bass",
-      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-      "velocities": [0.95,0,0.8,0,0.9,0,0.78,0,0.9,0,0.8,0,0.88,0,0.78,0],
+      "steps": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        0.95,
+        0,
+        0.8,
+        0,
+        0.9,
+        0,
+        0.78,
+        0,
+        0.9,
+        0,
+        0.8,
+        0,
+        0.88,
+        0,
+        0.78,
+        0
+      ],
       "note": "C2"
     },
     {
@@ -576,8 +1211,42 @@
       "name": "Offbeat Bass",
       "instrument": "bass",
       "characterId": "saw-pluck",
-      "steps": [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0],
-      "velocities": [0,0.85,0,0,0,0.8,0,0,0,0.75,0,0,0,0.8,0,0],
+      "steps": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "velocities": [
+        0,
+        0.85,
+        0,
+        0,
+        0,
+        0.8,
+        0,
+        0,
+        0,
+        0.75,
+        0,
+        0,
+        0,
+        0.8,
+        0,
+        0
+      ],
       "note": "C2"
     },
     {
@@ -585,9 +1254,60 @@
       "name": "Rolling Sub",
       "instrument": "bass",
       "characterId": "rolling-sub",
-      "steps": [1,0,0,0,1,0,0,0,1,0,0,1,1,0,0,0],
-      "velocities": [0.9,0,0,0,0.85,0,0,0,0.88,0,0,0.8,0.82,0,0,0],
-      "pitches": [0,0,0,0,0,0,0,0,0,0,0,7,5,0,0,0],
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "velocities": [
+        0.9,
+        0,
+        0,
+        0,
+        0.85,
+        0,
+        0,
+        0,
+        0.88,
+        0,
+        0,
+        0.8,
+        0.82,
+        0,
+        0,
+        0
+      ],
+      "pitches": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        7,
+        5,
+        0,
+        0,
+        0
+      ],
       "note": "C2"
     },
     {
@@ -595,9 +1315,60 @@
       "name": "Rising Arp",
       "instrument": "arp",
       "characterId": "laser-chase",
-      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-      "velocities": [0.85,0,0.78,0,0.8,0,0.76,0,0.83,0,0.78,0,0.8,0,0.76,0],
-      "pitches": [0,4,7,11,12,16,19,23,24,28,31,35,36,40,43,47],
+      "steps": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        0.85,
+        0,
+        0.78,
+        0,
+        0.8,
+        0,
+        0.76,
+        0,
+        0.83,
+        0,
+        0.78,
+        0,
+        0.8,
+        0,
+        0.76,
+        0
+      ],
+      "pitches": [
+        0,
+        4,
+        7,
+        11,
+        12,
+        16,
+        19,
+        23,
+        24,
+        28,
+        31,
+        35,
+        36,
+        40,
+        43,
+        47
+      ],
       "note": "C4"
     },
     {
@@ -605,9 +1376,60 @@
       "name": "Stutter Bounce",
       "instrument": "arp",
       "characterId": "stutter-stars",
-      "steps": [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1],
-      "velocities": [0.8,0.6,0,0.78,0.6,0,0.82,0.6,0,0.8,0.6,0,0.78,0.6,0,0.82],
-      "pitches": [0,7,0,12,0,7,0,12,0,7,0,12,0,7,0,12],
+      "steps": [
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        1
+      ],
+      "velocities": [
+        0.8,
+        0.6,
+        0,
+        0.78,
+        0.6,
+        0,
+        0.82,
+        0.6,
+        0,
+        0.8,
+        0.6,
+        0,
+        0.78,
+        0.6,
+        0,
+        0.82
+      ],
+      "pitches": [
+        0,
+        7,
+        0,
+        12,
+        0,
+        7,
+        0,
+        12,
+        0,
+        7,
+        0,
+        12,
+        0,
+        7,
+        0,
+        12
+      ],
       "note": "C4"
     },
     {
@@ -615,9 +1437,60 @@
       "name": "Laser Sweep",
       "instrument": "arp",
       "characterId": "laser-chase",
-      "steps": [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0],
-      "velocities": [0.85,0,0,0.78,0,0,0.82,0,0.84,0,0,0.8,0,0,0.82,0],
-      "pitches": [0,0,0,7,0,0,12,0,19,0,0,24,0,0,31,0],
+      "steps": [
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        0.85,
+        0,
+        0,
+        0.78,
+        0,
+        0,
+        0.82,
+        0,
+        0.84,
+        0,
+        0,
+        0.8,
+        0,
+        0,
+        0.82,
+        0
+      ],
+      "pitches": [
+        0,
+        0,
+        0,
+        7,
+        0,
+        0,
+        12,
+        0,
+        19,
+        0,
+        0,
+        24,
+        0,
+        0,
+        31,
+        0
+      ],
       "note": "C4"
     },
     {
@@ -625,8 +1498,42 @@
       "name": "Pad Wash",
       "instrument": "keyboard",
       "characterId": "supersaw-pad",
-      "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-      "velocities": [0.9,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "velocities": [
+        0.9,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.85,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
       "sustain": 1.8,
       "reverb": 0.45,
       "chorus": 0.4,
@@ -637,8 +1544,42 @@
       "name": "Big Chords",
       "instrument": "keyboard",
       "characterId": "saw-pad",
-      "steps": [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
-      "velocities": [0.88,0,0,0,0,0,0.8,0,0.82,0,0,0,0,0,0.78,0],
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        0.88,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.8,
+        0,
+        0.82,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.78,
+        0
+      ],
       "sustain": 0.9,
       "reverb": 0.35,
       "delay": 0.2,
@@ -649,8 +1590,42 @@
       "name": "Break Wash",
       "instrument": "keyboard",
       "characterId": "airwash",
-      "steps": [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
-      "velocities": [0.8,0,0,0,0,0,0,0,0,0.82,0,0,0,0,0,0],
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "velocities": [
+        0.8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.82,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
       "sustain": 1.4,
       "reverb": 0.4,
       "delay": 0.24,
@@ -662,8 +1637,42 @@
       "name": "Hands Up Hook",
       "instrument": "harmonia",
       "characterId": "simple",
-      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [0.9,0,0,0,0.88,0,0,0,0.86,0,0,0,0.84,0,0,0],
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "velocities": [
+        0.9,
+        0,
+        0,
+        0,
+        0.88,
+        0,
+        0,
+        0,
+        0.86,
+        0,
+        0,
+        0,
+        0.84,
+        0,
+        0,
+        0
+      ],
       "tonalCenter": "C4",
       "scale": "Major",
       "degree": 0,
@@ -673,15 +1682,66 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "basic-progression",
-      "harmoniaStepDegrees": [0,null,null,null,5,null,null,null,3,null,null,null,4,null,null,null]
+      "harmoniaStepDegrees": [
+        0,
+        null,
+        null,
+        null,
+        5,
+        null,
+        null,
+        null,
+        3,
+        null,
+        null,
+        null,
+        4,
+        null,
+        null,
+        null
+      ]
     },
     {
       "id": "edm-harmonia-descending",
       "name": "Trance Plunge",
       "instrument": "harmonia",
       "characterId": "extended",
-      "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [0.88,0,0,0,0.86,0,0,0,0.84,0,0,0,0.82,0,0,0],
+      "steps": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "velocities": [
+        0.88,
+        0,
+        0,
+        0,
+        0.86,
+        0,
+        0,
+        0,
+        0.84,
+        0,
+        0,
+        0,
+        0.82,
+        0,
+        0,
+        0
+      ],
       "tonalCenter": "C4",
       "scale": "Major",
       "degree": 5,
@@ -691,15 +1751,66 @@
       "harmoniaBass": true,
       "harmoniaArp": false,
       "harmoniaPatternId": "descending-line",
-      "harmoniaStepDegrees": [5,null,null,null,4,null,null,null,3,null,null,null,1,null,null,null]
+      "harmoniaStepDegrees": [
+        5,
+        null,
+        null,
+        null,
+        4,
+        null,
+        null,
+        null,
+        3,
+        null,
+        null,
+        null,
+        1,
+        null,
+        null,
+        null
+      ]
     },
     {
       "id": "edm-harmonia-circle",
       "name": "Club Cycle",
       "instrument": "harmonia",
       "characterId": "lush",
-      "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-      "velocities": [0.89,0,0.85,0,0.83,0,0.81,0,0.83,0,0.8,0,0.82,0,0.8,0],
+      "steps": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0
+      ],
+      "velocities": [
+        0.89,
+        0,
+        0.85,
+        0,
+        0.83,
+        0,
+        0.81,
+        0,
+        0.83,
+        0,
+        0.8,
+        0,
+        0.82,
+        0,
+        0.8,
+        0
+      ],
       "tonalCenter": "C4",
       "scale": "Major",
       "degree": 0,
@@ -709,7 +1820,24 @@
       "harmoniaBass": true,
       "harmoniaArp": true,
       "harmoniaPatternId": "circle-of-fifths",
-      "harmoniaStepDegrees": [0,null,4,null,5,null,1,null,2,null,6,null,4,null,0,null]
+      "harmoniaStepDegrees": [
+        0,
+        null,
+        4,
+        null,
+        5,
+        null,
+        1,
+        null,
+        2,
+        null,
+        6,
+        null,
+        4,
+        null,
+        0,
+        null
+      ]
     }
   ]
 }

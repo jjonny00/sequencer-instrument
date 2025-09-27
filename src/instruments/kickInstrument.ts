@@ -9,8 +9,34 @@ type KickMacroDefaults = {
   tight: number;
 };
 
-function resolveKickCharacter(packId: string, characterId: string) {
-  const pack = packs.find((candidate: Pack) => candidate.id === packId);
+type ToneLike = Pick<
+  typeof Tone,
+  "Destination" | "Gain" | "MembraneSynth" | "NoiseSynth" | "dbToGain" | "now"
+>;
+
+interface KickVoiceOptions {
+  tone?: ToneLike;
+  pack?: Pack;
+}
+
+type KickVoice = Tone.Gain & {
+  triggerAttackRelease: (
+    note?: Tone.Unit.Frequency,
+    duration?: Tone.Unit.Time,
+    time?: Tone.Unit.Time,
+    velocity?: number
+  ) => void;
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+function resolveKickCharacter(
+  packId: string,
+  characterId: string,
+  providedPack?: Pack
+) {
+  const pack = providedPack ?? packs.find((candidate: Pack) => candidate.id === packId);
   if (!pack) throw new Error(`[kick] pack not found: ${packId}`);
   const instrument = pack.instruments?.["kick"];
   if (!instrument) throw new Error(`[kick] no 'kick' instrument in pack ${packId}`);
@@ -27,7 +53,10 @@ function resolveKickCharacter(packId: string, characterId: string) {
   return char;
 }
 
-function mapKickParams({ punch, clean, tight }: KickMacroDefaults) {
+function mapKickParams(defaults?: Partial<KickMacroDefaults>) {
+  const punch = clamp(defaults?.punch ?? 0.5, 0, 1);
+  const clean = clamp(defaults?.clean ?? 0.5, 0, 1);
+  const tight = clamp(defaults?.tight ?? 0.5, 0, 1);
   return {
     pitchDecay: 0.01 + punch * 0.05,
     octaves: 2 + Math.round(punch * 3),
@@ -37,49 +66,73 @@ function mapKickParams({ punch, clean, tight }: KickMacroDefaults) {
   };
 }
 
-export function createKick(packId: string, characterId: string) {
-  const char = resolveKickCharacter(packId, characterId);
-  const macroDefaults: KickMacroDefaults = {
-    punch: char.defaults?.punch ?? 0.5,
-    clean: char.defaults?.clean ?? 0.5,
-    tight: char.defaults?.tight ?? 0.5,
-  };
-  const params = mapKickParams(macroDefaults);
+export function createKick(
+  packId: string,
+  characterId: string,
+  options: KickVoiceOptions = {}
+): KickVoice {
+  const toneApi = options.tone ?? Tone;
+  const char = resolveKickCharacter(packId, characterId, options.pack);
+  const params = mapKickParams(char.defaults);
 
-  const sub = new Tone.MembraneSynth({
+  const output = new toneApi.Gain(1) as KickVoice;
+
+  const sub = new toneApi.MembraneSynth({
     pitchDecay: params.pitchDecay,
     octaves: params.octaves,
     oscillator: { type: "sine" },
-    envelope: { attack: 0.005, decay: params.decay, sustain: 0, release: params.release }
-  }).toDestination();
+    envelope: {
+      attack: 0.005,
+      decay: params.decay,
+      sustain: 0,
+      release: params.release,
+    },
+  });
+  sub.connect(output);
 
-  let noise: Tone.NoiseSynth | null = null;
-  let noiseGain: Tone.Gain | null = null;
+  let noise: InstanceType<typeof toneApi.NoiseSynth> | null = null;
+  let noiseGain: InstanceType<typeof toneApi.Gain> | null = null;
   if (params.noiseDb > -36) {
-    noise = new Tone.NoiseSynth({
-      envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 }
+    noise = new toneApi.NoiseSynth({
+      envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 },
     });
-    noiseGain = new Tone.Gain(Tone.dbToGain(params.noiseDb)).toDestination();
+    noiseGain = new toneApi.Gain(toneApi.dbToGain(params.noiseDb));
     noise.connect(noiseGain);
+    noiseGain.connect(output);
   }
+
+  output.connect(toneApi.Destination);
 
   if (import.meta.env.DEV) {
-    console.info("[kick:new]", { packId, characterId: char.id, defaults: char.defaults, mapped: params });
+    console.info("[kick:new]", {
+      packId,
+      characterId: char.id,
+      defaults: char.defaults,
+      mapped: params,
+    });
   }
 
-  return {
-    triggerAttackRelease(dur: Tone.Unit.Time, time: Tone.Unit.Time, vel?: number) {
-      // reset oscillator phase for click-free hits
-      const oscillator = (sub as { oscillator?: Tone.OmniOscillator<Tone.Oscillator> }).oscillator;
-      if (oscillator && typeof oscillator.phase !== "undefined") {
-        oscillator.phase = 0;
-      }
-      sub.triggerAttackRelease("C1", dur, time, vel);
-      if (noise) noise.triggerAttackRelease(dur, time, vel);
-    },
-    dispose() {
-      noise?.dispose(); noiseGain?.dispose();
-      sub.dispose();
+  output.triggerAttackRelease = (
+    note: Tone.Unit.Frequency = "C1",
+    duration: Tone.Unit.Time = "8n",
+    time?: Tone.Unit.Time,
+    velocity?: number
+  ) => {
+    const oscillator = (sub as { oscillator?: { phase?: number } }).oscillator;
+    if (oscillator && typeof oscillator.phase === "number") {
+      oscillator.phase = 0;
     }
+    sub.triggerAttackRelease(note, duration, time, velocity);
+    noise?.triggerAttackRelease(duration, time, velocity);
   };
+
+  const originalDispose = output.dispose.bind(output);
+  output.dispose = () => {
+    noise?.dispose();
+    noiseGain?.dispose();
+    sub.dispose();
+    return originalDispose();
+  };
+
+  return output;
 }

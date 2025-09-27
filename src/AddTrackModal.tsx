@@ -350,7 +350,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         const when = Tone.now() + 0.05;
         if (import.meta.env.DEV)
           console.info("[kick:preview]", { packId: selectedPackId, characterId });
-        voice.triggerAttackRelease("8n", when, 0.9);
+        voice.triggerAttackRelease("C1", "8n", when, 0.9);
         setTimeout(() => voice.dispose(), 600);
         return;
       }
