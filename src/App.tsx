@@ -1185,6 +1185,45 @@ export default function App() {
   }, [viewMode]);
 
   useEffect(() => {
+    if (editing === null) return;
+    const activeTrack = tracks.find((track) => track.id === editing);
+    if (!activeTrack || activeTrack.pattern || !activeTrack.instrument) {
+      return;
+    }
+
+    setTracks((previousTracks) => {
+      const index = previousTracks.findIndex((track) => track.id === editing);
+      if (index === -1) {
+        return previousTracks;
+      }
+      const track = previousTracks[index];
+      if (!track.instrument || track.pattern) {
+        return previousTracks;
+      }
+
+      const label = (index + 1).toString().padStart(2, "0");
+      const pattern: Chunk = {
+        id: `track-${track.id}-${Date.now()}`,
+        name: `Track ${label} Pattern`,
+        instrument: track.instrument,
+        steps: Array(16).fill(0),
+        velocities: Array(16).fill(1),
+        pitches: Array(16).fill(0),
+        ...(track.source?.characterId
+          ? { characterId: track.source.characterId }
+          : {}),
+      };
+
+      const nextTracks = previousTracks.slice();
+      nextTracks[index] = {
+        ...track,
+        pattern,
+      };
+      return nextTracks;
+    });
+  }, [editing, tracks, setTracks]);
+
+  useEffect(() => {
     if (viewMode !== "track") return;
     if (!pendingLoopStripAction) return;
     let frame = 0;
