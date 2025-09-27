@@ -1,6 +1,5 @@
 import * as Tone from "tone";
-import { packs, type Pack } from "../packs";
-import type { InstrumentCharacter as Character } from "../packs";
+import { packs, type Pack, type InstrumentCharacter as Character } from "@/packs";
 
 interface KickCharacterDefaults {
   pitchDecay?: number;
