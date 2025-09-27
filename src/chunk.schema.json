@@ -278,24 +278,6 @@
         "minimum": 0,
         "maximum": 6
       }
-    },
-    "punch": {
-      "type": "number",
-      "description": "Kick Designer punch vs sub balance",
-      "minimum": 0,
-      "maximum": 1
-    },
-    "clean": {
-      "type": "number",
-      "description": "Kick Designer clean vs dirty saturation",
-      "minimum": 0,
-      "maximum": 1
-    },
-    "tight": {
-      "type": "number",
-      "description": "Kick Designer decay length",
-      "minimum": 0,
-      "maximum": 1
     }
   }
 }

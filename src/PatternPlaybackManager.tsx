@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef } from "react";
 import type { JSX } from "react";
 import * as Tone from "tone";
 
+import { createKick } from "@/instruments/kickInstrument";
+
 import type { Chunk } from "./chunks";
 import {
   HARMONIA_DEFAULT_CONTROLS,
@@ -49,6 +51,54 @@ export function PatternPlaybackManager({
     return triggers[createTriggerKey(resolvedPackId, instrument)];
   };
 
+  const resolveKickTrigger = (track: Track): TriggerMap[string] | undefined => {
+    const instrumentId = track.instrument;
+    if (instrumentId !== "kick") {
+      return undefined;
+    }
+    const resolvedPackId =
+      track.source?.packId ??
+      packs.find((candidate) => candidate.instruments[instrumentId])?.id ??
+      null;
+    if (!resolvedPackId) {
+      return undefined;
+    }
+    const sourceCharacterId = track.source?.characterId;
+    const trackId = track.id;
+    return ((time: number, velocity?: number) => {
+      const resolvedVelocity = velocity ?? 0.9;
+      if (resolvedVelocity <= 0) {
+        return;
+      }
+      try {
+        const voice = createKick(resolvedPackId, sourceCharacterId);
+        voice.triggerAttackRelease("8n", time, resolvedVelocity);
+        if (import.meta.env.DEV) {
+          console.info("[kick:play]", {
+            packId: resolvedPackId,
+            characterId: sourceCharacterId,
+            trackId,
+          });
+        }
+        const disposeDelayMs = Math.max(
+          0,
+          (time - Tone.now()) * 1000 + 600
+        );
+        if (Number.isFinite(disposeDelayMs)) {
+          window.setTimeout(() => {
+            voice.dispose();
+          }, disposeDelayMs);
+        } else {
+          voice.dispose();
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.info("[kick:play:error]", error);
+        }
+      }
+    }) as TriggerMap[string];
+  };
+
   if (viewMode === "song") {
     const players: JSX.Element[] = [];
     songRows.forEach((row, rowIndex) => {
@@ -63,7 +113,11 @@ export function PatternPlaybackManager({
         if (!track.pattern) return;
         const instrument = track.instrument;
         if (!instrument) return;
-        const trigger = resolveTrigger(instrument, track.source?.packId);
+        const trigger =
+          instrument === "kick"
+            ? resolveKickTrigger(track) ??
+              resolveTrigger(instrument, track.source?.packId)
+            : resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return;
         const scaledTrigger = (
           time: number,
@@ -109,7 +163,11 @@ export function PatternPlaybackManager({
         if (!track.pattern) return null;
         const instrument = track.instrument;
         if (!instrument) return null;
-        const trigger = resolveTrigger(instrument, track.source?.packId);
+        const trigger =
+          instrument === "kick"
+            ? resolveKickTrigger(track) ??
+              resolveTrigger(instrument, track.source?.packId)
+            : resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return null;
         const isTrackActive = () => !track.muted;
         return (

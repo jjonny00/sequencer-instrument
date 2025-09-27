@@ -10,12 +10,24 @@
         {
           "id": "trap_808_boom",
           "name": "808 Boom",
-          "defaults": { "punch": 0.2, "clean": 0.6, "tight": 0.7 }
+          "defaults": {
+            "pitchDecay": 0.05,
+            "octaves": 5.5,
+            "decay": 0.95,
+            "release": 0.22,
+            "noiseDb": -40
+          }
         },
         {
           "id": "trap_hard_clip",
           "name": "Hard Clip",
-          "defaults": { "punch": 0.4, "clean": 0.2, "tight": 0.6 }
+          "defaults": {
+            "pitchDecay": 0.035,
+            "octaves": 4.8,
+            "decay": 0.8,
+            "release": 0.18,
+            "noiseDb": -34
+          }
         }
       ],
       "patterns": [
@@ -364,10 +376,7 @@
       "instrument": "kick",
       "characterId": "trap_808_boom",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [1,0,0,0,0.9,0,0,0,0.95,0,0,0,0.9,0,0,0],
-      "punch": 0.2,
-      "clean": 0.6,
-      "tight": 0.7
+      "velocities": [1,0,0,0,0.9,0,0,0,0.95,0,0,0,0.9,0,0,0]
     },
     {
       "id": "trap-kick-sparse",
@@ -376,10 +385,7 @@
       "characterId": "trap_hard_clip",
       "steps": [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],
       "velocities": [1,0,0,0,0,0,0.85,0,0,0,0,0,0.9,0,0,0],
-      "humanize": 0.03,
-      "punch": 0.45,
-      "clean": 0.25,
-      "tight": 0.58
+      "humanize": 0.03
     },
     {
       "id": "trap-kick-sync",
@@ -388,10 +394,7 @@
       "characterId": "trap_808_boom",
       "steps": [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0],
       "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0.8,0,0,0],
-      "swing": 0.06,
-      "punch": 0.25,
-      "clean": 0.55,
-      "tight": 0.68
+      "swing": 0.06
     },
     {
       "id": "trap-snare-backbeat",
