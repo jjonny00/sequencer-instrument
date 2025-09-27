@@ -1,5 +1,6 @@
 import * as Tone from "tone";
-import { packs, type InstrumentCharacter } from "@/packs";
+import { packs, type Pack } from "../packs";
+import type { InstrumentCharacter as Character } from "../packs";
 
 interface KickCharacterDefaults {
   pitchDecay?: number;
@@ -12,19 +13,23 @@ interface KickCharacterDefaults {
 export const resolveKickCharacter = (
   packId: string,
   characterId?: string
-): InstrumentCharacter | undefined => {
-  const pack = packs.find((candidate) => candidate.id === packId);
+): Character | undefined => {
+  const pack = packs.find((candidate: Pack) => candidate.id === packId);
   const kickInstrument = pack?.instruments?.kick;
-  const characters = kickInstrument?.characters ?? [];
+  const characters: Character[] = kickInstrument?.characters ?? [];
 
   if (characters.length === 0) {
     return undefined;
   }
 
   const resolvedId = characterId ?? kickInstrument?.defaultCharacterId;
-  const resolvedCharacter = characters.find((character) => character.id === resolvedId);
+  const resolvedCharacter = characters.find(
+    (character: Character) => character.id === resolvedId
+  );
   const defaultCharacter = kickInstrument?.defaultCharacterId
-    ? characters.find((character) => character.id === kickInstrument.defaultCharacterId)
+    ? characters.find(
+        (character: Character) => character.id === kickInstrument.defaultCharacterId
+      )
     : undefined;
 
   return resolvedCharacter ?? defaultCharacter ?? characters[0];
