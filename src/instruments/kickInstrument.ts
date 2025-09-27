@@ -94,3 +94,21 @@ export function createKick(
     },
   };
 }
+
+declare global {
+  interface Window {
+    __debugKick?: (packId: string, characterId: string) => string;
+  }
+}
+
+// @ts-ignore
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  // Debug helper for console
+  window.__debugKick = (packId: string, characterId: string) => {
+    const voice = createKick(packId, characterId);
+    const when = Tone.now() + 0.05;
+    voice.triggerAttackRelease("8n", when, 0.9);
+    setTimeout(() => voice.dispose(), 600);
+    return `Triggered kick for ${packId}:${characterId}`;
+  };
+}
