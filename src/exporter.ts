@@ -14,12 +14,7 @@ import {
   triggerHarmoniaChord,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import {
-  createKickDesigner,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-  type KickDesignerInstrument,
-} from "./instruments/kickDesigner";
+import { createKick } from "./instruments/kickInstrument";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -155,6 +150,7 @@ type BoundTone = ReturnType<typeof fromContext>;
 
 const createInstrumentInstance = (
   tone: BoundTone,
+  packId: string,
   instrumentId: string,
   character: InstrumentCharacter
 ): {
@@ -163,10 +159,21 @@ const createInstrumentInstance = (
   harmoniaNodes?: HarmoniaNodes;
 } => {
   if (instrumentId === "kick") {
-    const defaults = normalizeKickDesignerState(character.defaults);
-    const instrument = createKickDesigner(defaults);
-    instrument.toDestination();
-    return { instrument: instrument as ToneInstrument };
+    const output = new tone.Gain(0).toDestination();
+    const instrument = output as unknown as ToneInstrument;
+    instrument.triggerAttackRelease = (
+      _note?: Tone.Unit.Frequency,
+      duration?: Tone.Unit.Time,
+      time?: Tone.Unit.Time,
+      velocity?: number
+    ) => {
+      const voice = createKick(packId, character.id);
+      const when = time ?? tone.now();
+      const playDuration = duration ?? "8n";
+      voice.triggerAttackRelease(playDuration, when, velocity);
+      setTimeout(() => voice.dispose(), 600);
+    };
+    return { instrument };
   }
 
   if (character.type === "Harmonia") {
@@ -305,7 +312,7 @@ const createOfflineTriggerMap = (
       const key = `${instrumentId}:${character.id}`;
       let inst = instrumentRefs[key];
       if (!inst) {
-        const created = createInstrumentInstance(tone, instrumentId, character);
+        const created = createInstrumentInstance(tone, pack.id, instrumentId, character);
         inst = created.instrument;
         instrumentRefs[key] = inst;
         if (created.keyboardFx) {
@@ -346,18 +353,6 @@ const createOfflineTriggerMap = (
       const settable = inst as unknown as {
         set?: (values: Record<string, unknown>) => void;
       };
-      if (instrumentId === "kick") {
-        const kick = inst as unknown as KickDesignerInstrument;
-        if (kick.setMacroState) {
-          const defaults = normalizeKickDesignerState(character.defaults);
-          const merged = mergeKickDesignerState(defaults, {
-            punch: chunk?.punch,
-            clean: chunk?.clean,
-            tight: chunk?.tight,
-          });
-          kick.setMacroState(merged);
-        }
-      }
       if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
         const envelope: Record<string, unknown> = {};
         if (chunk.attack !== undefined) envelope.attack = chunk.attack;

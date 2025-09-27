@@ -497,10 +497,7 @@
       "instrument": "kick",
       "characterId": "edm_club_punch",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [1,0,0,0,0.95,0,0,0,0.98,0,0,0,0.95,0,0,0],
-      "punch": 0.7,
-      "clean": 0.9,
-      "tight": 0.4
+      "velocities": [1,0,0,0,0.95,0,0,0,0.98,0,0,0,0.95,0,0,0]
     },
     {
       "id": "edm-kick-drop",
@@ -508,10 +505,7 @@
       "instrument": "kick",
       "characterId": "edm_trance_boom",
       "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
-      "velocities": [1,0,0,0,0.95,0,0.85,0,0.92,0,0,0,0.96,0,0.82,0],
-      "punch": 0.55,
-      "clean": 0.72,
-      "tight": 0.48
+      "velocities": [1,0,0,0,0.95,0,0.85,0,0.92,0,0,0,0.96,0,0.82,0]
     },
     {
       "id": "edm-kick-sync",
@@ -519,10 +513,7 @@
       "instrument": "kick",
       "characterId": "edm_club_punch",
       "steps": [1,0,0,0,1,0,0,1,1,0,0,0,1,0,0,1],
-      "velocities": [1,0,0,0,0.95,0,0,0.75,0.9,0,0,0,0.92,0,0,0.78],
-      "punch": 0.68,
-      "clean": 0.85,
-      "tight": 0.42
+      "velocities": [1,0,0,0,0.95,0,0,0.75,0.9,0,0,0,0.92,0,0,0.78]
     },
     {
       "id": "edm-snare-offbeat",
