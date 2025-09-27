@@ -30,6 +30,7 @@ import {
   FALLBACK_INSTRUMENT_COLOR,
   getInstrumentColor,
   hexToRgba,
+  lightenColor,
 } from "./utils/color";
 
 type SelectField = "pack" | "instrument" | "style" | "preset";
@@ -813,14 +814,22 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       minHeight?: number;
     }
   ): CSSProperties => {
+    const safeAccentColor = accentColor || FALLBACK_INSTRUMENT_COLOR;
+    const activeBackground = `radial-gradient(circle, ${hexToRgba(
+      lightenColor(safeAccentColor, 0.18),
+      0.85
+    )}, ${hexToRgba(safeAccentColor, 0.85)})`;
+    const activeBorderColor = hexToRgba(safeAccentColor, 0.65);
+    const activeGlowColor = hexToRgba(safeAccentColor, 0.55);
+
     return {
       minWidth,
       minHeight,
       padding: "12px 16px 14px",
       borderRadius: 12,
-      border: "1px solid #273144",
+      border: isActive ? `1px solid ${activeBorderColor}` : "1px solid #273144",
       background: isActive
-        ? "#27E0B0"
+        ? activeBackground
         : "radial-gradient(circle at center, #1e293b 0%, #101726 72%)",
       color: isActive ? "#0e151f" : "#e2e8f0",
       display: "flex",
@@ -831,7 +840,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       textAlign: "left",
       flex: "0 0 auto",
       boxShadow: isActive
-        ? `0 0 12px rgba(39, 224, 176, 0.4), 0 6px 14px rgba(2, 12, 23, 0.45)`
+        ? `0 0 12px ${activeGlowColor}, 0 6px 14px rgba(2, 12, 23, 0.45)`
         : "none",
       transform: isActive ? "translateY(2px)" : "translateY(0)",
       transition:
