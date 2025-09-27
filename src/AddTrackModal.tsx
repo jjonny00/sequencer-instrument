@@ -340,7 +340,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     async (characterId: string) => {
       if (!characterId || !selectedInstrumentId || !selectedPackId) return;
       const trigger =
-        triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
+        triggers[
+          createTriggerKey(selectedPackId, selectedInstrumentId, characterId)
+        ] ?? triggers[createTriggerKey(selectedPackId, selectedInstrumentId)];
       if (!trigger) return;
       try {
         await initAudioContext();
@@ -364,15 +366,22 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     async (chunk: Chunk, fallbackCharacterId?: string | null) => {
       const instrumentId = chunk.instrument || selectedInstrumentId;
       if (!instrumentId || !selectedPackId) return;
-      const trigger = triggers[createTriggerKey(selectedPackId, instrumentId)];
+      const activeCharacterId =
+        fallbackCharacterId ?? chunk.characterId ?? selectedCharacterId ?? null;
+      const primaryTriggerKey = createTriggerKey(
+        selectedPackId,
+        instrumentId,
+        activeCharacterId ?? undefined
+      );
+      const trigger =
+        triggers[primaryTriggerKey] ??
+        triggers[createTriggerKey(selectedPackId, instrumentId)];
       if (!trigger) return;
       try {
         await initAudioContext();
       } catch {
         return;
       }
-      const activeCharacterId =
-        fallbackCharacterId ?? chunk.characterId ?? selectedCharacterId ?? null;
       const start = Tone.now() + 0.05;
       let hasTriggered = false;
 

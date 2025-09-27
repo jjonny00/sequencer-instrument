@@ -13,7 +13,6 @@ import type {
 } from "./instruments/harmonia";
 import { isScaleName, type ScaleName } from "./music/scales";
 import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
-import { packs } from "./packs";
 import type { PatternGroup, SongRow } from "./song";
 
 interface PatternPlaybackManagerProps {
@@ -40,13 +39,21 @@ export function PatternPlaybackManager({
     [patternGroups]
   );
 
-  const resolveTrigger = (instrument: string, packId?: string | null) => {
-    const resolvedPackId =
-      packId ??
-      packs.find((candidate) => candidate.instruments[instrument])?.id ??
-      null;
-    if (!resolvedPackId) return undefined;
-    return triggers[createTriggerKey(resolvedPackId, instrument)];
+  const resolveTrigger = (
+    instrument: string,
+    packId?: string | null,
+    characterId?: string | null
+  ) => {
+    if (!packId) return undefined;
+    if (characterId) {
+      const characterSpecific = triggers[
+        createTriggerKey(packId, instrument, characterId)
+      ];
+      if (characterSpecific) {
+        return characterSpecific;
+      }
+    }
+    return triggers[createTriggerKey(packId, instrument)];
   };
 
   if (viewMode === "song") {
@@ -63,7 +70,10 @@ export function PatternPlaybackManager({
         if (!track.pattern) return;
         const instrument = track.instrument;
         if (!instrument) return;
-        const trigger = resolveTrigger(instrument, track.source?.packId);
+        const packId = track.source?.packId;
+        const characterId = track.source?.characterId;
+        if (!packId || !characterId) return;
+        const trigger = resolveTrigger(instrument, packId, characterId);
         if (!trigger) return;
         const scaledTrigger = (
           time: number,
@@ -84,7 +94,7 @@ export function PatternPlaybackManager({
             note,
             sustain,
             chunk,
-            track.source?.characterId
+            characterId
           );
         };
         const isTrackActive = () => !row.muted && !track.muted;
@@ -109,7 +119,10 @@ export function PatternPlaybackManager({
         if (!track.pattern) return null;
         const instrument = track.instrument;
         if (!instrument) return null;
-        const trigger = resolveTrigger(instrument, track.source?.packId);
+        const packId = track.source?.packId;
+        const characterId = track.source?.characterId;
+        if (!packId || !characterId) return null;
+        const trigger = resolveTrigger(instrument, packId, characterId);
         if (!trigger) return null;
         const isTrackActive = () => !track.muted;
         return (
@@ -124,7 +137,7 @@ export function PatternPlaybackManager({
                 note,
                 sustain,
                 chunk,
-                track.source?.characterId
+                characterId
               )
             }
             started={started}

@@ -31,5 +31,11 @@ export interface Track {
   source?: TrackSource;
 }
 
-export const createTriggerKey = (packId: string, instrumentId: string) =>
-  `${packId}::${instrumentId}`;
+export const createTriggerKey = (
+  packId: string,
+  instrumentId: string,
+  characterId?: string | null
+) =>
+  characterId && characterId.length > 0
+    ? `${packId}:${instrumentId}:${characterId}`
+    : `${packId}:${instrumentId}`;
