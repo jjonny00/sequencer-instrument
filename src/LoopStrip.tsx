@@ -375,31 +375,37 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     if (!isPlaying) setStep(-1);
   }, [isPlaying]);
 
-  const addPattern = (trackId: number) => {
-    let created = false;
-    setTracks((ts) =>
-      ts.map((t) => {
-        if (t.id !== trackId) return t;
-        if (!t.instrument) return t;
-        const label = getTrackNumberLabel(ts, trackId);
-        created = true;
-        return {
-          ...t,
-          pattern: {
-            id: `track-${trackId}-${Date.now()}`,
-            name: `Track ${label} Pattern`,
-            instrument: t.instrument,
-            steps: Array(16).fill(0),
-            velocities: Array(16).fill(1),
-            pitches: Array(16).fill(0),
-          },
-        };
-      })
-    );
-    if (created) {
-      setEditing(trackId);
-    }
-  };
+  const addPattern = useCallback(
+    (trackId: number) => {
+      let created = false;
+      setTracks((ts) =>
+        ts.map((t) => {
+          if (t.id !== trackId) return t;
+          if (!t.instrument || t.pattern) return t;
+          const label = getTrackNumberLabel(ts, trackId);
+          created = true;
+          return {
+            ...t,
+            pattern: {
+              id: `track-${trackId}-${Date.now()}`,
+              name: `Track ${label} Pattern`,
+              instrument: t.instrument,
+              steps: Array(16).fill(0),
+              velocities: Array(16).fill(1),
+              pitches: Array(16).fill(0),
+              ...(t.source?.characterId
+                ? { characterId: t.source.characterId }
+                : {}),
+            },
+          };
+        })
+      );
+      if (created) {
+        setEditing(trackId);
+      }
+    },
+    [setTracks, setEditing]
+  );
 
   const handleAddTrack = useCallback(() => {
     if (!addTrackEnabled) return;
@@ -427,6 +433,15 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     setTracks,
     setEditing,
   ]);
+
+  useEffect(() => {
+    if (editing === null) return;
+    const active = tracks.find((track) => track.id === editing);
+    if (!active || active.pattern || !active.instrument) {
+      return;
+    }
+    addPattern(editing);
+  }, [addPattern, editing, tracks]);
 
   const handleAddTrackWithOptions = useCallback(
     ({ packId, instrumentId, characterId, presetId }: AddTrackRequest) => {
