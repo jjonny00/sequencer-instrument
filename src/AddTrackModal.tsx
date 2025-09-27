@@ -854,20 +854,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     };
   };
 
-  const createPadAccentStyle = (
-    accentColor: string,
-    isActive: boolean
-  ): CSSProperties => ({
-    display: "inline-block",
-    alignSelf: "stretch",
-    height: 4,
-    borderRadius: 999,
-    background: hexToRgba(accentColor || FALLBACK_INSTRUMENT_COLOR, isActive ? 0.95 : 0.55),
-    boxShadow: isActive
-      ? `0 0 10px ${hexToRgba(accentColor || FALLBACK_INSTRUMENT_COLOR, 0.55)}`
-      : "none",
-  });
-
   const createPadTitleStyle = (isActive: boolean): CSSProperties => ({
     fontSize: 14,
     fontWeight: 700,
@@ -1011,7 +997,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             <div style={horizontalScrollAreaStyle}>
               {packs.map((option) => {
                 const isActive = option.id === selectedPackId;
-                const accentColor = selectedInstrumentAccent;
+                const accentColor = FALLBACK_INSTRUMENT_COLOR;
                 const buttonStyle = createPadButtonStyle(accentColor, {
                   isActive,
                   isDisabled: packSelectDisabled,
@@ -1025,10 +1011,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handlePackSelect(option.id)}
                     style={buttonStyle}
                   >
-                    <span
-                      aria-hidden="true"
-                      style={createPadAccentStyle(accentColor, isActive)}
-                    />
                     <span style={createPadTitleStyle(isActive)}>
                       {option.name}
                     </span>
@@ -1070,10 +1052,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handleInstrumentSelect(instrument)}
                     style={buttonStyle}
                   >
-                    <span
-                      aria-hidden="true"
-                      style={createPadAccentStyle(accentColor, isActive)}
-                    />
                     <span style={createPadTitleStyle(isActive)}>
                       {formatInstrumentLabel(instrument)}
                     </span>
@@ -1123,10 +1101,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handleStyleSelect(character.id)}
                     style={buttonStyle}
                   >
-                    <span
-                      aria-hidden="true"
-                      style={createPadAccentStyle(accentColor, isActive)}
-                    />
                     <span style={createPadTitleStyle(isActive)}>
                       {character.name}
                     </span>
@@ -1186,10 +1160,6 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handlePresetSelect(preset.id)}
                     style={buttonStyle}
                   >
-                    <span
-                      aria-hidden="true"
-                      style={createPadAccentStyle(accentColor, isActive)}
-                    />
                     <span style={createPadTitleStyle(isActive)}>
                       {preset.name}
                     </span>
