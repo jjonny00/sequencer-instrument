@@ -32,11 +32,6 @@ import {
   normalizeControlState as normalizeHarmoniaControlState,
   resolveHarmoniaChord,
 } from "./instruments/harmonia";
-import {
-  DEFAULT_KICK_STATE,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-} from "./instruments/kickDesigner";
 import type {
   HarmoniaComplexity,
   HarmoniaPatternId,
@@ -323,7 +318,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const patternCharacterId = pattern?.characterId ?? null;
   const instrumentLabel = formatInstrumentLabel(track.instrument ?? "");
   const isPercussive = isPercussiveInstrument(track.instrument ?? "");
-  const isKick = track.instrument === "kick";
   const isBass = track.instrument === "bass";
   const isArp = track.instrument === "arp";
   const isKeyboard = track.instrument === "keyboard";
@@ -383,61 +377,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   );
 
   const packId = track.source?.packId ?? "";
-
-  const kickDefaults = useMemo(() => {
-    if (!isKick) return DEFAULT_KICK_STATE;
-    if (!packId) return DEFAULT_KICK_STATE;
-    const pack = packs.find((candidate) => candidate.id === packId);
-    const instrument = pack?.instruments?.kick;
-    if (!instrument) return DEFAULT_KICK_STATE;
-    const activeCharacterId =
-      patternCharacterId ??
-      sourceCharacterId ??
-      instrument.defaultCharacterId ??
-      instrument.characters[0]?.id ??
-      null;
-    const character = activeCharacterId
-      ? instrument.characters.find((candidate) => candidate.id === activeCharacterId) ?? null
-      : instrument.characters[0] ?? null;
-    return character
-      ? normalizeKickDesignerState(character.defaults)
-      : DEFAULT_KICK_STATE;
-  }, [
-    isKick,
-    packId,
-    patternCharacterId,
-    sourceCharacterId,
-  ]);
-
-  useEffect(() => {
-    if (!isKick || !pattern || !updatePattern) return;
-    const merged = mergeKickDesignerState(kickDefaults, {
-      punch: pattern.punch,
-      clean: pattern.clean,
-      tight: pattern.tight,
-    });
-    const needsUpdate =
-      pattern.punch !== merged.punch ||
-      pattern.clean !== merged.clean ||
-      pattern.tight !== merged.tight;
-    if (needsUpdate) {
-      updatePattern({
-        punch: merged.punch,
-        clean: merged.clean,
-        tight: merged.tight,
-      });
-    }
-  }, [isKick, pattern, updatePattern, kickDefaults]);
-
-  const kickState = useMemo(
-    () =>
-      mergeKickDesignerState(kickDefaults, {
-        punch: pattern?.punch,
-        clean: pattern?.clean,
-        tight: pattern?.tight,
-      }),
-    [kickDefaults, pattern?.punch, pattern?.clean, pattern?.tight]
-  );
 
   const harmoniaPatternPresets = useMemo(() => {
     if (!packId) {
@@ -3300,53 +3239,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           }
         />
       </Section>
-
-      {isKick ? (
-        <Section>
-          <span style={{ color: "#94a3b8", fontSize: 12 }}>
-            Shape the transient, saturation, and tail of the Kick Designer layer blend.
-          </span>
-          <Slider
-            label="Punch ↔ Sub"
-            min={0}
-            max={1}
-            step={0.01}
-            value={kickState.punch}
-            formatValue={(value) =>
-              `${Math.round((1 - value) * 100)}% Punch / ${Math.round(value * 100)}% Sub`
-            }
-            onChange={
-              updatePattern ? (value) => updatePattern({ punch: value }) : undefined
-            }
-          />
-          <Slider
-            label="Clean ↔ Dirty"
-            min={0}
-            max={1}
-            step={0.01}
-            value={kickState.clean}
-            formatValue={(value) =>
-              `${Math.round((1 - value) * 100)}% Clean / ${Math.round(value * 100)}% Dirty`
-            }
-            onChange={
-              updatePattern ? (value) => updatePattern({ clean: value }) : undefined
-            }
-          />
-          <Slider
-            label="Tight ↔ Long"
-            min={0}
-            max={1}
-            step={0.01}
-            value={kickState.tight}
-            formatValue={(value) =>
-              `${Math.round((1 - value) * 100)}% Tight / ${Math.round(value * 100)}% Long`
-            }
-            onChange={
-              updatePattern ? (value) => updatePattern({ tight: value }) : undefined
-            }
-          />
-        </Section>
-      ) : null}
 
       {isPercussive ? (
         <Section>
