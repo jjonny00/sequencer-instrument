@@ -9,16 +9,17 @@ function pushLog(msg: string) {
 }
 
 if (import.meta.env.DEV) {
-  ["log", "info", "warn", "error"].forEach((method) => {
-    const original = console[method as keyof Console] as any;
-    console[method as keyof Console] = (...args: any[]) => {
+  const methods = ["log", "info", "warn", "error"] as const;
+  methods.forEach((method) => {
+    const original = console[method].bind(console);
+    console[method] = ((...args: unknown[]) => {
       pushLog(
         `[${method.toUpperCase()}] ${args
           .map((a) => JSON.stringify(a))
           .join(" ")}`
       );
-      original.apply(console, args);
-    };
+      original(...args);
+    }) as typeof console[typeof method];
   });
 }
 
