@@ -135,23 +135,31 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [userPresets]
   );
 
-  const presetSelectionItems = useMemo(
+  type PresetSource = "none" | "user" | "pack";
+  type PresetSelectionItem = {
+    id: string | null;
+    name: string;
+    source: PresetSource;
+    characterId: string | null;
+    pattern?: Chunk;
+  };
+
+  const presetSelectionItems = useMemo<PresetSelectionItem[]>(
     () =>
       [
         {
-          id: null as const,
+          id: null,
           name: "None",
-          source: "none" as const,
+          source: "none",
           characterId: null,
-          pattern: undefined,
         },
         ...userPresetItems.map((preset) => ({
           ...preset,
-          source: "user" as const,
+          source: "user" as PresetSource,
         })),
         ...packPresets.map((preset) => ({
           ...preset,
-          source: "pack" as const,
+          source: "pack" as PresetSource,
         })),
       ],
     [packPresets, userPresetItems]
