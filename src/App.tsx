@@ -14,7 +14,7 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick } from "@/instruments/kickInstrument";
-import { DebugPanel } from "@/components/DebugPanel";
+import { DebugPanel, isDebugPanelEnabled } from "@/components/DebugPanel";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -2909,7 +2909,7 @@ export default function App() {
         </>
       )}
       </div>
-      {import.meta.env.DEV && <DebugPanel />}
+      {isDebugPanelEnabled() && <DebugPanel />}
     </>
   );
 }
