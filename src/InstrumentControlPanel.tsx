@@ -446,26 +446,26 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       }
     | null
   >(() => {
-    if (!isKick || !pattern || !kickDefaults) return null;
+    if (!isKick || !kickDefaults) return null;
     return {
       pitchDecay:
-        typeof pattern.kickPitchDecay === "number"
+        typeof pattern?.kickPitchDecay === "number"
           ? pattern.kickPitchDecay
           : kickDefaults.pitchDecay,
       octaves:
-        typeof pattern.kickOctaves === "number"
+        typeof pattern?.kickOctaves === "number"
           ? pattern.kickOctaves
           : kickDefaults.octaves,
       decay:
-        typeof pattern.kickDecay === "number"
+        typeof pattern?.kickDecay === "number"
           ? pattern.kickDecay
           : kickDefaults.decay,
       release:
-        typeof pattern.kickRelease === "number"
+        typeof pattern?.kickRelease === "number"
           ? pattern.kickRelease
           : kickDefaults.release,
       noiseDb:
-        typeof pattern.kickNoiseDb === "number"
+        typeof pattern?.kickNoiseDb === "number"
           ? pattern.kickNoiseDb
           : kickDefaults.noiseDb ?? FALLBACK_KICK_DEFAULTS.noiseDb,
     };
@@ -2253,24 +2253,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     [updatePattern, updatePatternAndReschedule]
   );
 
-  if (!pattern) {
-    return (
-      <div
-        style={{
-          borderRadius: 12,
-          border: "1px solid #2a3344",
-          padding: 24,
-          textAlign: "center",
-          color: "#94a3b8",
-          fontSize: 13,
-        }}
-      >
-        This track doesn't have a pattern yet. Add some steps to unlock
-        instrument controls.
-      </div>
-    );
-  }
-
   if (isArp) {
     const canAutopilot = timingMode === "sync" && autopHasHits;
     const autopilotMessage = !autopHasHits
@@ -3376,7 +3358,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={-12}
             max={12}
             step={1}
-            value={pattern.pitchOffset ?? 0}
+            value={pattern?.pitchOffset ?? 0}
             formatValue={(value) => `${value > 0 ? "+" : ""}${value} st`}
             onChange={updatePattern ? (value) => updatePattern({ pitchOffset: value }) : undefined}
           />
@@ -3385,7 +3367,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.swing ?? 0}
+            value={pattern?.swing ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ swing: value }) : undefined}
           />
@@ -3394,7 +3376,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.humanize ?? 0}
+            value={pattern?.humanize ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ humanize: value }) : undefined}
           />
@@ -3507,7 +3489,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={0.5}
             step={0.005}
-            value={pattern.attack ?? 0.01}
+            value={pattern?.attack ?? 0.01}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
             onChange={updatePattern ? (value) => updatePattern({ attack: value }) : undefined}
           />
@@ -3516,7 +3498,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.sustain ?? 0.2}
+            value={pattern?.sustain ?? 0.2}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
             onChange={updatePattern ? (value) => updatePattern({ sustain: value }) : undefined}
           />
@@ -3525,7 +3507,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={0.5}
             step={0.01}
-            value={pattern.glide ?? 0}
+            value={pattern?.glide ?? 0}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
             onChange={updatePattern ? (value) => updatePattern({ glide: value }) : undefined}
           />
@@ -3534,7 +3516,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.filter ?? 1}
+            value={pattern?.filter ?? 1}
             formatValue={(value) =>
               `${Math.round(filterValueToFrequency(value))} Hz`
             }
@@ -3559,7 +3541,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 onChange={(event) => {
                   const nextNote = event.target.value;
                   if (!updatePattern) return;
-                  const degrees = pattern.degrees ?? [];
+                  const degrees = pattern?.degrees ?? [];
                   const partial: Partial<Chunk> = { note: nextNote };
                   if (degrees.length) {
                     partial.notes = createChordNotes(nextNote, degrees);
@@ -3595,11 +3577,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                       borderRadius: 8,
                       border: "1px solid #2a3344",
                       background:
-                        pattern.style === style
-                          ? "#27E0B0"
-                          : "#1f2532",
+                        pattern?.style === style ? "#27E0B0" : "#1f2532",
                       color:
-                        pattern.style === style ? "#1F2532" : "#e6f2ff",
+                        pattern?.style === style ? "#1F2532" : "#e6f2ff",
                       cursor: "pointer",
                       textTransform: "capitalize",
                     }}
@@ -3622,9 +3602,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                       borderRadius: 8,
                       border: "1px solid #2a3344",
                       background:
-                        pattern.mode === mode ? "#27E0B0" : "#1f2532",
+                        pattern?.mode === mode ? "#27E0B0" : "#1f2532",
                       color:
-                        pattern.mode === mode ? "#1F2532" : "#e6f2ff",
+                        pattern?.mode === mode ? "#1F2532" : "#e6f2ff",
                       cursor: "pointer",
                       textTransform: "capitalize",
                     }}
@@ -3637,7 +3617,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>Rate</span>
               <select
-                value={pattern.arpRate ?? "1/16"}
+                value={pattern?.arpRate ?? "1/16"}
                 onChange={(event) =>
                   updatePattern?.({ arpRate: event.target.value })
                 }
@@ -3697,7 +3677,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               min={0.1}
               max={1}
               step={0.01}
-              value={pattern.arpGate ?? 0.6}
+              value={pattern?.arpGate ?? 0.6}
               formatValue={(value) => `${Math.round(value * 100)}%`}
               onChange={updatePattern ? (value) => updatePattern({ arpGate: value }) : undefined}
             />
@@ -3706,7 +3686,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               min={1}
               max={4}
               step={1}
-              value={pattern.arpOctaves ?? 1}
+              value={pattern?.arpOctaves ?? 1}
               formatValue={(value) => `${value}x`}
               onChange={updatePattern ? (value) => updatePattern({ arpOctaves: value }) : undefined}
             />
@@ -3715,7 +3695,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               min={-5}
               max={5}
               step={0.5}
-              value={pattern.pitchBend ?? 0}
+              value={pattern?.pitchBend ?? 0}
               formatValue={(value) => `${value > 0 ? "+" : ""}${value} st`}
               onChange={updatePattern ? (value) => updatePattern({ pitchBend: value }) : undefined}
             />
@@ -3724,7 +3704,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               min={0}
               max={1.5}
               step={0.01}
-              value={pattern.sustain ?? 0.2}
+              value={pattern?.sustain ?? 0.2}
               formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
               onChange={updatePattern ? (value) => updatePattern({ sustain: value }) : undefined}
             />
@@ -3740,18 +3720,18 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               <span style={{ fontWeight: 600 }}>Latch</span>
               <button
                 onClick={() =>
-                  updatePattern?.({ arpLatch: !(pattern.arpLatch ?? false) })
+                  updatePattern?.({ arpLatch: !(pattern?.arpLatch ?? false) })
                 }
                 style={{
                   padding: "6px 12px",
                   borderRadius: 8,
                   border: "1px solid #2a3344",
-                  background: pattern.arpLatch ? "#27E0B0" : "#1f2532",
-                  color: pattern.arpLatch ? "#1F2532" : "#e6f2ff",
+                  background: pattern?.arpLatch ? "#27E0B0" : "#1f2532",
+                  color: pattern?.arpLatch ? "#1F2532" : "#e6f2ff",
                   cursor: "pointer",
                 }}
               >
-                {pattern.arpLatch ? "On" : "Off"}
+                {pattern?.arpLatch ? "On" : "Off"}
               </button>
             </div>
           </div>
@@ -3764,7 +3744,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={2}
             step={0.01}
-            value={pattern.attack ?? 0.05}
+            value={pattern?.attack ?? 0.05}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
             onChange={updatePattern ? (value) => updatePattern({ attack: value }) : undefined}
           />
@@ -3773,7 +3753,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={3}
             step={0.01}
-            value={pattern.sustain ?? 0.8}
+            value={pattern?.sustain ?? 0.8}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
             onChange={updatePattern ? (value) => updatePattern({ sustain: value }) : undefined}
           />
@@ -3782,7 +3762,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.glide ?? 0}
+            value={pattern?.glide ?? 0}
             formatValue={(value) => `${(value * 1000).toFixed(0)} ms`}
             onChange={updatePattern ? (value) => updatePattern({ glide: value }) : undefined}
           />
@@ -3791,7 +3771,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={-1}
             max={1}
             step={0.01}
-            value={pattern.pan ?? 0}
+            value={pattern?.pan ?? 0}
             formatValue={(value) => `${(value * 100).toFixed(0)}%`}
             onChange={updatePattern ? (value) => updatePattern({ pan: value }) : undefined}
           />
@@ -3800,7 +3780,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.reverb ?? 0}
+            value={pattern?.reverb ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ reverb: value }) : undefined}
           />
@@ -3809,7 +3789,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.delay ?? 0}
+            value={pattern?.delay ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ delay: value }) : undefined}
           />
@@ -3818,7 +3798,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.distortion ?? 0}
+            value={pattern?.distortion ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ distortion: value }) : undefined}
           />
@@ -3827,7 +3807,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.bitcrusher ?? 0}
+            value={pattern?.bitcrusher ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ bitcrusher: value }) : undefined}
           />
@@ -3836,7 +3816,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.chorus ?? 0}
+            value={pattern?.chorus ?? 0}
             formatValue={(value) => `${Math.round(value * 100)}%`}
             onChange={updatePattern ? (value) => updatePattern({ chorus: value }) : undefined}
           />
@@ -3845,7 +3825,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             min={0}
             max={1}
             step={0.01}
-            value={pattern.filter ?? 1}
+            value={pattern?.filter ?? 1}
             formatValue={(value) =>
               `${Math.round(filterValueToFrequency(value))} Hz`
             }
