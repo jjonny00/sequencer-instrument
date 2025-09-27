@@ -435,6 +435,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     ({ packId, instrumentId, characterId, presetId }: AddTrackRequest) => {
       if (!addTrackEnabled) return;
       if (!instrumentId) return;
+      if (!packId) {
+        throw new Error("[kick] track missing packId/characterId");
+      }
       const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
       if (!activePack) {
         return;
@@ -492,29 +495,40 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         const instrumentDefinition = activePack.instruments[
           instrumentId
         ] as InstrumentDefinition | undefined;
+        const previousCharacterId =
+          basePattern.characterId && basePattern.characterId.length > 0
+            ? basePattern.characterId
+            : null;
         const resolvedCharacterId = resolveInstrumentCharacterId(
           instrumentDefinition,
           characterId,
           presetPayload?.characterId ?? null,
-          basePattern.characterId ?? null
+          previousCharacterId
         );
-        const previousCharacterId = basePattern.characterId ?? null;
+        const nextCharacterId =
+          resolvedCharacterId ||
+          instrumentDefinition?.defaultCharacterId ||
+          instrumentDefinition?.characters?.[0]?.id ||
+          "";
+        if (!nextCharacterId) {
+          throw new Error("[kick] track missing packId/characterId");
+        }
         let pattern: Chunk = {
           ...basePattern,
-          characterId: resolvedCharacterId,
+          characterId: nextCharacterId,
         };
         if (instrumentId === "kick") {
           pattern = applyKickMacrosToChunk(
             pattern,
             instrumentDefinition,
-            resolvedCharacterId,
+            nextCharacterId,
             previousCharacterId
           );
         }
         if (instrumentId === "harmonia") {
           pattern = initializeHarmoniaPattern(
             pattern,
-            resolvedCharacterId,
+            nextCharacterId,
             instrumentDefinition
           );
         }
@@ -530,7 +544,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             source: {
               packId,
               instrumentId,
-              characterId: resolvedCharacterId,
+              characterId: nextCharacterId,
               presetId: presetId ?? null,
             },
           },
@@ -554,50 +568,52 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       { packId, instrumentId, characterId, presetId }: AddTrackRequest
     ) => {
       if (!instrumentId) return;
-      const activePack = pack.id === packId ? pack : packs.find((p) => p.id === packId);
-      if (!activePack) {
-        return;
-      }
-      const resolvePreset = () => {
-        if (!presetId) return null;
-        if (isUserPresetId(presetId)) {
-          const stored = loadInstrumentPreset(
-            packId,
-            instrumentId,
-            stripUserPresetPrefix(presetId)
-          );
-          if (!stored) return null;
-          const cloned = cloneChunk(stored.pattern);
-          return {
-            pattern: {
-              ...cloned,
-              id: `${stored.id}-${Date.now()}`,
-              instrument: instrumentId,
-              name: stored.name || cloned.name,
-            },
-            name: stored.name || cloned.name,
-            characterId: stored.characterId,
-          };
-        }
-        const preset = presetId
-          ? activePack.chunks.find((chunk) => chunk.id === presetId)
-          : null;
-        if (!preset) return null;
-        const cloned = cloneChunk(preset);
-        return {
-          pattern: {
-            ...cloned,
-            id: `${preset.id}-${Date.now()}`,
-            instrument: instrumentId,
-            name: preset.name,
-          },
-          name: preset.name,
-          characterId: preset.characterId ?? null,
-        };
-      };
       setTracks((ts) =>
         ts.map((t) => {
           if (t.id !== trackId) return t;
+          const nextPackId = packId || t.source?.packId || pack.id;
+          const activePack =
+            packs.find((candidate) => candidate.id === nextPackId) ?? pack;
+          if (!activePack) {
+            return t;
+          }
+          const resolvePreset = () => {
+            if (!presetId) return null;
+            if (isUserPresetId(presetId)) {
+              const stored = loadInstrumentPreset(
+                nextPackId,
+                instrumentId,
+                stripUserPresetPrefix(presetId)
+              );
+              if (!stored) return null;
+              const cloned = cloneChunk(stored.pattern);
+              return {
+                pattern: {
+                  ...cloned,
+                  id: `${stored.id}-${Date.now()}`,
+                  instrument: instrumentId,
+                  name: stored.name || cloned.name,
+                },
+                name: stored.name || cloned.name,
+                characterId: stored.characterId,
+              };
+            }
+            const preset = presetId
+              ? activePack.chunks.find((chunk) => chunk.id === presetId)
+              : null;
+            if (!preset) return null;
+            const cloned = cloneChunk(preset);
+            return {
+              pattern: {
+                ...cloned,
+                id: `${preset.id}-${Date.now()}`,
+                instrument: instrumentId,
+                name: preset.name,
+              },
+              name: preset.name,
+              characterId: preset.characterId ?? null,
+            };
+          };
           const presetPayload = resolvePreset();
           const basePattern: Chunk | null = presetPayload
             ? presetPayload.pattern
@@ -614,28 +630,40 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const instrumentDefinition = activePack.instruments[
             instrumentId
           ] as InstrumentDefinition | undefined;
-          const previousCharacterId = basePattern?.characterId ?? null;
+          const previousCharacterId =
+            basePattern?.characterId && basePattern.characterId.length > 0
+              ? basePattern.characterId
+              : t.source?.characterId ?? null;
           const resolvedCharacterId = resolveInstrumentCharacterId(
             instrumentDefinition,
             characterId,
             presetPayload?.characterId ?? null,
             previousCharacterId
           );
+          const nextCharacterId =
+            resolvedCharacterId ||
+            t.source?.characterId ||
+            instrumentDefinition?.defaultCharacterId ||
+            instrumentDefinition?.characters?.[0]?.id ||
+            "";
+          if (!nextPackId || !nextCharacterId) {
+            throw new Error("[kick] track missing packId/characterId");
+          }
           let nextPattern: Chunk | null = basePattern
-            ? { ...basePattern, characterId: resolvedCharacterId }
+            ? { ...basePattern, characterId: nextCharacterId }
             : null;
           if (instrumentId === "kick" && nextPattern) {
             nextPattern = applyKickMacrosToChunk(
               nextPattern,
               instrumentDefinition,
-              resolvedCharacterId,
+              nextCharacterId,
               previousCharacterId
             );
           }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
             nextPattern = initializeHarmoniaPattern(
               nextPattern,
-              resolvedCharacterId,
+              nextCharacterId,
               instrumentDefinition
             );
           }
@@ -646,9 +674,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             instrument: instrumentId as keyof TriggerMap,
             pattern: nextPattern,
             source: {
-              packId,
+              packId: nextPackId,
               instrumentId,
-              characterId: resolvedCharacterId,
+              characterId: nextCharacterId,
               presetId: presetId ?? null,
             },
           };

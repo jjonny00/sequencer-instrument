@@ -16,6 +16,14 @@ import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import { packs } from "./packs";
 import type { PatternGroup, SongRow } from "./song";
 
+const ensureKickTrackSource = (track: Track) => {
+  if (track.instrument === "kick") {
+    if (!track.source?.packId || !track.source?.characterId) {
+      throw new Error("[kick] track missing packId/characterId");
+    }
+  }
+};
+
 interface PatternPlaybackManagerProps {
   tracks: Track[];
   triggers: TriggerMap;
@@ -63,6 +71,7 @@ export function PatternPlaybackManager({
         if (!track.pattern) return;
         const instrument = track.instrument;
         if (!instrument) return;
+        ensureKickTrackSource(track);
         const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return;
         const scaledTrigger = (
@@ -109,6 +118,7 @@ export function PatternPlaybackManager({
         if (!track.pattern) return null;
         const instrument = track.instrument;
         if (!instrument) return null;
+        ensureKickTrackSource(track);
         const trigger = resolveTrigger(instrument, track.source?.packId);
         if (!trigger) return null;
         const isTrackActive = () => !track.muted;
