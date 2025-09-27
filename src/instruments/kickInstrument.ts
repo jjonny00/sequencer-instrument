@@ -1,42 +1,71 @@
 import * as Tone from "tone";
-import { packs } from "@/packs";
+import type { InstrumentCharacter, Pack } from "../packs";
+import { packs } from "../packs";
 
-function resolveKickCharacter(packId: string, characterId: string) {
-  const pack = packs.find(p => p.id === packId);
+type KickDefaults = {
+  pitchDecay: number;
+  octaves: number;
+  decay: number;
+  release: number;
+  noiseDb?: number;
+};
+
+function resolveKickCharacter(packId: string, characterId: string): InstrumentCharacter {
+  const pack = packs.find((packDef: Pack) => packDef.id === packId);
   if (!pack) throw new Error(`[kick] pack not found: ${packId}`);
   const instrument = pack.instruments?.["kick"];
   if (!instrument) throw new Error(`[kick] kick not found in pack ${packId}`);
-  let char = instrument.characters.find(c => c.id === characterId);
+  let char = instrument.characters.find((character: InstrumentCharacter) => character.id === characterId);
   if (!char && instrument.defaultCharacterId) {
-    char = instrument.characters.find(c => c.id === instrument.defaultCharacterId);
+    char = instrument.characters.find((character: InstrumentCharacter) => character.id === instrument.defaultCharacterId);
   }
   if (!char) char = instrument.characters[0];
   return char;
 }
 
+function resolveKickDefaults(character: InstrumentCharacter): KickDefaults {
+  const defaults = character.defaults as Partial<KickDefaults> | undefined;
+  if (!defaults) {
+    throw new Error(`[kick] defaults missing for character ${character.id}`);
+  }
+
+  const { pitchDecay, octaves, decay, release, noiseDb } = defaults;
+  if (
+    typeof pitchDecay !== "number" ||
+    typeof octaves !== "number" ||
+    typeof decay !== "number" ||
+    typeof release !== "number"
+  ) {
+    throw new Error(`[kick] invalid defaults for character ${character.id}`);
+  }
+
+  return { pitchDecay, octaves, decay, release, noiseDb };
+}
+
 export function createKick(packId: string, characterId: string) {
   const char = resolveKickCharacter(packId, characterId);
-  const { pitchDecay, octaves, decay, release, noiseDb } = char.defaults;
+  const defaults = resolveKickDefaults(char);
+  const { pitchDecay, octaves, decay, release, noiseDb } = defaults;
 
   const sub = new Tone.MembraneSynth({
     pitchDecay,
     octaves,
     oscillator: { type: "sine" },
-    envelope: { attack: 0.005, decay, sustain: 0, release }
+    envelope: { attack: 0.005, decay, sustain: 0, release },
   }).toDestination();
 
   let noise: Tone.NoiseSynth | null = null;
   let noiseGain: Tone.Gain | null = null;
   if (typeof noiseDb === "number" && noiseDb > -36) {
     noise = new Tone.NoiseSynth({
-      envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 }
+      envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 },
     });
     noiseGain = new Tone.Gain(Tone.dbToGain(noiseDb)).toDestination();
     noise.connect(noiseGain);
   }
 
   if (import.meta.env.DEV) {
-    console.info("[kick:create]", { packId, characterId: char.id, params: char.defaults });
+    console.info("[kick:create]", { packId, characterId: char.id, params: defaults });
   }
 
   return {
@@ -51,8 +80,9 @@ export function createKick(packId: string, characterId: string) {
       if (noise) noise.triggerAttackRelease(dur, time, vel);
     },
     dispose() {
-      noise?.dispose(); noiseGain?.dispose();
+      noise?.dispose();
+      noiseGain?.dispose();
       sub.dispose();
-    }
+    },
   };
 }
