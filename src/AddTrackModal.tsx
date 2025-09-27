@@ -816,20 +816,17 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   ): CSSProperties => {
     const safeColor = accentColor || FALLBACK_INSTRUMENT_COLOR;
     const activeBorder = hexToRgba(lightenColor(safeColor, 0.1), 0.9);
-    const restingBorder = "rgba(17, 26, 44, 0.9)";
+    const restingBorder = hexToRgba(lightenColor(safeColor, -0.35), 0.5);
     return {
       minWidth,
       minHeight,
       padding: "16px 18px",
-      borderRadius: 18,
+      borderRadius: 10,
       border: `1px solid ${isActive ? activeBorder : restingBorder}`,
       background: isActive
-        ? `radial-gradient(circle at 30% 20%, ${hexToRgba(
-            lightenColor(safeColor, 0.45),
-            0.95
-          )} 0%, ${hexToRgba(lightenColor(safeColor, 0.15), 0.9)} 42%, rgba(12, 19, 32, 0.92) 100%)`
-        : "linear-gradient(145deg, #111a2e, #0a111f)",
-      color: isActive ? "#04121c" : "#e2e8f0",
+        ? "radial-gradient(circle, rgba(255, 235, 191, 0.85), rgba(255, 199, 68, 0.85))"
+        : "radial-gradient(circle, rgba(255, 235, 191, 0.25), rgba(255, 199, 68, 0.25))",
+      color: isActive ? "#2d1600" : "#f8fafc",
       display: "flex",
       flexDirection: "column",
       justifyContent: "flex-start",
@@ -838,11 +835,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       textAlign: "left",
       flex: "0 0 auto",
       boxShadow: isActive
-        ? `0 0 12px ${hexToRgba(safeColor, 0.55)}, 0 0 28px ${hexToRgba(
-            lightenColor(safeColor, 0.35),
-            0.5
-          )}, inset 0 0 18px ${hexToRgba(lightenColor(safeColor, 0.25), 0.45)}, inset 0 2px 6px rgba(255, 255, 255, 0.15)`
-        : "inset 0 6px 12px rgba(6, 10, 20, 0.78), inset 0 -6px 10px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(2, 5, 12, 0.65)",
+        ? "inset 0 0 12px rgba(255,255,255,0.4), 0 0 12px rgba(234, 189, 115, 0.95), 0px 1px 3px 2px rgba(0, 0, 0, 1)"
+        : "inset 0 0 12px rgba(255,255,255,0.4), 0 0 0px rgba(234, 189, 115, 0.95), 0px 3px 3px 0px rgba(0, 0, 0, 0.5)",
       transform: isActive ? "translateY(3px)" : "translateY(0)",
       transition:
         "transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
@@ -858,9 +852,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     fontSize: 15,
     fontWeight: 700,
     letterSpacing: 0.2,
-    color: isActive ? "#04121c" : "#e2e8f0",
+    color: isActive ? "#2d1600" : "#f8fafc",
     textShadow: isActive
-      ? `0 0 12px ${hexToRgba("#ffffff", 0.55)}`
+      ? `0 0 8px ${hexToRgba("#ffffff", 0.5)}`
       : "0 1px 0 rgba(4, 7, 14, 0.65)",
     transition: "color 0.2s ease, text-shadow 0.2s ease",
   });
@@ -888,7 +882,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           variant === "user" ? 0.4 : 0.3
         )
       : "rgba(148, 163, 184, 0.08)",
-    color: isActive ? "#04121c" : "#94a3b8",
+    color: isActive ? "#2d1600" : "#94a3b8",
     transition: "border-color 0.2s ease, background 0.2s ease, color 0.2s ease",
   });
 
