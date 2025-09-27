@@ -1117,6 +1117,15 @@ export default function App() {
   }, [tracks]);
 
   useEffect(() => {
+    if (viewMode !== "track") return;
+    if (editing !== null) return;
+    const fallbackTrack =
+      tracks.find((track) => Boolean(track.instrument)) ?? tracks[0] ?? null;
+    if (!fallbackTrack) return;
+    setEditing(fallbackTrack.id);
+  }, [editing, tracks, viewMode]);
+
+  useEffect(() => {
     const previousMode = previousViewModeRef.current;
     if (previousMode === "track" && viewMode === "song") {
       currentLoopDraftRef.current = latestTracksRef.current.map((track) =>

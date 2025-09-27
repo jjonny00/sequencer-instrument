@@ -1017,15 +1017,16 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               style={{ display: "flex", flexDirection: "column", gap: 8 }}
             >
               <div
-                onPointerDown={(event) => {
+                onPointerDownCapture={(event) => {
                   swipeRef.current = event.clientX;
+                  if (!isEditing) {
+                    setEditing(t.id);
+                  }
                 }}
                 onPointerUp={(event) => {
                   const dx = event.clientX - swipeRef.current;
                   if (isEditing && dx > 50) {
                     setEditing(null);
-                  } else if (!isEditing && Math.abs(dx) < 10) {
-                    setEditing(t.id);
                   }
                 }}
                 style={{
