@@ -1,5 +1,7 @@
 import * as Tone from "tone";
-import { packs } from "@/packs";
+
+import { packs } from "../packs";
+import type { InstrumentCharacter, Pack } from "../packs";
 
 type KickMacroDefaults = {
   punch: number;
@@ -8,13 +10,17 @@ type KickMacroDefaults = {
 };
 
 function resolveKickCharacter(packId: string, characterId: string) {
-  const pack = packs.find(p => p.id === packId);
+  const pack = packs.find((candidate: Pack) => candidate.id === packId);
   if (!pack) throw new Error(`[kick] pack not found: ${packId}`);
   const instrument = pack.instruments?.["kick"];
   if (!instrument) throw new Error(`[kick] no 'kick' instrument in pack ${packId}`);
-  let char = instrument.characters.find(c => c.id === characterId);
+  let char = instrument.characters.find(
+    (candidate: InstrumentCharacter) => candidate.id === characterId
+  );
   if (!char && instrument.defaultCharacterId) {
-    char = instrument.characters.find(c => c.id === instrument.defaultCharacterId);
+    char = instrument.characters.find(
+      (candidate: InstrumentCharacter) => candidate.id === instrument.defaultCharacterId
+    );
   }
   if (!char) char = instrument.characters[0];
   if (!char) throw new Error(`[kick] no characters available for pack ${packId}`);
