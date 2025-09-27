@@ -13,12 +13,7 @@ import {
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import {
-  createKickDesigner,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-  type KickDesignerInstrument,
-} from "./instruments/kickDesigner";
+import { createKick } from "./instruments/kickInstrument";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import {
@@ -183,9 +178,6 @@ const createDemoProjectData = (): StoredProjectData => {
     velocities: [
       0.95, 0, 0, 0, 0.9, 0, 0.82, 0, 0.9, 0, 0, 0, 0.88, 0, 0.8, 0,
     ],
-    punch: 0.62,
-    clean: 0.82,
-    tight: 0.48,
   };
 
   const snarePattern: Chunk = {
@@ -847,13 +839,6 @@ export default function App() {
       instrumentId: string,
       character: InstrumentCharacter
     ) => {
-      if (instrumentId === "kick") {
-        const defaults = normalizeKickDesignerState(character.defaults);
-        const instrument = createKickDesigner(defaults);
-        instrument.toDestination();
-        return { instrument: instrument as ToneInstrument };
-      }
-
       if (character.type === "Harmonia") {
         const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
@@ -968,6 +953,18 @@ export default function App() {
             characterId
           );
           if (!character) return;
+          const sustainOverride =
+            sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+          if (instrumentId === "kick") {
+            const voice = createKick(pack.id, character.id);
+            const duration = sustainOverride ?? "8n";
+            const hitVelocity = velocity ?? 0.9;
+            voice.triggerAttackRelease(duration, time, hitVelocity);
+            Tone.context.setTimeout(() => {
+              voice.dispose();
+            }, 0.6);
+            return;
+          }
           const key = `${pack.id}:${instrumentId}:${character.id}`;
           let inst = instrumentRefs.current[key];
           if (!inst) {
@@ -981,8 +978,6 @@ export default function App() {
               harmoniaNodesRef.current[key] = created.harmoniaNodes;
             }
           }
-          const sustainOverride =
-            sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
           if (instrumentId === "harmonia") {
             const nodes = harmoniaNodesRef.current[key];
             if (!nodes) return;
@@ -1009,19 +1004,6 @@ export default function App() {
         const settable = inst as unknown as {
           set?: (values: Record<string, unknown>) => void;
         };
-        if (instrumentId === "kick") {
-          const kick = inst as unknown as KickDesignerInstrument;
-          if (kick.setMacroState) {
-            const defaults = normalizeKickDesignerState(character.defaults);
-            const merged = mergeKickDesignerState(defaults, {
-              punch: chunk?.punch,
-              clean: chunk?.clean,
-              tight: chunk?.tight,
-            });
-            kick.setMacroState(merged);
-          }
-        }
-
         if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
           const envelope: Record<string, unknown> = {};
           if (chunk.attack !== undefined) envelope.attack = chunk.attack;

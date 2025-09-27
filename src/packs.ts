@@ -1,6 +1,4 @@
 import type { Chunk } from "./chunks";
-import type { KickDesignerState } from "./instruments/kickDesigner";
-
 export interface InstrumentSpec {
   type?: string;
   note?: string;
@@ -8,11 +6,19 @@ export interface InstrumentSpec {
   effects?: EffectSpec[];
 }
 
+export interface KickCharacterDefaults {
+  pitchDecay: number;
+  octaves: number;
+  decay: number;
+  release: number;
+  noiseDb?: number;
+}
+
 export interface InstrumentCharacter extends InstrumentSpec {
   id: string;
   name: string;
   description?: string;
-  defaults?: Partial<KickDesignerState>;
+  defaults?: KickCharacterDefaults;
 }
 
 export interface InstrumentDefinition {
@@ -31,9 +37,6 @@ export interface InstrumentPatternPreset {
   degrees?: number[];
   steps?: number[];
   velocities?: number[];
-  punch?: number;
-  clean?: number;
-  tight?: number;
 }
 
 export interface EffectSpec {

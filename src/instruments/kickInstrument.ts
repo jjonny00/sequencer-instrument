@@ -1,14 +1,18 @@
 import * as Tone from "tone";
-import type { InstrumentCharacter, Pack } from "../packs";
-import { packs } from "../packs";
+import type { fromContext } from "tone/build/esm/fromContext";
+import type { InstrumentCharacter, Pack } from "@/packs";
+import { packs } from "@/packs";
 
-type KickDefaults = {
+export type KickDefaults = {
   pitchDecay: number;
   octaves: number;
   decay: number;
   release: number;
   noiseDb?: number;
 };
+
+type BoundTone = ReturnType<typeof fromContext>;
+type ToneLike = typeof Tone | BoundTone;
 
 function resolveKickCharacter(packId: string, characterId: string): InstrumentCharacter {
   const pack = packs.find((packDef: Pack) => packDef.id === packId);
@@ -42,12 +46,16 @@ function resolveKickDefaults(character: InstrumentCharacter): KickDefaults {
   return { pitchDecay, octaves, decay, release, noiseDb };
 }
 
-export function createKick(packId: string, characterId: string) {
+export function createKick(
+  packId: string,
+  characterId: string,
+  tone: ToneLike = Tone
+) {
   const char = resolveKickCharacter(packId, characterId);
   const defaults = resolveKickDefaults(char);
   const { pitchDecay, octaves, decay, release, noiseDb } = defaults;
 
-  const sub = new Tone.MembraneSynth({
+  const sub = new tone.MembraneSynth({
     pitchDecay,
     octaves,
     oscillator: { type: "sine" },
@@ -57,10 +65,10 @@ export function createKick(packId: string, characterId: string) {
   let noise: Tone.NoiseSynth | null = null;
   let noiseGain: Tone.Gain | null = null;
   if (typeof noiseDb === "number" && noiseDb > -36) {
-    noise = new Tone.NoiseSynth({
+    noise = new tone.NoiseSynth({
       envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 },
     });
-    noiseGain = new Tone.Gain(Tone.dbToGain(noiseDb)).toDestination();
+    noiseGain = new tone.Gain(tone.dbToGain(noiseDb)).toDestination();
     noise.connect(noiseGain);
   }
 

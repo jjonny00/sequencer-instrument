@@ -14,12 +14,7 @@ import {
   triggerHarmoniaChord,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
-import {
-  createKickDesigner,
-  mergeKickDesignerState,
-  normalizeKickDesignerState,
-  type KickDesignerInstrument,
-} from "./instruments/kickDesigner";
+import { createKick } from "./instruments/kickInstrument";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -162,13 +157,6 @@ const createInstrumentInstance = (
   keyboardFx?: KeyboardFxNodes;
   harmoniaNodes?: HarmoniaNodes;
 } => {
-  if (instrumentId === "kick") {
-    const defaults = normalizeKickDesignerState(character.defaults);
-    const instrument = createKickDesigner(defaults);
-    instrument.toDestination();
-    return { instrument: instrument as ToneInstrument };
-  }
-
   if (character.type === "Harmonia") {
     const nodes = createHarmoniaNodes(tone, character);
     nodes.volume.connect(tone.Destination);
@@ -302,6 +290,20 @@ const createOfflineTriggerMap = (
         characterId ?? chunk?.characterId
       );
       if (!character) return;
+      const sustainOverride =
+        sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+
+      if (instrumentId === "kick") {
+        const voice = createKick(pack.id, character.id, tone);
+        const duration = sustainOverride ?? "8n";
+        const hitVelocity = velocity ?? 0.9;
+        voice.triggerAttackRelease(duration, time, hitVelocity);
+        tone.context.setTimeout(() => {
+          voice.dispose();
+        }, 0.6);
+        return;
+      }
+
       const key = `${instrumentId}:${character.id}`;
       let inst = instrumentRefs[key];
       if (!inst) {
@@ -315,9 +317,6 @@ const createOfflineTriggerMap = (
           harmoniaFxRefs[key] = created.harmoniaNodes;
         }
       }
-
-      const sustainOverride =
-        sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
 
       if (instrumentId === "harmonia") {
         const nodes = harmoniaFxRefs[key];
@@ -346,18 +345,6 @@ const createOfflineTriggerMap = (
       const settable = inst as unknown as {
         set?: (values: Record<string, unknown>) => void;
       };
-      if (instrumentId === "kick") {
-        const kick = inst as unknown as KickDesignerInstrument;
-        if (kick.setMacroState) {
-          const defaults = normalizeKickDesignerState(character.defaults);
-          const merged = mergeKickDesignerState(defaults, {
-            punch: chunk?.punch,
-            clean: chunk?.clean,
-            tight: chunk?.tight,
-          });
-          kick.setMacroState(merged);
-        }
-      }
       if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
         const envelope: Record<string, unknown> = {};
         if (chunk.attack !== undefined) envelope.attack = chunk.attack;

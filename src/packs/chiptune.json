@@ -374,10 +374,7 @@
       "instrument": "kick",
       "characterId": "chip_square_thump",
       "steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-      "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0],
-      "punch": 0.6,
-      "clean": 0.8,
-      "tight": 0.5
+      "velocities": [1,0,0,0,0,0,0,0,0.85,0,0,0,0,0,0,0]
     },
     {
       "id": "chip-kick-drive",
@@ -385,10 +382,7 @@
       "instrument": "kick",
       "characterId": "chip_noise_pop",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-      "velocities": [0.95,0,0,0,0.9,0,0,0,0.92,0,0,0,0.88,0,0,0],
-      "punch": 0.72,
-      "clean": 0.9,
-      "tight": 0.42
+      "velocities": [0.95,0,0,0,0.9,0,0,0,0.92,0,0,0,0.88,0,0,0]
     },
     {
       "id": "chip-kick-sync",
@@ -396,10 +390,7 @@
       "instrument": "kick",
       "characterId": "chip_square_thump",
       "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0],
-      "velocities": [0.95,0,0,0,0.9,0,0.82,0,0.9,0,0,0,0.88,0,0.8,0],
-      "punch": 0.62,
-      "clean": 0.82,
-      "tight": 0.48
+      "velocities": [0.95,0,0,0,0.9,0,0.82,0,0.9,0,0,0,0.88,0,0.8,0]
     },
     {
       "id": "chip-snare-backbeat",
