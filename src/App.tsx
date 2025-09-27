@@ -645,7 +645,7 @@ export default function App() {
     (packId: string, requestedId?: string | null) => {
       const character = resolveInstrumentCharacter(packId, "harmonia", requestedId);
       if (!character) return undefined;
-      return `${packId}:harmonia:${character.id}`;
+      return createTriggerKey(packId, "harmonia", character.id);
     },
     [resolveInstrumentCharacter]
   );
@@ -1068,135 +1068,164 @@ export default function App() {
 
     const newTriggers: TriggerMap = {};
     packs.forEach((pack) => {
-      Object.keys(pack.instruments).forEach((instrumentId) => {
-        const triggerKey = createTriggerKey(pack.id, instrumentId);
-        newTriggers[triggerKey] = (
-          time: number,
-          velocity = 1,
-          pitch = 0,
-          noteArg?: string,
-          sustainArg?: number,
-          chunk?: Chunk,
-          characterId?: string
-        ) => {
-          void initAudioContext();
-          const character = resolveInstrumentCharacter(
-            pack.id,
-            instrumentId,
-            characterId
-          );
-          if (!character) return;
-          const key = `${pack.id}:${instrumentId}:${character.id}`;
-          let inst = instrumentRefs.current[key];
-          if (!inst) {
-            const created = createInstrumentInstance(instrumentId, character);
-            inst = created.instrument;
-            instrumentRefs.current[key] = inst;
-            if (created.keyboardFx) {
-              keyboardFxRefs.current[key] = created.keyboardFx;
-            }
-            if (created.harmoniaNodes) {
-              harmoniaNodesRef.current[key] = created.harmoniaNodes;
-            }
-          }
-          const sustainOverride =
-            sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
-          if (instrumentId === "harmonia") {
-            const nodes = harmoniaNodesRef.current[key];
-            if (!nodes) return;
-            if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
-              const envelope: Record<string, unknown> = {};
-              if (chunk.attack !== undefined) envelope.attack = chunk.attack;
-              if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
-              if (Object.keys(envelope).length > 0) {
-                (inst as unknown as { set?: (values: Record<string, unknown>) => void }).set?.({
-                  envelope,
+      Object.entries(pack.instruments).forEach(
+        ([instrumentId, instrumentDefinition]) => {
+          const registerTrigger = (characterId?: string | null) => {
+            const triggerKey = createTriggerKey(
+              pack.id,
+              instrumentId,
+              characterId
+            );
+            newTriggers[triggerKey] = (
+              time: number,
+              velocity = 1,
+              pitch = 0,
+              noteArg?: string,
+              sustainArg?: number,
+              chunk?: Chunk,
+              overrideCharacterId?: string
+            ) => {
+              void initAudioContext();
+              const requestedCharacterId =
+                overrideCharacterId ??
+                characterId ??
+                chunk?.characterId ??
+                undefined;
+              const character = resolveInstrumentCharacter(
+                pack.id,
+                instrumentId,
+                requestedCharacterId
+              );
+              if (!character) return;
+              const instanceKey = createTriggerKey(
+                pack.id,
+                instrumentId,
+                character.id
+              );
+              let inst = instrumentRefs.current[instanceKey];
+              if (!inst) {
+                const created = createInstrumentInstance(instrumentId, character);
+                inst = created.instrument;
+                instrumentRefs.current[instanceKey] = inst;
+                if (created.keyboardFx) {
+                  keyboardFxRefs.current[instanceKey] = created.keyboardFx;
+                }
+                if (created.harmoniaNodes) {
+                  harmoniaNodesRef.current[instanceKey] = created.harmoniaNodes;
+                }
+              }
+              const sustainOverride =
+                sustainArg ??
+                (chunk?.sustain !== undefined ? chunk.sustain : undefined);
+              if (instrumentId === "harmonia") {
+                const nodes = harmoniaNodesRef.current[instanceKey];
+                if (!nodes) return;
+                if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+                  const envelope: Record<string, unknown> = {};
+                  if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+                  if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+                  if (Object.keys(envelope).length > 0) {
+                    (inst as unknown as {
+                      set?: (values: Record<string, unknown>) => void;
+                    }).set?.({
+                      envelope,
+                    });
+                  }
+                }
+                triggerHarmoniaChord({
+                  nodes,
+                  time,
+                  velocity,
+                  sustain: sustainOverride,
+                  chunk,
+                  characterId: character.id,
+                });
+                return;
+              }
+              const settable = inst as unknown as {
+                set?: (values: Record<string, unknown>) => void;
+              };
+              if (instrumentId === "kick") {
+                const kick = inst as unknown as KickDesignerInstrument;
+                if (kick.setMacroState) {
+                  const defaults = normalizeKickDesignerState(character.defaults);
+                  const merged = mergeKickDesignerState(defaults, {
+                    punch: chunk?.punch,
+                    clean: chunk?.clean,
+                    tight: chunk?.tight,
+                  });
+                  kick.setMacroState(merged);
+                }
+              }
+
+              if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+                const envelope: Record<string, unknown> = {};
+                if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+                if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+                if (Object.keys(envelope).length > 0) {
+                  settable.set?.({ envelope });
+                }
+              }
+              if (chunk?.glide !== undefined) {
+                settable.set?.({ portamento: chunk.glide });
+              }
+              if (chunk?.filter !== undefined) {
+                settable.set?.({
+                  filter: { frequency: filterValueToFrequency(chunk.filter) },
                 });
               }
-            }
-            triggerHarmoniaChord({
-              nodes,
-              time,
-              velocity,
-              sustain: sustainOverride,
-              chunk,
-              characterId: character.id,
-            });
-            return;
-          }
-        const settable = inst as unknown as {
-          set?: (values: Record<string, unknown>) => void;
-        };
-        if (instrumentId === "kick") {
-          const kick = inst as unknown as KickDesignerInstrument;
-          if (kick.setMacroState) {
-            const defaults = normalizeKickDesignerState(character.defaults);
-            const merged = mergeKickDesignerState(defaults, {
-              punch: chunk?.punch,
-              clean: chunk?.clean,
-              tight: chunk?.tight,
-            });
-            kick.setMacroState(merged);
-          }
-        }
+              if (instrumentId === "keyboard") {
+                const fx = keyboardFxRefs.current[instanceKey];
+                if (fx) {
+                  if (chunk?.pan !== undefined) {
+                    fx.panner.pan.rampTo(chunk.pan, 0.1);
+                  }
+                  if (chunk?.reverb !== undefined) {
+                    fx.reverb.wet.value = chunk.reverb;
+                  }
+                  if (chunk?.delay !== undefined) {
+                    fx.delay.wet.value = chunk.delay;
+                  }
+                  if (chunk?.distortion !== undefined) {
+                    fx.distortion.distortion = chunk.distortion;
+                  }
+                  if (chunk?.bitcrusher !== undefined) {
+                    fx.bitCrusher.wet.value = chunk.bitcrusher;
+                  }
+                  if (chunk?.chorus !== undefined) {
+                    fx.chorus.wet.value = chunk.chorus;
+                  }
+                  if (chunk?.filter !== undefined) {
+                    const frequency = filterValueToFrequency(chunk.filter);
+                    fx.filter.frequency.rampTo(frequency, 0.1);
+                  }
+                }
+              }
+              if (inst instanceof Tone.NoiseSynth) {
+                inst.triggerAttackRelease(
+                  sustainOverride ?? character.note ?? "8n",
+                  time,
+                  velocity
+                );
+                return;
+              }
+              const baseNote = noteArg ?? chunk?.note ?? character.note ?? "C2";
+              const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
+              const duration =
+                sustainOverride ?? (instrumentId === "keyboard" ? 0.3 : "8n");
+              inst.triggerAttackRelease(targetNote, duration, time, velocity);
+            };
+          };
 
-        if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
-          const envelope: Record<string, unknown> = {};
-          if (chunk.attack !== undefined) envelope.attack = chunk.attack;
-          if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
-          if (Object.keys(envelope).length > 0) {
-            settable.set?.({ envelope });
+          const characters = instrumentDefinition?.characters ?? [];
+          if (characters.length > 0) {
+            characters.forEach((character) => {
+              registerTrigger(character.id);
+            });
           }
+          registerTrigger(undefined);
         }
-        if (chunk?.glide !== undefined) {
-          settable.set?.({ portamento: chunk.glide });
-        }
-        if (chunk?.filter !== undefined) {
-          settable.set?.({
-            filter: { frequency: filterValueToFrequency(chunk.filter) },
-          });
-        }
-        if (instrumentId === "keyboard") {
-          const fx = keyboardFxRefs.current[key];
-          if (fx) {
-            if (chunk?.pan !== undefined) {
-              fx.panner.pan.rampTo(chunk.pan, 0.1);
-            }
-            if (chunk?.reverb !== undefined) {
-              fx.reverb.wet.value = chunk.reverb;
-            }
-            if (chunk?.delay !== undefined) {
-              fx.delay.wet.value = chunk.delay;
-            }
-            if (chunk?.distortion !== undefined) {
-              fx.distortion.distortion = chunk.distortion;
-            }
-            if (chunk?.bitcrusher !== undefined) {
-              fx.bitCrusher.wet.value = chunk.bitcrusher;
-            }
-            if (chunk?.chorus !== undefined) {
-              fx.chorus.wet.value = chunk.chorus;
-            }
-            if (chunk?.filter !== undefined) {
-              const frequency = filterValueToFrequency(chunk.filter);
-              fx.filter.frequency.rampTo(frequency, 0.1);
-            }
-          }
-        }
-        if (inst instanceof Tone.NoiseSynth) {
-          inst.triggerAttackRelease(
-            sustainOverride ?? character.note ?? "8n",
-            time,
-            velocity
-          );
-          return;
-        }
-        const baseNote = noteArg ?? chunk?.note ?? character.note ?? "C2";
-        const targetNote = Tone.Frequency(baseNote).transpose(pitch).toNote();
-        const duration = sustainOverride ?? (instrumentId === "keyboard" ? 0.3 : "8n");
-        inst.triggerAttackRelease(targetNote, duration, time, velocity);
-        };
-      });
+      );
     });
 
     setTriggers(newTriggers);
@@ -2967,14 +2996,25 @@ export default function App() {
                       trigger={(() => {
                         if (!selectedTrack.instrument) return undefined;
                         const packId = selectedTrack.source?.packId;
-                        const triggerKey = packId
-                          ? createTriggerKey(packId, selectedTrack.instrument)
-                          : null;
-                        const trigger = triggerKey
-                          ? triggers[triggerKey] ?? undefined
-                          : undefined;
-                        if (!trigger) return undefined;
                         const characterId = selectedTrack.source?.characterId;
+                        const triggerKey =
+                          packId && selectedTrack.instrument
+                            ? createTriggerKey(
+                                packId,
+                                selectedTrack.instrument,
+                                characterId ?? undefined
+                              )
+                            : null;
+                        const fallbackTriggerKey =
+                          packId && selectedTrack.instrument
+                            ? createTriggerKey(packId, selectedTrack.instrument)
+                            : null;
+                        const trigger =
+                          (triggerKey ? triggers[triggerKey] : undefined) ??
+                          (fallbackTriggerKey
+                            ? triggers[fallbackTriggerKey]
+                            : undefined);
+                        if (!trigger) return undefined;
                         return (
                           time: number,
                           velocity?: number,

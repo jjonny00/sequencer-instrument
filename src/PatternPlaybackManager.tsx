@@ -39,8 +39,20 @@ export function PatternPlaybackManager({
     [patternGroups]
   );
 
-  const resolveTrigger = (instrument: string, packId?: string | null) => {
+  const resolveTrigger = (
+    instrument: string,
+    packId?: string | null,
+    characterId?: string | null
+  ) => {
     if (!packId) return undefined;
+    if (characterId) {
+      const characterSpecific = triggers[
+        createTriggerKey(packId, instrument, characterId)
+      ];
+      if (characterSpecific) {
+        return characterSpecific;
+      }
+    }
     return triggers[createTriggerKey(packId, instrument)];
   };
 
@@ -61,7 +73,7 @@ export function PatternPlaybackManager({
         const packId = track.source?.packId;
         const characterId = track.source?.characterId;
         if (!packId || !characterId) return;
-        const trigger = resolveTrigger(instrument, packId);
+        const trigger = resolveTrigger(instrument, packId, characterId);
         if (!trigger) return;
         const scaledTrigger = (
           time: number,
@@ -110,7 +122,7 @@ export function PatternPlaybackManager({
         const packId = track.source?.packId;
         const characterId = track.source?.characterId;
         if (!packId || !characterId) return null;
-        const trigger = resolveTrigger(instrument, packId);
+        const trigger = resolveTrigger(instrument, packId, characterId);
         if (!trigger) return null;
         const isTrackActive = () => !track.muted;
         return (
