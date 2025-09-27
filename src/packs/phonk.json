@@ -10,12 +10,24 @@
         {
           "id": "phonk_memphis_distorted",
           "name": "Memphis Distorted",
-          "defaults": { "punch": 0.5, "clean": 0.1, "tight": 0.6 }
+          "defaults": {
+            "pitchDecay": 0.05,
+            "octaves": 4,
+            "decay": 0.82,
+            "release": 0.26,
+            "noiseDb": -26
+          }
         },
         {
           "id": "phonk_tape_slam",
           "name": "Tape Slam",
-          "defaults": { "punch": 0.4, "clean": 0.3, "tight": 0.7 }
+          "defaults": {
+            "pitchDecay": 0.042,
+            "octaves": 3.5,
+            "decay": 0.68,
+            "release": 0.21,
+            "noiseDb": -22
+          }
         }
       ],
       "patterns": [

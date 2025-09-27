@@ -10,12 +10,24 @@
         {
           "id": "chip_square_thump",
           "name": "Square Thump",
-          "defaults": { "punch": 0.6, "clean": 0.8, "tight": 0.5 }
+          "defaults": {
+            "pitchDecay": 0.026,
+            "octaves": 2.4,
+            "decay": 0.28,
+            "release": 0.09,
+            "noiseDb": -16
+          }
         },
         {
           "id": "chip_noise_pop",
           "name": "Noise Pop",
-          "defaults": { "punch": 0.7, "clean": 0.9, "tight": 0.4 }
+          "defaults": {
+            "pitchDecay": 0.022,
+            "octaves": 2,
+            "decay": 0.22,
+            "release": 0.07,
+            "noiseDb": -12
+          }
         }
       ],
       "patterns": [

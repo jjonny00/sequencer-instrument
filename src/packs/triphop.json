@@ -10,12 +10,24 @@
         {
           "id": "triphop_lofi_thump",
           "name": "Lo-Fi Thump",
-          "defaults": { "punch": 0.3, "clean": 0.3, "tight": 0.8 }
+          "defaults": {
+            "pitchDecay": 0.04,
+            "octaves": 3.1,
+            "decay": 0.74,
+            "release": 0.23,
+            "noiseDb": -24
+          }
         },
         {
           "id": "triphop_vinyl_kick",
           "name": "Vinyl Kick",
-          "defaults": { "punch": 0.4, "clean": 0.2, "tight": 0.7 }
+          "defaults": {
+            "pitchDecay": 0.035,
+            "octaves": 2.9,
+            "decay": 0.6,
+            "release": 0.2,
+            "noiseDb": -20
+          }
         }
       ],
       "patterns": [

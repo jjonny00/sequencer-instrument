@@ -10,12 +10,24 @@
         {
           "id": "edm_club_punch",
           "name": "Club Punch",
-          "defaults": { "punch": 0.7, "clean": 0.9, "tight": 0.4 }
+          "defaults": {
+            "pitchDecay": 0.038,
+            "octaves": 3.8,
+            "decay": 0.65,
+            "release": 0.18,
+            "noiseDb": -24
+          }
         },
         {
           "id": "edm_trance_boom",
           "name": "Trance Boom",
-          "defaults": { "punch": 0.5, "clean": 0.7, "tight": 0.5 }
+          "defaults": {
+            "pitchDecay": 0.048,
+            "octaves": 4.2,
+            "decay": 0.78,
+            "release": 0.24,
+            "noiseDb": -28
+          }
         }
       ],
       "patterns": [
