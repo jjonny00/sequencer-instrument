@@ -3,7 +3,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ChangeEvent,
   type CSSProperties,
   type FC,
 } from "react";
@@ -31,21 +30,6 @@ import { initAudioContext } from "./utils/audio";
 type SelectField = "pack" | "instrument" | "style" | "preset";
 
 const ENABLE_DELAY_MS = 180;
-
-const baseSelectStyle: CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid #2f384a",
-  background: "#0f172a",
-  color: "#e6f2ff",
-  transition: "border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
-};
-
-const disabledSelectStyle: CSSProperties = {
-  opacity: 0.5,
-  color: "#64748b",
-  cursor: "not-allowed",
-};
 
 const statusTextStyle: CSSProperties = {
   fontSize: 12,
@@ -149,6 +133,28 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         pattern: preset.pattern ?? undefined,
       })),
     [userPresets]
+  );
+
+  const presetSelectionItems = useMemo(
+    () =>
+      [
+        {
+          id: null as const,
+          name: "None",
+          source: "none" as const,
+          characterId: null,
+          pattern: undefined,
+        },
+        ...userPresetItems.map((preset) => ({
+          ...preset,
+          source: "user" as const,
+        })),
+        ...packPresets.map((preset) => ({
+          ...preset,
+          source: "pack" as const,
+        })),
+      ],
+    [packPresets, userPresetItems]
   );
 
   const scheduleAfterBlur = useCallback((task: () => void) => {
@@ -336,6 +342,35 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     setLoading,
     setReady,
   ]);
+
+  useEffect(() => {
+    if (!selectedInstrumentId || characterOptions.length === 0) return;
+    const hasSelection = characterOptions.some(
+      (option) => option.id === selectedCharacterId
+    );
+    if (hasSelection) return;
+    const first = characterOptions[0];
+    if (!first) return;
+    startLoadingSelect("preset");
+    onSelectCharacter(first.id);
+    onSelectPreset(null);
+  }, [
+    characterOptions,
+    selectedCharacterId,
+    selectedInstrumentId,
+    onSelectCharacter,
+    onSelectPreset,
+    startLoadingSelect,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPresetId) return;
+    const hasSelection = presetSelectionItems.some(
+      (preset) => preset.id === selectedPresetId
+    );
+    if (hasSelection) return;
+    onSelectPreset(null);
+  }, [presetSelectionItems, selectedPresetId, onSelectPreset]);
 
   const previewStyle = useCallback(
     async (characterId: string) => {
@@ -540,15 +575,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     refreshUserPresets,
   ]);
 
-  const handlePackSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handlePackSelect = useCallback(
+    (nextValue: string) => {
+      if (nextValue === selectedPackId) return;
       setHandoffLock("pack");
       startLoadingSelect("instrument");
       resetSelectStatus("style");
@@ -571,19 +600,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       onSelectPreset,
       resetSelectStatus,
       scheduleAfterBlur,
+      selectedPackId,
       startLoadingSelect,
     ]
   );
 
-  const handleInstrumentSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handleInstrumentSelect = useCallback(
+    (nextValue: string) => {
+      if (nextValue === selectedInstrumentId) return;
       setHandoffLock("instrument");
       startLoadingSelect("style");
       resetSelectStatus("preset");
@@ -603,19 +627,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       onSelectPreset,
       resetSelectStatus,
       scheduleAfterBlur,
+      selectedInstrumentId,
       startLoadingSelect,
     ]
   );
 
-  const handleStyleSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handleStyleSelect = useCallback(
+    (nextValue: string) => {
+      if (nextValue === selectedCharacterId) return;
       setHandoffLock("style");
       startLoadingSelect("preset");
       scheduleAfterBlur(() => {
@@ -635,19 +654,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       onSelectPreset,
       previewStyle,
       scheduleAfterBlur,
+      selectedCharacterId,
       startLoadingSelect,
     ]
   );
 
-  const handlePresetSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const select = event.target;
-      const nextValue = select.value;
-      select.blur();
-      const activeElement = (
-        typeof document !== "undefined" ? document.activeElement : null
-      ) as HTMLElement | null;
-      activeElement?.blur();
+  const handlePresetSelect = useCallback(
+    (nextValue: string | null) => {
+      if (nextValue === (selectedPresetId ?? null)) return;
       setHandoffLock("preset");
       scheduleAfterBlur(() => {
         try {
@@ -656,8 +670,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             return;
           }
           onSelectPreset(nextValue);
-          const allPresets = [...userPresetItems, ...packPresets];
-          const match = allPresets.find((item) => item.id === nextValue);
+          const match = presetSelectionItems.find((item) => item.id === nextValue);
           if (match?.pattern) {
             void previewPreset(match.pattern, match.characterId);
           }
@@ -666,7 +679,13 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         }
       });
     },
-    [onSelectPreset, packPresets, previewPreset, scheduleAfterBlur, userPresetItems]
+    [
+      onSelectPreset,
+      presetSelectionItems,
+      previewPreset,
+      scheduleAfterBlur,
+      selectedPresetId,
+    ]
   );
 
   const confirmDisabled = !pack || !selectedInstrumentId || !selectedCharacterId;
@@ -756,6 +775,72 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 12,
   };
 
+  const horizontalScrollAreaStyle: CSSProperties = {
+    display: "flex",
+    gap: 12,
+    overflowX: "auto",
+    padding: "4px 0 8px",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
+  };
+
+  const optionButtonBaseStyle: CSSProperties = {
+    minWidth: 120,
+    padding: "12px 16px",
+    borderRadius: 14,
+    border: "1px solid #1d2636",
+    background: "#10192c",
+    color: "#e6f2ff",
+    fontSize: 15,
+    fontWeight: 500,
+    flex: "0 0 auto",
+    textAlign: "left",
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    transition:
+      "border-color 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+  };
+
+  const optionButtonActiveStyle: CSSProperties = {
+    borderColor: "#27E0B0",
+    background: "rgba(39, 224, 176, 0.12)",
+  };
+
+  const optionButtonDisabledStyle: CSSProperties = {
+    opacity: 0.5,
+    cursor: "not-allowed",
+  };
+
+  const optionNameStyle: CSSProperties = {
+    fontSize: 15,
+    fontWeight: 600,
+    color: "inherit",
+  };
+
+  const optionBadgeStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    border: "1px solid #273247",
+    background: "rgba(148, 163, 184, 0.14)",
+    color: "#94a3b8",
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: 0.5,
+    padding: "2px 8px",
+    textTransform: "uppercase",
+  };
+
+  const emptyStateTextStyle: CSSProperties = {
+    fontSize: 13,
+    color: "#94a3b8",
+  };
+
+  const optionNameDefaultColor = "#e2e8f0";
+  const optionNameActiveColor = "#27E0B0";
+
   const packSelectDisabled = handoffLock !== null && handoffLock !== "pack";
 
   const instrumentSelectDisabled =
@@ -780,13 +865,23 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Loading presets..."
     : "Saved loops unavailable";
 
-  const userPresetSelectValue =
-    selectedPresetId && isUserPresetId(selectedPresetId) ? selectedPresetId : "";
-  const packPresetSelectValue =
-    selectedPresetId && !isUserPresetId(selectedPresetId) ? selectedPresetId : "";
+  const instrumentHelperText = loadingState.instrument
+    ? "Loading instruments..."
+    : !selectedPackId
+    ? "Select a sound pack first."
+    : instrumentOptions.length === 0
+    ? "No instruments available."
+    : null;
 
-  const userPresetSelectDisabled = presetSelectDisabled;
-  const packPresetSelectDisabled = presetSelectDisabled || packPresets.length === 0;
+  const styleHelperText = loadingState.style
+    ? "Loading styles..."
+    : !selectedPackId
+    ? "Select a sound pack first."
+    : !selectedInstrumentId
+    ? "Select an instrument first."
+    : characterOptions.length === 0
+    ? "No styles available yet."
+    : null;
 
   const savedLoopsHelperText = loadingState.preset
     ? "Loading presets..."
@@ -838,124 +933,162 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       }
     >
       <div style={sectionListStyle}>
-        <label
+        <section
+          aria-label="Sound pack selection"
           aria-disabled={packSelectDisabled}
           style={{
             ...fieldLabelStyle,
+            gap: 10,
             opacity: packSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
-          <select
-            value={selectedPackId || ""}
-            onChange={handlePackSelectChange}
-            disabled={packSelectDisabled}
-            style={{
-              ...baseSelectStyle,
-              ...(packSelectDisabled ? disabledSelectStyle : {}),
-              color:
-                selectedPackId && !packSelectDisabled ? "#e6f2ff" : "#64748b",
-            }}
-          >
-            <option value="" disabled>
-              Select a sound pack
-            </option>
-            {packs.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          {packs.length > 0 ? (
+            <div style={horizontalScrollAreaStyle}>
+              {packs.map((option) => {
+                const isActive = option.id === selectedPackId;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={packSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handlePackSelect(option.id)}
+                    style={{
+                      ...optionButtonBaseStyle,
+                      ...(isActive ? optionButtonActiveStyle : {}),
+                      ...(packSelectDisabled ? optionButtonDisabledStyle : {}),
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...optionNameStyle,
+                        color: isActive
+                          ? optionNameActiveColor
+                          : optionNameDefaultColor,
+                      }}
+                    >
+                      {option.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <span style={emptyStateTextStyle}>No sound packs available.</span>
+          )}
+        </section>
 
-        <label
+        <section
+          aria-label="Instrument selection"
           aria-disabled={instrumentSelectDisabled}
           style={{
             ...fieldLabelStyle,
+            gap: 10,
             opacity: instrumentSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
-          <select
-            value={selectedInstrumentId || ""}
-            onChange={handleInstrumentSelectChange}
-            disabled={instrumentSelectDisabled}
-            style={{
-              ...baseSelectStyle,
-              ...(instrumentSelectDisabled ? disabledSelectStyle : {}),
-              color:
-                selectedInstrumentId && !instrumentSelectDisabled
-                  ? "#e6f2ff"
-                  : "#64748b",
-            }}
-          >
-            <option value="" disabled>
-              {!selectedPackId
-                ? "Select a sound pack first"
-                : loadingState.instrument
-                ? "Loading instruments..."
-                : readyState.instrument
-                ? "Select an instrument"
-                : "Select a sound pack first"}
-            </option>
-            {instrumentOptions.map((instrument) => (
-              <option key={instrument} value={instrument}>
-                {formatInstrumentLabel(instrument)}
-              </option>
-            ))}
-          </select>
-          {loadingState.instrument ? (
-            <span role="status" aria-live="polite" style={statusTextStyle}>
-              Loading instruments...
+          {instrumentOptions.length > 0 ? (
+            <div style={horizontalScrollAreaStyle}>
+              {instrumentOptions.map((instrument) => {
+                const isActive = instrument === selectedInstrumentId;
+                return (
+                  <button
+                    key={instrument}
+                    type="button"
+                    disabled={instrumentSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handleInstrumentSelect(instrument)}
+                    style={{
+                      ...optionButtonBaseStyle,
+                      ...(isActive ? optionButtonActiveStyle : {}),
+                      ...(instrumentSelectDisabled
+                        ? optionButtonDisabledStyle
+                        : {}),
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...optionNameStyle,
+                        color: isActive
+                          ? optionNameActiveColor
+                          : optionNameDefaultColor,
+                      }}
+                    >
+                      {formatInstrumentLabel(instrument)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : instrumentHelperText ? (
+            <span
+              role={loadingState.instrument ? "status" : undefined}
+              aria-live={loadingState.instrument ? "polite" : undefined}
+              style={
+                loadingState.instrument ? statusTextStyle : emptyStateTextStyle
+              }
+            >
+              {instrumentHelperText}
             </span>
           ) : null}
-        </label>
+        </section>
 
-        <label
+        <section
+          aria-label="Style selection"
           aria-disabled={styleSelectDisabled}
           style={{
             ...fieldLabelStyle,
+            gap: 10,
             opacity: styleSelectDisabled ? 0.6 : 1,
             transition: "opacity 0.2s ease",
           }}
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
-          <select
-            value={selectedCharacterId || ""}
-            onChange={handleStyleSelectChange}
-            disabled={styleSelectDisabled}
-            style={{
-              ...baseSelectStyle,
-              ...(styleSelectDisabled ? disabledSelectStyle : {}),
-              color:
-                selectedCharacterId && !styleSelectDisabled
-                  ? "#e6f2ff"
-                  : "#64748b",
-            }}
-          >
-            <option value="" disabled>
-              {!selectedInstrumentId
-                ? "Select an instrument first"
-                : loadingState.style
-                ? "Loading styles..."
-                : readyState.style
-                ? "Select a style"
-                : "Select an instrument first"}
-            </option>
-            {characterOptions.map((character) => (
-              <option key={character.id} value={character.id}>
-                {character.name}
-              </option>
-            ))}
-          </select>
-          {loadingState.style ? (
-            <span role="status" aria-live="polite" style={statusTextStyle}>
-              Loading styles...
+          {characterOptions.length > 0 ? (
+            <div style={horizontalScrollAreaStyle}>
+              {characterOptions.map((character) => {
+                const isActive = character.id === selectedCharacterId;
+                return (
+                  <button
+                    key={character.id}
+                    type="button"
+                    disabled={styleSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handleStyleSelect(character.id)}
+                    style={{
+                      ...optionButtonBaseStyle,
+                      ...(isActive ? optionButtonActiveStyle : {}),
+                      ...(styleSelectDisabled ? optionButtonDisabledStyle : {}),
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...optionNameStyle,
+                        color: isActive
+                          ? optionNameActiveColor
+                          : optionNameDefaultColor,
+                      }}
+                    >
+                      {character.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : styleHelperText ? (
+            <span
+              role={loadingState.style ? "status" : undefined}
+              aria-live={loadingState.style ? "polite" : undefined}
+              style={loadingState.style ? statusTextStyle : emptyStateTextStyle}
+            >
+              {styleHelperText}
             </span>
           ) : null}
-        </label>
+        </section>
 
         <section
           aria-disabled={presetSelectDisabled}
@@ -972,68 +1105,61 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             </p>
           </div>
           <div style={savedLoopsFieldsStyle}>
-            <label style={fieldLabelStyle}>
-              <span style={{ fontSize: 13, color: "#cbd5f5" }}>Your Saved Loops</span>
-              <select
-                value={userPresetSelectValue}
-                onChange={handlePresetSelectChange}
-                disabled={userPresetSelectDisabled}
-                style={{
-                  ...baseSelectStyle,
-                  ...(userPresetSelectDisabled ? disabledSelectStyle : {}),
-                  color:
-                    !userPresetSelectDisabled && userPresetSelectValue
-                      ? "#e6f2ff"
-                      : "#64748b",
-                }}
-              >
-                <option value="">Start fresh (no saved loop)</option>
-                {userPresetItems.map((preset) => (
-                  <option key={`user-${preset.id}`} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label style={fieldLabelStyle}>
-              <span style={{ fontSize: 13, color: "#cbd5f5" }}>Pack Loops</span>
-              <select
-                value={packPresetSelectValue}
-                onChange={handlePresetSelectChange}
-                disabled={packPresetSelectDisabled}
-                style={{
-                  ...baseSelectStyle,
-                  ...(packPresetSelectDisabled ? disabledSelectStyle : {}),
-                  color:
-                    !packPresetSelectDisabled && packPresetSelectValue
-                      ? "#e6f2ff"
-                      : "#64748b",
-                }}
-              >
-                {packPresetSelectDisabled ? (
-                  <option value="" disabled>
-                    {packPresets.length === 0
-                      ? "No pack loops available"
-                      : presetBlockedLabel}
-                  </option>
-                ) : (
-                  <>
-                    <option value="">Select a pack loop</option>
-                    {packPresets.map((preset) => (
-                      <option key={`pack-${preset.id}`} value={preset.id}>
-                        {preset.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-            </label>
+            <div style={horizontalScrollAreaStyle}>
+              {presetSelectionItems.map((preset) => {
+                const isNone = preset.id === null;
+                const isActive = isNone
+                  ? selectedPresetId === null
+                  : preset.id === selectedPresetId;
+                const presetKey = preset.id ?? "preset-none";
+                const badgeStyle =
+                  preset.source === "user"
+                    ? {
+                        ...optionBadgeStyle,
+                        borderColor: optionNameActiveColor,
+                        color: optionNameActiveColor,
+                      }
+                    : preset.source === "pack"
+                    ? optionBadgeStyle
+                    : null;
+                return (
+                  <button
+                    key={presetKey}
+                    type="button"
+                    disabled={presetSelectDisabled}
+                    aria-pressed={isActive}
+                    onClick={() => handlePresetSelect(preset.id)}
+                    style={{
+                      ...optionButtonBaseStyle,
+                      ...(isActive ? optionButtonActiveStyle : {}),
+                      ...(presetSelectDisabled ? optionButtonDisabledStyle : {}),
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...optionNameStyle,
+                        color: isActive
+                          ? optionNameActiveColor
+                          : optionNameDefaultColor,
+                      }}
+                    >
+                      {preset.name}
+                    </span>
+                    {badgeStyle ? (
+                      <span style={badgeStyle}>
+                        {preset.source === "user" ? "Saved" : "Pack"}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {savedLoopsHelperText ? (
             <span
               role={loadingState.preset ? "status" : undefined}
               aria-live={loadingState.preset ? "polite" : undefined}
-              style={statusTextStyle}
+              style={loadingState.preset ? statusTextStyle : emptyStateTextStyle}
             >
               {savedLoopsHelperText}
             </span>
