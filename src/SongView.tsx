@@ -6,8 +6,10 @@ import type {
   SetStateAction,
 } from "react";
 
-import type { PatternGroup, SongRow } from "./song";
+import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import { createSongRow } from "./song";
+import { getInstrumentColor, withAlpha } from "./utils/color";
+import type { Track } from "./tracks";
 interface SongViewProps {
   patternGroups: PatternGroup[];
   songRows: SongRow[];
@@ -20,11 +22,263 @@ interface SongViewProps {
   selectedGroupId: string | null;
   onOpenLoopsLibrary: () => void;
   onSelectLoop: (groupId: string) => void;
+  performanceTracks: PerformanceTrack[];
 }
 
 const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
-const ROW_LABEL_WIDTH = 80;
+const ROW_LABEL_WIDTH = 60;
+const MAX_PREVIEW_STEPS = 16;
+const PREVIEW_GAP_COLLAPSED = 1;
+const PREVIEW_GAP_EXPANDED = 2;
+const PREVIEW_HEIGHT_COLLAPSED = 14;
+const PREVIEW_HEIGHT_EXPANDED = 28;
+const PERFORMANCE_MIN_SEGMENT_WIDTH = 4;
+
+const formatInstrumentLabel = (instrument: string | null | undefined) =>
+  instrument ? instrument.charAt(0).toUpperCase() + instrument.slice(1) : "";
+
+const formatNoteCount = (count: number) =>
+  `${count} note${count === 1 ? "" : "s"}`;
+
+interface LoopPreviewTrack {
+  color: string;
+  steps: number[];
+  velocities?: number[];
+}
+
+const sampleArrayValue = (
+  values: number[] | undefined,
+  sourceIndex: number,
+  sourceLength: number,
+  targetLength: number
+) => {
+  if (!values || values.length === 0) {
+    return 0;
+  }
+  if (values.length === targetLength) {
+    return values[sourceIndex] ?? 0;
+  }
+  if (targetLength === 0) {
+    return 0;
+  }
+  if (values.length === sourceLength) {
+    return values[sourceIndex] ?? 0;
+  }
+  const ratio = values.length / targetLength;
+  const sampledIndex = Math.floor(sourceIndex * ratio);
+  return values[sampledIndex] ?? 0;
+};
+
+const createLoopPreviewData = (tracks: Track[]): LoopPreviewTrack[] =>
+  tracks
+    .filter((track) => track.pattern && track.pattern.steps.length > 0)
+    .map((track) => ({
+      color: getInstrumentColor(track.instrument),
+      steps: track.pattern ? track.pattern.steps.slice() : [],
+      velocities: track.pattern?.velocities
+        ? track.pattern.velocities.slice()
+        : undefined,
+    }));
+
+const renderLoopSlotPreview = (
+  group: PatternGroup | undefined,
+  isExpanded: boolean
+) => {
+  if (!group) {
+    return (
+      <div
+        style={{
+          height: isExpanded ? PREVIEW_HEIGHT_EXPANDED : PREVIEW_HEIGHT_COLLAPSED,
+          borderRadius: 6,
+          border: "1px dashed #2d3748",
+          background: "rgba(15, 23, 42, 0.35)",
+        }}
+      />
+    );
+  }
+
+  const previewTracks = createLoopPreviewData(group.tracks);
+  if (previewTracks.length === 0) {
+    return (
+      <div
+        style={{
+          height: isExpanded ? PREVIEW_HEIGHT_EXPANDED : PREVIEW_HEIGHT_COLLAPSED,
+          borderRadius: 6,
+          background: "rgba(30, 41, 59, 0.65)",
+          border: "1px solid #1f2937",
+        }}
+      />
+    );
+  }
+
+  const targetStepCount = Math.max(
+    8,
+    Math.min(
+      MAX_PREVIEW_STEPS,
+      previewTracks.reduce(
+        (max, track) => Math.max(max, track.steps.length),
+        0
+      )
+    )
+  );
+
+  const gap = isExpanded ? PREVIEW_GAP_EXPANDED : PREVIEW_GAP_COLLAPSED;
+  const dotSize = isExpanded ? 7 : 4;
+  const containerHeight = isExpanded
+    ? PREVIEW_HEIGHT_EXPANDED
+    : PREVIEW_HEIGHT_COLLAPSED;
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${targetStepCount}, minmax(0, 1fr))`,
+        gap,
+        width: "100%",
+        height: containerHeight,
+        background: "rgba(15, 23, 42, 0.65)",
+        borderRadius: 6,
+        padding: gap,
+      }}
+    >
+      {Array.from({ length: targetStepCount }, (_, stepIndex) => (
+        <div
+          key={`preview-step-${stepIndex}`}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap,
+          }}
+        >
+          {previewTracks.map((track, trackIndex) => {
+            const stepLength = track.steps.length;
+            if (stepLength === 0) {
+              return null;
+            }
+            const ratio = stepLength / targetStepCount;
+            const sampledIndex = Math.floor(stepIndex * ratio);
+            const rawValue =
+              track.steps[sampledIndex] ?? track.steps[stepIndex % stepLength];
+            const velocity = sampleArrayValue(
+              track.velocities,
+              sampledIndex,
+              stepLength,
+              targetStepCount
+            );
+            const active = rawValue > 0;
+            const opacity = active
+              ? Math.max(0.35, Math.min(1, velocity || 0.85))
+              : 0.12;
+
+            return (
+              <span
+                key={`preview-track-${trackIndex}`}
+                style={{
+                  width: dotSize,
+                  height: dotSize,
+                  borderRadius: dotSize / 2,
+                  background: track.color,
+                  opacity,
+                  transition: "opacity 0.2s ease",
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const renderPerformanceSlotPreview = (
+  performanceTrack: PerformanceTrack | undefined,
+  columnStart: number,
+  columnEnd: number,
+  isExpanded: boolean
+) => {
+  const height = isExpanded ? PREVIEW_HEIGHT_EXPANDED : PREVIEW_HEIGHT_COLLAPSED;
+  if (!performanceTrack || performanceTrack.notes.length === 0) {
+    return (
+      <div
+        style={{
+          height,
+          borderRadius: 6,
+          background: "rgba(30, 41, 59, 0.65)",
+          border: "1px solid #1f2937",
+        }}
+      />
+    );
+  }
+
+  const { notes } = performanceTrack;
+  const accent = performanceTrack.color || getInstrumentColor(performanceTrack.instrument);
+  const background = withAlpha(accent, 0.12);
+  const trackNotes = notes.filter(
+    (note) => note.time + note.duration > columnStart && note.time < columnEnd
+  );
+
+  if (trackNotes.length === 0) {
+    return (
+      <div
+        style={{
+          height,
+          borderRadius: 6,
+          background: withAlpha(accent, 0.08),
+          border: `1px solid ${withAlpha(accent, 0.25)}`,
+        }}
+      />
+    );
+  }
+
+  const range = columnEnd - columnStart;
+  const dotHeight = isExpanded ? 10 : 6;
+  const verticalPadding = isExpanded ? 4 : 3;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        height,
+        borderRadius: 6,
+        background,
+        border: `1px solid ${withAlpha(accent, 0.25)}`,
+        overflow: "hidden",
+      }}
+    >
+      {trackNotes.map((note, index) => {
+        const start = Math.max(note.time, columnStart);
+        const end = Math.min(note.time + note.duration, columnEnd);
+        if (end <= start) {
+          return null;
+        }
+        const startRatio = (start - columnStart) / range;
+        const endRatio = (end - columnStart) / range;
+        const widthPercent = Math.max(
+          PERFORMANCE_MIN_SEGMENT_WIDTH,
+          (endRatio - startRatio) * 100
+        );
+        return (
+          <span
+            key={`perf-note-${index}`}
+            style={{
+              position: "absolute",
+              left: `${startRatio * 100}%`,
+              width: `${widthPercent}%`,
+              top: verticalPadding,
+              height: dotHeight,
+              borderRadius: 999,
+              background: accent,
+              boxShadow: `0 0 6px ${withAlpha(accent, 0.35)}`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+};
 
 const formatTrackCount = (count: number) =>
   `${count} track${count === 1 ? "" : "s"}`;
@@ -41,6 +295,7 @@ export function SongView({
   selectedGroupId,
   onOpenLoopsLibrary,
   onSelectLoop,
+  performanceTracks,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -48,10 +303,18 @@ export function SongView({
   const [activeRowSettings, setActiveRowSettings] = useState<number | null>(
     null
   );
+  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
     [patternGroups]
+  );
+  const performanceTrackMap = useMemo(
+    () =>
+      new Map(
+        performanceTracks.map((track) => [track.id, track] as const)
+      ),
+    [performanceTracks]
   );
 
   const activeGroup = useMemo(() => {
@@ -315,6 +578,36 @@ export function SongView({
 
                 const rowMuted = row.muted;
                 const rowSelected = activeRowSettings === rowIndex;
+                const performanceTrack = row.performanceTrackId
+                  ? performanceTrackMap.get(row.performanceTrackId)
+                  : undefined;
+                const isRowExpanded = Boolean(expandedRows[rowIndex]);
+                const performanceAccent = performanceTrack
+                  ? performanceTrack.color ||
+                    getInstrumentColor(performanceTrack.instrument)
+                  : null;
+                const firstAssignedGroupId =
+                  row.slots.find((slotId) => slotId !== null) ?? null;
+                const firstGroup = firstAssignedGroupId
+                  ? patternGroupMap.get(firstAssignedGroupId)
+                  : undefined;
+                const loopAccentInstrument = firstGroup?.tracks.find(
+                  (track) => track.instrument
+                )?.instrument;
+                const loopAccent = loopAccentInstrument
+                  ? getInstrumentColor(loopAccentInstrument)
+                  : null;
+                const rowAccent = performanceAccent ?? loopAccent;
+                const labelBorderColor = rowSelected
+                  ? "#27E0B0"
+                  : rowAccent
+                  ? withAlpha(rowAccent, 0.6)
+                  : "#333";
+                const labelBackground = rowMuted
+                  ? "#181f2b"
+                  : rowAccent
+                  ? withAlpha(rowAccent, 0.18)
+                  : "#121827";
 
                 return (
                   <div
@@ -338,11 +631,9 @@ export function SongView({
                         style={{
                           width: ROW_LABEL_WIDTH,
                           borderRadius: 8,
-                          border: `1px solid ${
-                            rowSelected ? "#27E0B0" : "#333"
-                          }`,
-                          background: rowMuted ? "#181f2b" : "#121827",
-                          color: rowMuted ? "#475569" : "#e6f2ff",
+                          border: `1px solid ${labelBorderColor}`,
+                          background: labelBackground,
+                          color: rowMuted ? "#475569" : "#f8fafc",
                           fontSize: 12,
                           display: "flex",
                           alignItems: "center",
@@ -366,7 +657,7 @@ export function SongView({
                             style={{
                               position: "absolute",
                               top: 4,
-                              right: 4,
+                              right: 6,
                               fontSize: 14,
                               color: "#27E0B0",
                             }}
@@ -375,6 +666,47 @@ export function SongView({
                             tune
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setExpandedRows((previous) => {
+                              const next = { ...previous };
+                              next[rowIndex] = !isRowExpanded;
+                              return next;
+                            });
+                          }}
+                          style={{
+                            position: "absolute",
+                            bottom: 4,
+                            right: 4,
+                            width: 22,
+                            height: 22,
+                            borderRadius: 6,
+                            border: "1px solid #2a3344",
+                            background: "rgba(15, 23, 42, 0.85)",
+                            color: "#94a3b8",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 12,
+                            cursor: "pointer",
+                          }}
+                          aria-label={
+                            isRowExpanded
+                              ? "Collapse row preview"
+                              : "Expand row preview"
+                          }
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            aria-hidden="true"
+                            style={{ fontSize: 14, lineHeight: 1 }}
+                          >
+                            {isRowExpanded ? "unfold_less" : "unfold_more"}
+                          </span>
+                        </button>
                       </div>
                       <div
                         style={{
@@ -397,31 +729,60 @@ export function SongView({
                             editingSlot?.rowIndex === rowIndex &&
                             editingSlot.columnIndex === columnIndex;
                           const assigned = Boolean(group);
+                          const columnStart = columnIndex;
+                          const columnEnd = columnIndex + 1;
+                          const columnPerformanceNotes = performanceTrack
+                            ? performanceTrack.notes.filter(
+                                (note) =>
+                                  note.time + note.duration > columnStart &&
+                                  note.time < columnEnd
+                              )
+                            : [];
+                          const hasPerformance = Boolean(performanceTrack);
+                          const slotAccentInstrument = group?.tracks.find(
+                            (track) => track.instrument
+                          )?.instrument;
+                          const slotAccentColor = hasPerformance
+                            ? performanceAccent
+                            : slotAccentInstrument
+                            ? getInstrumentColor(slotAccentInstrument)
+                            : rowAccent;
+                          const resolvedAccent = slotAccentColor ?? "#273041";
+                          const hasContent = assigned || hasPerformance;
+                          const textColor = hasContent ? "#e6f2ff" : "#64748b";
+                          const descriptionColor = hasContent
+                            ? "#94a3b8"
+                            : "#475569";
 
                           const buttonStyles: CSSProperties = {
                             width: "100%",
-                            height: 60,
+                            minHeight: isRowExpanded ? 104 : 80,
                             borderRadius: 8,
                             border: `1px solid ${
-                              highlight ? "#27E0B0" : assigned ? "#374151" : "#333"
+                              highlight
+                                ? "#27E0B0"
+                                : hasContent
+                                ? withAlpha(resolvedAccent, 0.55)
+                                : "#333"
                             }`,
-                            background: assigned
+                            background: hasContent
                               ? highlight
-                                ? "#1f2937"
-                                : "#273041"
+                                ? withAlpha(resolvedAccent, 0.32)
+                                : withAlpha(resolvedAccent, 0.22)
                               : "#111826",
-                            color: assigned ? "#e6f2ff" : "#64748b",
+                            color: textColor,
                             display: "flex",
                             flexDirection: "column",
-                            alignItems: "flex-start",
-                            justifyContent: "center",
-                            gap: 4,
-                            padding: "8px 12px",
+                            alignItems: "stretch",
+                            justifyContent: "space-between",
+                            gap: isRowExpanded ? 8 : 6,
+                            padding: isRowExpanded ? "10px 12px" : "8px 12px",
                             fontSize: 13,
                             cursor:
                               patternGroups.length > 0 ? "pointer" : "not-allowed",
                             textAlign: "left",
                             opacity: rowMuted ? 0.7 : 1,
+                            transition: "background 0.2s ease, border-color 0.2s ease",
                           };
 
                           return (
@@ -441,7 +802,7 @@ export function SongView({
                                   onBlur={() => setEditingSlot(null)}
                                   style={{
                                     width: "100%",
-                                    height: 60,
+                                    minHeight: isRowExpanded ? 104 : 80,
                                     borderRadius: 8,
                                     border: `1px solid ${
                                       highlight ? "#27E0B0" : "#475569"
@@ -471,17 +832,71 @@ export function SongView({
                                   style={buttonStyles}
                                   disabled={patternGroups.length === 0}
                                 >
-                                  <span style={{ fontWeight: 600 }}>
-                                    {group?.name ?? "Empty"}
-                                  </span>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      width: "100%",
+                                    }}
+                                  >
+                                    <span style={{ fontWeight: 600 }}>
+                                      {group?.name ??
+                                        (hasPerformance
+                                          ? `${formatInstrumentLabel(
+                                              performanceTrack?.instrument
+                                            )} Performance`
+                                          : "Empty")}
+                                    </span>
+                                    {hasPerformance && (
+                                      <span
+                                        style={{
+                                          marginLeft: "auto",
+                                          fontSize: 10,
+                                          padding: "2px 6px",
+                                          borderRadius: 999,
+                                          background: withAlpha(
+                                            resolvedAccent,
+                                            0.25
+                                          ),
+                                          border: `1px solid ${withAlpha(
+                                            resolvedAccent,
+                                            0.35
+                                          )}`,
+                                          color: "#f8fafc",
+                                          fontWeight: 600,
+                                          letterSpacing: 0.4,
+                                          textTransform: "uppercase",
+                                        }}
+                                      >
+                                        Live
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ width: "100%" }}>
+                                    {hasPerformance
+                                      ? renderPerformanceSlotPreview(
+                                          performanceTrack,
+                                          columnStart,
+                                          columnEnd,
+                                          isRowExpanded
+                                        )
+                                      : renderLoopSlotPreview(group, isRowExpanded)}
+                                  </div>
                                   <span
                                     style={{
                                       fontSize: 11,
-                                      color: assigned ? "#94a3b8" : "#475569",
+                                      color: descriptionColor,
                                     }}
                                   >
                                     {assigned
                                       ? formatTrackCount(group?.tracks.length ?? 0)
+                                      : hasPerformance
+                                      ? columnPerformanceNotes.length > 0
+                                        ? formatNoteCount(
+                                            columnPerformanceNotes.length
+                                          )
+                                        : "No notes yet"
                                       : patternGroups.length > 0
                                       ? "Tap to assign"
                                       : "Save a sequence in Track view"}
