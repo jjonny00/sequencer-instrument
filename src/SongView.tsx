@@ -561,18 +561,8 @@ export function SongView({
   const visibleRowTarget = isTimelineExpanded
     ? TIMELINE_VISIBLE_ROWS_EXPANDED
     : TIMELINE_VISIBLE_ROWS_COLLAPSED;
-  const timelineCollapsedViewportHeight = Math.round(
-    TIMELINE_VISIBLE_ROWS_COLLAPSED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
-  );
-  const timelineExpandedViewportHeight = Math.round(
-    TIMELINE_VISIBLE_ROWS_EXPANDED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
-  );
   const timelineViewportHeight = Math.round(
     visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
-  );
-  const instrumentPanelMaxHeight = Math.max(
-    timelineExpandedViewportHeight - timelineCollapsedViewportHeight,
-    0
   );
   const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
   const playInstrumentColor = useMemo(
@@ -1122,115 +1112,6 @@ export function SongView({
             </div>
           </div>
         </div>
-        {isPlayInstrumentOpen ? (
-          <div
-            style={{
-              borderRadius: 12,
-              border: "1px solid #2a3344",
-              background: "#111827",
-              padding: 16,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-              maxHeight: `${instrumentPanelMaxHeight}px`,
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 999,
-                    background: playInstrumentColor,
-                    boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "#e6f2ff",
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  {formatInstrumentLabel(playInstrument)} Instrument
-                </span>
-              </div>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                {liveRowLabel
-                  ? `${liveRowLabel} captures this performance`
-                  : "Live row added to your timeline"}
-              </span>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-              }}
-            >
-              {PLAYABLE_INSTRUMENTS.map((instrumentOption) => {
-                const selected = instrumentOption === playInstrument;
-                const accent = getInstrumentColor(instrumentOption);
-                return (
-                  <button
-                    key={instrumentOption}
-                    type="button"
-                    onClick={() => handleSelectPlayInstrument(instrumentOption)}
-                    style={{
-                      padding: "6px 14px",
-                      borderRadius: 999,
-                      border: selected
-                        ? `1px solid ${accent}`
-                        : "1px solid #2a3344",
-                      background: selected
-                        ? withAlpha(accent, 0.22)
-                        : "#0f172a",
-                      color: selected ? "#e6f2ff" : "#94a3b8",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      letterSpacing: 0.4,
-                      cursor: "pointer",
-                      transition: "background 0.2s ease, border 0.2s ease",
-                    }}
-                  >
-                    {formatInstrumentLabel(instrumentOption)}
-                  </button>
-                );
-              })}
-            </div>
-            <div
-              style={{
-                borderRadius: 12,
-                border: "1px solid #1f2937",
-                background: "#10192c",
-                padding: 12,
-              }}
-            >
-              <InstrumentControlPanel
-                track={playInstrumentTrackForPanel}
-                allTracks={[]}
-                onUpdatePattern={handlePlayInstrumentPatternUpdate}
-                trigger={playInstrumentTrigger}
-              />
-            </div>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Play and record directly into the live performance row from this
-              panel.
-            </span>
-          </div>
-        ) : null}
       </div>
 
       <Modal
@@ -1402,137 +1283,261 @@ export function SongView({
       </div>
 
       <div
-        className="scrollable"
         style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          paddingRight: 4,
           display: "flex",
           flexDirection: "column",
           gap: 12,
+          flex: 1,
+          minHeight: 0,
         }}
       >
         <div
+          className="scrollable"
           style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            paddingRight: 4,
             display: "flex",
             flexDirection: "column",
-            gap: 4,
+            gap: 12,
           }}
         >
-          <h3
-            style={{
-              margin: 0,
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#e6f2ff",
-            }}
-          >
-            Loops Library
-          </h3>
-          <span
-            style={{
-              fontSize: 12,
-              color: "#94a3b8",
-            }}
-          >
-            Save and edit loops in Track view, then place them onto the song
-            timeline.
-          </span>
-        </div>
-        {patternGroups.length === 0 ? (
-          <div
-            style={{
-              padding: 16,
-              borderRadius: 8,
-              border: "1px dashed #475569",
-              color: "#94a3b8",
-              fontSize: 13,
-            }}
-          >
-            No loops yet. Create loops in Track view to start arranging
-            the song.
-          </div>
-        ) : (
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 12,
+              gap: 4,
             }}
           >
-            {patternGroups.map((group) => {
-              const trackLabels = group.tracks
-                .map((track) => track.name)
-                .filter((name): name is string => Boolean(name));
-              const isActive = selectedGroupId === group.id;
-              return (
-                <button
-                  key={group.id}
-                  type="button"
-                  onClick={() => onSelectLoop(group.id)}
-                  style={{
-                    borderRadius: 10,
-                    border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
-                    background: isActive
-                      ? "rgba(39, 224, 176, 0.12)"
-                      : "#121827",
-                    padding: 12,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                    textAlign: "left",
-                    cursor: "pointer",
-                    color: "#e6f2ff",
-                  }}
-                  title={`Open ${group.name} in Track view`}
-                >
-                  <div
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#e6f2ff",
+              }}
+            >
+              Loops Library
+            </h3>
+            <span
+              style={{
+                fontSize: 12,
+                color: "#94a3b8",
+              }}
+            >
+              Save and edit loops in Track view, then place them onto the song
+              timeline.
+            </span>
+          </div>
+          {patternGroups.length === 0 ? (
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 8,
+                border: "1px dashed #475569",
+                color: "#94a3b8",
+                fontSize: 13,
+              }}
+            >
+              No loops yet. Create loops in Track view to start arranging
+              the song.
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {patternGroups.map((group) => {
+                const trackLabels = group.tracks
+                  .map((track) => track.name)
+                  .filter((name): name is string => Boolean(name));
+                const isActive = selectedGroupId === group.id;
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => onSelectLoop(group.id)}
                     style={{
+                      borderRadius: 10,
+                      border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
+                      background: isActive
+                        ? "rgba(39, 224, 176, 0.12)"
+                        : "#121827",
+                      padding: 12,
                       display: "flex",
-                      alignItems: "center",
+                      flexDirection: "column",
                       gap: 8,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "#e6f2ff",
                     }}
+                    title={`Open ${group.name} in Track view`}
                   >
-                    <span aria-hidden="true" style={{ fontSize: 16 }}>
-                      📼
-                    </span>
-                    <span style={{ fontWeight: 600 }}>{group.name}</span>
-                    <div style={{ marginLeft: "auto" }} />
-                  </div>
-                  {trackLabels.length === 0 ? (
-                    <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                      This loop is empty — add instruments in Tracks view first.
-                    </span>
-                  ) : (
                     <div
                       style={{
                         display: "flex",
-                        flexWrap: "wrap",
-                        gap: 6,
+                        alignItems: "center",
+                        gap: 8,
                       }}
                     >
-                      {trackLabels.map((name) => (
-                        <span
-                          key={`${group.id}-${name}`}
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: 6,
-                            background: "#1f2532",
-                            border: "1px solid #333",
-                            fontSize: 12,
-                          }}
-                        >
-                          {name}
-                        </span>
-                      ))}
+                      <span aria-hidden="true" style={{ fontSize: 16 }}>
+                        📼
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{group.name}</span>
+                      <div style={{ marginLeft: "auto" }} />
                     </div>
-                  )}
-                </button>
-              );
-            })}
+                    {trackLabels.length === 0 ? (
+                      <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                        This loop is empty — add instruments in Tracks view
+                        first.
+                      </span>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                        }}
+                      >
+                        {trackLabels.map((name) => (
+                          <span
+                            key={`${group.id}-${name}`}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              background: "#1f2532",
+                              border: "1px solid #333",
+                              fontSize: 12,
+                            }}
+                          >
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {isPlayInstrumentOpen ? (
+          <div
+            className="scrollable"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              borderRadius: 12,
+              border: "1px solid #2a3344",
+              background: "#111827",
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 999,
+                    background: playInstrumentColor,
+                    boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#e6f2ff",
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {formatInstrumentLabel(playInstrument)} Instrument
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                {liveRowLabel
+                  ? `${liveRowLabel} captures this performance`
+                  : "Live row added to your timeline"}
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+              }}
+            >
+              {PLAYABLE_INSTRUMENTS.map((instrumentOption) => {
+                const selected = instrumentOption === playInstrument;
+                const accent = getInstrumentColor(instrumentOption);
+                return (
+                  <button
+                    key={instrumentOption}
+                    type="button"
+                    onClick={() => handleSelectPlayInstrument(instrumentOption)}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 999,
+                      border: selected
+                        ? `1px solid ${accent}`
+                        : "1px solid #2a3344",
+                      background: selected
+                        ? withAlpha(accent, 0.22)
+                        : "#0f172a",
+                      color: selected ? "#e6f2ff" : "#94a3b8",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: 0.4,
+                      cursor: "pointer",
+                      transition: "background 0.2s ease, border 0.2s ease",
+                    }}
+                  >
+                    {formatInstrumentLabel(instrumentOption)}
+                  </button>
+                );
+              })}
+            </div>
+            <div
+              style={{
+                borderRadius: 12,
+                border: "1px solid #1f2937",
+                background: "#10192c",
+                padding: 12,
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
+              <InstrumentControlPanel
+                track={playInstrumentTrackForPanel}
+                allTracks={[]}
+                onUpdatePattern={handlePlayInstrumentPatternUpdate}
+                trigger={playInstrumentTrigger}
+              />
+            </div>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              Play and record directly into the live performance row from this
+              panel.
+            </span>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
