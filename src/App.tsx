@@ -24,7 +24,7 @@ import {
   refreshAudioReadyState,
   audioReady,
 } from "./utils/audio";
-import type { PatternGroup, SongRow } from "./song";
+import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
@@ -266,6 +266,7 @@ const createDemoProjectData = (): StoredProjectData => {
     tracks: trackSnapshots,
     patternGroups,
     songRows,
+    performanceTracks: [],
     selectedGroupId: patternGroupId,
     currentSectionIndex: 0,
   };
@@ -281,6 +282,7 @@ const createEmptyProjectData = (): StoredProjectData => {
     tracks: [],
     patternGroups: [group],
     songRows: [createSongRow()],
+    performanceTracks: [],
     selectedGroupId: group.id,
     currentSectionIndex: 0,
   };
@@ -331,6 +333,9 @@ export default function App() {
   const [songRows, setSongRows] = useState<SongRow[]>([
     createSongRow(),
   ]);
+  const [performanceTracks, setPerformanceTracks] = useState<PerformanceTrack[]>(
+    []
+  );
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
   const currentLoopDraftRef = useRef<Track[] | null>(null);
@@ -1312,6 +1317,7 @@ export default function App() {
     tracks,
     patternGroups,
     songRows,
+    performanceTracks,
     selectedGroupId,
     currentSectionIndex,
   }), [
@@ -1322,6 +1328,7 @@ export default function App() {
     tracks,
     patternGroups,
     songRows,
+    performanceTracks,
     selectedGroupId,
     currentSectionIndex,
   ]);
@@ -1481,6 +1488,11 @@ export default function App() {
         project.songRows.length > 0
           ? project.songRows
           : [createSongRow()]
+      );
+      setPerformanceTracks(
+        Array.isArray(project.performanceTracks)
+          ? project.performanceTracks
+          : []
       );
       setSelectedGroupId(project.selectedGroupId ?? null);
       setCurrentSectionIndex(project.currentSectionIndex ?? 0);

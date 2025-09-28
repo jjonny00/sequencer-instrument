@@ -1,5 +1,19 @@
 import type { Track } from "./tracks";
 
+export interface PerformanceNote {
+  time: number;
+  note: string;
+  duration: number;
+  velocity: number;
+}
+
+export interface PerformanceTrack {
+  id: string;
+  instrument: string;
+  channel?: number;
+  notes: PerformanceNote[];
+}
+
 export interface PatternGroup {
   id: string;
   name: string;

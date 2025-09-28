@@ -1,5 +1,10 @@
 import type { Chunk } from "./chunks";
-import type { PatternGroup, SongRow } from "./song";
+import type {
+  PatternGroup,
+  PerformanceTrack,
+  PerformanceNote,
+  SongRow,
+} from "./song";
 import type { Track } from "./tracks";
 
 const STORAGE_KEY = "sequencer_projects";
@@ -13,6 +18,7 @@ export interface StoredProjectData {
   tracks: Track[];
   patternGroups: PatternGroup[];
   songRows: SongRow[];
+  performanceTracks?: PerformanceTrack[];
   selectedGroupId: string | null;
   currentSectionIndex?: number;
 }
@@ -70,11 +76,27 @@ const cloneSongRow = (row: SongRow): SongRow => ({
   slots: row.slots.slice(),
 });
 
+const clonePerformanceNote = (note: PerformanceNote): PerformanceNote => ({
+  ...note,
+});
+
+const clonePerformanceTrack = (
+  track: PerformanceTrack
+): PerformanceTrack => ({
+  ...track,
+  notes: Array.isArray(track.notes)
+    ? track.notes.map((note) => clonePerformanceNote(note))
+    : [],
+});
+
 const cloneProjectData = (project: StoredProjectData): StoredProjectData => ({
   ...project,
   tracks: project.tracks.map((track) => cloneTrack(track)),
   patternGroups: project.patternGroups.map((group) => clonePatternGroup(group)),
   songRows: project.songRows.map((row) => cloneSongRow(row)),
+  performanceTracks: Array.isArray(project.performanceTracks)
+    ? project.performanceTracks.map((track) => clonePerformanceTrack(track))
+    : [],
 });
 
 const cloneLoopDraftData = (draft: StoredLoopDraftData): StoredLoopDraftData => ({
