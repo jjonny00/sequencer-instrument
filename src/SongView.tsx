@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
   Dispatch,
   PointerEvent as ReactPointerEvent,
   SetStateAction,
 } from "react";
+import * as Tone from "tone";
 
 import type { PatternGroup, SongRow } from "./song";
 import { createSongRow } from "./song";
+import { initAudioContext } from "./utils/audio";
 interface SongViewProps {
   patternGroups: PatternGroup[];
   songRows: SongRow[];
@@ -25,6 +27,35 @@ interface SongViewProps {
 const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
 const ROW_LABEL_WIDTH = 80;
+
+type PerformanceInstrumentType = "keyboard" | "arp" | "pads";
+
+const INSTRUMENT_SETTINGS: Record<PerformanceInstrumentType, Tone.SynthOptions> = {
+  keyboard: {
+    oscillator: { type: "triangle" },
+    envelope: { attack: 0.01, decay: 0.2, sustain: 0.6, release: 0.25 },
+  },
+  arp: {
+    oscillator: { type: "square" },
+    envelope: { attack: 0.005, decay: 0.15, sustain: 0.4, release: 0.15 },
+  },
+  pads: {
+    oscillator: { type: "sine" },
+    envelope: { attack: 0.25, decay: 0.4, sustain: 0.8, release: 1.6 },
+  },
+};
+
+const INSTRUMENT_DURATIONS: Record<PerformanceInstrumentType, string> = {
+  keyboard: "4n",
+  arp: "8n",
+  pads: "2n",
+};
+
+const INSTRUMENT_VELOCITY: Record<PerformanceInstrumentType, number> = {
+  keyboard: 0.8,
+  arp: 0.7,
+  pads: 0.9,
+};
 
 const formatTrackCount = (count: number) =>
   `${count} track${count === 1 ? "" : "s"}`;
@@ -48,6 +79,12 @@ export function SongView({
   const [activeRowSettings, setActiveRowSettings] = useState<number | null>(
     null
   );
+  const [instrumentPanelOpen, setInstrumentPanelOpen] = useState(false);
+  const [instrumentType, setInstrumentType] =
+    useState<PerformanceInstrumentType>("keyboard");
+
+  const liveInstrumentRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
+  const liveInstrumentTypeRef = useRef<PerformanceInstrumentType | null>(null);
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -148,6 +185,73 @@ export function SongView({
   };
 
   const showEmptyTimeline = sectionCount === 0;
+
+  const getOrCreateInstrument = useCallback(async () => {
+    await initAudioContext();
+    if (
+      !liveInstrumentRef.current ||
+      liveInstrumentTypeRef.current !== instrumentType
+    ) {
+      liveInstrumentRef.current?.dispose();
+      const synth = new Tone.PolySynth(
+        Tone.Synth,
+        INSTRUMENT_SETTINGS[instrumentType]
+      ).toDestination();
+      synth.volume.value = instrumentType === "pads" ? -4 : -6;
+      liveInstrumentRef.current = synth;
+      liveInstrumentTypeRef.current = instrumentType;
+    }
+    return liveInstrumentRef.current;
+  }, [instrumentType]);
+
+  const triggerLiveNote = useCallback(
+    async (note: string) => {
+      const instrument = await getOrCreateInstrument();
+      if (!instrument) return;
+      const now = Tone.now();
+      instrument.triggerAttackRelease(
+        note,
+        INSTRUMENT_DURATIONS[instrumentType],
+        now,
+        INSTRUMENT_VELOCITY[instrumentType]
+      );
+    },
+    [getOrCreateInstrument, instrumentType]
+  );
+
+  const keyboardNotes = useMemo(() => {
+    const octaves = instrumentType === "pads" ? [3, 4] : [4, 5];
+    const toneOrder = [
+      "C",
+      "C#",
+      "D",
+      "D#",
+      "E",
+      "F",
+      "F#",
+      "G",
+      "G#",
+      "A",
+      "A#",
+      "B",
+    ];
+    return octaves.flatMap((octave) =>
+      toneOrder.map((note) => `${note}${octave}`)
+    );
+  }, [instrumentType]);
+
+  useEffect(() => {
+    if (!instrumentPanelOpen) return;
+    void getOrCreateInstrument();
+  }, [getOrCreateInstrument, instrumentPanelOpen]);
+
+  useEffect(() => {
+    return () => {
+      liveInstrumentRef.current?.dispose();
+      liveInstrumentRef.current = null;
+      liveInstrumentTypeRef.current = null;
+    };
+  }, []);
 
   return (
     <div
@@ -580,6 +684,7 @@ export function SongView({
           display: "flex",
           alignItems: "center",
           gap: 12,
+          flexWrap: "wrap",
         }}
       >
         <div
@@ -608,7 +713,15 @@ export function SongView({
           </select>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
           <button
             aria-label={isPlaying ? "Stop" : "Play"}
             onPointerDown={onToggleTransport}
@@ -630,8 +743,181 @@ export function SongView({
               {isPlaying ? "stop" : "play_arrow"}
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!instrumentPanelOpen) {
+                void initAudioContext();
+              }
+              setInstrumentPanelOpen((prev) => !prev);
+            }}
+            aria-pressed={instrumentPanelOpen}
+            style={{
+              height: 44,
+              padding: "0 16px",
+              borderRadius: 10,
+              border: `1px solid ${instrumentPanelOpen ? "#27E0B0" : "#333"}`,
+              background: instrumentPanelOpen
+                ? "rgba(39, 224, 176, 0.14)"
+                : "#1b2130",
+              color: "#e6f2ff",
+              fontSize: 13,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              letterSpacing: 0.3,
+            }}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              piano
+            </span>
+            Play Instrument
+          </button>
         </div>
       </div>
+
+      {instrumentPanelOpen ? (
+        <div
+          style={{
+            borderRadius: 12,
+            border: "1px solid #333",
+            background: "#10192c",
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              {(
+                [
+                  { id: "keyboard", label: "Keyboard", icon: "🎹" },
+                  { id: "arp", label: "Arp", icon: "🌀" },
+                  { id: "pads", label: "Pads", icon: "🎛️" },
+                ] as const
+              ).map(({ id, label, icon }) => {
+                const active = instrumentType === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setInstrumentType(id)}
+                    aria-pressed={active}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 999,
+                      border: `1px solid ${active ? "#27E0B0" : "#333"}`,
+                      background: active ? "rgba(39, 224, 176, 0.18)" : "#1b2130",
+                      color: "#e6f2ff",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    <span aria-hidden="true" style={{ fontSize: 14 }}>
+                      {icon}
+                    </span>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setInstrumentPanelOpen(false)}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #333",
+                background: "#1b2536",
+                color: "#94a3b8",
+                fontSize: 12,
+              }}
+            >
+              Close
+            </button>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              Tap notes to play along with the song timeline.
+            </span>
+            <div
+              className="scrollable"
+              style={{
+                overflowX: "auto",
+                paddingBottom: 4,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  minWidth: keyboardNotes.length * 44,
+                }}
+              >
+                {keyboardNotes.map((note) => {
+                  const sharp = note.includes("#");
+                  return (
+                    <button
+                      key={note}
+                      type="button"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        void triggerLiveNote(note);
+                      }}
+                      onPointerUp={(event) => {
+                        event.currentTarget.blur();
+                      }}
+                      style={{
+                        width: 44,
+                        height: sharp ? 56 : 72,
+                        borderRadius: 8,
+                        border: `1px solid ${sharp ? "#273041" : "#94a3b8"}`,
+                        background: sharp ? "#1f2532" : "#e2e8f0",
+                        color: sharp ? "#e6f2ff" : "#0f172a",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        paddingBottom: 6,
+                        letterSpacing: 0.4,
+                      }}
+                    >
+                      {note}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div
         className="scrollable"
