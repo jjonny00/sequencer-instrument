@@ -30,7 +30,7 @@ const ROW_LABEL_WIDTH = 80;
 
 type PerformanceInstrumentType = "keyboard" | "arp" | "pads";
 
-const INSTRUMENT_SETTINGS: Record<PerformanceInstrumentType, Tone.SynthOptions> = {
+const INSTRUMENT_SETTINGS = {
   keyboard: {
     oscillator: { type: "triangle" },
     envelope: { attack: 0.01, decay: 0.2, sustain: 0.6, release: 0.25 },
@@ -43,7 +43,7 @@ const INSTRUMENT_SETTINGS: Record<PerformanceInstrumentType, Tone.SynthOptions> 
     oscillator: { type: "sine" },
     envelope: { attack: 0.25, decay: 0.4, sustain: 0.8, release: 1.6 },
   },
-};
+} as const satisfies Record<PerformanceInstrumentType, Record<string, unknown>>;
 
 const INSTRUMENT_DURATIONS: Record<PerformanceInstrumentType, string> = {
   keyboard: "4n",
@@ -193,10 +193,8 @@ export function SongView({
       liveInstrumentTypeRef.current !== instrumentType
     ) {
       liveInstrumentRef.current?.dispose();
-      const synth = new Tone.PolySynth(
-        Tone.Synth,
-        INSTRUMENT_SETTINGS[instrumentType]
-      ).toDestination();
+      const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+      synth.set(INSTRUMENT_SETTINGS[instrumentType] as Tone.SynthOptions);
       synth.volume.value = instrumentType === "pads" ? -4 : -6;
       liveInstrumentRef.current = synth;
       liveInstrumentTypeRef.current = instrumentType;
