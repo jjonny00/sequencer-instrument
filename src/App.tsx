@@ -2913,6 +2913,8 @@ export default function App() {
                 selectedGroupId={selectedGroupId}
                 onOpenLoopsLibrary={handleOpenLoopsLibrary}
                 onSelectLoop={handleSelectLoopFromSongView}
+                performanceTracks={performanceTracks}
+                setPerformanceTracks={setPerformanceTracks}
               />
             )}
           </div>

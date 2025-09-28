@@ -1,9 +1,9 @@
 import type { Track } from "./tracks";
 
 export interface PerformanceNote {
-  time: number;
+  time: string;
   note: string;
-  duration: number;
+  duration: string;
   velocity: number;
 }
 

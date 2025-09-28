@@ -7,7 +7,12 @@ import type {
 } from "react";
 import * as Tone from "tone";
 
-import type { PatternGroup, SongRow } from "./song";
+import type {
+  PatternGroup,
+  PerformanceNote,
+  PerformanceTrack,
+  SongRow,
+} from "./song";
 import { createSongRow } from "./song";
 import { initAudioContext } from "./utils/audio";
 interface SongViewProps {
@@ -22,6 +27,8 @@ interface SongViewProps {
   selectedGroupId: string | null;
   onOpenLoopsLibrary: () => void;
   onSelectLoop: (groupId: string) => void;
+  performanceTracks: PerformanceTrack[];
+  setPerformanceTracks: Dispatch<SetStateAction<PerformanceTrack[]>>;
 }
 
 const SLOT_WIDTH = 150;
@@ -57,8 +64,28 @@ const INSTRUMENT_VELOCITY: Record<PerformanceInstrumentType, number> = {
   pads: 0.9,
 };
 
+const INSTRUMENT_LABELS: Record<PerformanceInstrumentType, string> = {
+  keyboard: "Keyboard",
+  arp: "Arp",
+  pads: "Pads",
+};
+
 const formatTrackCount = (count: number) =>
   `${count} track${count === 1 ? "" : "s"}`;
+
+const formatNoteCount = (count: number) =>
+  `${count} note${count === 1 ? "" : "s"}`;
+
+interface RecordingSummaryEntry {
+  instrument: PerformanceInstrumentType;
+  trackId: string;
+  noteCount: number;
+  wasNewTrack: boolean;
+}
+
+interface RecordingSummary {
+  entries: RecordingSummaryEntry[];
+}
 
 export function SongView({
   patternGroups,
@@ -72,6 +99,8 @@ export function SongView({
   selectedGroupId,
   onOpenLoopsLibrary,
   onSelectLoop,
+  performanceTracks,
+  setPerformanceTracks,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -85,6 +114,47 @@ export function SongView({
 
   const liveInstrumentRef = useRef<Tone.PolySynth<Tone.Synth> | null>(null);
   const liveInstrumentTypeRef = useRef<PerformanceInstrumentType | null>(null);
+  const pendingPerformanceNotesRef = useRef<
+    { instrument: PerformanceInstrumentType; note: PerformanceNote }[]
+  >([]);
+  const wasPlayingRef = useRef(isPlaying);
+  const [lastRecordingSummary, setLastRecordingSummary] =
+    useState<RecordingSummary | null>(null);
+  const performanceSummary = useMemo(() => {
+    const trackCount = performanceTracks.length;
+    const noteCount = performanceTracks.reduce(
+      (total, track) => total + track.notes.length,
+      0
+    );
+    return { trackCount, noteCount };
+  }, [performanceTracks]);
+
+  const lastRecordingNoteCount = useMemo(
+    () =>
+      lastRecordingSummary?.entries.reduce(
+        (total, entry) => total + entry.noteCount,
+        0
+      ) ?? 0,
+    [lastRecordingSummary]
+  );
+
+  const lastRecordingInstrumentNames = useMemo(() => {
+    if (!lastRecordingSummary) return [] as PerformanceInstrumentType[];
+    const unique = new Set<PerformanceInstrumentType>();
+    for (const entry of lastRecordingSummary.entries) {
+      unique.add(entry.instrument);
+    }
+    return Array.from(unique);
+  }, [lastRecordingSummary]);
+
+  const lastRecordingInstrumentSummary = useMemo(() => {
+    if (lastRecordingInstrumentNames.length === 0) {
+      return "";
+    }
+    return lastRecordingInstrumentNames
+      .map((instrument) => INSTRUMENT_LABELS[instrument])
+      .join(", ");
+  }, [lastRecordingInstrumentNames]);
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -217,6 +287,145 @@ export function SongView({
     [getOrCreateInstrument, instrumentType]
   );
 
+  const commitPendingPerformanceNotes = useCallback(() => {
+    const pending = pendingPerformanceNotesRef.current;
+    if (pending.length === 0) {
+      return;
+    }
+    pendingPerformanceNotesRef.current = [];
+    const grouped = new Map<
+      PerformanceInstrumentType,
+      PerformanceNote[]
+    >();
+    for (const entry of pending) {
+      const bucket = grouped.get(entry.instrument);
+      if (bucket) {
+        bucket.push(entry.note);
+      } else {
+        grouped.set(entry.instrument, [entry.note]);
+      }
+    }
+    if (grouped.size === 0) {
+      setLastRecordingSummary(null);
+      return;
+    }
+    let summaryEntries: RecordingSummaryEntry[] = [];
+    setPerformanceTracks((tracks) => {
+      const next = tracks.map((track) => ({
+        ...track,
+        notes: track.notes.slice(),
+      }));
+      grouped.forEach((notes, instrument) => {
+        const clonedNotes = notes.map((note) => ({ ...note }));
+        const existingIndex = next.findIndex(
+          (track) => track.instrument === instrument
+        );
+        if (existingIndex >= 0) {
+          const target = next[existingIndex];
+          const updated: PerformanceTrack = {
+            ...target,
+            notes: [...target.notes, ...clonedNotes],
+          };
+          next[existingIndex] = updated;
+          summaryEntries.push({
+            instrument,
+            trackId: updated.id,
+            noteCount: clonedNotes.length,
+            wasNewTrack: false,
+          });
+        } else {
+          const newTrack: PerformanceTrack = {
+            id: `performance-${instrument}-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 8)}`,
+            instrument,
+            notes: clonedNotes,
+          };
+          next.push(newTrack);
+          summaryEntries.push({
+            instrument,
+            trackId: newTrack.id,
+            noteCount: clonedNotes.length,
+            wasNewTrack: true,
+          });
+        }
+      });
+      return next;
+    });
+    setLastRecordingSummary(
+      summaryEntries.length ? { entries: summaryEntries } : null
+    );
+  }, [setPerformanceTracks]);
+
+  const handleUndoLastRecording = useCallback(() => {
+    if (!lastRecordingSummary || lastRecordingSummary.entries.length === 0) {
+      return;
+    }
+    const summaryMap = new Map(
+      lastRecordingSummary.entries.map((entry) => [entry.trackId, entry])
+    );
+    let didUndo = false;
+    setPerformanceTracks((tracks) => {
+      let mutated = false;
+      const next: PerformanceTrack[] = [];
+      for (const track of tracks) {
+        const entry = summaryMap.get(track.id);
+        if (!entry) {
+          next.push(track);
+          continue;
+        }
+        const keepCount = Math.max(0, track.notes.length - entry.noteCount);
+        if (entry.wasNewTrack) {
+          if (keepCount > 0) {
+            next.push({
+              ...track,
+              notes: track.notes.slice(0, keepCount),
+            });
+          }
+          mutated = true;
+          continue;
+        }
+        if (keepCount === track.notes.length) {
+          next.push(track);
+          continue;
+        }
+        next.push({
+          ...track,
+          notes: track.notes.slice(0, keepCount),
+        });
+        mutated = true;
+      }
+      if (!mutated) {
+        return tracks;
+      }
+      didUndo = true;
+      return next;
+    });
+    if (didUndo) {
+      setLastRecordingSummary(null);
+    }
+  }, [lastRecordingSummary, setPerformanceTracks]);
+
+  const handleLiveNoteTrigger = useCallback(
+    (note: string) => {
+      void triggerLiveNote(note);
+      if (!instrumentPanelOpen) return;
+      if (!isPlaying) return;
+      if (Tone.Transport.state !== "started") return;
+      const recordedNote: PerformanceNote = {
+        time: String(Tone.Transport.position),
+        note,
+        duration: INSTRUMENT_DURATIONS[instrumentType],
+        velocity: INSTRUMENT_VELOCITY[instrumentType],
+      };
+      pendingPerformanceNotesRef.current.push({
+        instrument: instrumentType,
+        note: recordedNote,
+      });
+    },
+    [instrumentPanelOpen, instrumentType, isPlaying, triggerLiveNote]
+  );
+
   const keyboardNotes = useMemo(() => {
     const octaves = instrumentType === "pads" ? [3, 4] : [4, 5];
     const toneOrder = [
@@ -242,6 +451,13 @@ export function SongView({
     if (!instrumentPanelOpen) return;
     void getOrCreateInstrument();
   }, [getOrCreateInstrument, instrumentPanelOpen]);
+
+  useEffect(() => {
+    if (wasPlayingRef.current && !isPlaying) {
+      commitPendingPerformanceNotes();
+    }
+    wasPlayingRef.current = isPlaying;
+  }, [commitPendingPerformanceNotes, isPlaying]);
 
   useEffect(() => {
     return () => {
@@ -861,9 +1077,62 @@ export function SongView({
               gap: 12,
             }}
           >
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Tap notes to play along with the song timeline.
-            </span>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                Tap notes to play along with the song timeline.
+              </span>
+              <span style={{ fontSize: 11, color: "#64748b" }}>
+                Saved takes:{" "}
+                {performanceSummary.trackCount > 0
+                  ? `${formatTrackCount(performanceSummary.trackCount)} · ${formatNoteCount(
+                      performanceSummary.noteCount
+                    )}`
+                  : "None yet"}
+              </span>
+              {lastRecordingSummary && lastRecordingNoteCount > 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #2b3547",
+                    background: "rgba(39, 224, 176, 0.08)",
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: "#cbd5f5" }}>
+                    Last recording captured {formatNoteCount(lastRecordingNoteCount)}
+                    {lastRecordingInstrumentSummary
+                      ? ` on ${lastRecordingInstrumentSummary}`
+                      : ""}.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleUndoLastRecording}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      border: "1px solid #27E0B0",
+                      background: "rgba(39, 224, 176, 0.18)",
+                      color: "#e6f2ff",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    Undo
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <div
               className="scrollable"
               style={{
@@ -886,7 +1155,7 @@ export function SongView({
                       type="button"
                       onPointerDown={(event) => {
                         event.preventDefault();
-                        void triggerLiveNote(note);
+                        handleLiveNoteTrigger(note);
                       }}
                       onPointerUp={(event) => {
                         event.currentTarget.blur();
