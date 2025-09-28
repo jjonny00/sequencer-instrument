@@ -35,6 +35,11 @@ const PREVIEW_GAP_COLLAPSED = 1;
 const PREVIEW_GAP_EXPANDED = 2;
 const PREVIEW_HEIGHT_COLLAPSED = 14;
 const PREVIEW_HEIGHT_EXPANDED = 28;
+const SLOT_MIN_HEIGHT_COLLAPSED = 84;
+const SLOT_MIN_HEIGHT_EXPANDED = 112;
+const APPROXIMATE_ROW_OFFSET = 34;
+const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
+const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
 
 const formatInstrumentLabel = (instrument: string | null | undefined) =>
   instrument ? instrument.charAt(0).toUpperCase() + instrument.slice(1) : "";
@@ -273,9 +278,6 @@ const renderPerformanceSlotPreview = (
   );
 };
 
-const formatTrackCount = (count: number) =>
-  `${count} track${count === 1 ? "" : "s"}`;
-
 export function SongView({
   patternGroups,
   songRows,
@@ -294,7 +296,7 @@ export function SongView({
     { rowIndex: number; columnIndex: number } | null
   >(null);
   const [rowSettingsIndex, setRowSettingsIndex] = useState<number | null>(null);
-  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
+  const [isTimelineExpanded, setTimelineExpanded] = useState(false);
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -402,6 +404,18 @@ export function SongView({
   };
 
   const showEmptyTimeline = sectionCount === 0;
+  const slotMinHeight = isTimelineExpanded
+    ? SLOT_MIN_HEIGHT_EXPANDED
+    : SLOT_MIN_HEIGHT_COLLAPSED;
+  const slotPadding = isTimelineExpanded ? "10px 12px" : "8px 12px";
+  const slotGap = isTimelineExpanded ? 8 : 6;
+  const visibleRowTarget = isTimelineExpanded
+    ? TIMELINE_VISIBLE_ROWS_EXPANDED
+    : TIMELINE_VISIBLE_ROWS_COLLAPSED;
+  const timelineMaxHeight =
+    visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET);
+  const timelineMaxHeightValue = Math.round(timelineMaxHeight);
+  const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
   const hasRowSettings =
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length;
   const rowSettingsRow =
@@ -490,6 +504,19 @@ export function SongView({
           </h2>
           <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
             <button
+              onClick={() => setTimelineExpanded((previous) => !previous)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 20,
+                border: "1px solid #333",
+                background: "#273041",
+                color: "#e6f2ff",
+                fontSize: 12,
+              }}
+            >
+              {isTimelineExpanded ? "Collapse Timeline" : "Expand Timeline"}
+            </button>
+            <button
               onClick={handleAddRow}
               style={{
                 padding: "6px 12px",
@@ -525,8 +552,16 @@ export function SongView({
             minHeight: 120,
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {showEmptyTimeline ? (
+          <div
+            style={{
+              maxHeight: `${timelineMaxHeightValue}px`,
+              overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
+              paddingRight: shouldEnableVerticalScroll ? 6 : 0,
+              minWidth: "100%",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {showEmptyTimeline ? (
               <div
                 style={{
                   padding: 24,
@@ -582,7 +617,6 @@ export function SongView({
                 const performanceTrack = row.performanceTrackId
                   ? performanceTrackMap.get(row.performanceTrackId)
                   : undefined;
-                const isRowExpanded = Boolean(expandedRows[rowIndex]);
                 const performanceAccent = performanceTrack
                   ? performanceTrack.color ||
                     getInstrumentColor(performanceTrack.instrument)
@@ -685,53 +719,12 @@ export function SongView({
                             tune
                           </span>
                         )}
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setExpandedRows((previous) => {
-                              const next = { ...previous };
-                              next[rowIndex] = !isRowExpanded;
-                              return next;
-                            });
-                          }}
-                          style={{
-                            position: "absolute",
-                            bottom: 4,
-                            right: 4,
-                            width: 22,
-                            height: 22,
-                            borderRadius: 6,
-                            border: "1px solid #2a3344",
-                            background: "#0f172a",
-                            color: "#94a3b8",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 12,
-                            cursor: "pointer",
-                          }}
-                          aria-label={
-                            isRowExpanded
-                              ? "Collapse row preview"
-                              : "Expand row preview"
-                          }
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            aria-hidden="true"
-                            style={{ fontSize: 14, lineHeight: 1 }}
-                          >
-                            {isRowExpanded ? "density_small" : "density_large"}
-                          </span>
-                        </button>
                       </div>
                       <div
                         style={{
                           flex: 1,
                           background: "#161d2b",
-                          padding: isRowExpanded ? "10px 12px" : "8px 12px",
+                          padding: slotPadding,
                           display: "flex",
                           alignItems: "stretch",
                         }}
@@ -778,10 +771,19 @@ export function SongView({
                               const descriptionColor = hasContent
                                 ? "#94a3b8"
                                 : "#475569";
+                              const description = hasPerformance
+                                ? columnPerformanceNotes.length > 0
+                                  ? formatNoteCount(columnPerformanceNotes.length)
+                                  : "No notes yet"
+                                : assigned
+                                ? null
+                                : patternGroups.length > 0
+                                ? "Tap to assign"
+                                : "Save a sequence in Track view";
 
                               const buttonStyles: CSSProperties = {
                                 width: "100%",
-                                minHeight: isRowExpanded ? 104 : 80,
+                                minHeight: slotMinHeight,
                                 borderRadius: 8,
                                 border: `1px solid ${
                                   highlight
@@ -800,8 +802,8 @@ export function SongView({
                                 flexDirection: "column",
                                 alignItems: "stretch",
                                 justifyContent: "space-between",
-                                gap: isRowExpanded ? 8 : 6,
-                                padding: isRowExpanded ? "10px 12px" : "8px 12px",
+                                gap: slotGap,
+                                padding: slotPadding,
                                 fontSize: 13,
                                 cursor:
                                   patternGroups.length > 0 ? "pointer" : "not-allowed",
@@ -827,7 +829,7 @@ export function SongView({
                                       onBlur={() => setEditingSlot(null)}
                                       style={{
                                         width: "100%",
-                                        minHeight: isRowExpanded ? 104 : 80,
+                                        minHeight: slotMinHeight,
                                         borderRadius: 8,
                                         border: `1px solid ${
                                           highlight ? "#27E0B0" : "#475569"
@@ -841,8 +843,7 @@ export function SongView({
                                       <option value="">Empty Slot</option>
                                       {patternGroups.map((groupOption) => (
                                         <option key={groupOption.id} value={groupOption.id}>
-                                          {groupOption.name} (
-                                          {formatTrackCount(groupOption.tracks.length)})
+                                          {groupOption.name}
                                         </option>
                                       ))}
                                     </select>
@@ -893,28 +894,23 @@ export function SongView({
                                               performanceTrack,
                                               columnStart,
                                               columnEnd,
-                                              isRowExpanded
+                                              isTimelineExpanded
                                             )
-                                          : renderLoopSlotPreview(group, isRowExpanded)}
+                                          : renderLoopSlotPreview(
+                                              group,
+                                              isTimelineExpanded
+                                            )}
                                       </div>
-                                      <span
-                                        style={{
-                                          fontSize: 11,
-                                          color: descriptionColor,
-                                        }}
-                                      >
-                                        {assigned
-                                          ? formatTrackCount(group?.tracks.length ?? 0)
-                                          : hasPerformance
-                                          ? columnPerformanceNotes.length > 0
-                                            ? formatNoteCount(
-                                                columnPerformanceNotes.length
-                                              )
-                                            : "No notes yet"
-                                          : patternGroups.length > 0
-                                          ? "Tap to assign"
-                                          : "Save a sequence in Track view"}
-                                      </span>
+                                      {description && (
+                                        <span
+                                          style={{
+                                            fontSize: 11,
+                                            color: descriptionColor,
+                                          }}
+                                        >
+                                          {description}
+                                        </span>
+                                      )}
                                     </button>
                                   )}
                                 </div>
@@ -927,7 +923,8 @@ export function SongView({
                   </div>
                 );
               })
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1149,14 +1146,6 @@ export function SongView({
                       📼
                     </span>
                     <span style={{ fontWeight: 600 }}>{group.name}</span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "#94a3b8",
-                      }}
-                    >
-                      {formatTrackCount(group.tracks.length)}
-                    </span>
                     <div style={{ marginLeft: "auto" }} />
                   </div>
                   {trackLabels.length === 0 ? (
