@@ -3,7 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
 import { LoopStrip, type LoopStripHandle } from "./LoopStrip";
-import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
+import {
+  createTriggerKey,
+  type Track,
+  type TrackInstrument,
+  type TriggerMap,
+} from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs, type InstrumentCharacter } from "./packs";
 import {
@@ -25,7 +30,11 @@ import {
   audioReady,
 } from "./utils/audio";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
-import { createPatternGroupId, createSongRow } from "./song";
+import {
+  createPatternGroupId,
+  createPerformanceTrackId,
+  createSongRow,
+} from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
@@ -43,6 +52,7 @@ import {
   type StoredProjectData,
 } from "./storage";
 import { isUserPresetId } from "./presets";
+import { getInstrumentColor } from "./utils/color";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -326,6 +336,9 @@ export default function App() {
   const [performanceTracks, setPerformanceTracks] = useState<
     PerformanceTrack[]
   >([]);
+  const [activePerformanceTrackId, setActivePerformanceTrackId] = useState<
+    string | null
+  >(null);
   const [isRecording, setIsRecording] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
@@ -1277,6 +1290,72 @@ export default function App() {
     [setTracks]
   );
 
+  const ensurePerformanceRow = useCallback(
+    (instrument: TrackInstrument, existingId?: string | null): string | null => {
+      const color = getInstrumentColor(instrument);
+      let ensuredId: string | null =
+        existingId ?? activePerformanceTrackId ?? null;
+
+      setPerformanceTracks((prev) => {
+        if (ensuredId) {
+          const index = prev.findIndex((track) => track.id === ensuredId);
+          if (index >= 0) {
+            const track = prev[index];
+            if (track.instrument === instrument && track.color === color) {
+              return prev;
+            }
+            const next = prev.slice();
+            next[index] = { ...track, instrument, color };
+            return next;
+          }
+        }
+
+        const nextId = createPerformanceTrackId();
+        ensuredId = nextId;
+        return [
+          ...prev,
+          {
+            id: nextId,
+            instrument,
+            color,
+            notes: [],
+          },
+        ];
+      });
+
+      if (!ensuredId) {
+        return null;
+      }
+
+      setSongRows((prev) => {
+        const existingIndex = prev.findIndex(
+          (row) => row.performanceTrackId === ensuredId
+        );
+        if (existingIndex >= 0) {
+          return prev;
+        }
+
+        const maxColumns = prev.reduce(
+          (max, row) => Math.max(max, row.slots.length),
+          0
+        );
+        const newRow = createSongRow(maxColumns > 0 ? maxColumns : 1);
+        newRow.performanceTrackId = ensuredId;
+        return [...prev, newRow];
+      });
+
+      setActivePerformanceTrackId(ensuredId);
+
+      return ensuredId;
+    },
+    [
+      activePerformanceTrackId,
+      setPerformanceTracks,
+      setSongRows,
+      setActivePerformanceTrackId,
+    ]
+  );
+
   const clearTrackPattern = useCallback(
     (trackId: number) => {
       updateTrackPattern(trackId, (pattern) => {
@@ -1482,6 +1561,9 @@ export default function App() {
       );
       const nextPerformanceTracks = project.performanceTracks ?? [];
       setPerformanceTracks(nextPerformanceTracks);
+      setActivePerformanceTrackId(
+        nextPerformanceTracks.length > 0 ? nextPerformanceTracks[0].id : null
+      );
       const nextPatternGroups =
         project.patternGroups.length > 0
           ? project.patternGroups
@@ -2912,6 +2994,9 @@ export default function App() {
                 onOpenLoopsLibrary={handleOpenLoopsLibrary}
                 onSelectLoop={handleSelectLoopFromSongView}
                 performanceTracks={performanceTracks}
+                triggers={triggers}
+                onEnsurePerformanceRow={ensurePerformanceRow}
+                activePerformanceTrackId={activePerformanceTrackId}
               />
             )}
           </div>

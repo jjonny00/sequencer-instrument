@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CSSProperties,
   Dispatch,
@@ -6,12 +6,20 @@ import type {
   SetStateAction,
 } from "react";
 
+import type { Chunk } from "./chunks";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import { createSongRow } from "./song";
 import { getInstrumentColor, withAlpha } from "./utils/color";
-import type { Track } from "./tracks";
+import {
+  createTriggerKey,
+  type Track,
+  type TrackInstrument,
+  type TriggerMap,
+} from "./tracks";
+import { packs } from "./packs";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
+import { InstrumentControlPanel } from "./InstrumentControlPanel";
 interface SongViewProps {
   patternGroups: PatternGroup[];
   songRows: SongRow[];
@@ -25,6 +33,12 @@ interface SongViewProps {
   onOpenLoopsLibrary: () => void;
   onSelectLoop: (groupId: string) => void;
   performanceTracks: PerformanceTrack[];
+  triggers: TriggerMap;
+  onEnsurePerformanceRow: (
+    instrument: TrackInstrument,
+    existingId?: string | null
+  ) => string | null;
+  activePerformanceTrackId: string | null;
 }
 
 const SLOT_WIDTH = 150;
@@ -41,6 +55,41 @@ const SLOT_PADDING = "6px 12px";
 const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
+
+const PLAYABLE_INSTRUMENTS: TrackInstrument[] = [
+  "arp",
+  "keyboard",
+  "harmonia",
+];
+
+const createPerformancePattern = (instrument: TrackInstrument): Chunk => ({
+  id: `live-${instrument}-${Math.random().toString(36).slice(2, 8)}`,
+  name: `${instrument}-performance`,
+  instrument,
+  steps: Array(16).fill(0),
+  velocities: Array(16).fill(0),
+  note: "C4",
+  sustain: 0.8,
+  velocityFactor: 1,
+  timingMode: "sync",
+  noteEvents: [],
+});
+
+const resolveInstrumentSource = (instrument: TrackInstrument) => {
+  if (!instrument) return null;
+  for (const pack of packs) {
+    const definition = pack.instruments?.[instrument];
+    if (!definition) continue;
+    const characterId =
+      definition.defaultCharacterId ??
+      (definition.characters.length > 0 ? definition.characters[0].id : "");
+    return {
+      packId: pack.id,
+      characterId,
+    };
+  }
+  return null;
+};
 
 const formatInstrumentLabel = (instrument: string | null | undefined) =>
   instrument ? instrument.charAt(0).toUpperCase() + instrument.slice(1) : "";
@@ -286,12 +335,75 @@ export function SongView({
   onOpenLoopsLibrary,
   onSelectLoop,
   performanceTracks,
+  triggers,
+  onEnsurePerformanceRow,
+  activePerformanceTrackId,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
   >(null);
   const [rowSettingsIndex, setRowSettingsIndex] = useState<number | null>(null);
   const [isTimelineExpanded, setTimelineExpanded] = useState(false);
+  const [isPlayInstrumentOpen, setPlayInstrumentOpen] = useState(false);
+  const [playInstrument, setPlayInstrument] =
+    useState<TrackInstrument>("keyboard");
+  const [playInstrumentPattern, setPlayInstrumentPattern] = useState<Chunk>(() =>
+    createPerformancePattern("keyboard")
+  );
+  const [playInstrumentRowTrackId, setPlayInstrumentRowTrackId] = useState<
+    string | null
+  >(activePerformanceTrackId);
+
+  const handleTogglePlayInstrumentPanel = useCallback(() => {
+    setPlayInstrumentOpen((prev) => !prev);
+  }, []);
+
+  const handleSelectPlayInstrument = useCallback(
+    (instrument: TrackInstrument) => {
+      setPlayInstrument(instrument);
+    },
+    []
+  );
+
+  const handlePlayInstrumentPatternUpdate = useCallback(
+    (updater: (chunk: Chunk) => Chunk) => {
+      setPlayInstrumentPattern((prev) => {
+        const draft: Chunk = {
+          ...prev,
+          steps: prev.steps.slice(),
+          velocities: prev.velocities ? prev.velocities.slice() : undefined,
+          pitches: prev.pitches ? prev.pitches.slice() : undefined,
+          notes: prev.notes ? prev.notes.slice() : undefined,
+          degrees: prev.degrees ? prev.degrees.slice() : undefined,
+          noteEvents: prev.noteEvents
+            ? prev.noteEvents.map((event) => ({ ...event }))
+            : undefined,
+          harmoniaStepDegrees: prev.harmoniaStepDegrees
+            ? prev.harmoniaStepDegrees.slice()
+            : undefined,
+        };
+        const next = updater(draft);
+        return { ...next, instrument: playInstrument };
+      });
+    },
+    [playInstrument]
+  );
+
+  useEffect(() => {
+    if (!isPlayInstrumentOpen) return;
+    setPlayInstrumentRowTrackId((currentId) =>
+      onEnsurePerformanceRow(playInstrument, currentId) ?? currentId
+    );
+  }, [isPlayInstrumentOpen, playInstrument, onEnsurePerformanceRow]);
+
+  useEffect(() => {
+    if (isPlayInstrumentOpen) return;
+    setPlayInstrumentRowTrackId(activePerformanceTrackId ?? null);
+  }, [activePerformanceTrackId, isPlayInstrumentOpen]);
+
+  useEffect(() => {
+    setPlayInstrumentPattern(createPerformancePattern(playInstrument));
+  }, [playInstrument]);
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -409,6 +521,77 @@ export function SongView({
     visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
   );
   const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
+  const playInstrumentColor = useMemo(
+    () => getInstrumentColor(playInstrument),
+    [playInstrument]
+  );
+  const playInstrumentSource = useMemo(
+    () => resolveInstrumentSource(playInstrument),
+    [playInstrument]
+  );
+  const playInstrumentCharacterId = playInstrumentSource?.characterId ?? "";
+  const playInstrumentTrackForPanel = useMemo<Track>(
+    () => ({
+      id: -1,
+      name: `${formatInstrumentLabel(playInstrument)} Live`,
+      instrument: playInstrument,
+      pattern: playInstrumentPattern,
+      muted: false,
+      source: playInstrumentSource
+        ? {
+            packId: playInstrumentSource.packId,
+            instrumentId: playInstrument,
+            characterId: playInstrumentCharacterId,
+          }
+        : undefined,
+    }),
+    [
+      playInstrument,
+      playInstrumentPattern,
+      playInstrumentSource,
+      playInstrumentCharacterId,
+    ]
+  );
+  const playInstrumentTrigger = useMemo(() => {
+    if (!playInstrumentSource) return undefined;
+    const triggerKey = createTriggerKey(
+      playInstrumentSource.packId,
+      playInstrument
+    );
+    const trigger = triggers[triggerKey];
+    if (!trigger) return undefined;
+    return (
+      time: number,
+      velocity?: number,
+      pitch?: number,
+      note?: string,
+      sustain?: number,
+      chunk?: Chunk
+    ) =>
+      trigger(
+        time,
+        velocity,
+        pitch,
+        note,
+        sustain,
+        chunk,
+        playInstrumentCharacterId || undefined
+      );
+  }, [
+    playInstrumentSource,
+    playInstrument,
+    triggers,
+    playInstrumentCharacterId,
+  ]);
+  const liveRowIndex = useMemo(() => {
+    if (!playInstrumentRowTrackId) return -1;
+    return songRows.findIndex(
+      (row) => row.performanceTrackId === playInstrumentRowTrackId
+    );
+  }, [songRows, playInstrumentRowTrackId]);
+  const liveRowLabel = liveRowIndex >= 0
+    ? `Row ${String(liveRowIndex + 1).padStart(2, "0")}`
+    : null;
   const hasRowSettings =
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length;
   const rowSettingsRow =
@@ -1015,7 +1198,20 @@ export function SongView({
           </select>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <IconButton
+            icon="piano"
+            label="Play Instrument"
+            showLabel
+            description={
+              isPlayInstrumentOpen
+                ? `Hide ${formatInstrumentLabel(playInstrument)} controls`
+                : `Play ${formatInstrumentLabel(playInstrument)} live`
+            }
+            tone={isPlayInstrumentOpen ? "accent" : "default"}
+            onClick={handleTogglePlayInstrumentPanel}
+            style={{ minWidth: 0 }}
+          />
           <button
             aria-label={isPlaying ? "Stop" : "Play"}
             onPointerDown={onToggleTransport}
@@ -1039,6 +1235,114 @@ export function SongView({
           </button>
         </div>
       </div>
+
+      {isPlayInstrumentOpen ? (
+        <div
+          style={{
+            borderRadius: 12,
+            border: "1px solid #2a3344",
+            background: "#111827",
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 999,
+                  background: playInstrumentColor,
+                  boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#e6f2ff",
+                  letterSpacing: 0.2,
+                }}
+              >
+                {formatInstrumentLabel(playInstrument)} Instrument
+              </span>
+            </div>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              {liveRowLabel
+                ? `${liveRowLabel} captures this performance`
+                : "Live row added to your timeline"}
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            {PLAYABLE_INSTRUMENTS.map((instrumentOption) => {
+              const selected = instrumentOption === playInstrument;
+              const accent = getInstrumentColor(instrumentOption);
+              return (
+                <button
+                  key={instrumentOption}
+                  type="button"
+                  onClick={() => handleSelectPlayInstrument(instrumentOption)}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 999,
+                    border: selected
+                      ? `1px solid ${accent}`
+                      : "1px solid #2a3344",
+                    background: selected
+                      ? withAlpha(accent, 0.22)
+                      : "#0f172a",
+                    color: selected ? "#e6f2ff" : "#94a3b8",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                    transition: "background 0.2s ease, border 0.2s ease",
+                  }}
+                >
+                  {formatInstrumentLabel(instrumentOption)}
+                </button>
+              );
+            })}
+          </div>
+          <div
+            style={{
+              borderRadius: 12,
+              border: "1px solid #1f2937",
+              background: "#10192c",
+              padding: 12,
+            }}
+          >
+            <InstrumentControlPanel
+              track={playInstrumentTrackForPanel}
+              allTracks={[]}
+              onUpdatePattern={handlePlayInstrumentPatternUpdate}
+              trigger={playInstrumentTrigger}
+            />
+          </div>
+          <span style={{ fontSize: 12, color: "#94a3b8" }}>
+            Play and record directly into the live performance row from this
+            panel.
+          </span>
+        </div>
+      ) : null}
 
       <div
         className="scrollable"

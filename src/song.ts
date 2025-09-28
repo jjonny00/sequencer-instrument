@@ -36,3 +36,6 @@ export const createSongRow = (length = 0): SongRow => ({
   velocity: 1,
   performanceTrackId: null,
 });
+
+export const createPerformanceTrackId = () =>
+  `perf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
