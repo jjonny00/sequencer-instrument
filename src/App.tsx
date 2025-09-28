@@ -350,6 +350,8 @@ export default function App() {
   const [songRows, setSongRows] = useState<SongRow[]>([
     createSongRow(),
   ]);
+  const [isSongInstrumentPanelOpen, setIsSongInstrumentPanelOpen] =
+    useState(false);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
   const currentLoopDraftRef = useRef<Track[] | null>(null);
@@ -392,6 +394,12 @@ export default function App() {
   useEffect(() => {
     latestTracksRef.current = tracks;
   }, [tracks]);
+
+  useEffect(() => {
+    if (viewMode !== "song") {
+      setIsSongInstrumentPanelOpen(false);
+    }
+  }, [viewMode]);
 
   const loopStateSignature = useMemo(
     () =>
@@ -1983,15 +1991,6 @@ export default function App() {
     };
   }, []);
 
-  const handleOpenLoopsLibrary = () => {
-    if (viewMode !== "track") {
-      setViewMode("track");
-      setPendingLoopStripAction("openLibrary");
-      return;
-    }
-    loopStripRef.current?.openLoopsLibrary();
-  };
-
   const handleSelectLoopFromSongView = useCallback(
     (groupId: string) => {
       setSelectedGroupId(groupId);
@@ -2684,7 +2683,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            {viewMode === "song" ? (
+            {viewMode === "song" && !isSongInstrumentPanelOpen ? (
               <div
                 style={{
                   marginTop: 12,
@@ -2991,12 +2990,12 @@ export default function App() {
                 setBpm={setBpm}
                 onToggleTransport={handlePlayStop}
                 selectedGroupId={selectedGroupId}
-                onOpenLoopsLibrary={handleOpenLoopsLibrary}
                 onSelectLoop={handleSelectLoopFromSongView}
                 performanceTracks={performanceTracks}
                 triggers={triggers}
                 onEnsurePerformanceRow={ensurePerformanceRow}
                 activePerformanceTrackId={activePerformanceTrackId}
+                onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
               />
             )}
           </div>

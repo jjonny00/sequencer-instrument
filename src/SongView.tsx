@@ -30,7 +30,6 @@ interface SongViewProps {
   setBpm: Dispatch<SetStateAction<number>>;
   onToggleTransport: () => void;
   selectedGroupId: string | null;
-  onOpenLoopsLibrary: () => void;
   onSelectLoop: (groupId: string) => void;
   performanceTracks: PerformanceTrack[];
   triggers: TriggerMap;
@@ -39,6 +38,7 @@ interface SongViewProps {
     existingId?: string | null
   ) => string | null;
   activePerformanceTrackId: string | null;
+  onPlayInstrumentOpenChange?: (open: boolean) => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -46,12 +46,12 @@ const SLOT_GAP = 8;
 const ROW_LABEL_WIDTH = 60;
 const MAX_PREVIEW_STEPS = 16;
 const PREVIEW_GAP = 1;
-const PREVIEW_HEIGHT = 12;
+const PREVIEW_HEIGHT = 10;
 const PREVIEW_DOT_SIZE = 4;
 const PERFORMANCE_DOT_SIZE = 5;
-const SLOT_MIN_HEIGHT = 64;
-const SLOT_CONTENT_GAP = 6;
-const SLOT_PADDING = "6px 12px";
+const SLOT_MIN_HEIGHT = 52;
+const SLOT_CONTENT_GAP = 4;
+const SLOT_PADDING = "4px 10px";
 const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
@@ -332,12 +332,12 @@ export function SongView({
   setBpm,
   onToggleTransport,
   selectedGroupId,
-  onOpenLoopsLibrary,
   onSelectLoop,
   performanceTracks,
   triggers,
   onEnsurePerformanceRow,
   activePerformanceTrackId,
+  onPlayInstrumentOpenChange,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -353,6 +353,10 @@ export function SongView({
   const [playInstrumentRowTrackId, setPlayInstrumentRowTrackId] = useState<
     string | null
   >(activePerformanceTrackId);
+
+  useEffect(() => {
+    onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
+  }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
 
   const handleTogglePlayInstrumentPanel = useCallback(() => {
     setPlayInstrumentOpen((prev) => !prev);
@@ -416,11 +420,6 @@ export function SongView({
       ),
     [performanceTracks]
   );
-
-  const activeGroup = useMemo(() => {
-    if (!selectedGroupId) return null;
-    return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
-  }, [patternGroups, selectedGroupId]);
 
   const sectionCount = useMemo(
     () => songRows.reduce((max, row) => Math.max(max, row.slots.length), 0),
@@ -615,42 +614,6 @@ export function SongView({
     >
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          onClick={onOpenLoopsLibrary}
-          disabled={patternGroups.length === 0}
-          style={{
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: "1px solid #333",
-            background: "#1f2532",
-            color: patternGroups.length === 0 ? "#475569" : "#e6f2ff",
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0.3,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
-          }}
-        >
-          <span>
-            Loop: {activeGroup?.name ?? "None"}
-          </span>
-          <span aria-hidden="true" style={{ fontSize: 10 }}>
-            ▴
-          </span>
-        </button>
-      </div>
-      <div
-        style={{
           border: "1px solid #333",
           borderRadius: 12,
           background: "#1b2130",
@@ -661,65 +624,67 @@ export function SongView({
           minHeight: 0,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <h2
+        {!isPlayInstrumentOpen ? (
+          <div
             style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#e6f2ff",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
             }}
           >
-            Song Timeline
-          </h2>
-          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-            <button
-              onClick={() => setTimelineExpanded((previous) => !previous)}
+            <h2
               style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 600,
                 color: "#e6f2ff",
-                fontSize: 12,
               }}
             >
-              {isTimelineExpanded ? "Collapse Timeline" : "Expand Timeline"}
-            </button>
-            <button
-              onClick={handleAddRow}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-              }}
-            >
-              + Row
-            </button>
-            <button
-              onClick={handleAddSection}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-              }}
-            >
-              + Section
-            </button>
+              Timeline
+            </h2>
+            <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+              <IconButton
+                icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
+                label="Toggle timeline height"
+                description={
+                  isTimelineExpanded
+                    ? "Show fewer rows"
+                    : "Show more rows"
+                }
+                onClick={() => setTimelineExpanded((previous) => !previous)}
+                style={{ minWidth: 0 }}
+              />
+              <button
+                onClick={handleAddRow}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  border: "1px solid #333",
+                  background: "#273041",
+                  color: "#e6f2ff",
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                + Row
+              </button>
+              <button
+                onClick={handleAddSection}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  border: "1px solid #333",
+                  background: "#273041",
+                  color: "#e6f2ff",
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                + Sequence
+              </button>
+            </div>
           </div>
-        </div>
+        ) : null}
         <div
           className="scrollable"
           style={{
@@ -749,7 +714,7 @@ export function SongView({
                   fontSize: 13,
                 }}
               >
-                Add a section to start placing sequences into the song timeline.
+                Add a sequence to start placing loops into the timeline.
               </div>
             ) : (
               songRows.map((row, rowIndex) => {
@@ -959,6 +924,7 @@ export function SongView({
                                 ? "Tap to assign"
                                 : "Save a sequence in Track view";
 
+                              const showSlotLabel = !isPlayInstrumentOpen;
                               const buttonStyles: CSSProperties = {
                                 width: "100%",
                                 minHeight: slotMinHeight,
@@ -980,7 +946,7 @@ export function SongView({
                                 flexDirection: "column",
                                 alignItems: "stretch",
                                 justifyContent: "space-between",
-                                gap: slotGap,
+                                gap: showSlotLabel ? slotGap : slotGap / 2,
                                 padding: slotPadding,
                                 fontSize: 13,
                                 cursor:
@@ -1036,36 +1002,38 @@ export function SongView({
                                       style={buttonStyles}
                                       disabled={patternGroups.length === 0}
                                     >
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: 6,
-                                          width: "100%",
-                                        }}
-                                      >
-                                        <span style={{ fontWeight: 600 }}>
-                                          {group?.name ??
-                                            (hasPerformance
-                                              ? `${formatInstrumentLabel(
-                                                  performanceTrack?.instrument
-                                                )} Performance`
-                                              : "Empty")}
-                                        </span>
-                                        {hasPerformance && (
-                                          <span
-                                            style={{
-                                              marginLeft: "auto",
-                                              fontSize: 10,
-                                              color: "#cbd5f5",
-                                              letterSpacing: 0.4,
-                                              textTransform: "uppercase",
-                                            }}
-                                          >
-                                            Live
+                                      {showSlotLabel ? (
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 6,
+                                            width: "100%",
+                                          }}
+                                        >
+                                          <span style={{ fontWeight: 600 }}>
+                                            {group?.name ??
+                                              (hasPerformance
+                                                ? `${formatInstrumentLabel(
+                                                    performanceTrack?.instrument
+                                                  )} Performance`
+                                                : "Empty")}
                                           </span>
-                                        )}
-                                      </div>
+                                          {hasPerformance && (
+                                            <span
+                                              style={{
+                                                marginLeft: "auto",
+                                                fontSize: 10,
+                                                color: "#cbd5f5",
+                                                letterSpacing: 0.4,
+                                                textTransform: "uppercase",
+                                              }}
+                                            >
+                                              Live
+                                            </span>
+                                          )}
+                                        </div>
+                                      ) : null}
                                       <div style={{ width: "100%" }}>
                                         {hasPerformance
                                           ? renderPerformanceSlotPreview(
