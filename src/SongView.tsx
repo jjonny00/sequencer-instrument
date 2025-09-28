@@ -33,11 +33,11 @@ const ROW_LABEL_WIDTH = 60;
 const MAX_PREVIEW_STEPS = 16;
 const PREVIEW_GAP_COLLAPSED = 1;
 const PREVIEW_GAP_EXPANDED = 2;
-const PREVIEW_HEIGHT_COLLAPSED = 14;
-const PREVIEW_HEIGHT_EXPANDED = 28;
-const SLOT_MIN_HEIGHT_COLLAPSED = 84;
-const SLOT_MIN_HEIGHT_EXPANDED = 112;
-const APPROXIMATE_ROW_OFFSET = 34;
+const PREVIEW_HEIGHT_COLLAPSED = 12;
+const PREVIEW_HEIGHT_EXPANDED = 24;
+const SLOT_MIN_HEIGHT_COLLAPSED = 64;
+const SLOT_MIN_HEIGHT_EXPANDED = 96;
+const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
 
@@ -407,14 +407,14 @@ export function SongView({
   const slotMinHeight = isTimelineExpanded
     ? SLOT_MIN_HEIGHT_EXPANDED
     : SLOT_MIN_HEIGHT_COLLAPSED;
-  const slotPadding = isTimelineExpanded ? "10px 12px" : "8px 12px";
+  const slotPadding = isTimelineExpanded ? "10px 12px" : "6px 12px";
   const slotGap = isTimelineExpanded ? 8 : 6;
   const visibleRowTarget = isTimelineExpanded
     ? TIMELINE_VISIBLE_ROWS_EXPANDED
     : TIMELINE_VISIBLE_ROWS_COLLAPSED;
-  const timelineMaxHeight =
-    visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET);
-  const timelineMaxHeightValue = Math.round(timelineMaxHeight);
+  const timelineViewportHeight = Math.round(
+    visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  );
   const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
   const hasRowSettings =
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length;
@@ -549,12 +549,14 @@ export function SongView({
           style={{
             overflowX: "auto",
             paddingBottom: 4,
-            minHeight: 120,
+            minHeight: `${timelineViewportHeight}px`,
+            maxHeight: `${timelineViewportHeight}px`,
           }}
         >
           <div
             style={{
-              maxHeight: `${timelineMaxHeightValue}px`,
+              maxHeight: `${timelineViewportHeight}px`,
+              minHeight: `${timelineViewportHeight}px`,
               overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
               paddingRight: shouldEnableVerticalScroll ? 6 : 0,
               minWidth: "100%",
