@@ -10,6 +10,8 @@ import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import { createSongRow } from "./song";
 import { getInstrumentColor, withAlpha } from "./utils/color";
 import type { Track } from "./tracks";
+import { Modal } from "./components/Modal";
+import { IconButton } from "./components/IconButton";
 interface SongViewProps {
   patternGroups: PatternGroup[];
   songRows: SongRow[];
@@ -33,7 +35,6 @@ const PREVIEW_GAP_COLLAPSED = 1;
 const PREVIEW_GAP_EXPANDED = 2;
 const PREVIEW_HEIGHT_COLLAPSED = 14;
 const PREVIEW_HEIGHT_EXPANDED = 28;
-const PERFORMANCE_MIN_SEGMENT_WIDTH = 4;
 
 const formatInstrumentLabel = (instrument: string | null | undefined) =>
   instrument ? instrument.charAt(0).toUpperCase() + instrument.slice(1) : "";
@@ -206,7 +207,7 @@ const renderPerformanceSlotPreview = (
         style={{
           height,
           borderRadius: 6,
-          background: "rgba(30, 41, 59, 0.65)",
+          background: "rgba(15, 23, 42, 0.75)",
           border: "1px solid #1f2937",
         }}
       />
@@ -214,8 +215,6 @@ const renderPerformanceSlotPreview = (
   }
 
   const { notes } = performanceTrack;
-  const accent = performanceTrack.color || getInstrumentColor(performanceTrack.instrument);
-  const background = withAlpha(accent, 0.12);
   const trackNotes = notes.filter(
     (note) => note.time + note.duration > columnStart && note.time < columnEnd
   );
@@ -226,16 +225,17 @@ const renderPerformanceSlotPreview = (
         style={{
           height,
           borderRadius: 6,
-          background: withAlpha(accent, 0.08),
-          border: `1px solid ${withAlpha(accent, 0.25)}`,
+          background: "rgba(15, 23, 42, 0.75)",
+          border: "1px solid #1f2937",
         }}
       />
     );
   }
 
   const range = columnEnd - columnStart;
-  const dotHeight = isExpanded ? 10 : 6;
-  const verticalPadding = isExpanded ? 4 : 3;
+  const accent =
+    performanceTrack.color || getInstrumentColor(performanceTrack.instrument);
+  const dotSize = isExpanded ? 8 : 5;
 
   return (
     <div
@@ -243,33 +243,26 @@ const renderPerformanceSlotPreview = (
         position: "relative",
         height,
         borderRadius: 6,
-        background,
-        border: `1px solid ${withAlpha(accent, 0.25)}`,
+        background: "rgba(15, 23, 42, 0.75)",
+        border: "1px solid #1f2937",
         overflow: "hidden",
       }}
     >
       {trackNotes.map((note, index) => {
         const start = Math.max(note.time, columnStart);
-        const end = Math.min(note.time + note.duration, columnEnd);
-        if (end <= start) {
-          return null;
-        }
         const startRatio = (start - columnStart) / range;
-        const endRatio = (end - columnStart) / range;
-        const widthPercent = Math.max(
-          PERFORMANCE_MIN_SEGMENT_WIDTH,
-          (endRatio - startRatio) * 100
-        );
         return (
           <span
             key={`perf-note-${index}`}
             style={{
               position: "absolute",
               left: `${startRatio * 100}%`,
-              width: `${widthPercent}%`,
-              top: verticalPadding,
-              height: dotHeight,
-              borderRadius: 999,
+              top: "50%",
+              width: dotSize,
+              height: dotSize,
+              marginLeft: -(dotSize / 2),
+              marginTop: -(dotSize / 2),
+              borderRadius: dotSize,
               background: accent,
               boxShadow: `0 0 6px ${withAlpha(accent, 0.35)}`,
             }}
@@ -300,9 +293,7 @@ export function SongView({
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
   >(null);
-  const [activeRowSettings, setActiveRowSettings] = useState<number | null>(
-    null
-  );
+  const [rowSettingsIndex, setRowSettingsIndex] = useState<number | null>(null);
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 
   const patternGroupMap = useMemo(
@@ -344,11 +335,11 @@ export function SongView({
   }, [editingSlot, songRows, patternGroups.length]);
 
   useEffect(() => {
-    if (activeRowSettings === null) return;
-    if (activeRowSettings >= songRows.length) {
-      setActiveRowSettings(null);
+    if (rowSettingsIndex === null) return;
+    if (rowSettingsIndex >= songRows.length) {
+      setRowSettingsIndex(null);
     }
-  }, [activeRowSettings, songRows.length]);
+  }, [rowSettingsIndex, songRows.length]);
 
   const handleAddSection = () => {
     setSongRows((rows) => {
@@ -411,6 +402,16 @@ export function SongView({
   };
 
   const showEmptyTimeline = sectionCount === 0;
+  const hasRowSettings =
+    rowSettingsIndex !== null && rowSettingsIndex < songRows.length;
+  const rowSettingsRow =
+    rowSettingsIndex !== null && rowSettingsIndex < songRows.length
+      ? songRows[rowSettingsIndex]
+      : null;
+  const rowSettingsLabel =
+    rowSettingsIndex !== null && rowSettingsIndex < songRows.length
+      ? `Row ${String(rowSettingsIndex + 1).padStart(2, "0")}`
+      : null;
 
   return (
     <div
@@ -553,7 +554,7 @@ export function SongView({
                   labelTimer = window.setTimeout(() => {
                     longPressTriggered = true;
                     setEditingSlot(null);
-                    setActiveRowSettings(rowIndex);
+                    setRowSettingsIndex(rowIndex);
                   }, 500);
                 };
 
@@ -577,7 +578,7 @@ export function SongView({
                 };
 
                 const rowMuted = row.muted;
-                const rowSelected = activeRowSettings === rowIndex;
+                const rowSelected = rowSettingsIndex === rowIndex;
                 const performanceTrack = row.performanceTrackId
                   ? performanceTrackMap.get(row.performanceTrackId)
                   : undefined;
@@ -597,17 +598,8 @@ export function SongView({
                 const loopAccent = loopAccentInstrument
                   ? getInstrumentColor(loopAccentInstrument)
                   : null;
-                const rowAccent = performanceAccent ?? loopAccent;
-                const labelBorderColor = rowSelected
-                  ? "#27E0B0"
-                  : rowAccent
-                  ? withAlpha(rowAccent, 0.6)
-                  : "#333";
-                const labelBackground = rowMuted
-                  ? "#181f2b"
-                  : rowAccent
-                  ? withAlpha(rowAccent, 0.18)
-                  : "#121827";
+                const rowAccent = performanceAccent ?? loopAccent ?? null;
+                const labelBackground = rowMuted ? "#1b2332" : "#111827";
 
                 return (
                   <div
@@ -617,10 +609,15 @@ export function SongView({
                     <div
                       style={{
                         display: "flex",
-                        gap: SLOT_GAP,
                         alignItems: "stretch",
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        border: rowSelected
+                          ? "2px solid #27E0B0"
+                          : "1px solid #2a3344",
+                        background: "#111827",
                         opacity: rowMuted ? 0.55 : 1,
-                        transition: "opacity 0.2s ease",
+                        transition: "opacity 0.2s ease, border 0.2s ease",
                       }}
                     >
                       <div
@@ -630,18 +627,19 @@ export function SongView({
                         onPointerCancel={handleLabelPointerLeave}
                         style={{
                           width: ROW_LABEL_WIDTH,
-                          borderRadius: 8,
-                          border: `1px solid ${labelBorderColor}`,
+                          flexShrink: 0,
+                          borderRight: "1px solid #2a3344",
                           background: labelBackground,
                           color: rowMuted ? "#475569" : "#f8fafc",
-                          fontSize: 12,
+                          fontSize: 11,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontWeight: 600,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
                           cursor: "pointer",
                           userSelect: "none",
-                          letterSpacing: 0.4,
+                          letterSpacing: 0.6,
                           position: "relative",
                         }}
                         title={
@@ -650,7 +648,28 @@ export function SongView({
                             : "Tap to mute. Long press for settings."
                         }
                       >
-                        {rowIndex + 1}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: 999,
+                              background: rowAccent ?? "#334155",
+                              boxShadow: rowAccent
+                                ? `0 0 6px ${withAlpha(rowAccent, 0.4)}`
+                                : "none",
+                            }}
+                          />
+                          <span>{rowIndex + 1}</span>
+                        </div>
                         {rowSelected && (
                           <span
                             className="material-symbols-outlined"
@@ -685,7 +704,7 @@ export function SongView({
                             height: 22,
                             borderRadius: 6,
                             border: "1px solid #2a3344",
-                            background: "rgba(15, 23, 42, 0.85)",
+                            background: "#0f172a",
                             color: "#94a3b8",
                             display: "flex",
                             alignItems: "center",
@@ -704,23 +723,38 @@ export function SongView({
                             aria-hidden="true"
                             style={{ fontSize: 14, lineHeight: 1 }}
                           >
-                            {isRowExpanded ? "unfold_less" : "unfold_more"}
+                            {isRowExpanded ? "density_small" : "density_large"}
                           </span>
                         </button>
                       </div>
                       <div
                         style={{
-                          display: "grid",
-                          gridTemplateColumns: `repeat(${maxColumns}, ${SLOT_WIDTH}px)`,
-                          gap: SLOT_GAP,
+                          flex: 1,
+                          background: "#161d2b",
+                          padding: isRowExpanded ? "10px 12px" : "8px 12px",
+                          display: "flex",
+                          alignItems: "stretch",
                         }}
                       >
-                        {Array.from({ length: maxColumns }, (_, columnIndex) => {
-                          const groupId =
-                            columnIndex < row.slots.length
-                              ? row.slots[columnIndex]
-                              : null;
-                          const group = groupId
+                        <div
+                          style={{
+                            width: "100%",
+                            overflowX: "auto",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: `repeat(${maxColumns}, ${SLOT_WIDTH}px)`,
+                              gap: SLOT_GAP,
+                            }}
+                          >
+                            {Array.from({ length: maxColumns }, (_, columnIndex) => {
+                              const groupId =
+                                columnIndex < row.slots.length
+                                  ? row.slots[columnIndex]
+                                  : null;
+                              const group = groupId
                             ? patternGroupMap.get(groupId)
                             : undefined;
                           const highlight =
@@ -731,257 +765,165 @@ export function SongView({
                           const assigned = Boolean(group);
                           const columnStart = columnIndex;
                           const columnEnd = columnIndex + 1;
-                          const columnPerformanceNotes = performanceTrack
-                            ? performanceTrack.notes.filter(
-                                (note) =>
-                                  note.time + note.duration > columnStart &&
-                                  note.time < columnEnd
-                              )
-                            : [];
-                          const hasPerformance = Boolean(performanceTrack);
-                          const slotAccentInstrument = group?.tracks.find(
-                            (track) => track.instrument
-                          )?.instrument;
-                          const slotAccentColor = hasPerformance
-                            ? performanceAccent
-                            : slotAccentInstrument
-                            ? getInstrumentColor(slotAccentInstrument)
-                            : rowAccent;
-                          const resolvedAccent = slotAccentColor ?? "#273041";
-                          const hasContent = assigned || hasPerformance;
-                          const textColor = hasContent ? "#e6f2ff" : "#64748b";
-                          const descriptionColor = hasContent
-                            ? "#94a3b8"
-                            : "#475569";
+                              const columnPerformanceNotes = performanceTrack
+                                ? performanceTrack.notes.filter(
+                                    (note) =>
+                                      note.time + note.duration > columnStart &&
+                                      note.time < columnEnd
+                                  )
+                                : [];
+                              const hasPerformance = Boolean(performanceTrack);
+                              const hasContent = assigned || hasPerformance;
+                              const textColor = hasContent ? "#e6f2ff" : "#94a3b8";
+                              const descriptionColor = hasContent
+                                ? "#94a3b8"
+                                : "#475569";
 
-                          const buttonStyles: CSSProperties = {
-                            width: "100%",
-                            minHeight: isRowExpanded ? 104 : 80,
-                            borderRadius: 8,
-                            border: `1px solid ${
-                              highlight
-                                ? "#27E0B0"
-                                : hasContent
-                                ? withAlpha(resolvedAccent, 0.55)
-                                : "#333"
-                            }`,
-                            background: hasContent
-                              ? highlight
-                                ? withAlpha(resolvedAccent, 0.32)
-                                : withAlpha(resolvedAccent, 0.22)
-                              : "#111826",
-                            color: textColor,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "stretch",
-                            justifyContent: "space-between",
-                            gap: isRowExpanded ? 8 : 6,
-                            padding: isRowExpanded ? "10px 12px" : "8px 12px",
-                            fontSize: 13,
-                            cursor:
-                              patternGroups.length > 0 ? "pointer" : "not-allowed",
-                            textAlign: "left",
-                            opacity: rowMuted ? 0.7 : 1,
-                            transition: "background 0.2s ease, border-color 0.2s ease",
-                          };
+                              const buttonStyles: CSSProperties = {
+                                width: "100%",
+                                minHeight: isRowExpanded ? 104 : 80,
+                                borderRadius: 8,
+                                border: `1px solid ${
+                                  highlight
+                                    ? "#27E0B0"
+                                    : hasContent
+                                    ? "#2f384a"
+                                    : "#1f2937"
+                                }`,
+                                background: highlight
+                                  ? "rgba(39, 224, 176, 0.12)"
+                                  : hasContent
+                                  ? "#0f1a2a"
+                                  : "#0b111d",
+                                color: textColor,
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "stretch",
+                                justifyContent: "space-between",
+                                gap: isRowExpanded ? 8 : 6,
+                                padding: isRowExpanded ? "10px 12px" : "8px 12px",
+                                fontSize: 13,
+                                cursor:
+                                  patternGroups.length > 0 ? "pointer" : "not-allowed",
+                                textAlign: "left",
+                                opacity: rowMuted ? 0.85 : 1,
+                                transition: "background 0.2s ease, border-color 0.2s ease",
+                              };
 
-                          return (
-                            <div key={`slot-${rowIndex}-${columnIndex}`}>
-                              {isEditing ? (
-                                <select
-                                  value={groupId ?? ""}
-                                  onChange={(event) => {
-                                    const value = event.target.value;
-                                    handleAssignSlot(
-                                      rowIndex,
-                                      columnIndex,
-                                      value ? value : null
-                                    );
-                                    setEditingSlot(null);
-                                  }}
-                                  onBlur={() => setEditingSlot(null)}
-                                  style={{
-                                    width: "100%",
-                                    minHeight: isRowExpanded ? 104 : 80,
-                                    borderRadius: 8,
-                                    border: `1px solid ${
-                                      highlight ? "#27E0B0" : "#475569"
-                                    }`,
-                                    background: "#121827",
-                                    color: "#e6f2ff",
-                                    padding: "0 12px",
-                                  }}
-                                  autoFocus
-                                >
-                                  <option value="">Empty Slot</option>
-                                  {patternGroups.map((groupOption) => (
-                                    <option key={groupOption.id} value={groupOption.id}>
-                                      {groupOption.name} (
-                                      {formatTrackCount(groupOption.tracks.length)})
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (patternGroups.length === 0) return;
-                                    setActiveRowSettings(null);
-                                    setEditingSlot({ rowIndex, columnIndex });
-                                  }}
-                                  style={buttonStyles}
-                                  disabled={patternGroups.length === 0}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 6,
-                                      width: "100%",
-                                    }}
-                                  >
-                                    <span style={{ fontWeight: 600 }}>
-                                      {group?.name ??
-                                        (hasPerformance
-                                          ? `${formatInstrumentLabel(
-                                              performanceTrack?.instrument
-                                            )} Performance`
-                                          : "Empty")}
-                                    </span>
-                                    {hasPerformance && (
-                                      <span
+                              return (
+                                <div key={`slot-${rowIndex}-${columnIndex}`}>
+                                  {isEditing ? (
+                                    <select
+                                      value={groupId ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        handleAssignSlot(
+                                          rowIndex,
+                                          columnIndex,
+                                          value ? value : null
+                                        );
+                                        setEditingSlot(null);
+                                      }}
+                                      onBlur={() => setEditingSlot(null)}
+                                      style={{
+                                        width: "100%",
+                                        minHeight: isRowExpanded ? 104 : 80,
+                                        borderRadius: 8,
+                                        border: `1px solid ${
+                                          highlight ? "#27E0B0" : "#475569"
+                                        }`,
+                                        background: "#121827",
+                                        color: "#e6f2ff",
+                                        padding: "0 12px",
+                                      }}
+                                      autoFocus
+                                    >
+                                      <option value="">Empty Slot</option>
+                                      {patternGroups.map((groupOption) => (
+                                        <option key={groupOption.id} value={groupOption.id}>
+                                          {groupOption.name} (
+                                          {formatTrackCount(groupOption.tracks.length)})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (patternGroups.length === 0) return;
+                                        setRowSettingsIndex(null);
+                                        setEditingSlot({ rowIndex, columnIndex });
+                                      }}
+                                      style={buttonStyles}
+                                      disabled={patternGroups.length === 0}
+                                    >
+                                      <div
                                         style={{
-                                          marginLeft: "auto",
-                                          fontSize: 10,
-                                          padding: "2px 6px",
-                                          borderRadius: 999,
-                                          background: withAlpha(
-                                            resolvedAccent,
-                                            0.25
-                                          ),
-                                          border: `1px solid ${withAlpha(
-                                            resolvedAccent,
-                                            0.35
-                                          )}`,
-                                          color: "#f8fafc",
-                                          fontWeight: 600,
-                                          letterSpacing: 0.4,
-                                          textTransform: "uppercase",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 6,
+                                          width: "100%",
                                         }}
                                       >
-                                        Live
+                                        <span style={{ fontWeight: 600 }}>
+                                          {group?.name ??
+                                            (hasPerformance
+                                              ? `${formatInstrumentLabel(
+                                                  performanceTrack?.instrument
+                                                )} Performance`
+                                              : "Empty")}
+                                        </span>
+                                        {hasPerformance && (
+                                          <span
+                                            style={{
+                                              marginLeft: "auto",
+                                              fontSize: 10,
+                                              color: "#cbd5f5",
+                                              letterSpacing: 0.4,
+                                              textTransform: "uppercase",
+                                            }}
+                                          >
+                                            Live
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div style={{ width: "100%" }}>
+                                        {hasPerformance
+                                          ? renderPerformanceSlotPreview(
+                                              performanceTrack,
+                                              columnStart,
+                                              columnEnd,
+                                              isRowExpanded
+                                            )
+                                          : renderLoopSlotPreview(group, isRowExpanded)}
+                                      </div>
+                                      <span
+                                        style={{
+                                          fontSize: 11,
+                                          color: descriptionColor,
+                                        }}
+                                      >
+                                        {assigned
+                                          ? formatTrackCount(group?.tracks.length ?? 0)
+                                          : hasPerformance
+                                          ? columnPerformanceNotes.length > 0
+                                            ? formatNoteCount(
+                                                columnPerformanceNotes.length
+                                              )
+                                            : "No notes yet"
+                                          : patternGroups.length > 0
+                                          ? "Tap to assign"
+                                          : "Save a sequence in Track view"}
                                       </span>
-                                    )}
-                                  </div>
-                                  <div style={{ width: "100%" }}>
-                                    {hasPerformance
-                                      ? renderPerformanceSlotPreview(
-                                          performanceTrack,
-                                          columnStart,
-                                          columnEnd,
-                                          isRowExpanded
-                                        )
-                                      : renderLoopSlotPreview(group, isRowExpanded)}
-                                  </div>
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      color: descriptionColor,
-                                    }}
-                                  >
-                                    {assigned
-                                      ? formatTrackCount(group?.tracks.length ?? 0)
-                                      : hasPerformance
-                                      ? columnPerformanceNotes.length > 0
-                                        ? formatNoteCount(
-                                            columnPerformanceNotes.length
-                                          )
-                                        : "No notes yet"
-                                      : patternGroups.length > 0
-                                      ? "Tap to assign"
-                                      : "Save a sequence in Track view"}
-                                  </span>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    {activeRowSettings === rowIndex && (
-                      <div
-                        style={{
-                          marginLeft: ROW_LABEL_WIDTH,
-                          padding: "12px 16px",
-                          background: "rgba(17, 24, 39, 0.95)",
-                          borderRadius: 8,
-                          border: "1px solid #333",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 16,
-                          boxShadow: "0 8px 20px rgba(8, 12, 20, 0.45)",
-                        }}
-                      >
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            flex: "1 1 auto",
-                            fontSize: 12,
-                            color: "#94a3b8",
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: 18 }}
-                            aria-hidden="true"
-                          >
-                            speed
-                          </span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            value={row.velocity}
-                            onChange={(event) =>
-                              handleRowVelocityChange(
-                                rowIndex,
-                                Number(event.target.value)
-                              )
-                            }
-                            style={{ flex: 1 }}
-                          />
-                          <span style={{ width: 48, textAlign: "right" }}>
-                            {row.velocity.toFixed(2)}
-                          </span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setActiveRowSettings(null)}
-                          aria-label="Close row settings"
-                          style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 6,
-                            border: "1px solid #333",
-                            background: "#27E0B0",
-                            color: "#0f1420",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: 20 }}
-                          >
-                            check
-                          </span>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 );
               })
@@ -989,6 +931,68 @@ export function SongView({
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={hasRowSettings && Boolean(rowSettingsRow)}
+        onClose={() => setRowSettingsIndex(null)}
+        title="Row Settings"
+        subtitle={rowSettingsLabel ? `Adjust playback for ${rowSettingsLabel}` : undefined}
+        footer={
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <IconButton
+              icon="check"
+              label="Done"
+              showLabel
+              tone="accent"
+              onClick={() => setRowSettingsIndex(null)}
+            />
+          </div>
+        }
+      >
+        {rowSettingsRow ? (
+          <label
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              fontSize: 13,
+              color: "#cbd5f5",
+            }}
+          >
+            <span>Velocity</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={rowSettingsRow.velocity}
+                onChange={(event) => {
+                  if (rowSettingsIndex === null) return;
+                  handleRowVelocityChange(
+                    rowSettingsIndex,
+                    Number(event.target.value)
+                  );
+                }}
+                style={{ flex: 1 }}
+              />
+              <span
+                style={{
+                  minWidth: 48,
+                  textAlign: "right",
+                  fontVariantNumeric: "tabular-nums",
+                  color: "#94a3b8",
+                }}
+              >
+                {rowSettingsRow.velocity.toFixed(2)}
+              </span>
+            </div>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              Adjust how prominent this row plays back during the song.
+            </span>
+          </label>
+        ) : null}
+      </Modal>
 
       <div
         style={{
