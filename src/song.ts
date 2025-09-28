@@ -12,6 +12,8 @@ export interface PerformanceTrack {
   instrument: string;
   channel?: number;
   notes: PerformanceNote[];
+  muted?: boolean;
+  solo?: boolean;
 }
 
 export interface PatternGroup {

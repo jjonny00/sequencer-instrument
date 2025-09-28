@@ -7,6 +7,10 @@ import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import { packs, type InstrumentCharacter } from "./packs";
 import {
+  createPerformanceInstrument,
+  isPerformanceInstrumentType,
+} from "./performanceInstruments";
+import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
   triggerHarmoniaChord,
@@ -24,7 +28,12 @@ import {
   refreshAudioReadyState,
   audioReady,
 } from "./utils/audio";
-import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
+import type {
+  PatternGroup,
+  PerformanceNote,
+  PerformanceTrack,
+  SongRow,
+} from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
@@ -320,6 +329,20 @@ export default function App() {
     >
   >({});
   const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
+  const performancePartsRef = useRef<
+    Map<string, Tone.Part<PerformanceNote>>
+  >(new Map());
+  const performanceInstrumentsRef = useRef<
+    Record<string, Tone.PolySynth<Tone.Synth>>
+  >({});
+  const disposePerformancePlayback = useCallback(() => {
+    performancePartsRef.current.forEach((part) => part.dispose());
+    performancePartsRef.current.clear();
+    Object.values(performanceInstrumentsRef.current).forEach((instrument) => {
+      instrument.dispose();
+    });
+    performanceInstrumentsRef.current = {};
+  }, []);
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -1192,6 +1215,137 @@ export default function App() {
   }, [started, viewMode, songRows]);
 
   useEffect(() => {
+    disposePerformancePlayback();
+    if (!started || !isPlaying || viewMode !== "song") {
+      return;
+    }
+
+    const sectionCount = songRows.reduce(
+      (max, row) => Math.max(max, row.slots.length),
+      0
+    );
+    const loopMeasures = Math.max(sectionCount, 1);
+    const loopEnd = `${loopMeasures}m`;
+    const loopTicks = Tone.Time(loopEnd).toTicks();
+    if (!Number.isFinite(loopTicks) || loopTicks <= 0) {
+      return;
+    }
+
+    const ticksPerQuarter = Tone.Transport.PPQ;
+    if (!Number.isFinite(ticksPerQuarter) || ticksPerQuarter <= 0) {
+      return;
+    }
+    const ticksPerSixteenth = ticksPerQuarter / 4;
+    const ticksPerMeasure = ticksPerQuarter * 4;
+
+    const soloCandidates = performanceTracks.filter((track) => track.solo);
+    const activeTracks = (soloCandidates.length > 0
+      ? soloCandidates
+      : performanceTracks
+    ).filter(
+      (track) =>
+        (track.notes?.length ?? 0) > 0 && !(track.muted ?? false)
+    );
+
+    if (activeTracks.length === 0) {
+      return;
+    }
+
+    const toBarsBeatsSixteenths = (ticks: number) => {
+      let measureCount = Math.floor(ticks / ticksPerMeasure);
+      let remainder = ticks - measureCount * ticksPerMeasure;
+      let beatCount = Math.floor(remainder / ticksPerQuarter);
+      remainder -= beatCount * ticksPerQuarter;
+      let sixteenthCount = Math.round(remainder / ticksPerSixteenth);
+      if (sixteenthCount >= 4) {
+        sixteenthCount = 0;
+        beatCount += 1;
+      }
+      if (beatCount >= 4) {
+        beatCount = 0;
+        measureCount += 1;
+      }
+      measureCount %= loopMeasures;
+      return `${measureCount}:${beatCount}:${sixteenthCount}`;
+    };
+
+    activeTracks.forEach((track) => {
+      const instrumentType = isPerformanceInstrumentType(track.instrument)
+        ? track.instrument
+        : "keyboard";
+      const instrument = createPerformanceInstrument(instrumentType);
+      performanceInstrumentsRef.current[track.id] = instrument;
+
+      const events = track.notes
+        .map((note) => {
+          const noteTicks = Tone.Time(note.time).toTicks();
+          if (!Number.isFinite(noteTicks)) {
+            return null;
+          }
+          const normalizedTicks =
+            loopTicks > 0
+              ? ((noteTicks % loopTicks) + loopTicks) % loopTicks
+              : noteTicks;
+          const timePosition = toBarsBeatsSixteenths(normalizedTicks);
+          return {
+            ticks: normalizedTicks,
+            time: timePosition,
+            payload: note,
+          };
+        })
+        .filter(
+          (value): value is {
+            ticks: number;
+            time: string;
+            payload: PerformanceNote;
+          } => value !== null
+        )
+        .sort((a, b) => a.ticks - b.ticks);
+
+      if (events.length === 0) {
+        instrument.dispose();
+        delete performanceInstrumentsRef.current[track.id];
+        return;
+      }
+
+      const normalizedNotes = events.map(({ time, payload }) => ({
+        ...payload,
+        time,
+      }));
+
+      const part = new Tone.Part<PerformanceNote>(
+        (time, payload) => {
+          const velocity =
+            typeof payload.velocity === "number" ? payload.velocity : 0.8;
+          const duration = payload.duration ?? "4n";
+          instrument.triggerAttackRelease(
+            payload.note,
+            duration,
+            time,
+            velocity
+          );
+        },
+        normalizedNotes
+      );
+      part.loop = true;
+      part.loopEnd = loopEnd;
+      part.start(0);
+      performancePartsRef.current.set(track.id, part);
+    });
+
+    return () => {
+      disposePerformancePlayback();
+    };
+  }, [
+    disposePerformancePlayback,
+    isPlaying,
+    performanceTracks,
+    songRows,
+    started,
+    viewMode,
+  ]);
+
+  useEffect(() => {
     if (viewMode === "song") {
       setCurrentSectionIndex(0);
     }
@@ -1491,7 +1645,11 @@ export default function App() {
       );
       setPerformanceTracks(
         Array.isArray(project.performanceTracks)
-          ? project.performanceTracks
+          ? project.performanceTracks.map((track) => ({
+              ...track,
+              muted: track.muted ?? false,
+              solo: track.solo ?? false,
+            }))
           : []
       );
       setSelectedGroupId(project.selectedGroupId ?? null);

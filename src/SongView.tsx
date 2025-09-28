@@ -7,6 +7,14 @@ import type {
 } from "react";
 import * as Tone from "tone";
 
+import {
+  PERFORMANCE_INSTRUMENT_DURATIONS,
+  PERFORMANCE_INSTRUMENT_LABELS,
+  PERFORMANCE_INSTRUMENT_SETTINGS,
+  PERFORMANCE_INSTRUMENT_VELOCITY,
+  isPerformanceInstrumentType,
+  type PerformanceInstrumentType,
+} from "./performanceInstruments";
 import type {
   PatternGroup,
   PerformanceNote,
@@ -34,41 +42,6 @@ interface SongViewProps {
 const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
 const ROW_LABEL_WIDTH = 80;
-
-type PerformanceInstrumentType = "keyboard" | "arp" | "pads";
-
-const INSTRUMENT_SETTINGS = {
-  keyboard: {
-    oscillator: { type: "triangle" },
-    envelope: { attack: 0.01, decay: 0.2, sustain: 0.6, release: 0.25 },
-  },
-  arp: {
-    oscillator: { type: "square" },
-    envelope: { attack: 0.005, decay: 0.15, sustain: 0.4, release: 0.15 },
-  },
-  pads: {
-    oscillator: { type: "sine" },
-    envelope: { attack: 0.25, decay: 0.4, sustain: 0.8, release: 1.6 },
-  },
-} as const satisfies Record<PerformanceInstrumentType, Record<string, unknown>>;
-
-const INSTRUMENT_DURATIONS: Record<PerformanceInstrumentType, string> = {
-  keyboard: "4n",
-  arp: "8n",
-  pads: "2n",
-};
-
-const INSTRUMENT_VELOCITY: Record<PerformanceInstrumentType, number> = {
-  keyboard: 0.8,
-  arp: 0.7,
-  pads: 0.9,
-};
-
-const INSTRUMENT_LABELS: Record<PerformanceInstrumentType, string> = {
-  keyboard: "Keyboard",
-  arp: "Arp",
-  pads: "Pads",
-};
 
 const formatTrackCount = (count: number) =>
   `${count} track${count === 1 ? "" : "s"}`;
@@ -129,6 +102,11 @@ export function SongView({
     return { trackCount, noteCount };
   }, [performanceTracks]);
 
+  const performanceSoloActive = useMemo(
+    () => performanceTracks.some((track) => track.solo),
+    [performanceTracks]
+  );
+
   const lastRecordingNoteCount = useMemo(
     () =>
       lastRecordingSummary?.entries.reduce(
@@ -152,7 +130,7 @@ export function SongView({
       return "";
     }
     return lastRecordingInstrumentNames
-      .map((instrument) => INSTRUMENT_LABELS[instrument])
+      .map((instrument) => PERFORMANCE_INSTRUMENT_LABELS[instrument])
       .join(", ");
   }, [lastRecordingInstrumentNames]);
 
@@ -264,7 +242,9 @@ export function SongView({
     ) {
       liveInstrumentRef.current?.dispose();
       const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-      synth.set(INSTRUMENT_SETTINGS[instrumentType] as Tone.SynthOptions);
+      synth.set(
+        PERFORMANCE_INSTRUMENT_SETTINGS[instrumentType] as unknown as Tone.SynthOptions
+      );
       synth.volume.value = instrumentType === "pads" ? -4 : -6;
       liveInstrumentRef.current = synth;
       liveInstrumentTypeRef.current = instrumentType;
@@ -279,9 +259,9 @@ export function SongView({
       const now = Tone.now();
       instrument.triggerAttackRelease(
         note,
-        INSTRUMENT_DURATIONS[instrumentType],
+        PERFORMANCE_INSTRUMENT_DURATIONS[instrumentType],
         now,
-        INSTRUMENT_VELOCITY[instrumentType]
+        PERFORMANCE_INSTRUMENT_VELOCITY[instrumentType]
       );
     },
     [getOrCreateInstrument, instrumentType]
@@ -340,6 +320,8 @@ export function SongView({
               .slice(2, 8)}`,
             instrument,
             notes: clonedNotes,
+            muted: false,
+            solo: false,
           };
           next.push(newTrack);
           summaryEntries.push({
@@ -415,8 +397,8 @@ export function SongView({
       const recordedNote: PerformanceNote = {
         time: String(Tone.Transport.position),
         note,
-        duration: INSTRUMENT_DURATIONS[instrumentType],
-        velocity: INSTRUMENT_VELOCITY[instrumentType],
+        duration: PERFORMANCE_INSTRUMENT_DURATIONS[instrumentType],
+        velocity: PERFORMANCE_INSTRUMENT_VELOCITY[instrumentType],
       };
       pendingPerformanceNotesRef.current.push({
         instrument: instrumentType,
@@ -466,6 +448,32 @@ export function SongView({
       liveInstrumentTypeRef.current = null;
     };
   }, []);
+
+  const handleTogglePerformanceMute = useCallback(
+    (trackId: string) => {
+      setPerformanceTracks((tracks) =>
+        tracks.map((track) =>
+          track.id === trackId
+            ? { ...track, muted: !(track.muted ?? false) }
+            : track
+        )
+      );
+    },
+    [setPerformanceTracks]
+  );
+
+  const handleTogglePerformanceSolo = useCallback(
+    (trackId: string) => {
+      setPerformanceTracks((tracks) =>
+        tracks.map((track) =>
+          track.id === trackId
+            ? { ...track, solo: !(track.solo ?? false) }
+            : track
+        )
+      );
+    },
+    [setPerformanceTracks]
+  );
 
   return (
     <div
@@ -1182,6 +1190,167 @@ export function SongView({
                 })}
               </div>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {performanceTracks.length > 0 ? (
+        <div
+          style={{
+            borderRadius: 12,
+            border: "1px solid #333",
+            background: "#10192c",
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#e6f2ff",
+                }}
+              >
+                Performance Tracks
+              </h3>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                {formatTrackCount(performanceSummary.trackCount)}
+                {performanceSummary.noteCount > 0
+                  ? ` · ${formatNoteCount(performanceSummary.noteCount)}`
+                  : ""}
+              </span>
+              {performanceSoloActive ? (
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    border: "1px solid #27E0B0",
+                    background: "rgba(39, 224, 176, 0.18)",
+                    color: "#e6f2ff",
+                    fontSize: 11,
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  Solo active
+                </span>
+              ) : null}
+            </div>
+            <span style={{ fontSize: 11, color: "#64748b" }}>
+              Toggle mute or solo to control playback alongside your loops.
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            {performanceTracks.map((track) => {
+              const muted = track.muted ?? false;
+              const solo = track.solo ?? false;
+              const instrumentLabel = isPerformanceInstrumentType(track.instrument)
+                ? PERFORMANCE_INSTRUMENT_LABELS[track.instrument]
+                : track.instrument;
+              return (
+                <div
+                  key={track.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    padding: "12px 14px",
+                    borderRadius: 10,
+                    border: `1px solid ${muted ? "#4b5563" : "#2b3547"}`,
+                    background: muted
+                      ? "rgba(71, 85, 105, 0.18)"
+                      : "rgba(30, 41, 59, 0.65)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      minWidth: 120,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#e6f2ff",
+                      }}
+                    >
+                      {instrumentLabel}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                      {formatNoteCount(track.notes.length)} recorded
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePerformanceMute(track.id)}
+                      aria-pressed={muted}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        border: `1px solid ${muted ? "#E02749" : "#374151"}`,
+                        background: muted
+                          ? "rgba(224, 39, 73, 0.18)"
+                          : "#1b2536",
+                        color: muted ? "#ffe4e6" : "#e6f2ff",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      Mute
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePerformanceSolo(track.id)}
+                      aria-pressed={solo}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        border: `1px solid ${solo ? "#27E0B0" : "#374151"}`,
+                        background: solo
+                          ? "rgba(39, 224, 176, 0.18)"
+                          : "#1b2536",
+                        color: solo ? "#e6f2ff" : "#cbd5f5",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      Solo
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
