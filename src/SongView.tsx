@@ -31,12 +31,13 @@ const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
 const ROW_LABEL_WIDTH = 60;
 const MAX_PREVIEW_STEPS = 16;
-const PREVIEW_GAP_COLLAPSED = 1;
-const PREVIEW_GAP_EXPANDED = 2;
-const PREVIEW_HEIGHT_COLLAPSED = 12;
-const PREVIEW_HEIGHT_EXPANDED = 24;
-const SLOT_MIN_HEIGHT_COLLAPSED = 64;
-const SLOT_MIN_HEIGHT_EXPANDED = 96;
+const PREVIEW_GAP = 1;
+const PREVIEW_HEIGHT = 12;
+const PREVIEW_DOT_SIZE = 4;
+const PERFORMANCE_DOT_SIZE = 5;
+const SLOT_MIN_HEIGHT = 64;
+const SLOT_CONTENT_GAP = 6;
+const SLOT_PADDING = "6px 12px";
 const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
@@ -87,15 +88,12 @@ const createLoopPreviewData = (tracks: Track[]): LoopPreviewTrack[] =>
         : undefined,
     }));
 
-const renderLoopSlotPreview = (
-  group: PatternGroup | undefined,
-  isExpanded: boolean
-) => {
+const renderLoopSlotPreview = (group: PatternGroup | undefined) => {
   if (!group) {
     return (
       <div
         style={{
-          height: isExpanded ? PREVIEW_HEIGHT_EXPANDED : PREVIEW_HEIGHT_COLLAPSED,
+          height: PREVIEW_HEIGHT,
           borderRadius: 6,
           border: "1px dashed #2d3748",
           background: "rgba(15, 23, 42, 0.35)",
@@ -109,7 +107,7 @@ const renderLoopSlotPreview = (
     return (
       <div
         style={{
-          height: isExpanded ? PREVIEW_HEIGHT_EXPANDED : PREVIEW_HEIGHT_COLLAPSED,
+          height: PREVIEW_HEIGHT,
           borderRadius: 6,
           background: "rgba(30, 41, 59, 0.65)",
           border: "1px solid #1f2937",
@@ -129,11 +127,9 @@ const renderLoopSlotPreview = (
     )
   );
 
-  const gap = isExpanded ? PREVIEW_GAP_EXPANDED : PREVIEW_GAP_COLLAPSED;
-  const dotSize = isExpanded ? 7 : 4;
-  const containerHeight = isExpanded
-    ? PREVIEW_HEIGHT_EXPANDED
-    : PREVIEW_HEIGHT_COLLAPSED;
+  const gap = PREVIEW_GAP;
+  const dotSize = PREVIEW_DOT_SIZE;
+  const containerHeight = PREVIEW_HEIGHT;
 
   return (
     <div
@@ -202,10 +198,9 @@ const renderLoopSlotPreview = (
 const renderPerformanceSlotPreview = (
   performanceTrack: PerformanceTrack | undefined,
   columnStart: number,
-  columnEnd: number,
-  isExpanded: boolean
+  columnEnd: number
 ) => {
-  const height = isExpanded ? PREVIEW_HEIGHT_EXPANDED : PREVIEW_HEIGHT_COLLAPSED;
+  const height = PREVIEW_HEIGHT;
   if (!performanceTrack || performanceTrack.notes.length === 0) {
     return (
       <div
@@ -240,7 +235,7 @@ const renderPerformanceSlotPreview = (
   const range = columnEnd - columnStart;
   const accent =
     performanceTrack.color || getInstrumentColor(performanceTrack.instrument);
-  const dotSize = isExpanded ? 8 : 5;
+  const dotSize = PERFORMANCE_DOT_SIZE;
 
   return (
     <div
@@ -404,11 +399,9 @@ export function SongView({
   };
 
   const showEmptyTimeline = sectionCount === 0;
-  const slotMinHeight = isTimelineExpanded
-    ? SLOT_MIN_HEIGHT_EXPANDED
-    : SLOT_MIN_HEIGHT_COLLAPSED;
-  const slotPadding = isTimelineExpanded ? "10px 12px" : "6px 12px";
-  const slotGap = isTimelineExpanded ? 8 : 6;
+  const slotMinHeight = SLOT_MIN_HEIGHT;
+  const slotPadding = SLOT_PADDING;
+  const slotGap = SLOT_CONTENT_GAP;
   const visibleRowTarget = isTimelineExpanded
     ? TIMELINE_VISIBLE_ROWS_EXPANDED
     : TIMELINE_VISIBLE_ROWS_COLLAPSED;
@@ -895,13 +888,9 @@ export function SongView({
                                           ? renderPerformanceSlotPreview(
                                               performanceTrack,
                                               columnStart,
-                                              columnEnd,
-                                              isTimelineExpanded
+                                              columnEnd
                                             )
-                                          : renderLoopSlotPreview(
-                                              group,
-                                              isTimelineExpanded
-                                            )}
+                                          : renderLoopSlotPreview(group)}
                                       </div>
                                       {description && (
                                         <span
