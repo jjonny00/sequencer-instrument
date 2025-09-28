@@ -509,6 +509,51 @@ export function SongView({
     );
   };
 
+  const handleDuplicateRow = useCallback(
+    (rowIndex: number) => {
+      setSongRows((rows) => {
+        if (rowIndex < 0 || rowIndex >= rows.length) {
+          return rows;
+        }
+        const targetRow = rows[rowIndex];
+        const duplicatedRow: SongRow = {
+          ...targetRow,
+          slots: targetRow.slots.slice(),
+        };
+        return [
+          ...rows.slice(0, rowIndex + 1),
+          duplicatedRow,
+          ...rows.slice(rowIndex + 1),
+        ];
+      });
+      setRowSettingsIndex((current) => {
+        if (current === null) return current;
+        if (current < rowIndex) return current;
+        if (current === rowIndex) return rowIndex + 1;
+        return current + 1;
+      });
+    },
+    [setSongRows]
+  );
+
+  const handleDeleteRow = useCallback(
+    (rowIndex: number) => {
+      setSongRows((rows) => {
+        if (rowIndex < 0 || rowIndex >= rows.length) {
+          return rows;
+        }
+        return rows.filter((_, idx) => idx !== rowIndex);
+      });
+      setRowSettingsIndex((current) => {
+        if (current === null) return current;
+        if (current === rowIndex) return null;
+        if (current > rowIndex) return current - 1;
+        return current;
+      });
+    },
+    [setSongRows]
+  );
+
   const showEmptyTimeline = sectionCount === 0;
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
@@ -516,8 +561,18 @@ export function SongView({
   const visibleRowTarget = isTimelineExpanded
     ? TIMELINE_VISIBLE_ROWS_EXPANDED
     : TIMELINE_VISIBLE_ROWS_COLLAPSED;
+  const timelineCollapsedViewportHeight = Math.round(
+    TIMELINE_VISIBLE_ROWS_COLLAPSED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  );
+  const timelineExpandedViewportHeight = Math.round(
+    TIMELINE_VISIBLE_ROWS_EXPANDED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  );
   const timelineViewportHeight = Math.round(
     visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  );
+  const instrumentPanelMaxHeight = Math.max(
+    timelineExpandedViewportHeight - timelineCollapsedViewportHeight,
+    0
   );
   const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
   const playInstrumentColor = useMemo(
@@ -601,6 +656,9 @@ export function SongView({
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length
       ? `Row ${String(rowSettingsIndex + 1).padStart(2, "0")}`
       : null;
+  const timelineToggleLabel = isTimelineExpanded
+    ? "Collapse timeline height"
+    : "Expand timeline height";
 
   return (
     <div
@@ -645,12 +703,7 @@ export function SongView({
             <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
               <IconButton
                 icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
-                label="Toggle timeline height"
-                description={
-                  isTimelineExpanded
-                    ? "Show fewer rows"
-                    : "Show more rows"
-                }
+                label={timelineToggleLabel}
                 onClick={() => setTimelineExpanded((previous) => !previous)}
                 style={{ minWidth: 0 }}
               />
@@ -1069,6 +1122,115 @@ export function SongView({
             </div>
           </div>
         </div>
+        {isPlayInstrumentOpen ? (
+          <div
+            style={{
+              borderRadius: 12,
+              border: "1px solid #2a3344",
+              background: "#111827",
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              maxHeight: `${instrumentPanelMaxHeight}px`,
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 999,
+                    background: playInstrumentColor,
+                    boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#e6f2ff",
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {formatInstrumentLabel(playInstrument)} Instrument
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                {liveRowLabel
+                  ? `${liveRowLabel} captures this performance`
+                  : "Live row added to your timeline"}
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+              }}
+            >
+              {PLAYABLE_INSTRUMENTS.map((instrumentOption) => {
+                const selected = instrumentOption === playInstrument;
+                const accent = getInstrumentColor(instrumentOption);
+                return (
+                  <button
+                    key={instrumentOption}
+                    type="button"
+                    onClick={() => handleSelectPlayInstrument(instrumentOption)}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 999,
+                      border: selected
+                        ? `1px solid ${accent}`
+                        : "1px solid #2a3344",
+                      background: selected
+                        ? withAlpha(accent, 0.22)
+                        : "#0f172a",
+                      color: selected ? "#e6f2ff" : "#94a3b8",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: 0.4,
+                      cursor: "pointer",
+                      transition: "background 0.2s ease, border 0.2s ease",
+                    }}
+                  >
+                    {formatInstrumentLabel(instrumentOption)}
+                  </button>
+                );
+              })}
+            </div>
+            <div
+              style={{
+                borderRadius: 12,
+                border: "1px solid #1f2937",
+                background: "#10192c",
+                padding: 12,
+              }}
+            >
+              <InstrumentControlPanel
+                track={playInstrumentTrackForPanel}
+                allTracks={[]}
+                onUpdatePattern={handlePlayInstrumentPatternUpdate}
+                trigger={playInstrumentTrigger}
+              />
+            </div>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              Play and record directly into the live performance row from this
+              panel.
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <Modal
@@ -1089,47 +1251,82 @@ export function SongView({
         }
       >
         {rowSettingsRow ? (
-          <label
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              fontSize: 13,
-              color: "#cbd5f5",
-            }}
-          >
-            <span>Velocity</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={rowSettingsRow.velocity}
-                onChange={(event) => {
-                  if (rowSettingsIndex === null) return;
-                  handleRowVelocityChange(
-                    rowSettingsIndex,
-                    Number(event.target.value)
-                  );
-                }}
-                style={{ flex: 1 }}
-              />
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                fontSize: 13,
+                color: "#cbd5f5",
+              }}
+            >
+              <span>Velocity</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={rowSettingsRow.velocity}
+                  onChange={(event) => {
+                    if (rowSettingsIndex === null) return;
+                    handleRowVelocityChange(
+                      rowSettingsIndex,
+                      Number(event.target.value)
+                    );
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <span
+                  style={{
+                    minWidth: 48,
+                    textAlign: "right",
+                    fontVariantNumeric: "tabular-nums",
+                    color: "#94a3b8",
+                  }}
+                >
+                  {rowSettingsRow.velocity.toFixed(2)}
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                Adjust how prominent this row plays back during the song.
+              </span>
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <span
                 style={{
-                  minWidth: 48,
-                  textAlign: "right",
-                  fontVariantNumeric: "tabular-nums",
-                  color: "#94a3b8",
+                  fontSize: 11,
+                  letterSpacing: 0.6,
+                  textTransform: "uppercase",
+                  color: "#64748b",
                 }}
               >
-                {rowSettingsRow.velocity.toFixed(2)}
+                Row actions
               </span>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <IconButton
+                  icon="content_copy"
+                  label="Duplicate row"
+                  showLabel
+                  onClick={() => {
+                    if (rowSettingsIndex === null) return;
+                    handleDuplicateRow(rowSettingsIndex);
+                  }}
+                />
+                <IconButton
+                  icon="delete"
+                  label="Delete row"
+                  showLabel
+                  tone="danger"
+                  onClick={() => {
+                    if (rowSettingsIndex === null) return;
+                    handleDeleteRow(rowSettingsIndex);
+                  }}
+                />
+              </div>
             </div>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Adjust how prominent this row plays back during the song.
-            </span>
-          </label>
+          </div>
         ) : null}
       </Modal>
 
@@ -1203,114 +1400,6 @@ export function SongView({
           </button>
         </div>
       </div>
-
-      {isPlayInstrumentOpen ? (
-        <div
-          style={{
-            borderRadius: 12,
-            border: "1px solid #2a3344",
-            background: "#111827",
-            padding: 16,
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 12,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 999,
-                  background: playInstrumentColor,
-                  boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "#e6f2ff",
-                  letterSpacing: 0.2,
-                }}
-              >
-                {formatInstrumentLabel(playInstrument)} Instrument
-              </span>
-            </div>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              {liveRowLabel
-                ? `${liveRowLabel} captures this performance`
-                : "Live row added to your timeline"}
-            </span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
-            {PLAYABLE_INSTRUMENTS.map((instrumentOption) => {
-              const selected = instrumentOption === playInstrument;
-              const accent = getInstrumentColor(instrumentOption);
-              return (
-                <button
-                  key={instrumentOption}
-                  type="button"
-                  onClick={() => handleSelectPlayInstrument(instrumentOption)}
-                  style={{
-                    padding: "6px 14px",
-                    borderRadius: 999,
-                    border: selected
-                      ? `1px solid ${accent}`
-                      : "1px solid #2a3344",
-                    background: selected
-                      ? withAlpha(accent, 0.22)
-                      : "#0f172a",
-                    color: selected ? "#e6f2ff" : "#94a3b8",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    letterSpacing: 0.4,
-                    cursor: "pointer",
-                    transition: "background 0.2s ease, border 0.2s ease",
-                  }}
-                >
-                  {formatInstrumentLabel(instrumentOption)}
-                </button>
-              );
-            })}
-          </div>
-          <div
-            style={{
-              borderRadius: 12,
-              border: "1px solid #1f2937",
-              background: "#10192c",
-              padding: 12,
-            }}
-          >
-            <InstrumentControlPanel
-              track={playInstrumentTrackForPanel}
-              allTracks={[]}
-              onUpdatePattern={handlePlayInstrumentPatternUpdate}
-              trigger={playInstrumentTrigger}
-            />
-          </div>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>
-            Play and record directly into the live performance row from this
-            panel.
-          </span>
-        </div>
-      ) : null}
 
       <div
         className="scrollable"
