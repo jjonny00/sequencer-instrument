@@ -24,7 +24,7 @@ import {
   refreshAudioReadyState,
   audioReady,
 } from "./utils/audio";
-import type { PatternGroup, SongRow } from "./song";
+import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import { createPatternGroupId, createSongRow } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
@@ -255,6 +255,7 @@ const createDemoProjectData = (): StoredProjectData => {
       slots: [patternGroupId],
       muted: false,
       velocity: 1,
+      performanceTrackId: null,
     },
   ];
 
@@ -266,6 +267,7 @@ const createDemoProjectData = (): StoredProjectData => {
     tracks: trackSnapshots,
     patternGroups,
     songRows,
+    performanceTracks: [],
     selectedGroupId: patternGroupId,
     currentSectionIndex: 0,
   };
@@ -281,6 +283,7 @@ const createEmptyProjectData = (): StoredProjectData => {
     tracks: [],
     patternGroups: [group],
     songRows: [createSongRow()],
+    performanceTracks: [],
     selectedGroupId: group.id,
     currentSectionIndex: 0,
   };
@@ -320,6 +323,9 @@ export default function App() {
   const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
 
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [performanceTracks, setPerformanceTracks] = useState<
+    PerformanceTrack[]
+  >([]);
   const [isRecording, setIsRecording] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<TriggerMap>({});
@@ -1312,6 +1318,7 @@ export default function App() {
     tracks,
     patternGroups,
     songRows,
+    performanceTracks,
     selectedGroupId,
     currentSectionIndex,
   }), [
@@ -1322,6 +1329,7 @@ export default function App() {
     tracks,
     patternGroups,
     songRows,
+    performanceTracks,
     selectedGroupId,
     currentSectionIndex,
   ]);
@@ -1472,6 +1480,8 @@ export default function App() {
       currentLoopDraftRef.current = nextTracks.map((track) =>
         cloneTrackState(track)
       );
+      const nextPerformanceTracks = project.performanceTracks ?? [];
+      setPerformanceTracks(nextPerformanceTracks);
       const nextPatternGroups =
         project.patternGroups.length > 0
           ? project.patternGroups
