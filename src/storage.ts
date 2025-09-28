@@ -99,6 +99,10 @@ const cloneProjectData = (project: StoredProjectData): StoredProjectData => ({
     : [],
 });
 
+export const cloneStoredProjectData = (
+  project: StoredProjectData
+): StoredProjectData => cloneProjectData(project);
+
 const cloneLoopDraftData = (draft: StoredLoopDraftData): StoredLoopDraftData => ({
   tracks: draft.tracks.map((track) => cloneTrack(track)),
   patternGroups: draft.patternGroups.map((group) => clonePatternGroup(group)),
@@ -249,3 +253,7 @@ export const createStoredProjectPayload = (
   updatedAt: Date.now(),
   data: cloneProjectData(project),
 });
+
+export const deserializeStoredProjectPayload = (
+  payload: StoredProjectPayload
+): StoredProjectData => cloneProjectData(payload.data);
