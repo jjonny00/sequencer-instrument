@@ -16,7 +16,34 @@ import type {
 import { isScaleName, type ScaleName } from "./music/scales";
 import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import { packs } from "./packs";
-import type { PatternGroup, SongRow } from "./song";
+import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
+
+const TICKS_PER_QUARTER = Tone.Transport.PPQ;
+const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
+const TICKS_PER_MEASURE = TICKS_PER_SIXTEENTH * 16;
+
+const toTicks = (value: string | number | undefined | null): number => {
+  if (value === undefined || value === null) {
+    return 0;
+  }
+  if (typeof value === "number") {
+    return value * TICKS_PER_MEASURE;
+  }
+  try {
+    return Tone.Time(value).toTicks();
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("Failed to convert time to ticks", value, error);
+    }
+    return 0;
+  }
+};
+
+const ensurePositiveTicks = (ticks: number, fallback: number) =>
+  Number.isFinite(ticks) && ticks > 0 ? ticks : fallback;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
 
 interface PatternPlaybackManagerProps {
   tracks: Track[];
@@ -26,6 +53,7 @@ interface PatternPlaybackManagerProps {
   patternGroups: PatternGroup[];
   songRows: SongRow[];
   currentSectionIndex: number;
+  performanceTracks: PerformanceTrack[];
 }
 
 export function PatternPlaybackManager({
@@ -36,10 +64,16 @@ export function PatternPlaybackManager({
   patternGroups,
   songRows,
   currentSectionIndex,
+  performanceTracks,
 }: PatternPlaybackManagerProps) {
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
     [patternGroups]
+  );
+
+  const performanceTrackMap = useMemo(
+    () => new Map(performanceTracks.map((track) => [track.id, track])),
+    [performanceTracks]
   );
 
   const resolveTrigger = (instrument: string, packId?: string | null) => {
@@ -101,13 +135,47 @@ export function PatternPlaybackManager({
 
   if (viewMode === "song") {
     const players: JSX.Element[] = [];
+    const arrangementColumns = songRows.reduce(
+      (max, row) => Math.max(max, row.slots.length),
+      0
+    );
+    const arrangementLoopTicks = arrangementColumns * TICKS_PER_MEASURE;
+    const hasSoloRow = songRows.some((row) => row.solo);
+
     songRows.forEach((row, rowIndex) => {
+      const rowVelocity = clamp(row.velocity ?? 1, 0, 1);
+      const isRowActive = () => {
+        if (row.muted) return false;
+        if (hasSoloRow) {
+          return Boolean(row.solo);
+        }
+        return true;
+      };
+
+      if (row.performanceTrackId) {
+        const performanceTrack = performanceTrackMap.get(row.performanceTrackId);
+        if (!performanceTrack) return;
+        const trigger = resolveTrigger(performanceTrack.instrument);
+        if (!trigger) return;
+        players.push(
+          <PerformancePlayer
+            key={`perf-${rowIndex}-${performanceTrack.id}`}
+            track={performanceTrack}
+            trigger={trigger}
+            started={started}
+            isRowActive={isRowActive}
+            rowVelocity={rowVelocity}
+            loopTicks={arrangementLoopTicks}
+          />
+        );
+        return;
+      }
+
       if (currentSectionIndex >= row.slots.length) return;
       const groupId = row.slots[currentSectionIndex];
       if (!groupId) return;
       const group = patternGroupMap.get(groupId);
       if (!group) return;
-      const velocityFactor = Math.max(0, Math.min(1, row.velocity ?? 1));
 
       group.tracks.forEach((track, trackIndex) => {
         if (!track.pattern) return;
@@ -129,7 +197,7 @@ export function PatternPlaybackManager({
         ) => {
           const combinedVelocity = Math.max(
             0,
-            Math.min(1, velocity * velocityFactor)
+            Math.min(1, velocity * rowVelocity)
           );
           trigger(
             time,
@@ -141,7 +209,7 @@ export function PatternPlaybackManager({
             track.source?.characterId
           );
         };
-        const isTrackActive = () => !row.muted && !track.muted;
+        const isTrackActive = () => isRowActive() && !track.muted;
         players.push(
           <PatternPlayer
             key={`${rowIndex}-${group.id}-${track.id}-${trackIndex}`}
@@ -194,6 +262,122 @@ export function PatternPlaybackManager({
   );
 }
 
+interface NormalizedPerformanceNote {
+  time: string;
+  startTicks: number;
+  endTicks: number;
+  velocity: number;
+  note: string;
+  durationSeconds: number;
+}
+
+interface PerformancePlayerProps {
+  track: PerformanceTrack;
+  trigger: (
+    time: number,
+    velocity?: number,
+    pitch?: number,
+    note?: string,
+    sustain?: number,
+    chunk?: Chunk
+  ) => void;
+  started: boolean;
+  isRowActive: () => boolean;
+  rowVelocity: number;
+  loopTicks: number;
+}
+
+function PerformancePlayer({
+  track,
+  trigger,
+  started,
+  isRowActive,
+  rowVelocity,
+  loopTicks,
+}: PerformancePlayerProps) {
+  const isRowActiveRef = useRef(isRowActive);
+  const rowVelocityRef = useRef(rowVelocity);
+
+  useEffect(() => {
+    isRowActiveRef.current = isRowActive;
+  }, [isRowActive]);
+
+  useEffect(() => {
+    rowVelocityRef.current = rowVelocity;
+  }, [rowVelocity]);
+
+  const notes = useMemo<NormalizedPerformanceNote[]>(() => {
+    if (!track.notes || track.notes.length === 0) {
+      return [];
+    }
+
+    const normalized: NormalizedPerformanceNote[] = [];
+    track.notes.forEach((note) => {
+      const startTicks = toTicks(note.time);
+      if (!Number.isFinite(startTicks)) {
+        return;
+      }
+      const clampedStart = Math.max(0, startTicks);
+      const durationTicks = ensurePositiveTicks(
+        toTicks(note.duration),
+        TICKS_PER_SIXTEENTH
+      );
+      const endTicks = clampedStart + durationTicks;
+      const velocity = clamp(note.velocity ?? 1, 0, 1);
+      const durationSeconds = Tone.Ticks(durationTicks).toSeconds();
+      const timeString = Tone.Ticks(clampedStart).toBarsBeatsSixteenths();
+      normalized.push({
+        time: timeString,
+        startTicks: clampedStart,
+        endTicks,
+        velocity,
+        note: note.note,
+        durationSeconds,
+      });
+    });
+
+    return normalized.sort((a, b) => a.startTicks - b.startTicks);
+  }, [track.notes]);
+
+  const loopEndTicks = useMemo(() => {
+    const lastNoteEnd = notes.length
+      ? notes[notes.length - 1].endTicks
+      : 0;
+    return Math.max(loopTicks, lastNoteEnd);
+  }, [loopTicks, notes]);
+
+  useEffect(() => {
+    if (!started) return;
+    if (notes.length === 0) return;
+
+    const part = new Tone.Part(
+      (time, value: NormalizedPerformanceNote) => {
+        if (!isRowActiveRef.current()) return;
+        const combinedVelocity = clamp(
+          value.velocity * rowVelocityRef.current,
+          0,
+          1
+        );
+        trigger(time, combinedVelocity, undefined, value.note, value.durationSeconds);
+      },
+      notes.map((value) => [value.time, value] as const)
+    ).start(0);
+
+    if (loopEndTicks > 0) {
+      part.loop = true;
+      part.loopEnd = Tone.Ticks(loopEndTicks).toSeconds();
+    } else {
+      part.loop = false;
+    }
+
+    return () => {
+      part.dispose();
+    };
+  }, [notes, trigger, started, loopEndTicks]);
+
+  return null;
+}
+
 interface PatternPlayerProps {
   pattern: Chunk;
   trigger: (
@@ -207,9 +391,6 @@ interface PatternPlayerProps {
   started: boolean;
   isTrackActive: () => boolean;
 }
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, value));
 
 function PatternPlayer({
   pattern,

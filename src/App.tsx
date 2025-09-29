@@ -3052,6 +3052,7 @@ export default function App() {
             patternGroups={patternGroups}
             songRows={songRows}
             currentSectionIndex={currentSectionIndex}
+            performanceTracks={performanceTracks}
           />
         </>
       )}
