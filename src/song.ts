@@ -19,6 +19,8 @@ export interface PerformanceTrack {
   id: string;
   instrument: TrackInstrument;
   color: string;
+  packId?: string | null;
+  characterId?: string | null;
   notes: PerformanceNote[];
 }
 

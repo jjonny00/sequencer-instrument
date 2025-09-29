@@ -10,7 +10,7 @@ import {
   type TriggerMap,
 } from "./tracks";
 import type { Chunk } from "./chunks";
-import { packs, type InstrumentCharacter } from "./packs";
+import { packs, type InstrumentCharacter, type Pack } from "./packs";
 import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
@@ -113,6 +113,51 @@ const controlButtonBaseStyle: CSSProperties = {
 
 const controlIconStyle: CSSProperties = {
   fontSize: 24,
+};
+
+const pickCharacterForInstrument = (
+  pack: Pack | undefined,
+  instrument: TrackInstrument,
+  requested?: string | null
+): string | null => {
+  if (!pack || !instrument) {
+    return null;
+  }
+  const definition = pack.instruments?.[instrument];
+  if (!definition) {
+    return null;
+  }
+  if (requested) {
+    const existing = definition.characters.find(
+      (character) => character.id === requested
+    );
+    if (existing) {
+      return existing.id;
+    }
+  }
+  if (definition.defaultCharacterId) {
+    const preferred = definition.characters.find(
+      (character) => character.id === definition.defaultCharacterId
+    );
+    if (preferred) {
+      return preferred.id;
+    }
+  }
+  return definition.characters[0]?.id ?? null;
+};
+
+const resolvePerformanceTrackSourceForPack = (
+  pack: Pack | undefined,
+  instrument: TrackInstrument,
+  requestedCharacterId?: string | null
+): { packId: string | null; characterId: string | null } => {
+  if (!pack) {
+    return { packId: null, characterId: null };
+  }
+  return {
+    packId: pack.id ?? null,
+    characterId: pickCharacterForInstrument(pack, instrument, requestedCharacterId),
+  };
 };
 
 interface AddTrackModalState {
@@ -374,6 +419,33 @@ export default function App() {
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
+
+  useEffect(() => {
+    const pack = packs[packIndex];
+    setPerformanceTracks((prev) =>
+      prev.map((track) => {
+        const { packId, characterId } = resolvePerformanceTrackSourceForPack(
+          pack,
+          track.instrument,
+          track.characterId ?? null
+        );
+        const nextPackId = packId ?? null;
+        const nextCharacterId = characterId ?? null;
+        if (
+          (track.packId ?? null) === nextPackId &&
+          (track.characterId ?? null) === nextCharacterId
+        ) {
+          return track;
+        }
+        return {
+          ...track,
+          packId: nextPackId,
+          characterId: nextCharacterId,
+        };
+      })
+    );
+  }, [packIndex]);
+
   const [activeProjectName, setActiveProjectName] = useState("untitled");
   const [hasUnsavedLoopChanges, setHasUnsavedLoopChanges] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -1310,6 +1382,9 @@ export default function App() {
   const ensurePerformanceRow = useCallback(
     (instrument: TrackInstrument, existingId?: string | null): string | null => {
       const color = getInstrumentColor(instrument);
+      const pack = packs[packIndex];
+      const { packId, characterId: defaultCharacterId } =
+        resolvePerformanceTrackSourceForPack(pack, instrument, null);
       let ensuredId: string | null =
         existingId ?? activePerformanceTrackId ?? null;
 
@@ -1318,11 +1393,31 @@ export default function App() {
           const index = prev.findIndex((track) => track.id === ensuredId);
           if (index >= 0) {
             const track = prev[index];
-            if (track.instrument === instrument && track.color === color) {
+            const nextCharacterId = pack
+              ? pickCharacterForInstrument(
+                  pack,
+                  instrument,
+                  track.characterId ?? null
+                )
+              : track.characterId ?? null;
+            const normalizedCharacterId = nextCharacterId ?? null;
+            const normalizedPackId = packId ?? track.packId ?? null;
+            if (
+              track.instrument === instrument &&
+              track.color === color &&
+              (track.characterId ?? null) === normalizedCharacterId &&
+              (track.packId ?? null) === normalizedPackId
+            ) {
               return prev;
             }
             const next = prev.slice();
-            next[index] = { ...track, instrument, color };
+            next[index] = {
+              ...track,
+              instrument,
+              color,
+              packId: normalizedPackId,
+              characterId: normalizedCharacterId,
+            };
             return next;
           }
         }
@@ -1335,6 +1430,8 @@ export default function App() {
             id: nextId,
             instrument,
             color,
+            packId: packId ?? null,
+            characterId: defaultCharacterId ?? null,
             notes: [],
           },
         ];
@@ -1370,6 +1467,7 @@ export default function App() {
       setPerformanceTracks,
       setSongRows,
       setActivePerformanceTrackId,
+      packIndex,
     ]
   );
 
@@ -1619,7 +1717,28 @@ export default function App() {
       currentLoopDraftRef.current = nextTracks.map((track) =>
         cloneTrackState(track)
       );
-      const nextPerformanceTracks = project.performanceTracks ?? [];
+      const rawPerformanceTracks = project.performanceTracks ?? [];
+      const packForProject = packs[nextPackIndex];
+      const nextPerformanceTracks = rawPerformanceTracks.map((track) => {
+        const { packId, characterId } = resolvePerformanceTrackSourceForPack(
+          packForProject,
+          track.instrument,
+          track.characterId ?? null
+        );
+        const nextPackId = packId ?? track.packId ?? null;
+        const nextCharacterId = characterId ?? null;
+        if (
+          (track.packId ?? null) === nextPackId &&
+          (track.characterId ?? null) === nextCharacterId
+        ) {
+          return track;
+        }
+        return {
+          ...track,
+          packId: nextPackId,
+          characterId: nextCharacterId,
+        };
+      });
       setPerformanceTracks(nextPerformanceTracks);
       setActivePerformanceTrackId(
         nextPerformanceTracks.length > 0 ? nextPerformanceTracks[0].id : null

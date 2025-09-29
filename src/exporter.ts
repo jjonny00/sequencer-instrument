@@ -661,6 +661,7 @@ const buildSongSchedules = (
         kind: "performance",
         events,
         instrumentId: performanceTrack.instrument,
+        characterId: performanceTrack.characterId ?? undefined,
       });
       return;
     }

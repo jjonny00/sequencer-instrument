@@ -709,6 +709,20 @@ export function SongView({
     [performanceTracks]
   );
 
+  const activePerformanceTrack = useMemo(() => {
+    if (playInstrumentRowTrackId) {
+      return performanceTrackMap.get(playInstrumentRowTrackId) ?? null;
+    }
+    if (activePerformanceTrackId) {
+      return performanceTrackMap.get(activePerformanceTrackId) ?? null;
+    }
+    return null;
+  }, [
+    performanceTrackMap,
+    playInstrumentRowTrackId,
+    activePerformanceTrackId,
+  ]);
+
   const sectionCount = useMemo(
     () => songRows.reduce((max, row) => Math.max(max, row.slots.length), 0),
     [songRows]
@@ -913,43 +927,68 @@ export function SongView({
     visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
   );
   const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
+  const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
-    () => getInstrumentColor(playInstrument),
-    [playInstrument]
+    () => getInstrumentColor(panelInstrument),
+    [panelInstrument]
   );
-  const playInstrumentSource = useMemo(
-    () => resolveInstrumentSource(playInstrument),
-    [playInstrument]
-  );
+  const playInstrumentSource = useMemo(() => {
+    if (activePerformanceTrack?.packId) {
+      const pack = packs.find(
+        (candidate) => candidate.id === activePerformanceTrack.packId
+      );
+      if (pack && activePerformanceTrack.instrument) {
+        const definition = pack.instruments?.[activePerformanceTrack.instrument];
+        if (definition) {
+          const preferredCharacterId = activePerformanceTrack.characterId;
+          const validCharacter = preferredCharacterId
+            ? definition.characters.find(
+                (character) => character.id === preferredCharacterId
+              )
+            : null;
+          const resolvedCharacterId = validCharacter
+            ? validCharacter.id
+            : definition.defaultCharacterId
+            ? definition.characters.find(
+                (character) => character.id === definition.defaultCharacterId
+              )?.id ?? definition.characters[0]?.id ?? ""
+            : definition.characters[0]?.id ?? "";
+          return {
+            packId: pack.id,
+            characterId: resolvedCharacterId,
+          };
+        }
+      }
+    }
+    return resolveInstrumentSource(playInstrument);
+  }, [activePerformanceTrack, playInstrument]);
+  const playInstrumentPackId = playInstrumentSource?.packId ?? "";
   const playInstrumentCharacterId = playInstrumentSource?.characterId ?? "";
   const playInstrumentTrackForPanel = useMemo<Track>(
     () => ({
       id: -1,
-      name: `${formatInstrumentLabel(playInstrument)} Live`,
-      instrument: playInstrument,
+      name: `${formatInstrumentLabel(panelInstrument)} Live`,
+      instrument: panelInstrument,
       pattern: playInstrumentPattern,
       muted: false,
-      source: playInstrumentSource
+      source: playInstrumentPackId
         ? {
-            packId: playInstrumentSource.packId,
-            instrumentId: playInstrument,
-            characterId: playInstrumentCharacterId,
+            packId: playInstrumentPackId,
+            instrumentId: panelInstrument,
+            characterId: playInstrumentCharacterId || "",
           }
         : undefined,
     }),
     [
-      playInstrument,
+      panelInstrument,
       playInstrumentPattern,
-      playInstrumentSource,
+      playInstrumentPackId,
       playInstrumentCharacterId,
     ]
   );
   const playInstrumentTrigger = useMemo(() => {
-    if (!playInstrumentSource) return undefined;
-    const triggerKey = createTriggerKey(
-      playInstrumentSource.packId,
-      playInstrument
-    );
+    if (!playInstrumentPackId) return undefined;
+    const triggerKey = createTriggerKey(playInstrumentPackId, panelInstrument);
     const trigger = triggers[triggerKey];
     if (!trigger) return undefined;
     return (
@@ -971,11 +1010,19 @@ export function SongView({
       );
     };
   }, [
-    playInstrumentSource,
-    playInstrument,
+    playInstrumentPackId,
+    panelInstrument,
     triggers,
     playInstrumentCharacterId,
   ]);
+
+  useEffect(() => {
+    const targetInstrument = activePerformanceTrack?.instrument;
+    if (!targetInstrument) {
+      return;
+    }
+    setPlayInstrument((prev) => (prev === targetInstrument ? prev : targetInstrument));
+  }, [activePerformanceTrack?.instrument]);
   const liveRowIndex = useMemo(() => {
     if (!playInstrumentRowTrackId) return -1;
     return songRows.findIndex(

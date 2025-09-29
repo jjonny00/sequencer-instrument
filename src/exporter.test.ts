@@ -44,10 +44,18 @@ describe("renderProjectAudioBuffer", () => {
       tracks: [kickTrack],
     };
 
+    const keyboardDefinition = chiptunePack.instruments.keyboard;
+    const keyboardCharacterId =
+      keyboardDefinition.defaultCharacterId ??
+      keyboardDefinition.characters[0]?.id ??
+      "pulse-keys";
+
     const performanceTrack: PerformanceTrack = {
       id: "perf-test",
       instrument: "keyboard",
       color: "#ffffff",
+      packId: chiptunePack.id,
+      characterId: keyboardCharacterId,
       notes: [
         { time: "0:0:0", note: "C4", duration: "4n", velocity: 1 },
         { time: "0:2:0", note: "E4", duration: "4n", velocity: 0.9 },
@@ -106,15 +114,24 @@ describe("renderProjectAudioBuffer", () => {
     const notes = performanceEvents.map((event) => event.note);
     expect(notes).toContain("C4");
     expect(notes).toContain("E4");
+    expect(performanceSchedule?.characterId).toBe(keyboardCharacterId);
   });
 });
 
 describe("createStoredProjectPayload", () => {
   it("serializes performance tracks with their notes", () => {
+    const keyboardDefinition = chiptunePack.instruments.keyboard;
+    const keyboardCharacterId =
+      keyboardDefinition.defaultCharacterId ??
+      keyboardDefinition.characters[0]?.id ??
+      "pulse-keys";
+
     const performanceTrack: PerformanceTrack = {
       id: "perf-json",
       instrument: "keyboard",
       color: "#123456",
+      packId: chiptunePack.id,
+      characterId: keyboardCharacterId,
       notes: [
         { time: "0:0:0", note: "C4", duration: "8n", velocity: 0.8 },
         { time: "1:0:0", note: "G4", duration: "4n", velocity: 1 },
@@ -166,10 +183,18 @@ describe("createStoredProjectPayload", () => {
 
 describe("resolvePlaybackSchedules", () => {
   it("includes performance tracks even when no loop slots are active", async () => {
+    const keyboardDefinition = chiptunePack.instruments.keyboard;
+    const keyboardCharacterId =
+      keyboardDefinition.defaultCharacterId ??
+      keyboardDefinition.characters[0]?.id ??
+      "pulse-keys";
+
     const performanceTrack: PerformanceTrack = {
       id: "perf-only",
       instrument: "keyboard",
       color: "#abcdef",
+      packId: chiptunePack.id,
+      characterId: keyboardCharacterId,
       notes: [
         { time: "0:0:0", note: "C4", duration: "4n", velocity: 1 },
         { time: "2:0:0", note: "E4", duration: "4n", velocity: 0.7 },
