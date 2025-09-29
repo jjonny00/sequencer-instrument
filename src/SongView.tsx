@@ -333,7 +333,8 @@ const renderPerformanceSlotPreview = (
   columnEnd: number,
   accent: string | null,
   ghostNotes?: PerformanceNote[],
-  ghostNoteRefs?: Set<PerformanceNote>
+  ghostNoteRefs?: Set<PerformanceNote>,
+  highlightRange?: { start: number; end: number; color?: string }
 ) => {
   const height = PREVIEW_HEIGHT;
   const columnStartTicks = columnStart * TICKS_PER_MEASURE;
@@ -383,6 +384,32 @@ const renderPerformanceSlotPreview = (
       : "#27E0B0");
   const dotSize = PERFORMANCE_DOT_SIZE;
 
+  let highlightStyle: CSSProperties | null = null;
+  if (highlightRange) {
+    const highlightStartTicks = highlightRange.start * TICKS_PER_MEASURE;
+    const highlightEndTicks = highlightRange.end * TICKS_PER_MEASURE;
+    const effectiveStart = Math.max(columnStartTicks, highlightStartTicks);
+    const effectiveEnd = Math.min(columnEndTicks, highlightEndTicks);
+    if (effectiveEnd > effectiveStart && range > 0) {
+      const highlightLeft = ((effectiveStart - columnStartTicks) / range) * 100;
+      const highlightWidth = ((effectiveEnd - effectiveStart) / range) * 100;
+      const highlightColor = highlightRange.color ?? baseAccent;
+      highlightStyle = {
+        position: "absolute",
+        top: 2,
+        bottom: 2,
+        left: `${highlightLeft}%`,
+        width: `${highlightWidth}%`,
+        background: withAlpha(highlightColor, 0.15),
+        border: `1px solid ${highlightColor}`,
+        borderRadius: 6,
+        pointerEvents: "none",
+        boxShadow: `0 0 12px ${withAlpha(highlightColor, 0.2)}`,
+        transition: "left 0.2s ease, width 0.2s ease",
+      };
+    }
+  }
+
   return (
     <div
       style={{
@@ -394,6 +421,7 @@ const renderPerformanceSlotPreview = (
         overflow: "hidden",
       }}
     >
+      {highlightStyle ? <div style={highlightStyle} /> : null}
       {trackNotes.map((note, index) => {
         const { startTicks } = getPerformanceNoteRangeTicks(note);
         const clampedStart = Math.max(startTicks, columnStartTicks);
@@ -465,11 +493,18 @@ export function SongView({
     string | null
   >(activePerformanceTrackId);
   const [isQuantizedRecording, setIsQuantizedRecording] = useState(true);
+  const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
   const liveRecordingNotesRef = useRef<PerformanceNote[]>([]);
   const recordingActiveRef = useRef(false);
   const recordingActive = Boolean(
-    isPlaying && isPlayInstrumentOpen && playInstrumentRowTrackId
+    isPlaying &&
+      isPlayInstrumentOpen &&
+      isRecordEnabled &&
+      playInstrumentRowTrackId
+  );
+  const isRecordArmed = Boolean(
+    !recordingActive && isRecordEnabled && isPlayInstrumentOpen && playInstrumentRowTrackId
   );
 
   useEffect(() => {
@@ -805,7 +840,8 @@ export function SongView({
     [liveGhostNotes]
   );
 
-  const showEmptyTimeline = sectionCount === 0;
+  const hasPerformanceRow = songRows.some((row) => Boolean(row.performanceTrackId));
+  const showEmptyTimeline = sectionCount === 0 && !hasPerformanceRow;
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
@@ -890,6 +926,20 @@ export function SongView({
   const liveRowLabel = liveRowIndex >= 0
     ? `Row ${String(liveRowIndex + 1).padStart(2, "0")}`
     : null;
+  const liveRowMessage = recordingActive
+    ? `${liveRowLabel ?? "Live row"} is recording now`
+    : isRecordArmed
+    ? `${liveRowLabel ?? "Live row"} armed — press play to capture`
+    : isRecordEnabled
+    ? `${liveRowLabel ?? "Live row"} ready to record`
+    : liveRowLabel
+    ? `${liveRowLabel} ready for performance playback`
+    : "Live row added to your timeline";
+  const recordIndicatorLabel = recordingActive
+    ? "Recording"
+    : isRecordArmed
+    ? "Armed"
+    : "Record On";
   const hasRowSettings =
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length;
   const rowSettingsRow =
@@ -1066,6 +1116,7 @@ export function SongView({
                   ? performanceTrack.color ||
                     getInstrumentColor(performanceTrack.instrument)
                   : null;
+                const isPerformanceRow = Boolean(row.performanceTrackId);
                 const firstAssignedGroupId =
                   row.slots.find((slotId) => slotId !== null) ?? null;
                 const firstGroup = firstAssignedGroupId
@@ -1087,11 +1138,57 @@ export function SongView({
                 const isRecordingRow =
                   recordingActive &&
                   row.performanceTrackId === playInstrumentRowTrackId;
+                const isArmedRow =
+                  !isRecordingRow &&
+                  isRecordArmed &&
+                  row.performanceTrackId === playInstrumentRowTrackId;
                 const rowGhostNotes = isRecordingRow ? liveGhostNotes : [];
                 const rowGhostNoteSet = isRecordingRow
                   ? liveGhostNoteSet
                   : undefined;
-
+                const performanceHasContent = isPerformanceRow
+                  ? (performanceTrack?.notes.length ?? 0) > 0 ||
+                    rowGhostNotes.length > 0
+                  : false;
+                const totalPerformanceNotes = isPerformanceRow
+                  ? (performanceTrack?.notes.length ?? 0) +
+                    (isRecordingRow ? rowGhostNotes.length : 0)
+                  : 0;
+                const performanceHighlightRange =
+                  isPerformanceRow && isPlaying
+                    ? {
+                        start: currentSectionIndex,
+                        end: currentSectionIndex + 1,
+                        color: performanceAccent ?? rowAccent ?? "#27E0B0",
+                      }
+                    : undefined;
+                const performanceStatusLabel = isPerformanceRow
+                  ? isRecordingRow
+                    ? "Recording"
+                    : isArmedRow
+                    ? "Armed"
+                    : performanceHasContent
+                    ? "Live"
+                    : null
+                  : null;
+                const performanceInstrumentLabel = isPerformanceRow
+                  ? performanceTrack
+                    ? formatInstrumentLabel(performanceTrack.instrument)
+                    : formatInstrumentLabel(playInstrument)
+                  : null;
+                const performanceDescription = isPerformanceRow
+                  ? isRecordingRow
+                    ? "Recording…"
+                    : totalPerformanceNotes > 0
+                    ? `${formatNoteCount(totalPerformanceNotes)} across the song`
+                    : "No notes yet"
+                  : null;
+                const performanceTextColor =
+                  isPerformanceRow && performanceHasContent
+                    ? "#e6f2ff"
+                    : "#94a3b8";
+                const safeColumnCount = Math.max(1, maxColumns);
+                
                 return (
                   <div
                     key={`row-${rowIndex}`}
@@ -1146,7 +1243,7 @@ export function SongView({
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "center",
-                            gap: rowSolo ? 4 : 6,
+                            gap: 4,
                           }}
                         >
                           <span
@@ -1172,6 +1269,26 @@ export function SongView({
                               }}
                             >
                               SOLO
+                            </span>
+                          ) : null}
+                          {isPerformanceRow && (isRecordingRow || isArmedRow) ? (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                letterSpacing: 0.6,
+                                color: "#fecdd3",
+                                background: isRecordingRow
+                                  ? "rgba(248, 113, 113, 0.22)"
+                                  : "rgba(248, 113, 113, 0.12)",
+                                border: `1px solid ${
+                                  isRecordingRow ? "#f87171" : "#fb7185"
+                                }`,
+                                padding: "2px 6px",
+                                borderRadius: 999,
+                              }}
+                            >
+                              {isRecordingRow ? "REC" : "ARM"}
                             </span>
                           ) : null}
                         </div>
@@ -1209,206 +1326,297 @@ export function SongView({
                           <div
                             style={{
                               display: "grid",
-                              gridTemplateColumns: `repeat(${maxColumns}, ${SLOT_WIDTH}px)`,
+                              gridTemplateColumns: `repeat(${safeColumnCount}, ${SLOT_WIDTH}px)`,
                               gap: SLOT_GAP,
                             }}
                           >
-                            {Array.from({ length: maxColumns }, (_, columnIndex) => {
-                              const groupId =
-                                columnIndex < row.slots.length
-                                  ? row.slots[columnIndex]
-                                  : null;
-                              const group = groupId
-                            ? patternGroupMap.get(groupId)
-                            : undefined;
-                          const highlight =
-                            isPlaying && columnIndex === currentSectionIndex;
-                          const isEditing =
-                            editingSlot?.rowIndex === rowIndex &&
-                            editingSlot.columnIndex === columnIndex;
-                          const assigned = Boolean(group);
-                          const columnStart = columnIndex;
-                          const columnEnd = columnIndex + 1;
-                              const columnBounds = getColumnTickBounds(
-                                columnIndex
-                              );
-                              const combinedPerformanceNotes = [
-                                ...(performanceTrack?.notes ?? []),
-                                ...rowGhostNotes,
-                              ];
-                              const columnNoteCount = countPerformanceNotesInRange(
-                                combinedPerformanceNotes,
-                                columnBounds.startTicks,
-                                columnBounds.endTicks
-                              );
-                              const hasPerformanceContent =
-                                combinedPerformanceNotes.length > 0;
-                              const hasContent = assigned || hasPerformanceContent;
-                              const textColor = hasContent ? "#e6f2ff" : "#94a3b8";
-                              const descriptionColor = hasContent
-                                ? "#94a3b8"
-                                : "#475569";
-                              const description = hasPerformanceContent
-                                ? columnNoteCount > 0
-                                  ? formatNoteCount(columnNoteCount)
-                                  : isRecordingRow
-                                  ? "Recording…"
-                                  : "No notes yet"
-                                : assigned
-                                ? null
-                                : patternGroups.length > 0
-                                ? "Tap to assign"
-                                : "Save a sequence in Track view";
-                              const performanceInstrumentLabel = performanceTrack
-                                ? formatInstrumentLabel(performanceTrack.instrument)
-                                : isRecordingRow
-                                ? formatInstrumentLabel(playInstrument)
-                                : null;
-                              const slotStatusLabel = isRecordingRow
-                                ? "Recording"
-                                : hasPerformanceContent
-                                ? "Live"
-                                : null;
-
-                              const showSlotLabel = !isPlayInstrumentOpen;
-                              const buttonStyles: CSSProperties = {
-                                width: "100%",
-                                minHeight: slotMinHeight,
-                                borderRadius: 8,
-                                border: `1px solid ${
-                                  highlight
-                                    ? "#27E0B0"
-                                    : isRecordingRow
-                                    ? withAlpha(playInstrumentColor, 0.6)
-                                    : hasContent
-                                    ? "#2f384a"
-                                    : "#1f2937"
-                                }`,
-                                background: highlight
-                                  ? "rgba(39, 224, 176, 0.12)"
-                                  : isRecordingRow
-                                  ? withAlpha(playInstrumentColor, 0.12)
-                                  : hasContent
-                                  ? "#0f1a2a"
-                                  : "#0b111d",
-                                color: textColor,
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "stretch",
-                                justifyContent: "space-between",
-                                gap: showSlotLabel ? slotGap : slotGap / 2,
-                                padding: slotPadding,
-                                fontSize: 13,
-                                cursor:
-                                  patternGroups.length > 0 ? "pointer" : "not-allowed",
-                                textAlign: "left",
-                                opacity: rowMuted ? 0.85 : 1,
-                                transition: "background 0.2s ease, border-color 0.2s ease",
-                              };
-
-                              return (
-                                <div key={`slot-${rowIndex}-${columnIndex}`}>
-                                  {isEditing ? (
-                                    <select
-                                      value={groupId ?? ""}
-                                      onChange={(event) => {
-                                        const value = event.target.value;
-                                        handleAssignSlot(
-                                          rowIndex,
-                                          columnIndex,
-                                          value ? value : null
-                                        );
-                                        setEditingSlot(null);
-                                      }}
-                                      onBlur={() => setEditingSlot(null)}
+                            {isPerformanceRow ? (
+                              <div
+                                key={`performance-span-${rowIndex}`}
+                                style={{ gridColumn: `1 / span ${safeColumnCount}` }}
+                              >
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    minHeight: slotMinHeight,
+                                    borderRadius: 8,
+                                    border: `1px solid ${
+                                      isRecordingRow
+                                        ? withAlpha(playInstrumentColor, 0.6)
+                                        : performanceHasContent
+                                        ? "#2f384a"
+                                        : "#1f2937"
+                                    }`,
+                                    background: isRecordingRow
+                                      ? withAlpha(playInstrumentColor, 0.12)
+                                      : performanceHasContent
+                                      ? "#0f1a2a"
+                                      : "#0b111d",
+                                    color: performanceTextColor,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: slotGap,
+                                    padding: slotPadding,
+                                    justifyContent: "space-between",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 8,
+                                      width: "100%",
+                                    }}
+                                  >
+                                    <span style={{ fontWeight: 600 }}>
+                                      {performanceInstrumentLabel
+                                        ? `${performanceInstrumentLabel} Performance`
+                                        : "Performance"}
+                                    </span>
+                                    <div
                                       style={{
-                                        width: "100%",
-                                        minHeight: slotMinHeight,
-                                        borderRadius: 8,
-                                        border: `1px solid ${
-                                          highlight ? "#27E0B0" : "#475569"
-                                        }`,
-                                        background: "#121827",
-                                        color: "#e6f2ff",
-                                        padding: "0 12px",
+                                        marginLeft: "auto",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
                                       }}
-                                      autoFocus
                                     >
-                                      <option value="">Empty Slot</option>
-                                      {patternGroups.map((groupOption) => (
-                                        <option key={groupOption.id} value={groupOption.id}>
-                                          {groupOption.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (patternGroups.length === 0) return;
-                                        setRowSettingsIndex(null);
-                                        setEditingSlot({ rowIndex, columnIndex });
-                                      }}
-                                      style={buttonStyles}
-                                      disabled={patternGroups.length === 0}
-                                    >
-                                      {showSlotLabel ? (
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 6,
-                                            width: "100%",
-                                          }}
-                                        >
-                                          <span style={{ fontWeight: 600 }}>
-                                            {group?.name ??
-                                              (performanceInstrumentLabel
-                                                ? `${performanceInstrumentLabel} Performance`
-                                                : "Empty")}
-                                          </span>
-                                          {slotStatusLabel && (
-                                            <span
-                                              style={{
-                                                marginLeft: "auto",
-                                                fontSize: 10,
-                                                color: "#cbd5f5",
-                                                letterSpacing: 0.4,
-                                                textTransform: "uppercase",
-                                              }}
-                                            >
-                                              {slotStatusLabel}
-                                            </span>
-                                          )}
-                                        </div>
-                                      ) : null}
-                                      <div style={{ width: "100%" }}>
-                                        {hasPerformanceContent
-                                          ? renderPerformanceSlotPreview(
-                                              performanceTrack,
-                                              columnStart,
-                                              columnEnd,
-                                              performanceAccent ?? rowAccent,
-                                              rowGhostNotes,
-                                              rowGhostNoteSet
-                                            )
-                                          : renderLoopSlotPreview(group)}
-                                      </div>
-                                      {description && (
+                                      {performanceStatusLabel ? (
                                         <span
                                           style={{
-                                            fontSize: 11,
-                                            color: descriptionColor,
+                                            fontSize: 10,
+                                            color: "#fce7f3",
+                                            letterSpacing: 0.4,
+                                            textTransform: "uppercase",
+                                            background: isRecordingRow
+                                              ? "rgba(248, 113, 113, 0.2)"
+                                              : "rgba(248, 113, 113, 0.12)",
+                                            border: `1px solid ${
+                                              isRecordingRow ? "#f87171" : "#fb7185"
+                                            }`,
+                                            padding: "2px 8px",
+                                            borderRadius: 999,
                                           }}
                                         >
-                                          {description}
+                                          {performanceStatusLabel}
                                         </span>
-                                      )}
-                                    </button>
-                                  )}
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <div style={{ width: "100%" }}>
+                                    {renderPerformanceSlotPreview(
+                                      performanceTrack,
+                                      0,
+                                      safeColumnCount,
+                                      performanceAccent ?? rowAccent,
+                                      rowGhostNotes,
+                                      rowGhostNoteSet,
+                                      performanceHighlightRange
+                                    )}
+                                  </div>
+                                  {performanceDescription ? (
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        color:
+                                          performanceTextColor === "#e6f2ff"
+                                            ? "#94a3b8"
+                                            : "#475569",
+                                      }}
+                                    >
+                                      {performanceDescription}
+                                    </span>
+                                  ) : null}
                                 </div>
-                              );
-                            })}
+                              </div>
+                            ) : (
+                              Array.from({ length: maxColumns }, (_, columnIndex) => {
+                                const groupId =
+                                  columnIndex < row.slots.length
+                                    ? row.slots[columnIndex]
+                                    : null;
+                                const group = groupId
+                                  ? patternGroupMap.get(groupId)
+                                  : undefined;
+                                const highlight =
+                                  isPlaying && columnIndex === currentSectionIndex;
+                                const isEditing =
+                                  editingSlot?.rowIndex === rowIndex &&
+                                  editingSlot.columnIndex === columnIndex;
+                                const assigned = Boolean(group);
+                                const columnStart = columnIndex;
+                                const columnEnd = columnIndex + 1;
+                                const columnBounds = getColumnTickBounds(columnIndex);
+                                const combinedPerformanceNotes = [
+                                  ...(performanceTrack?.notes ?? []),
+                                  ...rowGhostNotes,
+                                ];
+                                const columnNoteCount = countPerformanceNotesInRange(
+                                  combinedPerformanceNotes,
+                                  columnBounds.startTicks,
+                                  columnBounds.endTicks
+                                );
+                                const hasPerformanceContent =
+                                  combinedPerformanceNotes.length > 0;
+                                const hasContent = assigned || hasPerformanceContent;
+                                const textColor = hasContent ? "#e6f2ff" : "#94a3b8";
+                                const descriptionColor = hasContent
+                                  ? "#94a3b8"
+                                  : "#475569";
+                                const description = hasPerformanceContent
+                                  ? columnNoteCount > 0
+                                    ? formatNoteCount(columnNoteCount)
+                                    : isRecordingRow
+                                    ? "Recording…"
+                                    : "No notes yet"
+                                  : assigned
+                                  ? null
+                                  : patternGroups.length > 0
+                                  ? "Tap to assign"
+                                  : "Save a sequence in Track view";
+                                const performanceSlotStatus = isRecordingRow
+                                  ? "Recording"
+                                  : hasPerformanceContent
+                                  ? "Live"
+                                  : null;
+
+                                const showSlotLabel = !isPlayInstrumentOpen;
+                                const buttonStyles: CSSProperties = {
+                                  width: "100%",
+                                  minHeight: slotMinHeight,
+                                  borderRadius: 8,
+                                  border: `1px solid ${
+                                    highlight
+                                      ? "#27E0B0"
+                                      : isRecordingRow
+                                      ? withAlpha(playInstrumentColor, 0.6)
+                                      : hasContent
+                                      ? "#2f384a"
+                                      : "#1f2937"
+                                  }`,
+                                  background: highlight
+                                    ? "rgba(39, 224, 176, 0.12)"
+                                    : isRecordingRow
+                                    ? withAlpha(playInstrumentColor, 0.12)
+                                    : hasContent
+                                    ? "#0f1a2a"
+                                    : "#0b111d",
+                                  color: textColor,
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "stretch",
+                                  justifyContent: "space-between",
+                                  gap: showSlotLabel ? slotGap : slotGap / 2,
+                                  padding: slotPadding,
+                                  fontSize: 13,
+                                  cursor:
+                                    patternGroups.length > 0 ? "pointer" : "not-allowed",
+                                  textAlign: "left",
+                                  opacity: rowMuted ? 0.85 : 1,
+                                  transition: "background 0.2s ease, border-color 0.2s ease",
+                                };
+
+                                return (
+                                  <div key={`slot-${rowIndex}-${columnIndex}`}>
+                                    {isEditing ? (
+                                      <select
+                                        value={groupId ?? ""}
+                                        onChange={(event) => {
+                                          const value = event.target.value;
+                                          handleAssignSlot(
+                                            rowIndex,
+                                            columnIndex,
+                                            value ? value : null
+                                          );
+                                          setEditingSlot(null);
+                                        }}
+                                        onBlur={() => setEditingSlot(null)}
+                                        style={{
+                                          width: "100%",
+                                          minHeight: slotMinHeight,
+                                          borderRadius: 8,
+                                          border: `1px solid ${
+                                            highlight ? "#27E0B0" : "#475569"
+                                          }`,
+                                          background: "#121827",
+                                          color: "#e6f2ff",
+                                          padding: "0 12px",
+                                        }}
+                                        autoFocus
+                                      >
+                                        <option value="">Empty Slot</option>
+                                        {patternGroups.map((groupOption) => (
+                                          <option key={groupOption.id} value={groupOption.id}>
+                                            {groupOption.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (patternGroups.length === 0) return;
+                                          setRowSettingsIndex(null);
+                                          setEditingSlot({ rowIndex, columnIndex });
+                                        }}
+                                        style={buttonStyles}
+                                        disabled={patternGroups.length === 0}
+                                      >
+                                        {showSlotLabel ? (
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: 6,
+                                              width: "100%",
+                                            }}
+                                          >
+                                            <span style={{ fontWeight: 600 }}>
+                                              {group?.name ?? "Empty"}
+                                            </span>
+                                            {performanceSlotStatus && (
+                                              <span
+                                                style={{
+                                                  marginLeft: "auto",
+                                                  fontSize: 10,
+                                                  color: "#cbd5f5",
+                                                  letterSpacing: 0.4,
+                                                  textTransform: "uppercase",
+                                                }}
+                                              >
+                                                {performanceSlotStatus}
+                                              </span>
+                                            )}
+                                          </div>
+                                        ) : null}
+                                        <div style={{ width: "100%" }}>
+                                          {hasPerformanceContent
+                                            ? renderPerformanceSlotPreview(
+                                                performanceTrack,
+                                                columnStart,
+                                                columnEnd,
+                                                performanceAccent ?? rowAccent,
+                                                rowGhostNotes,
+                                                rowGhostNoteSet
+                                              )
+                                            : renderLoopSlotPreview(group)}
+                                        </div>
+                                        {description && (
+                                          <span
+                                            style={{
+                                              fontSize: 11,
+                                              color: descriptionColor,
+                                            }}
+                                          >
+                                            {description}
+                                          </span>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1554,6 +1762,32 @@ export function SongView({
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <IconButton
+            icon="fiber_manual_record"
+            label={recordingActive ? "Recording" : "Record"}
+            showLabel
+            tone={isRecordEnabled ? "danger" : "default"}
+            onClick={() => {
+              setIsRecordEnabled((prev) => !prev);
+            }}
+            description={
+              recordingActive
+                ? "Capturing notes into the performance row"
+                : isRecordEnabled
+                ? "Armed to record when playback is running"
+                : "Play instruments without recording"
+            }
+            style={{
+              minWidth: 0,
+              ...(isRecordEnabled
+                ? {
+                    background: recordingActive ? "#E02749" : "#2b121d",
+                    border: `1px solid ${recordingActive ? "#E02749" : "#831843"}`,
+                    color: "#ffe4e6",
+                  }
+                : {}),
+            }}
+          />
+          <IconButton
             icon="piano"
             label="Play Instrument"
             showLabel
@@ -1650,11 +1884,53 @@ export function SongView({
                   justifyContent: "flex-end",
                 }}
               >
-                <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                  {liveRowLabel
-                    ? `${liveRowLabel} captures this performance`
-                    : "Live row added to your timeline"}
-                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  {isRecordEnabled ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: 0.6,
+                        textTransform: "uppercase",
+                        background: recordingActive
+                          ? "rgba(248, 113, 113, 0.24)"
+                          : "rgba(248, 113, 113, 0.14)",
+                        border: `1px solid ${
+                          recordingActive ? "#f87171" : "#fb7185"
+                        }`,
+                        color: "#fecdd3",
+                        boxShadow: recordingActive
+                          ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
+                          : "none",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: 14 }}
+                        aria-hidden="true"
+                      >
+                        fiber_manual_record
+                      </span>
+                      {recordIndicatorLabel}
+                    </span>
+                  ) : null}
+                  <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                    {liveRowMessage}
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() =>
