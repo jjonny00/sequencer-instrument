@@ -742,6 +742,20 @@ export function SongView({
     ghostColumnCount
   );
 
+  const timelineContentWidth = useMemo(() => {
+    const columns = Math.max(1, effectiveColumnCount);
+    const totalSlotWidth = columns * SLOT_WIDTH;
+    const totalGapWidth = Math.max(0, columns - 1) * SLOT_GAP;
+    return totalSlotWidth + totalGapWidth;
+  }, [effectiveColumnCount]);
+
+  const timelineWidthStyle = useMemo(() => {
+    if (timelineContentWidth <= 0) {
+      return "100%";
+    }
+    return `max(100%, ${timelineContentWidth}px)`;
+  }, [timelineContentWidth]);
+
   useEffect(() => {
     if (!editingSlot) return;
     if (patternGroups.length === 0) {
@@ -1092,7 +1106,8 @@ export function SongView({
               minHeight: `${timelineViewportHeight}px`,
               overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
               paddingRight: shouldEnableVerticalScroll ? 6 : 0,
-              minWidth: "100%",
+              width: timelineWidthStyle,
+              minWidth: timelineWidthStyle,
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1374,8 +1389,8 @@ export function SongView({
                       >
                         <div
                           style={{
-                            width: "100%",
-                            overflowX: "auto",
+                            width: timelineWidthStyle,
+                            minWidth: timelineWidthStyle,
                           }}
                         >
                           <div
@@ -1383,6 +1398,7 @@ export function SongView({
                               display: "grid",
                               gridTemplateColumns: `repeat(${safeColumnCount}, ${SLOT_WIDTH}px)`,
                               gap: SLOT_GAP,
+                              width: "100%",
                             }}
                           >
                             {isPerformanceRow ? (
