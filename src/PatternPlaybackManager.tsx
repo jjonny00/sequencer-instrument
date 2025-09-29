@@ -17,6 +17,7 @@ import { isScaleName, type ScaleName } from "./music/scales";
 import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import { packs } from "./packs";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
+import { getPerformanceTracksSpanMeasures, performanceSettingsToChunk } from "./song";
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
@@ -135,9 +136,16 @@ export function PatternPlaybackManager({
 
   if (viewMode === "song") {
     const players: JSX.Element[] = [];
-    const arrangementColumns = songRows.reduce(
+    const rowColumnCount = songRows.reduce(
       (max, row) => Math.max(max, row.slots.length),
       0
+    );
+    const performanceColumnCount = getPerformanceTracksSpanMeasures(
+      performanceTracks
+    );
+    const arrangementColumns = Math.max(
+      rowColumnCount,
+      performanceColumnCount
     );
     const arrangementLoopTicks = arrangementColumns * TICKS_PER_MEASURE;
     const hasSoloRow = songRows.some((row) => row.solo);
@@ -155,7 +163,10 @@ export function PatternPlaybackManager({
       if (row.performanceTrackId) {
         const performanceTrack = performanceTrackMap.get(row.performanceTrackId);
         if (!performanceTrack) return;
-        const trigger = resolveTrigger(performanceTrack.instrument);
+        const trigger = resolveTrigger(
+          performanceTrack.instrument,
+          performanceTrack.packId ?? null
+        );
         if (!trigger) return;
         players.push(
           <PerformancePlayer
@@ -279,7 +290,8 @@ interface PerformancePlayerProps {
     pitch?: number,
     note?: string,
     sustain?: number,
-    chunk?: Chunk
+    chunk?: Chunk,
+    characterId?: string
   ) => void;
   started: boolean;
   isRowActive: () => boolean;
@@ -346,6 +358,16 @@ function PerformancePlayer({
     return Math.max(loopTicks, lastNoteEnd);
   }, [loopTicks, notes]);
 
+  const settingsChunk = useMemo(
+    () =>
+      performanceSettingsToChunk(track.instrument, track.settings, {
+        id: `${track.id}-performance-settings`,
+        name: `${track.instrument}-performance-settings`,
+        characterId: track.characterId ?? null,
+      }),
+    [track.id, track.instrument, track.settings, track.characterId]
+  );
+
   useEffect(() => {
     if (!started) return;
     if (notes.length === 0) return;
@@ -358,7 +380,15 @@ function PerformancePlayer({
           0,
           1
         );
-        trigger(time, combinedVelocity, undefined, value.note, value.durationSeconds);
+        trigger(
+          time,
+          combinedVelocity,
+          undefined,
+          value.note,
+          value.durationSeconds,
+          settingsChunk,
+          track.characterId ?? undefined
+        );
       },
       notes.map((value) => [value.time, value] as const)
     ).start(0);
@@ -373,7 +403,14 @@ function PerformancePlayer({
     return () => {
       part.dispose();
     };
-  }, [notes, trigger, started, loopEndTicks]);
+  }, [
+    notes,
+    trigger,
+    started,
+    loopEndTicks,
+    settingsChunk,
+    track.characterId,
+  ]);
 
   return null;
 }
@@ -386,7 +423,8 @@ interface PatternPlayerProps {
     pitch?: number,
     note?: string,
     sustain?: number,
-    chunk?: Chunk
+    chunk?: Chunk,
+    characterId?: string
   ) => void;
   started: boolean;
   isTrackActive: () => boolean;

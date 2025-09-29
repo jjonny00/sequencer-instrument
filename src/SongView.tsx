@@ -14,7 +14,11 @@ import type {
   PerformanceTrack,
   SongRow,
 } from "./song";
-import { createSongRow } from "./song";
+import {
+  createPerformanceSettingsSnapshot,
+  createSongRow,
+  getPerformanceTracksSpanMeasures,
+} from "./song";
 import { getInstrumentColor, withAlpha } from "./utils/color";
 import {
   createTriggerKey,
@@ -339,10 +343,16 @@ const renderPerformanceSlotPreview = (
   const height = PREVIEW_HEIGHT;
   const columnStartTicks = columnStart * TICKS_PER_MEASURE;
   const columnEndTicks = columnEnd * TICKS_PER_MEASURE;
-  const combinedNotes = [
-    ...(performanceTrack?.notes ?? []),
-    ...(ghostNotes ?? []),
-  ];
+  const trackNotes = performanceTrack?.notes ?? [];
+  const combinedNotes = trackNotes.slice();
+  if (ghostNotes && ghostNotes.length) {
+    const trackNoteSet = new Set(trackNotes);
+    ghostNotes.forEach((note) => {
+      if (!trackNoteSet.has(note)) {
+        combinedNotes.push(note);
+      }
+    });
+  }
 
   if (combinedNotes.length === 0) {
     return (
@@ -357,12 +367,12 @@ const renderPerformanceSlotPreview = (
     );
   }
 
-  const trackNotes = combinedNotes.filter((note) => {
+  const trackNotesInColumn = combinedNotes.filter((note) => {
     const { startTicks, endTicks } = getPerformanceNoteRangeTicks(note);
     return endTicks > columnStartTicks && startTicks < columnEndTicks;
   });
 
-  if (trackNotes.length === 0) {
+  if (trackNotesInColumn.length === 0) {
     return (
       <div
         style={{
@@ -383,6 +393,21 @@ const renderPerformanceSlotPreview = (
       ? getInstrumentColor(performanceTrack.instrument)
       : "#27E0B0");
   const dotSize = PERFORMANCE_DOT_SIZE;
+
+  const seenNotes = new Set<PerformanceNote>();
+  const sortedNotes = trackNotesInColumn
+    .filter((note) => {
+      if (seenNotes.has(note)) {
+        return false;
+      }
+      seenNotes.add(note);
+      return true;
+    })
+    .sort((a, b) => {
+      const { startTicks: aStart } = getPerformanceNoteRangeTicks(a);
+      const { startTicks: bStart } = getPerformanceNoteRangeTicks(b);
+      return aStart - bStart;
+    });
 
   let highlightStyle: CSSProperties | null = null;
   if (highlightRange) {
@@ -422,7 +447,7 @@ const renderPerformanceSlotPreview = (
       }}
     >
       {highlightStyle ? <div style={highlightStyle} /> : null}
-      {trackNotes.map((note, index) => {
+      {sortedNotes.map((note, index) => {
         const { startTicks } = getPerformanceNoteRangeTicks(note);
         const clampedStart = Math.max(startTicks, columnStartTicks);
         const startRatio = range > 0 ? (clampedStart - columnStartTicks) / range : 0;
@@ -489,6 +514,7 @@ export function SongView({
   const [playInstrumentPattern, setPlayInstrumentPattern] = useState<Chunk>(() =>
     createPerformancePattern("keyboard")
   );
+  const latestPlayPatternRef = useRef(playInstrumentPattern);
   const [playInstrumentRowTrackId, setPlayInstrumentRowTrackId] = useState<
     string | null
   >(activePerformanceTrackId);
@@ -496,19 +522,34 @@ export function SongView({
   const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
   const wasRecordingRef = useRef(false);
+  const hasPerformanceTarget = Boolean(playInstrumentRowTrackId);
   const recordingActive = Boolean(
-    isPlaying &&
-      isPlayInstrumentOpen &&
-      isRecordEnabled &&
-      playInstrumentRowTrackId
+    isRecordEnabled && isPlayInstrumentOpen && hasPerformanceTarget
   );
   const isRecordArmed = Boolean(
-    !recordingActive && isRecordEnabled && isPlayInstrumentOpen && playInstrumentRowTrackId
+    isRecordEnabled && !isPlayInstrumentOpen && hasPerformanceTarget
   );
 
   useEffect(() => {
     onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
   }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
+
+  const applyPerformanceSettings = useCallback(
+    (pattern: Chunk) => {
+      if (!onUpdatePerformanceTrack) {
+        return;
+      }
+      if (!playInstrumentRowTrackId) {
+        return;
+      }
+      const snapshot = createPerformanceSettingsSnapshot(pattern);
+      onUpdatePerformanceTrack(playInstrumentRowTrackId, (track) => ({
+        ...track,
+        settings: snapshot,
+      }));
+    },
+    [onUpdatePerformanceTrack, playInstrumentRowTrackId]
+  );
 
   const handleTogglePlayInstrumentPanel = useCallback(() => {
     setPlayInstrumentOpen((prev) => !prev);
@@ -539,52 +580,61 @@ export function SongView({
             : undefined,
         };
         const next = updater(draft);
-        return { ...next, instrument: playInstrument };
+        const nextPattern = { ...next, instrument: playInstrument };
+        applyPerformanceSettings(nextPattern);
+        return nextPattern;
       });
     },
-    [playInstrument]
+    [playInstrument, applyPerformanceSettings]
   );
 
   const clearLiveRecording = useCallback(() => {
     setLiveGhostNotes([]);
   }, []);
 
-  const capturePerformanceNote = useCallback(
-    (
-      time: number | string,
-      velocity?: number,
-      noteName?: string,
-      sustain?: number,
-      chunk?: Chunk
-    ) => {
+  const handlePerformanceNoteRecorded = useCallback(
+    ({
+      eventTime,
+      noteName,
+      velocity,
+      durationSeconds,
+      mode,
+    }: {
+      eventTime: number;
+      noteName: string;
+      velocity: number;
+      durationSeconds?: number;
+      mode: "sync" | "free";
+    }) => {
       if (!recordingActive || !playInstrumentRowTrackId) {
         return;
       }
-      const resolvedVelocity =
-        velocity !== undefined ? Math.max(0, Math.min(1, velocity)) : 1;
-      const fallbackNote = chunk?.note ?? playInstrumentPattern.note ?? "C4";
-      const resolvedNote = noteName ?? fallbackNote;
 
-      let startTicks =
-        typeof time === "number"
-          ? Tone.Transport.getTicksAtTime(time)
-          : toTicks(time);
+      const resolvedVelocity = Math.max(0, Math.min(1, velocity));
+      const fallbackNote = playInstrumentPattern.note ?? "C4";
+      const resolvedNote = noteName || fallbackNote;
+
+      let startTicks = Tone.Transport.getTicksAtTime(eventTime);
       if (!Number.isFinite(startTicks) || startTicks < 0) {
         startTicks = Math.max(0, Tone.Transport.ticks);
       }
-      if (isQuantizedRecording) {
+
+      const shouldQuantize = mode === "sync" || isQuantizedRecording;
+      if (shouldQuantize) {
         startTicks =
           Math.round(startTicks / TICKS_PER_SIXTEENTH) * TICKS_PER_SIXTEENTH;
       }
 
-      const sustainSource =
-        sustain ?? chunk?.sustain ?? playInstrumentPattern.sustain ?? 0.5;
-      const defaultDurationTicks = TICKS_PER_QUARTER;
-      let durationTicks = Tone.Time(sustainSource).toTicks();
+      let durationTicks =
+        durationSeconds !== undefined
+          ? Tone.Time(Math.max(0.02, durationSeconds)).toTicks()
+          : Tone.Time(playInstrumentPattern.sustain ?? 0.5).toTicks();
+
       if (!Number.isFinite(durationTicks) || durationTicks <= 0) {
-        durationTicks = defaultDurationTicks;
+        durationTicks = TICKS_PER_QUARTER;
       }
-      if (isQuantizedRecording) {
+
+      if (shouldQuantize) {
         durationTicks = Math.max(
           TICKS_PER_SIXTEENTH,
           Math.round(durationTicks / TICKS_PER_SIXTEENTH) *
@@ -601,6 +651,9 @@ export function SongView({
 
       setLiveGhostNotes((prev) => [...prev, noteEntry]);
       if (onUpdatePerformanceTrack) {
+        const settingsSnapshot = createPerformanceSettingsSnapshot(
+          playInstrumentPattern
+        );
         onUpdatePerformanceTrack(
           playInstrumentRowTrackId,
           (track: PerformanceTrack) => {
@@ -609,6 +662,7 @@ export function SongView({
             return {
               ...track,
               notes: nextNotes,
+              settings: settingsSnapshot,
             };
           }
         );
@@ -616,11 +670,12 @@ export function SongView({
     },
     [
       recordingActive,
-      isQuantizedRecording,
+      playInstrumentRowTrackId,
       playInstrumentPattern.note,
       playInstrumentPattern.sustain,
-      playInstrumentRowTrackId,
+      playInstrumentPattern,
       onUpdatePerformanceTrack,
+      isQuantizedRecording,
     ]
   );
 
@@ -637,8 +692,19 @@ export function SongView({
   }, [activePerformanceTrackId, isPlayInstrumentOpen]);
 
   useEffect(() => {
-    setPlayInstrumentPattern(createPerformancePattern(playInstrument));
-  }, [playInstrument]);
+    const pattern = createPerformancePattern(playInstrument);
+    setPlayInstrumentPattern(pattern);
+    applyPerformanceSettings(pattern);
+  }, [playInstrument, applyPerformanceSettings]);
+
+  useEffect(() => {
+    latestPlayPatternRef.current = playInstrumentPattern;
+  }, [playInstrumentPattern]);
+
+  useEffect(() => {
+    if (!playInstrumentRowTrackId) return;
+    applyPerformanceSettings(latestPlayPatternRef.current);
+  }, [playInstrumentRowTrackId, applyPerformanceSettings]);
 
   useEffect(() => {
     setPlayInstrumentPattern((prev) => {
@@ -683,10 +749,66 @@ export function SongView({
     [performanceTracks]
   );
 
+  const activePerformanceTrack = useMemo(() => {
+    if (playInstrumentRowTrackId) {
+      return performanceTrackMap.get(playInstrumentRowTrackId) ?? null;
+    }
+    if (activePerformanceTrackId) {
+      return performanceTrackMap.get(activePerformanceTrackId) ?? null;
+    }
+    return null;
+  }, [
+    performanceTrackMap,
+    playInstrumentRowTrackId,
+    activePerformanceTrackId,
+  ]);
+
   const sectionCount = useMemo(
     () => songRows.reduce((max, row) => Math.max(max, row.slots.length), 0),
     [songRows]
   );
+
+  const performanceColumnCount = useMemo(
+    () => getPerformanceTracksSpanMeasures(performanceTracks),
+    [performanceTracks]
+  );
+
+  const ghostColumnCount = useMemo(() => {
+    if (liveGhostNotes.length === 0) {
+      return 0;
+    }
+    let maxEndTicks = 0;
+    liveGhostNotes.forEach((note) => {
+      const { endTicks } = getPerformanceNoteRangeTicks(note);
+      if (endTicks > maxEndTicks) {
+        maxEndTicks = endTicks;
+      }
+    });
+    if (maxEndTicks <= 0) {
+      return 0;
+    }
+    return Math.ceil(maxEndTicks / TICKS_PER_MEASURE);
+  }, [liveGhostNotes]);
+
+  const effectiveColumnCount = Math.max(
+    sectionCount,
+    performanceColumnCount,
+    ghostColumnCount
+  );
+
+  const timelineContentWidth = useMemo(() => {
+    const columns = Math.max(1, effectiveColumnCount);
+    const totalSlotWidth = columns * SLOT_WIDTH;
+    const totalGapWidth = Math.max(0, columns - 1) * SLOT_GAP;
+    return totalSlotWidth + totalGapWidth;
+  }, [effectiveColumnCount]);
+
+  const timelineWidthStyle = useMemo(() => {
+    if (timelineContentWidth <= 0) {
+      return "100%";
+    }
+    return `max(100%, ${timelineContentWidth}px)`;
+  }, [timelineContentWidth]);
 
   useEffect(() => {
     if (!editingSlot) return;
@@ -845,43 +967,68 @@ export function SongView({
     visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
   );
   const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
+  const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
-    () => getInstrumentColor(playInstrument),
-    [playInstrument]
+    () => getInstrumentColor(panelInstrument),
+    [panelInstrument]
   );
-  const playInstrumentSource = useMemo(
-    () => resolveInstrumentSource(playInstrument),
-    [playInstrument]
-  );
+  const playInstrumentSource = useMemo(() => {
+    if (activePerformanceTrack?.packId) {
+      const pack = packs.find(
+        (candidate) => candidate.id === activePerformanceTrack.packId
+      );
+      if (pack && activePerformanceTrack.instrument) {
+        const definition = pack.instruments?.[activePerformanceTrack.instrument];
+        if (definition) {
+          const preferredCharacterId = activePerformanceTrack.characterId;
+          const validCharacter = preferredCharacterId
+            ? definition.characters.find(
+                (character) => character.id === preferredCharacterId
+              )
+            : null;
+          const resolvedCharacterId = validCharacter
+            ? validCharacter.id
+            : definition.defaultCharacterId
+            ? definition.characters.find(
+                (character) => character.id === definition.defaultCharacterId
+              )?.id ?? definition.characters[0]?.id ?? ""
+            : definition.characters[0]?.id ?? "";
+          return {
+            packId: pack.id,
+            characterId: resolvedCharacterId,
+          };
+        }
+      }
+    }
+    return resolveInstrumentSource(playInstrument);
+  }, [activePerformanceTrack, playInstrument]);
+  const playInstrumentPackId = playInstrumentSource?.packId ?? "";
   const playInstrumentCharacterId = playInstrumentSource?.characterId ?? "";
   const playInstrumentTrackForPanel = useMemo<Track>(
     () => ({
       id: -1,
-      name: `${formatInstrumentLabel(playInstrument)} Live`,
-      instrument: playInstrument,
+      name: `${formatInstrumentLabel(panelInstrument)} Live`,
+      instrument: panelInstrument,
       pattern: playInstrumentPattern,
       muted: false,
-      source: playInstrumentSource
+      source: playInstrumentPackId
         ? {
-            packId: playInstrumentSource.packId,
-            instrumentId: playInstrument,
-            characterId: playInstrumentCharacterId,
+            packId: playInstrumentPackId,
+            instrumentId: panelInstrument,
+            characterId: playInstrumentCharacterId || "",
           }
         : undefined,
     }),
     [
-      playInstrument,
+      panelInstrument,
       playInstrumentPattern,
-      playInstrumentSource,
+      playInstrumentPackId,
       playInstrumentCharacterId,
     ]
   );
   const playInstrumentTrigger = useMemo(() => {
-    if (!playInstrumentSource) return undefined;
-    const triggerKey = createTriggerKey(
-      playInstrumentSource.packId,
-      playInstrument
-    );
+    if (!playInstrumentPackId) return undefined;
+    const triggerKey = createTriggerKey(playInstrumentPackId, panelInstrument);
     const trigger = triggers[triggerKey];
     if (!trigger) return undefined;
     return (
@@ -892,7 +1039,6 @@ export function SongView({
       sustain?: number,
       chunk?: Chunk
     ) => {
-      capturePerformanceNote(time, velocity, note, sustain, chunk);
       trigger(
         time,
         velocity,
@@ -904,12 +1050,19 @@ export function SongView({
       );
     };
   }, [
-    playInstrumentSource,
-    playInstrument,
+    playInstrumentPackId,
+    panelInstrument,
     triggers,
     playInstrumentCharacterId,
-    capturePerformanceNote,
   ]);
+
+  useEffect(() => {
+    const targetInstrument = activePerformanceTrack?.instrument;
+    if (!targetInstrument) {
+      return;
+    }
+    setPlayInstrument((prev) => (prev === targetInstrument ? prev : targetInstrument));
+  }, [activePerformanceTrack?.instrument]);
   const liveRowIndex = useMemo(() => {
     if (!playInstrumentRowTrackId) return -1;
     return songRows.findIndex(
@@ -922,7 +1075,7 @@ export function SongView({
   const liveRowMessage = recordingActive
     ? `${liveRowLabel ?? "Live row"} is recording now`
     : isRecordArmed
-    ? `${liveRowLabel ?? "Live row"} armed — press play to capture`
+    ? `${liveRowLabel ?? "Live row"} armed — open the instrument panel to capture`
     : isRecordEnabled
     ? `${liveRowLabel ?? "Live row"} ready to record`
     : liveRowLabel
@@ -1040,7 +1193,8 @@ export function SongView({
               minHeight: `${timelineViewportHeight}px`,
               overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
               paddingRight: shouldEnableVerticalScroll ? 6 : 0,
-              minWidth: "100%",
+              width: timelineWidthStyle,
+              minWidth: timelineWidthStyle,
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1058,7 +1212,10 @@ export function SongView({
               </div>
             ) : (
               songRows.map((row, rowIndex) => {
-                const maxColumns = Math.max(sectionCount, row.slots.length);
+                const maxColumns = Math.max(
+                  effectiveColumnCount,
+                  row.slots.length
+                );
                 let labelTimer: number | null = null;
                 let longPressTriggered = false;
 
@@ -1139,13 +1296,20 @@ export function SongView({
                 const rowGhostNoteSet = isRecordingRow
                   ? liveGhostNoteSet
                   : undefined;
+                const trackNoteSet = performanceTrack
+                  ? new Set(performanceTrack.notes)
+                  : undefined;
+                const rowGhostDisplayNotes =
+                  rowGhostNotes.length && trackNoteSet
+                    ? rowGhostNotes.filter((note) => !trackNoteSet.has(note))
+                    : rowGhostNotes;
                 const performanceHasContent = isPerformanceRow
                   ? (performanceTrack?.notes.length ?? 0) > 0 ||
-                    rowGhostNotes.length > 0
+                    rowGhostDisplayNotes.length > 0
                   : false;
                 const totalPerformanceNotes = isPerformanceRow
                   ? (performanceTrack?.notes.length ?? 0) +
-                    (isRecordingRow ? rowGhostNotes.length : 0)
+                    (isRecordingRow ? rowGhostDisplayNotes.length : 0)
                   : 0;
                 const performanceHighlightRange =
                   isPerformanceRow && isPlaying
@@ -1312,8 +1476,8 @@ export function SongView({
                       >
                         <div
                           style={{
-                            width: "100%",
-                            overflowX: "auto",
+                            width: timelineWidthStyle,
+                            minWidth: timelineWidthStyle,
                           }}
                         >
                           <div
@@ -1321,6 +1485,7 @@ export function SongView({
                               display: "grid",
                               gridTemplateColumns: `repeat(${safeColumnCount}, ${SLOT_WIDTH}px)`,
                               gap: SLOT_GAP,
+                              width: "100%",
                             }}
                           >
                             {isPerformanceRow ? (
@@ -1402,7 +1567,7 @@ export function SongView({
                                       0,
                                       safeColumnCount,
                                       performanceAccent ?? rowAccent,
-                                      rowGhostNotes,
+                                      rowGhostDisplayNotes,
                                       rowGhostNoteSet,
                                       performanceHighlightRange
                                     )}
@@ -1442,7 +1607,7 @@ export function SongView({
                                 const columnBounds = getColumnTickBounds(columnIndex);
                                 const combinedPerformanceNotes = [
                                   ...(performanceTrack?.notes ?? []),
-                                  ...rowGhostNotes,
+                                  ...rowGhostDisplayNotes,
                                 ];
                                 const columnNoteCount = countPerformanceNotesInRange(
                                   combinedPerformanceNotes,
@@ -1589,7 +1754,7 @@ export function SongView({
                                                 columnStart,
                                                 columnEnd,
                                                 performanceAccent ?? rowAccent,
-                                                rowGhostNotes,
+                                                rowGhostDisplayNotes,
                                                 rowGhostNoteSet
                                               )
                                             : renderLoopSlotPreview(group)}
@@ -2002,6 +2167,7 @@ export function SongView({
                 onUpdatePattern={handlePlayInstrumentPatternUpdate}
                 trigger={playInstrumentTrigger}
                 isRecording={recordingActive}
+                onPerformanceNote={handlePerformanceNoteRecorded}
               />
             </div>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>

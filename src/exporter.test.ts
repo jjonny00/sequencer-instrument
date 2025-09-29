@@ -5,6 +5,7 @@ import type { Chunk } from "./chunks";
 import type { StoredProjectData } from "./storage";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import type { Track } from "./tracks";
+import { createStoredProjectPayload } from "./storage";
 
 describe("renderProjectAudioBuffer", () => {
   it("renders loop and performance tracks together", async () => {
@@ -43,10 +44,25 @@ describe("renderProjectAudioBuffer", () => {
       tracks: [kickTrack],
     };
 
+    const keyboardDefinition = chiptunePack.instruments.keyboard;
+    const keyboardCharacterId =
+      keyboardDefinition.defaultCharacterId ??
+      keyboardDefinition.characters[0]?.id ??
+      "pulse-keys";
+
     const performanceTrack: PerformanceTrack = {
       id: "perf-test",
       instrument: "keyboard",
       color: "#ffffff",
+      packId: chiptunePack.id,
+      characterId: keyboardCharacterId,
+      settings: {
+        note: "C4",
+        sustain: 0.6,
+        style: "up-down",
+        reverb: 0.35,
+        arpRate: "8n",
+      },
       notes: [
         { time: "0:0:0", note: "C4", duration: "4n", velocity: 1 },
         { time: "0:2:0", note: "E4", duration: "4n", velocity: 0.9 },
@@ -97,6 +113,11 @@ describe("renderProjectAudioBuffer", () => {
     expect(performanceSchedule).toBeDefined();
     expect(duration).toBeGreaterThan(1);
 
+    if (performanceSchedule?.kind === "performance") {
+      expect(performanceSchedule.chunk?.style).toBe("up-down");
+      expect(performanceSchedule.chunk?.reverb).toBeCloseTo(0.35);
+    }
+
     const performanceEvents =
       performanceSchedule?.kind === "performance"
         ? performanceSchedule.events
@@ -105,5 +126,139 @@ describe("renderProjectAudioBuffer", () => {
     const notes = performanceEvents.map((event) => event.note);
     expect(notes).toContain("C4");
     expect(notes).toContain("E4");
+    expect(performanceSchedule?.characterId).toBe(keyboardCharacterId);
+  });
+});
+
+describe("createStoredProjectPayload", () => {
+  it("serializes performance tracks with their notes", () => {
+    const keyboardDefinition = chiptunePack.instruments.keyboard;
+    const keyboardCharacterId =
+      keyboardDefinition.defaultCharacterId ??
+      keyboardDefinition.characters[0]?.id ??
+      "pulse-keys";
+
+    const performanceTrack: PerformanceTrack = {
+      id: "perf-json",
+      instrument: "keyboard",
+      color: "#123456",
+      packId: chiptunePack.id,
+      characterId: keyboardCharacterId,
+      settings: {
+        note: "D4",
+        sustain: 0.4,
+        style: "random",
+        delay: 0.2,
+      },
+      notes: [
+        { time: "0:0:0", note: "C4", duration: "8n", velocity: 0.8 },
+        { time: "1:0:0", note: "G4", duration: "4n", velocity: 1 },
+      ],
+    };
+
+    const loopRow: SongRow = {
+      slots: [null],
+      muted: false,
+      velocity: 1,
+      solo: false,
+      performanceTrackId: null,
+    };
+
+    const performanceRow: SongRow = {
+      slots: [null],
+      muted: false,
+      velocity: 1,
+      solo: false,
+      performanceTrackId: performanceTrack.id,
+    };
+
+    const project: StoredProjectData = {
+      packIndex: 0,
+      bpm: 120,
+      subdivision: "16n",
+      isPlaying: false,
+      tracks: [],
+      patternGroups: [],
+      songRows: [loopRow, performanceRow],
+      performanceTracks: [performanceTrack],
+      selectedGroupId: null,
+      currentSectionIndex: 0,
+    };
+
+    const payload = createStoredProjectPayload(project);
+
+    expect(payload.data.performanceTracks).toHaveLength(1);
+    expect(payload.data.performanceTracks[0]).toEqual(performanceTrack);
+    expect(payload.data.performanceTracks[0]).not.toBe(performanceTrack);
+    expect(payload.data.performanceTracks[0].notes).not.toBe(
+      performanceTrack.notes
+    );
+    expect(payload.data.performanceTracks[0].settings).toEqual(
+      performanceTrack.settings
+    );
+    expect(payload.data.performanceTracks[0].settings).not.toBe(
+      performanceTrack.settings
+    );
+    expect(payload.data.songRows[1]?.performanceTrackId).toBe(
+      performanceTrack.id
+    );
+  });
+});
+
+describe("resolvePlaybackSchedules", () => {
+  it("includes performance tracks even when no loop slots are active", async () => {
+    const keyboardDefinition = chiptunePack.instruments.keyboard;
+    const keyboardCharacterId =
+      keyboardDefinition.defaultCharacterId ??
+      keyboardDefinition.characters[0]?.id ??
+      "pulse-keys";
+
+    const performanceTrack: PerformanceTrack = {
+      id: "perf-only",
+      instrument: "keyboard",
+      color: "#abcdef",
+      packId: chiptunePack.id,
+      characterId: keyboardCharacterId,
+      settings: {
+        sustain: 0.5,
+      },
+      notes: [
+        { time: "0:0:0", note: "C4", duration: "4n", velocity: 1 },
+        { time: "2:0:0", note: "E4", duration: "4n", velocity: 0.7 },
+      ],
+    };
+
+    const performanceRow: SongRow = {
+      slots: [null, null, null],
+      muted: false,
+      velocity: 1,
+      solo: false,
+      performanceTrackId: performanceTrack.id,
+    };
+
+    const project: StoredProjectData = {
+      packIndex: 0,
+      bpm: 100,
+      subdivision: "16n",
+      isPlaying: false,
+      tracks: [],
+      patternGroups: [],
+      songRows: [performanceRow],
+      performanceTracks: [performanceTrack],
+      selectedGroupId: null,
+      currentSectionIndex: 0,
+    };
+
+    const { resolvePlaybackSchedules } = await import("./exporter");
+
+    const { schedules, duration } = resolvePlaybackSchedules(project, "song");
+
+    expect(duration).toBeGreaterThan(0);
+    expect(schedules.some((schedule) => schedule.kind === "performance")).toBe(
+      true
+    );
+    expect(
+      schedules.filter((schedule) => schedule.kind === "pattern").length
+    ).toBe(0);
   });
 });
