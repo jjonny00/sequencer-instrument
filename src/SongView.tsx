@@ -93,7 +93,7 @@ const getPerformanceNoteRangeTicks = (note: PerformanceNote) => {
   const startTicks = toTicks(note.time);
   const durationTicks = ensurePositiveTicks(
     toTicks(note.duration),
-    TICKS_PER_SIXTEENTH
+    TICKS_PER_QUARTER
   );
   return {
     startTicks,
@@ -495,7 +495,6 @@ export function SongView({
   const [isQuantizedRecording, setIsQuantizedRecording] = useState(true);
   const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
-  const liveRecordingNotesRef = useRef<PerformanceNote[]>([]);
   const wasRecordingRef = useRef(false);
   const recordingActive = Boolean(
     isPlaying &&
@@ -546,23 +545,9 @@ export function SongView({
     [playInstrument]
   );
 
-  const finalizeRecording = useCallback(() => {
-    const pending = liveRecordingNotesRef.current;
-    if (!pending.length) {
-      liveRecordingNotesRef.current = [];
-      setLiveGhostNotes([]);
-      return;
-    }
-    if (playInstrumentRowTrackId && onUpdatePerformanceTrack) {
-      const sortedNotes = pending.slice().sort(sortPerformanceNotes);
-      onUpdatePerformanceTrack(playInstrumentRowTrackId, (track: PerformanceTrack) => ({
-        ...track,
-        notes: [...track.notes, ...sortedNotes].sort(sortPerformanceNotes),
-      }));
-    }
-    liveRecordingNotesRef.current = [];
+  const clearLiveRecording = useCallback(() => {
     setLiveGhostNotes([]);
-  }, [onUpdatePerformanceTrack, playInstrumentRowTrackId]);
+  }, []);
 
   const capturePerformanceNote = useCallback(
     (
@@ -594,9 +579,10 @@ export function SongView({
 
       const sustainSource =
         sustain ?? chunk?.sustain ?? playInstrumentPattern.sustain ?? 0.5;
+      const defaultDurationTicks = TICKS_PER_QUARTER;
       let durationTicks = Tone.Time(sustainSource).toTicks();
       if (!Number.isFinite(durationTicks) || durationTicks <= 0) {
-        durationTicks = TICKS_PER_SIXTEENTH;
+        durationTicks = defaultDurationTicks;
       }
       if (isQuantizedRecording) {
         durationTicks = Math.max(
@@ -613,11 +599,20 @@ export function SongView({
         velocity: resolvedVelocity,
       };
 
-      liveRecordingNotesRef.current = [
-        ...liveRecordingNotesRef.current,
-        noteEntry,
-      ];
       setLiveGhostNotes((prev) => [...prev, noteEntry]);
+      if (onUpdatePerformanceTrack) {
+        onUpdatePerformanceTrack(
+          playInstrumentRowTrackId,
+          (track: PerformanceTrack) => {
+            const nextNotes = [...track.notes, noteEntry];
+            nextNotes.sort(sortPerformanceNotes);
+            return {
+              ...track,
+              notes: nextNotes,
+            };
+          }
+        );
+      }
     },
     [
       recordingActive,
@@ -625,6 +620,7 @@ export function SongView({
       playInstrumentPattern.note,
       playInstrumentPattern.sustain,
       playInstrumentRowTrackId,
+      onUpdatePerformanceTrack,
     ]
   );
 
@@ -657,25 +653,21 @@ export function SongView({
   useEffect(() => {
     if (recordingActive && !wasRecordingRef.current) {
       wasRecordingRef.current = true;
-      liveRecordingNotesRef.current = [];
       setLiveGhostNotes([]);
     } else if (!recordingActive && wasRecordingRef.current) {
       wasRecordingRef.current = false;
-      finalizeRecording();
+      clearLiveRecording();
     }
-  }, [recordingActive, finalizeRecording]);
+  }, [recordingActive, clearLiveRecording]);
 
   useEffect(() => {
     return () => {
-      if (liveRecordingNotesRef.current.length > 0) {
-        finalizeRecording();
-      }
+      clearLiveRecording();
     };
-  }, [finalizeRecording]);
+  }, [clearLiveRecording]);
 
   useEffect(() => {
     if (wasRecordingRef.current) return;
-    liveRecordingNotesRef.current = [];
     setLiveGhostNotes([]);
   }, [playInstrument, playInstrumentRowTrackId]);
 
