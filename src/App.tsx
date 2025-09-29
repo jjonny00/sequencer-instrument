@@ -34,6 +34,7 @@ import {
   createPatternGroupId,
   createPerformanceTrackId,
   createSongRow,
+  getPerformanceTracksSpanMeasures,
 } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
@@ -1171,21 +1172,29 @@ export default function App() {
 
   useEffect(() => {
     setCurrentSectionIndex((prev) => {
-      const maxColumns = songRows.reduce(
+      const rowColumnCount = songRows.reduce(
         (max, row) => Math.max(max, row.slots.length),
         0
       );
+      const performanceColumnCount = getPerformanceTracksSpanMeasures(
+        performanceTracks
+      );
+      const maxColumns = Math.max(rowColumnCount, performanceColumnCount);
       if (maxColumns === 0) return 0;
       return prev >= maxColumns ? maxColumns - 1 : prev;
     });
-  }, [songRows]);
+  }, [songRows, performanceTracks]);
 
   useEffect(() => {
     if (!started || viewMode !== "song") return;
-    const maxColumns = songRows.reduce(
+    const rowColumnCount = songRows.reduce(
       (max, row) => Math.max(max, row.slots.length),
       0
     );
+    const performanceColumnCount = getPerformanceTracksSpanMeasures(
+      performanceTracks
+    );
+    const maxColumns = Math.max(rowColumnCount, performanceColumnCount);
     if (maxColumns === 0) return;
 
     const ticksPerSection = Tone.Time("1m").toTicks();
@@ -1211,7 +1220,7 @@ export default function App() {
     return () => {
       Tone.Transport.clear(id);
     };
-  }, [started, viewMode, songRows]);
+  }, [started, viewMode, songRows, performanceTracks]);
 
   useEffect(() => {
     if (viewMode === "song") {

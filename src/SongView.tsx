@@ -14,7 +14,7 @@ import type {
   PerformanceTrack,
   SongRow,
 } from "./song";
-import { createSongRow } from "./song";
+import { createSongRow, getPerformanceTracksSpanMeasures } from "./song";
 import { getInstrumentColor, withAlpha } from "./utils/color";
 import {
   createTriggerKey,
@@ -339,10 +339,16 @@ const renderPerformanceSlotPreview = (
   const height = PREVIEW_HEIGHT;
   const columnStartTicks = columnStart * TICKS_PER_MEASURE;
   const columnEndTicks = columnEnd * TICKS_PER_MEASURE;
-  const combinedNotes = [
-    ...(performanceTrack?.notes ?? []),
-    ...(ghostNotes ?? []),
-  ];
+  const trackNotes = performanceTrack?.notes ?? [];
+  const combinedNotes = trackNotes.slice();
+  if (ghostNotes && ghostNotes.length) {
+    const trackNoteSet = new Set(trackNotes);
+    ghostNotes.forEach((note) => {
+      if (!trackNoteSet.has(note)) {
+        combinedNotes.push(note);
+      }
+    });
+  }
 
   if (combinedNotes.length === 0) {
     return (
@@ -357,12 +363,12 @@ const renderPerformanceSlotPreview = (
     );
   }
 
-  const trackNotes = combinedNotes.filter((note) => {
+  const trackNotesInColumn = combinedNotes.filter((note) => {
     const { startTicks, endTicks } = getPerformanceNoteRangeTicks(note);
     return endTicks > columnStartTicks && startTicks < columnEndTicks;
   });
 
-  if (trackNotes.length === 0) {
+  if (trackNotesInColumn.length === 0) {
     return (
       <div
         style={{
@@ -383,6 +389,21 @@ const renderPerformanceSlotPreview = (
       ? getInstrumentColor(performanceTrack.instrument)
       : "#27E0B0");
   const dotSize = PERFORMANCE_DOT_SIZE;
+
+  const seenNotes = new Set<PerformanceNote>();
+  const sortedNotes = trackNotesInColumn
+    .filter((note) => {
+      if (seenNotes.has(note)) {
+        return false;
+      }
+      seenNotes.add(note);
+      return true;
+    })
+    .sort((a, b) => {
+      const { startTicks: aStart } = getPerformanceNoteRangeTicks(a);
+      const { startTicks: bStart } = getPerformanceNoteRangeTicks(b);
+      return aStart - bStart;
+    });
 
   let highlightStyle: CSSProperties | null = null;
   if (highlightRange) {
@@ -422,7 +443,7 @@ const renderPerformanceSlotPreview = (
       }}
     >
       {highlightStyle ? <div style={highlightStyle} /> : null}
-      {trackNotes.map((note, index) => {
+      {sortedNotes.map((note, index) => {
         const { startTicks } = getPerformanceNoteRangeTicks(note);
         const clampedStart = Math.max(startTicks, columnStartTicks);
         const startRatio = range > 0 ? (clampedStart - columnStartTicks) / range : 0;
@@ -691,6 +712,34 @@ export function SongView({
   const sectionCount = useMemo(
     () => songRows.reduce((max, row) => Math.max(max, row.slots.length), 0),
     [songRows]
+  );
+
+  const performanceColumnCount = useMemo(
+    () => getPerformanceTracksSpanMeasures(performanceTracks),
+    [performanceTracks]
+  );
+
+  const ghostColumnCount = useMemo(() => {
+    if (liveGhostNotes.length === 0) {
+      return 0;
+    }
+    let maxEndTicks = 0;
+    liveGhostNotes.forEach((note) => {
+      const { endTicks } = getPerformanceNoteRangeTicks(note);
+      if (endTicks > maxEndTicks) {
+        maxEndTicks = endTicks;
+      }
+    });
+    if (maxEndTicks <= 0) {
+      return 0;
+    }
+    return Math.ceil(maxEndTicks / TICKS_PER_MEASURE);
+  }, [liveGhostNotes]);
+
+  const effectiveColumnCount = Math.max(
+    sectionCount,
+    performanceColumnCount,
+    ghostColumnCount
   );
 
   useEffect(() => {
@@ -1061,7 +1110,10 @@ export function SongView({
               </div>
             ) : (
               songRows.map((row, rowIndex) => {
-                const maxColumns = Math.max(sectionCount, row.slots.length);
+                const maxColumns = Math.max(
+                  effectiveColumnCount,
+                  row.slots.length
+                );
                 let labelTimer: number | null = null;
                 let longPressTriggered = false;
 
@@ -1142,13 +1194,20 @@ export function SongView({
                 const rowGhostNoteSet = isRecordingRow
                   ? liveGhostNoteSet
                   : undefined;
+                const trackNoteSet = performanceTrack
+                  ? new Set(performanceTrack.notes)
+                  : undefined;
+                const rowGhostDisplayNotes =
+                  rowGhostNotes.length && trackNoteSet
+                    ? rowGhostNotes.filter((note) => !trackNoteSet.has(note))
+                    : rowGhostNotes;
                 const performanceHasContent = isPerformanceRow
                   ? (performanceTrack?.notes.length ?? 0) > 0 ||
-                    rowGhostNotes.length > 0
+                    rowGhostDisplayNotes.length > 0
                   : false;
                 const totalPerformanceNotes = isPerformanceRow
                   ? (performanceTrack?.notes.length ?? 0) +
-                    (isRecordingRow ? rowGhostNotes.length : 0)
+                    (isRecordingRow ? rowGhostDisplayNotes.length : 0)
                   : 0;
                 const performanceHighlightRange =
                   isPerformanceRow && isPlaying
@@ -1405,7 +1464,7 @@ export function SongView({
                                       0,
                                       safeColumnCount,
                                       performanceAccent ?? rowAccent,
-                                      rowGhostNotes,
+                                      rowGhostDisplayNotes,
                                       rowGhostNoteSet,
                                       performanceHighlightRange
                                     )}
@@ -1445,7 +1504,7 @@ export function SongView({
                                 const columnBounds = getColumnTickBounds(columnIndex);
                                 const combinedPerformanceNotes = [
                                   ...(performanceTrack?.notes ?? []),
-                                  ...rowGhostNotes,
+                                  ...rowGhostDisplayNotes,
                                 ];
                                 const columnNoteCount = countPerformanceNotesInRange(
                                   combinedPerformanceNotes,
@@ -1592,7 +1651,7 @@ export function SongView({
                                                 columnStart,
                                                 columnEnd,
                                                 performanceAccent ?? rowAccent,
-                                                rowGhostNotes,
+                                                rowGhostDisplayNotes,
                                                 rowGhostNoteSet
                                               )
                                             : renderLoopSlotPreview(group)}

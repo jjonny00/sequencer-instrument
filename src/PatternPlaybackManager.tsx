@@ -17,6 +17,7 @@ import { isScaleName, type ScaleName } from "./music/scales";
 import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import { packs } from "./packs";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
+import { getPerformanceTracksSpanMeasures } from "./song";
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
@@ -135,9 +136,16 @@ export function PatternPlaybackManager({
 
   if (viewMode === "song") {
     const players: JSX.Element[] = [];
-    const arrangementColumns = songRows.reduce(
+    const rowColumnCount = songRows.reduce(
       (max, row) => Math.max(max, row.slots.length),
       0
+    );
+    const performanceColumnCount = getPerformanceTracksSpanMeasures(
+      performanceTracks
+    );
+    const arrangementColumns = Math.max(
+      rowColumnCount,
+      performanceColumnCount
     );
     const arrangementLoopTicks = arrangementColumns * TICKS_PER_MEASURE;
     const hasSoloRow = songRows.some((row) => row.solo);
