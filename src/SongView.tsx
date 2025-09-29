@@ -1764,18 +1764,10 @@ export function SongView({
           <IconButton
             icon="fiber_manual_record"
             label={recordingActive ? "Recording" : "Record"}
-            showLabel
             tone={isRecordEnabled ? "danger" : "default"}
             onClick={() => {
               setIsRecordEnabled((prev) => !prev);
             }}
-            description={
-              recordingActive
-                ? "Capturing notes into the performance row"
-                : isRecordEnabled
-                ? "Armed to record when playback is running"
-                : "Play instruments without recording"
-            }
             style={{
               minWidth: 0,
               ...(isRecordEnabled
@@ -1790,7 +1782,6 @@ export function SongView({
           <IconButton
             icon="piano"
             label="Play Instrument"
-            showLabel
             tone={isPlayInstrumentOpen ? "accent" : "default"}
             onClick={handleTogglePlayInstrumentPanel}
             style={{ minWidth: 0 }}
