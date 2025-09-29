@@ -496,14 +496,12 @@ export function SongView({
   const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
   const wasRecordingRef = useRef(false);
+  const hasPerformanceTarget = Boolean(playInstrumentRowTrackId);
   const recordingActive = Boolean(
-    isPlaying &&
-      isPlayInstrumentOpen &&
-      isRecordEnabled &&
-      playInstrumentRowTrackId
+    isRecordEnabled && isPlayInstrumentOpen && hasPerformanceTarget
   );
   const isRecordArmed = Boolean(
-    !recordingActive && isRecordEnabled && isPlayInstrumentOpen && playInstrumentRowTrackId
+    isRecordEnabled && !isPlayInstrumentOpen && hasPerformanceTarget
   );
 
   useEffect(() => {
@@ -549,42 +547,49 @@ export function SongView({
     setLiveGhostNotes([]);
   }, []);
 
-  const capturePerformanceNote = useCallback(
-    (
-      time: number | string,
-      velocity?: number,
-      noteName?: string,
-      sustain?: number,
-      chunk?: Chunk
-    ) => {
+  const handlePerformanceNoteRecorded = useCallback(
+    ({
+      eventTime,
+      noteName,
+      velocity,
+      durationSeconds,
+      mode,
+    }: {
+      eventTime: number;
+      noteName: string;
+      velocity: number;
+      durationSeconds?: number;
+      mode: "sync" | "free";
+    }) => {
       if (!recordingActive || !playInstrumentRowTrackId) {
         return;
       }
-      const resolvedVelocity =
-        velocity !== undefined ? Math.max(0, Math.min(1, velocity)) : 1;
-      const fallbackNote = chunk?.note ?? playInstrumentPattern.note ?? "C4";
-      const resolvedNote = noteName ?? fallbackNote;
 
-      let startTicks =
-        typeof time === "number"
-          ? Tone.Transport.getTicksAtTime(time)
-          : toTicks(time);
+      const resolvedVelocity = Math.max(0, Math.min(1, velocity));
+      const fallbackNote = playInstrumentPattern.note ?? "C4";
+      const resolvedNote = noteName || fallbackNote;
+
+      let startTicks = Tone.Transport.getTicksAtTime(eventTime);
       if (!Number.isFinite(startTicks) || startTicks < 0) {
         startTicks = Math.max(0, Tone.Transport.ticks);
       }
-      if (isQuantizedRecording) {
+
+      const shouldQuantize = mode === "sync" || isQuantizedRecording;
+      if (shouldQuantize) {
         startTicks =
           Math.round(startTicks / TICKS_PER_SIXTEENTH) * TICKS_PER_SIXTEENTH;
       }
 
-      const sustainSource =
-        sustain ?? chunk?.sustain ?? playInstrumentPattern.sustain ?? 0.5;
-      const defaultDurationTicks = TICKS_PER_QUARTER;
-      let durationTicks = Tone.Time(sustainSource).toTicks();
+      let durationTicks =
+        durationSeconds !== undefined
+          ? Tone.Time(Math.max(0.02, durationSeconds)).toTicks()
+          : Tone.Time(playInstrumentPattern.sustain ?? 0.5).toTicks();
+
       if (!Number.isFinite(durationTicks) || durationTicks <= 0) {
-        durationTicks = defaultDurationTicks;
+        durationTicks = TICKS_PER_QUARTER;
       }
-      if (isQuantizedRecording) {
+
+      if (shouldQuantize) {
         durationTicks = Math.max(
           TICKS_PER_SIXTEENTH,
           Math.round(durationTicks / TICKS_PER_SIXTEENTH) *
@@ -616,11 +621,11 @@ export function SongView({
     },
     [
       recordingActive,
-      isQuantizedRecording,
+      playInstrumentRowTrackId,
       playInstrumentPattern.note,
       playInstrumentPattern.sustain,
-      playInstrumentRowTrackId,
       onUpdatePerformanceTrack,
+      isQuantizedRecording,
     ]
   );
 
@@ -892,7 +897,6 @@ export function SongView({
       sustain?: number,
       chunk?: Chunk
     ) => {
-      capturePerformanceNote(time, velocity, note, sustain, chunk);
       trigger(
         time,
         velocity,
@@ -908,7 +912,6 @@ export function SongView({
     playInstrument,
     triggers,
     playInstrumentCharacterId,
-    capturePerformanceNote,
   ]);
   const liveRowIndex = useMemo(() => {
     if (!playInstrumentRowTrackId) return -1;
@@ -922,7 +925,7 @@ export function SongView({
   const liveRowMessage = recordingActive
     ? `${liveRowLabel ?? "Live row"} is recording now`
     : isRecordArmed
-    ? `${liveRowLabel ?? "Live row"} armed — press play to capture`
+    ? `${liveRowLabel ?? "Live row"} armed — open the instrument panel to capture`
     : isRecordEnabled
     ? `${liveRowLabel ?? "Live row"} ready to record`
     : liveRowLabel
@@ -2002,6 +2005,7 @@ export function SongView({
                 onUpdatePattern={handlePlayInstrumentPatternUpdate}
                 trigger={playInstrumentTrigger}
                 isRecording={recordingActive}
+                onPerformanceNote={handlePerformanceNoteRecorded}
               />
             </div>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>

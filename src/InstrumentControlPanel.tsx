@@ -71,6 +71,13 @@ interface InstrumentControlPanelProps {
     characterId?: string | null;
     packId?: string | null;
   }) => void;
+  onPerformanceNote?: (payload: {
+    eventTime: number;
+    noteName: string;
+    velocity: number;
+    durationSeconds?: number;
+    mode: "sync" | "free";
+  }) => void;
 }
 
 interface SliderProps {
@@ -313,6 +320,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   onRecordingChange,
   onPresetApplied,
   onHarmoniaRealtimeChange,
+  onPerformanceNote,
 }) => {
   const pattern = track.pattern;
   const patternCharacterId = pattern?.characterId ?? null;
@@ -940,6 +948,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         recordingAnchorRef.current = null;
         const ticksPerStep = Tone.Transport.PPQ / 4;
         const ticks = Tone.Transport.getTicksAtTime(eventTime);
+        let performanceDurationSeconds =
+          typeof duration === "number" && duration > 0
+            ? duration
+            : undefined;
         onUpdatePattern((chunk) => {
           const length = chunk.steps.length || 16;
           const stepIndex = length
@@ -1032,7 +1044,37 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             Object.assign(nextChunk, chunkOverrides);
           }
 
+          if (performanceDurationSeconds === undefined) {
+            const sustainSource =
+              chunkOverrides?.sustain ??
+              pattern?.sustain ??
+              chunk.sustain ??
+              0.5;
+            try {
+              performanceDurationSeconds = Tone.Time(sustainSource).toSeconds();
+            } catch (error) {
+              console.warn(
+                "Failed to resolve sustain duration for performance note",
+                sustainSource,
+                error
+              );
+              performanceDurationSeconds = undefined;
+            }
+          }
+
           return nextChunk;
+        });
+        const resolvedDurationSeconds =
+          performanceDurationSeconds !== undefined &&
+          Number.isFinite(performanceDurationSeconds)
+            ? Math.max(0.02, performanceDurationSeconds)
+            : Tone.Time("4n").toSeconds();
+        onPerformanceNote?.({
+          eventTime,
+          noteName,
+          velocity,
+          durationSeconds: resolvedDurationSeconds,
+          mode,
         });
         return;
       }
@@ -1128,6 +1170,13 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
         return nextChunk;
       });
+      onPerformanceNote?.({
+        eventTime,
+        noteName,
+        velocity,
+        durationSeconds,
+        mode,
+      });
     },
     [
       onUpdatePattern,
@@ -1140,6 +1189,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       chordDefinition,
       harmoniaLastChordRef,
       harmoniaPadStateRef,
+      onPerformanceNote,
     ]
   );
 
