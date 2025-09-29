@@ -9,6 +9,7 @@ import type { StoredProjectData } from "./storage";
 import { createStoredProjectPayload } from "./storage";
 import type { TriggerMap } from "./tracks";
 import { filterValueToFrequency } from "./utils/audio";
+import { performanceSettingsToChunk } from "./song";
 import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
@@ -56,6 +57,7 @@ interface PerformanceSchedule {
   events: PerformanceScheduleEvent[];
   instrumentId: string;
   characterId?: string;
+  chunk?: Chunk;
 }
 
 type PlaybackSchedule = PatternSchedule | PerformanceSchedule;
@@ -657,11 +659,21 @@ const buildSongSchedules = (
       events.sort((a, b) => a.time - b.time);
       const lastEvent = events[events.length - 1];
       maxDuration = Math.max(maxDuration, lastEvent.time + lastEvent.duration);
+      const chunk = performanceSettingsToChunk(
+        performanceTrack.instrument,
+        performanceTrack.settings,
+        {
+          id: `${performanceTrack.id}-performance-settings`,
+          name: `${performanceTrack.instrument}-performance-settings`,
+          characterId: performanceTrack.characterId ?? null,
+        }
+      );
       schedules.push({
         kind: "performance",
         events,
         instrumentId: performanceTrack.instrument,
         characterId: performanceTrack.characterId ?? undefined,
+        chunk,
       });
       return;
     }
@@ -827,7 +839,13 @@ const schedulePattern = (
 const schedulePerformance = (
   transport: TransportClass,
   schedule: PerformanceSchedule,
-  onTrigger: (time: number, velocity: number, note: string, duration: number) => void
+  onTrigger: (
+    time: number,
+    velocity: number,
+    note: string,
+    duration: number,
+    chunk?: Chunk
+  ) => void
 ): number[] => {
   const scheduledIds: number[] = [];
   schedule.events.forEach((event) => {
@@ -841,7 +859,13 @@ const schedulePerformance = (
       return;
     }
     const id = transport.schedule((transportTime) => {
-      onTrigger(transportTime, event.velocity, event.note, event.duration);
+      onTrigger(
+        transportTime,
+        event.velocity,
+        event.note,
+        event.duration,
+        schedule.chunk
+      );
     }, event.time);
     scheduledIds.push(id);
   });
@@ -929,8 +953,16 @@ export const renderProjectAudioBuffer = async (
         const ids = schedulePerformance(
           transport,
           schedule,
-          (time, velocity, note, duration) => {
-            trigger(time, velocity, undefined, note, duration, undefined, schedule.characterId);
+          (time, velocity, note, duration, chunk) => {
+            trigger(
+              time,
+              velocity,
+              undefined,
+              note,
+              duration,
+              chunk ?? schedule.chunk,
+              schedule.characterId
+            );
           }
         );
         scheduledEventIds.push(...ids);

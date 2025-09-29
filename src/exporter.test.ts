@@ -56,6 +56,13 @@ describe("renderProjectAudioBuffer", () => {
       color: "#ffffff",
       packId: chiptunePack.id,
       characterId: keyboardCharacterId,
+      settings: {
+        note: "C4",
+        sustain: 0.6,
+        style: "up-down",
+        reverb: 0.35,
+        arpRate: "8n",
+      },
       notes: [
         { time: "0:0:0", note: "C4", duration: "4n", velocity: 1 },
         { time: "0:2:0", note: "E4", duration: "4n", velocity: 0.9 },
@@ -106,6 +113,11 @@ describe("renderProjectAudioBuffer", () => {
     expect(performanceSchedule).toBeDefined();
     expect(duration).toBeGreaterThan(1);
 
+    if (performanceSchedule?.kind === "performance") {
+      expect(performanceSchedule.chunk?.style).toBe("up-down");
+      expect(performanceSchedule.chunk?.reverb).toBeCloseTo(0.35);
+    }
+
     const performanceEvents =
       performanceSchedule?.kind === "performance"
         ? performanceSchedule.events
@@ -132,6 +144,12 @@ describe("createStoredProjectPayload", () => {
       color: "#123456",
       packId: chiptunePack.id,
       characterId: keyboardCharacterId,
+      settings: {
+        note: "D4",
+        sustain: 0.4,
+        style: "random",
+        delay: 0.2,
+      },
       notes: [
         { time: "0:0:0", note: "C4", duration: "8n", velocity: 0.8 },
         { time: "1:0:0", note: "G4", duration: "4n", velocity: 1 },
@@ -175,6 +193,12 @@ describe("createStoredProjectPayload", () => {
     expect(payload.data.performanceTracks[0].notes).not.toBe(
       performanceTrack.notes
     );
+    expect(payload.data.performanceTracks[0].settings).toEqual(
+      performanceTrack.settings
+    );
+    expect(payload.data.performanceTracks[0].settings).not.toBe(
+      performanceTrack.settings
+    );
     expect(payload.data.songRows[1]?.performanceTrackId).toBe(
       performanceTrack.id
     );
@@ -195,6 +219,9 @@ describe("resolvePlaybackSchedules", () => {
       color: "#abcdef",
       packId: chiptunePack.id,
       characterId: keyboardCharacterId,
+      settings: {
+        sustain: 0.5,
+      },
       notes: [
         { time: "0:0:0", note: "C4", duration: "4n", velocity: 1 },
         { time: "2:0:0", note: "E4", duration: "4n", velocity: 0.7 },

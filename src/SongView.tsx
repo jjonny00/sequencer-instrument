@@ -14,7 +14,11 @@ import type {
   PerformanceTrack,
   SongRow,
 } from "./song";
-import { createSongRow, getPerformanceTracksSpanMeasures } from "./song";
+import {
+  createPerformanceSettingsSnapshot,
+  createSongRow,
+  getPerformanceTracksSpanMeasures,
+} from "./song";
 import { getInstrumentColor, withAlpha } from "./utils/color";
 import {
   createTriggerKey,
@@ -510,6 +514,7 @@ export function SongView({
   const [playInstrumentPattern, setPlayInstrumentPattern] = useState<Chunk>(() =>
     createPerformancePattern("keyboard")
   );
+  const latestPlayPatternRef = useRef(playInstrumentPattern);
   const [playInstrumentRowTrackId, setPlayInstrumentRowTrackId] = useState<
     string | null
   >(activePerformanceTrackId);
@@ -528,6 +533,23 @@ export function SongView({
   useEffect(() => {
     onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
   }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
+
+  const applyPerformanceSettings = useCallback(
+    (pattern: Chunk) => {
+      if (!onUpdatePerformanceTrack) {
+        return;
+      }
+      if (!playInstrumentRowTrackId) {
+        return;
+      }
+      const snapshot = createPerformanceSettingsSnapshot(pattern);
+      onUpdatePerformanceTrack(playInstrumentRowTrackId, (track) => ({
+        ...track,
+        settings: snapshot,
+      }));
+    },
+    [onUpdatePerformanceTrack, playInstrumentRowTrackId]
+  );
 
   const handleTogglePlayInstrumentPanel = useCallback(() => {
     setPlayInstrumentOpen((prev) => !prev);
@@ -558,10 +580,12 @@ export function SongView({
             : undefined,
         };
         const next = updater(draft);
-        return { ...next, instrument: playInstrument };
+        const nextPattern = { ...next, instrument: playInstrument };
+        applyPerformanceSettings(nextPattern);
+        return nextPattern;
       });
     },
-    [playInstrument]
+    [playInstrument, applyPerformanceSettings]
   );
 
   const clearLiveRecording = useCallback(() => {
@@ -627,6 +651,9 @@ export function SongView({
 
       setLiveGhostNotes((prev) => [...prev, noteEntry]);
       if (onUpdatePerformanceTrack) {
+        const settingsSnapshot = createPerformanceSettingsSnapshot(
+          playInstrumentPattern
+        );
         onUpdatePerformanceTrack(
           playInstrumentRowTrackId,
           (track: PerformanceTrack) => {
@@ -635,6 +662,7 @@ export function SongView({
             return {
               ...track,
               notes: nextNotes,
+              settings: settingsSnapshot,
             };
           }
         );
@@ -645,6 +673,7 @@ export function SongView({
       playInstrumentRowTrackId,
       playInstrumentPattern.note,
       playInstrumentPattern.sustain,
+      playInstrumentPattern,
       onUpdatePerformanceTrack,
       isQuantizedRecording,
     ]
@@ -663,8 +692,19 @@ export function SongView({
   }, [activePerformanceTrackId, isPlayInstrumentOpen]);
 
   useEffect(() => {
-    setPlayInstrumentPattern(createPerformancePattern(playInstrument));
-  }, [playInstrument]);
+    const pattern = createPerformancePattern(playInstrument);
+    setPlayInstrumentPattern(pattern);
+    applyPerformanceSettings(pattern);
+  }, [playInstrument, applyPerformanceSettings]);
+
+  useEffect(() => {
+    latestPlayPatternRef.current = playInstrumentPattern;
+  }, [playInstrumentPattern]);
+
+  useEffect(() => {
+    if (!playInstrumentRowTrackId) return;
+    applyPerformanceSettings(latestPlayPatternRef.current);
+  }, [playInstrumentRowTrackId, applyPerformanceSettings]);
 
   useEffect(() => {
     setPlayInstrumentPattern((prev) => {

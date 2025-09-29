@@ -1,5 +1,6 @@
 import type { Chunk } from "./chunks";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
+import { clonePerformanceTrackSettings } from "./song";
 import type { Track } from "./tracks";
 
 const STORAGE_KEY = "sequencer_projects";
@@ -82,6 +83,7 @@ const clonePerformanceTrack = (
   track: PerformanceTrack
 ): PerformanceTrack => ({
   ...track,
+  settings: clonePerformanceTrackSettings(track.settings),
   notes: track.notes.map((note) => clonePerformanceNote(note)),
 });
 
