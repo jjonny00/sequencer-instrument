@@ -1,4 +1,5 @@
 import * as Tone from "tone";
+import { getContext } from "tone";
 import { fromContext } from "tone/build/esm/fromContext";
 import type { TransportClass } from "tone/build/esm/core/clock/Transport";
 
@@ -34,6 +35,7 @@ type ToneInstrument = Tone.ToneAudioNode & {
 };
 
 interface PatternSchedule {
+  kind: "pattern";
   pattern: Chunk;
   startTime: number;
   stopTime: number;
@@ -41,6 +43,22 @@ interface PatternSchedule {
   instrumentId: string;
   characterId?: string;
 }
+
+interface PerformanceScheduleEvent {
+  time: number;
+  duration: number;
+  velocity: number;
+  note: string;
+}
+
+interface PerformanceSchedule {
+  kind: "performance";
+  events: PerformanceScheduleEvent[];
+  instrumentId: string;
+  characterId?: string;
+}
+
+type PlaybackSchedule = PatternSchedule | PerformanceSchedule;
 
 interface SchedulePatternOptions {
   pattern: Chunk;
@@ -72,6 +90,111 @@ export interface AudioExportOptions {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
+
+const DEFAULT_BPM = 120;
+
+const resolveBpm = (value: number | undefined) =>
+  Number.isFinite(value) && value !== undefined && value > 0 ? value : DEFAULT_BPM;
+
+const getQuarterSecondsForBpm = (bpm: number) => 60 / bpm;
+
+const getMeasureSecondsForBpm = (bpm: number) => getQuarterSecondsForBpm(bpm) * 4;
+
+const parseSecondsLiteral = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!trimmed.endsWith("s")) {
+    return null;
+  }
+  const parsed = Number.parseFloat(trimmed.slice(0, -1));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
+const parseBarsBeatsSixteenths = (value: string, bpm: number): number | null => {
+  const parts = value.split(":");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [barsStr, beatsStr, sixteenthStr] = parts;
+  const bars = Number.parseInt(barsStr, 10);
+  const beats = Number.parseInt(beatsStr, 10);
+  const sixteenths = Number.parseInt(sixteenthStr, 10);
+  if ([bars, beats, sixteenths].some((component) => Number.isNaN(component))) {
+    return null;
+  }
+  const measureSeconds = getMeasureSecondsForBpm(bpm);
+  const quarterSeconds = getQuarterSecondsForBpm(bpm);
+  const sixteenthSeconds = quarterSeconds / 4;
+  return (
+    Math.max(0, bars) * measureSeconds +
+    Math.max(0, beats) * quarterSeconds +
+    Math.max(0, sixteenths) * sixteenthSeconds
+  );
+};
+
+const parseNotationDuration = (value: string, bpm: number): number | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const dotted = trimmed.endsWith(".");
+  const notation = dotted ? trimmed.slice(0, -1) : trimmed;
+  const match = /^([0-9]*\.?[0-9]+)([mnt])$/i.exec(notation);
+  if (!match) {
+    return null;
+  }
+  const amount = Number.parseFloat(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  const type = match[2].toLowerCase();
+  const quarterSeconds = getQuarterSecondsForBpm(bpm);
+  let seconds: number;
+  switch (type) {
+    case "m":
+      seconds = amount * getMeasureSecondsForBpm(bpm);
+      break;
+    case "n":
+      seconds = (4 / amount) * quarterSeconds;
+      break;
+    case "t":
+      seconds = (4 / amount) * quarterSeconds * (2 / 3);
+      break;
+    default:
+      return null;
+  }
+  if (dotted) {
+    seconds *= 1.5;
+  }
+  return seconds;
+};
+
+const toTransportSeconds = (
+  value: string | number | undefined | null,
+  bpm: number
+): number => {
+  if (value === undefined || value === null) {
+    return 0;
+  }
+  if (typeof value === "number") {
+    return value * getMeasureSecondsForBpm(bpm);
+  }
+  const literalSeconds = parseSecondsLiteral(value);
+  if (literalSeconds !== null) {
+    return literalSeconds;
+  }
+  const barsBeatsSeconds = parseBarsBeatsSixteenths(value, bpm);
+  if (barsBeatsSeconds !== null) {
+    return barsBeatsSeconds;
+  }
+  const notationSeconds = parseNotationDuration(value, bpm);
+  if (notationSeconds !== null) {
+    return notationSeconds;
+  }
+  return 0;
+};
+
+const ensurePositiveSeconds = (value: number, fallback: number) =>
+  Number.isFinite(value) && value > 0 ? value : fallback;
 
 const sanitizeProjectName = (name: string) => {
   const trimmed = name.trim();
@@ -433,7 +556,7 @@ const createOfflineTriggerMap = (
   return { triggerMap, dispose };
 };
 
-const getPatternLoopDurationSeconds = (pattern: Chunk) => {
+const getPatternLoopDurationSeconds = (pattern: Chunk, bpm: number) => {
   if (pattern.timingMode === "free" && pattern.noteEvents && pattern.noteEvents.length) {
     const events = pattern.noteEvents.slice().sort((a, b) => a.time - b.time);
     const loopLength = pattern.noteLoopLength ?? 0;
@@ -444,21 +567,24 @@ const getPatternLoopDurationSeconds = (pattern: Chunk) => {
     return computed > 0 ? computed : 0;
   }
   const stepCount = pattern.steps && pattern.steps.length ? pattern.steps.length : 16;
-  return stepCount * Tone.Time("16n").toSeconds();
+  return stepCount * (getMeasureSecondsForBpm(bpm) / 16);
 };
 
 const buildTrackSchedules = (
   project: StoredProjectData
-): { schedules: PatternSchedule[]; duration: number } => {
-  const schedules: PatternSchedule[] = [];
+): { schedules: PlaybackSchedule[]; duration: number } => {
+  const schedules: PlaybackSchedule[] = [];
+  const bpm = resolveBpm(project.bpm);
+  const measureSeconds = getMeasureSecondsForBpm(bpm);
   let maxDuration = 0;
   project.tracks.forEach((track) => {
     if (!track.pattern) return;
     if (!track.instrument) return;
     if (track.muted) return;
-    const patternDuration = getPatternLoopDurationSeconds(track.pattern);
+    const patternDuration = getPatternLoopDurationSeconds(track.pattern, bpm);
     maxDuration = Math.max(maxDuration, patternDuration);
     schedules.push({
+      kind: "pattern",
       pattern: track.pattern,
       startTime: 0,
       stopTime: 0,
@@ -467,8 +593,7 @@ const buildTrackSchedules = (
       characterId: track.source?.characterId ?? track.pattern.characterId,
     });
   });
-  const minDuration = Tone.Time("1m").toSeconds();
-  const duration = Math.max(maxDuration, minDuration);
+  const duration = Math.max(maxDuration, measureSeconds);
   return {
     schedules: schedules.map((schedule) => ({
       ...schedule,
@@ -480,23 +605,65 @@ const buildTrackSchedules = (
 
 const buildSongSchedules = (
   project: StoredProjectData
-): { schedules: PatternSchedule[]; duration: number } => {
-  const schedules: PatternSchedule[] = [];
+): { schedules: PlaybackSchedule[]; duration: number } => {
+  const schedules: PlaybackSchedule[] = [];
+  const bpm = resolveBpm(project.bpm);
+  const measureSeconds = getMeasureSecondsForBpm(bpm);
   const sectionCount = project.songRows.reduce(
     (max, row) => Math.max(max, row.slots.length),
     0
   );
-  if (sectionCount === 0) {
-    return { schedules: [], duration: Tone.Time("1m").toSeconds() };
-  }
   const patternGroupMap = new Map(
     project.patternGroups.map((group) => [group.id, group])
   );
-  const measureSeconds = Tone.Time("1m").toSeconds();
+  const performanceTrackMap = new Map(
+    (project.performanceTracks ?? []).map((track) => [track.id, track])
+  );
+  let maxDuration = sectionCount > 0 ? sectionCount * measureSeconds : 0;
   project.songRows.forEach((row) => {
     if (row.muted) return;
     const velocityScale = clamp(row.velocity ?? 1, 0, 1);
     if (velocityScale <= 0) return;
+    if (row.performanceTrackId) {
+      const performanceTrack = performanceTrackMap.get(row.performanceTrackId);
+      if (!performanceTrack) {
+        return;
+      }
+      const events: PerformanceScheduleEvent[] = [];
+      const defaultDurationSeconds = getQuarterSecondsForBpm(bpm);
+      performanceTrack.notes.forEach((note) => {
+        const startSeconds = Math.max(0, toTransportSeconds(note.time, bpm));
+        const durationSeconds = ensurePositiveSeconds(
+          toTransportSeconds(note.duration, bpm),
+          defaultDurationSeconds
+        );
+        const velocity = clamp((note.velocity ?? 1) * velocityScale, 0, 1);
+        if (velocity <= 0) {
+          return;
+        }
+        if (!Number.isFinite(startSeconds) || !Number.isFinite(durationSeconds)) {
+          return;
+        }
+        events.push({
+          time: startSeconds,
+          duration: durationSeconds,
+          velocity,
+          note: note.note,
+        });
+      });
+      if (events.length === 0) {
+        return;
+      }
+      events.sort((a, b) => a.time - b.time);
+      const lastEvent = events[events.length - 1];
+      maxDuration = Math.max(maxDuration, lastEvent.time + lastEvent.duration);
+      schedules.push({
+        kind: "performance",
+        events,
+        instrumentId: performanceTrack.instrument,
+      });
+      return;
+    }
     for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex += 1) {
       const groupId = row.slots[sectionIndex] ?? null;
       if (!groupId) continue;
@@ -509,6 +676,7 @@ const buildSongSchedules = (
         if (!track.instrument) return;
         if (track.muted) return;
         schedules.push({
+          kind: "pattern",
           pattern: track.pattern,
           startTime: sectionStart,
           stopTime: sectionEnd,
@@ -521,7 +689,7 @@ const buildSongSchedules = (
   });
   return {
     schedules,
-    duration: Math.max(sectionCount * measureSeconds, measureSeconds),
+    duration: Math.max(maxDuration, measureSeconds),
   };
 };
 
@@ -655,6 +823,130 @@ const schedulePattern = (
   return scheduledIds;
 };
 
+const schedulePerformance = (
+  transport: TransportClass,
+  schedule: PerformanceSchedule,
+  onTrigger: (time: number, velocity: number, note: string, duration: number) => void
+): number[] => {
+  const scheduledIds: number[] = [];
+  schedule.events.forEach((event) => {
+    if (event.velocity <= 0) {
+      return;
+    }
+    if (!Number.isFinite(event.time) || event.time < 0) {
+      return;
+    }
+    if (!Number.isFinite(event.duration) || event.duration <= 0) {
+      return;
+    }
+    const id = transport.schedule((transportTime) => {
+      onTrigger(transportTime, event.velocity, event.note, event.duration);
+    }, event.time);
+    scheduledIds.push(id);
+  });
+  return scheduledIds;
+};
+
+interface RenderProjectAudioOptions {
+  project: StoredProjectData;
+  pack: Pack;
+  viewMode: "track" | "song";
+}
+
+interface RenderProjectAudioResult {
+  buffer: Tone.ToneAudioBuffer;
+  duration: number;
+}
+
+export const resolvePlaybackSchedules = (
+  project: StoredProjectData,
+  viewMode: "track" | "song"
+) => {
+  const hasSongArrangement =
+    viewMode === "song" &&
+    project.songRows.some((row) => row.slots.some((slot) => Boolean(slot)));
+
+  let scheduleResult = hasSongArrangement
+    ? buildSongSchedules(project)
+    : buildTrackSchedules(project);
+
+  if (hasSongArrangement && scheduleResult.schedules.length === 0) {
+    scheduleResult = buildTrackSchedules(project);
+  }
+
+  return scheduleResult;
+};
+
+export const renderProjectAudioBuffer = async (
+  options: RenderProjectAudioOptions
+): Promise<RenderProjectAudioResult> => {
+  const { project, pack, viewMode } = options;
+
+  const context = getContext();
+  if (context?.transport?.bpm) {
+    context.transport.bpm.value = project.bpm ?? 120;
+  }
+  if (Tone.Transport?.bpm) {
+    Tone.Transport.bpm.value = project.bpm ?? 120;
+  }
+
+  const { schedules, duration } = resolvePlaybackSchedules(project, viewMode);
+  const tailSeconds = 0.8;
+  const totalRenderDuration = duration + tailSeconds;
+
+  let cleanup: (() => void) | undefined;
+  const toneBuffer = await Tone.Offline(async (offlineContext) => {
+    const tone = fromContext(offlineContext);
+    const transport = offlineContext.transport;
+    transport.cancel(0);
+    transport.position = 0;
+    transport.seconds = 0;
+    transport.bpm.value = project.bpm ?? 120;
+    const { triggerMap, dispose } = createOfflineTriggerMap(tone, pack);
+    const scheduledEventIds: number[] = [];
+
+    schedules.forEach((schedule) => {
+      const trigger = triggerMap[schedule.instrumentId];
+      if (!trigger) return;
+      if (schedule.kind === "pattern") {
+        const ids = schedulePattern(transport, {
+          pattern: schedule.pattern,
+          startTime: schedule.startTime,
+          stopTime: schedule.stopTime,
+          velocityScale: schedule.velocityScale,
+          onTrigger: (time, velocity, pitch, note, sustain, chunk) => {
+            trigger(time, velocity, pitch, note, sustain, chunk, schedule.characterId);
+          },
+        });
+        scheduledEventIds.push(...ids);
+      } else {
+        const ids = schedulePerformance(
+          transport,
+          schedule,
+          (time, velocity, note, duration) => {
+            trigger(time, velocity, undefined, note, duration, undefined, schedule.characterId);
+          }
+        );
+        scheduledEventIds.push(...ids);
+      }
+    });
+
+    cleanup = () => {
+      scheduledEventIds.forEach((id) => {
+        transport.clear(id);
+      });
+      dispose();
+    };
+
+    transport.start(0);
+    transport.stop(totalRenderDuration);
+  }, totalRenderDuration);
+
+  cleanup?.();
+
+  return { buffer: toneBuffer, duration: totalRenderDuration };
+};
+
 const encodeToneBufferToWav = (buffer: Tone.ToneAudioBuffer): ArrayBuffer => {
   const channelData = buffer.toArray();
   const sampleRate = buffer.sampleRate;
@@ -719,65 +1011,13 @@ export const exportProjectAudio = async (
 
   onProgress?.({ step: "preparing", message: "Preparing export…" });
 
-  const hasSongArrangement =
-    viewMode === "song" &&
-    project.songRows.some((row) => row.slots.some((slot) => Boolean(slot)));
-
-  let scheduleResult = hasSongArrangement
-    ? buildSongSchedules(project)
-    : buildTrackSchedules(project);
-
-  if (hasSongArrangement && scheduleResult.schedules.length === 0) {
-    scheduleResult = buildTrackSchedules(project);
-  }
-
-  const { schedules, duration } = scheduleResult;
-  const tailSeconds = 0.8;
-  const totalRenderDuration = duration + tailSeconds;
-
   onProgress?.({ step: "rendering", message: "Rendering audio…" });
 
-  let cleanup: (() => void) | undefined;
-  let toneBuffer: Tone.ToneAudioBuffer;
-  try {
-    toneBuffer = await Tone.Offline(async (offlineContext) => {
-      const tone = fromContext(offlineContext);
-      const transport = offlineContext.transport;
-      transport.cancel(0);
-      transport.position = 0;
-      transport.seconds = 0;
-      transport.bpm.value = project.bpm ?? 120;
-      const { triggerMap, dispose } = createOfflineTriggerMap(tone, pack);
-      const scheduledEventIds: number[] = [];
-
-      schedules.forEach((schedule) => {
-        const trigger = triggerMap[schedule.instrumentId];
-        if (!trigger) return;
-        const ids = schedulePattern(transport, {
-          pattern: schedule.pattern,
-          startTime: schedule.startTime,
-          stopTime: schedule.stopTime,
-          velocityScale: schedule.velocityScale,
-          onTrigger: (time, velocity, pitch, note, sustain, chunk) => {
-            trigger(time, velocity, pitch, note, sustain, chunk, schedule.characterId);
-          },
-        });
-        scheduledEventIds.push(...ids);
-      });
-
-      cleanup = () => {
-        scheduledEventIds.forEach((id) => {
-          transport.clear(id);
-        });
-        dispose();
-      };
-
-      transport.start(0);
-      transport.stop(totalRenderDuration);
-    }, totalRenderDuration);
-  } finally {
-    cleanup?.();
-  }
+  const { buffer: toneBuffer } = await renderProjectAudioBuffer({
+    project,
+    pack,
+    viewMode,
+  });
 
   onProgress?.({ step: "encoding", message: "Encoding WAV…" });
   const wavBuffer = encodeToneBufferToWav(toneBuffer);
