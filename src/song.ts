@@ -7,9 +7,9 @@ export interface PatternGroup {
 }
 
 export interface PerformanceNote {
-  time: number;
+  time: string | number;
   note: string;
-  duration: number;
+  duration: string | number;
   velocity: number;
 }
 
@@ -24,6 +24,7 @@ export interface SongRow {
   slots: (string | null)[];
   muted: boolean;
   velocity: number;
+  solo?: boolean;
   performanceTrackId?: string | null;
 }
 
@@ -34,6 +35,7 @@ export const createSongRow = (length = 0): SongRow => ({
   slots: Array.from({ length }, () => null),
   muted: false,
   velocity: 1,
+  solo: false,
   performanceTrackId: null,
 });
 

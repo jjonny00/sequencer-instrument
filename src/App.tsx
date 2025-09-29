@@ -1364,6 +1364,49 @@ export default function App() {
     ]
   );
 
+  const updatePerformanceTrack = useCallback(
+    (
+      trackId: string,
+      updater: (track: PerformanceTrack) => PerformanceTrack
+    ) => {
+      setPerformanceTracks((prev) => {
+        const index = prev.findIndex((track) => track.id === trackId);
+        if (index < 0) {
+          return prev;
+        }
+        const current = prev[index];
+        const nextTrack = updater(current);
+        if (nextTrack === current) {
+          return prev;
+        }
+        const next = prev.slice();
+        next[index] = nextTrack;
+        return next;
+      });
+    },
+    [setPerformanceTracks]
+  );
+
+  const removePerformanceTrack = useCallback(
+    (trackId: string) => {
+      if (!trackId) return;
+      setPerformanceTracks((prev) =>
+        prev.filter((track) => track.id !== trackId)
+      );
+      setSongRows((rows) =>
+        rows.map((row) =>
+          row.performanceTrackId === trackId
+            ? { ...row, performanceTrackId: null }
+            : row
+        )
+      );
+      setActivePerformanceTrackId((current) =>
+        current === trackId ? null : current
+      );
+    },
+    [setPerformanceTracks, setSongRows, setActivePerformanceTrackId]
+  );
+
   const clearTrackPattern = useCallback(
     (trackId: number) => {
       updateTrackPattern(trackId, (pattern) => {
@@ -2995,6 +3038,8 @@ export default function App() {
                 triggers={triggers}
                 onEnsurePerformanceRow={ensurePerformanceRow}
                 activePerformanceTrackId={activePerformanceTrackId}
+                onUpdatePerformanceTrack={updatePerformanceTrack}
+                onRemovePerformanceTrack={removePerformanceTrack}
                 onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
               />
             )}
@@ -3007,6 +3052,7 @@ export default function App() {
             patternGroups={patternGroups}
             songRows={songRows}
             currentSectionIndex={currentSectionIndex}
+            performanceTracks={performanceTracks}
           />
         </>
       )}
