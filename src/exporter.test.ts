@@ -5,6 +5,7 @@ import type { Chunk } from "./chunks";
 import type { StoredProjectData } from "./storage";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import type { Track } from "./tracks";
+import { createStoredProjectPayload } from "./storage";
 
 describe("renderProjectAudioBuffer", () => {
   it("renders loop and performance tracks together", async () => {
@@ -105,5 +106,107 @@ describe("renderProjectAudioBuffer", () => {
     const notes = performanceEvents.map((event) => event.note);
     expect(notes).toContain("C4");
     expect(notes).toContain("E4");
+  });
+});
+
+describe("createStoredProjectPayload", () => {
+  it("serializes performance tracks with their notes", () => {
+    const performanceTrack: PerformanceTrack = {
+      id: "perf-json",
+      instrument: "keyboard",
+      color: "#123456",
+      notes: [
+        { time: "0:0:0", note: "C4", duration: "8n", velocity: 0.8 },
+        { time: "1:0:0", note: "G4", duration: "4n", velocity: 1 },
+      ],
+    };
+
+    const loopRow: SongRow = {
+      slots: [null],
+      muted: false,
+      velocity: 1,
+      solo: false,
+      performanceTrackId: null,
+    };
+
+    const performanceRow: SongRow = {
+      slots: [null],
+      muted: false,
+      velocity: 1,
+      solo: false,
+      performanceTrackId: performanceTrack.id,
+    };
+
+    const project: StoredProjectData = {
+      packIndex: 0,
+      bpm: 120,
+      subdivision: "16n",
+      isPlaying: false,
+      tracks: [],
+      patternGroups: [],
+      songRows: [loopRow, performanceRow],
+      performanceTracks: [performanceTrack],
+      selectedGroupId: null,
+      currentSectionIndex: 0,
+    };
+
+    const payload = createStoredProjectPayload(project);
+
+    expect(payload.data.performanceTracks).toHaveLength(1);
+    expect(payload.data.performanceTracks[0]).toEqual(performanceTrack);
+    expect(payload.data.performanceTracks[0]).not.toBe(performanceTrack);
+    expect(payload.data.performanceTracks[0].notes).not.toBe(
+      performanceTrack.notes
+    );
+    expect(payload.data.songRows[1]?.performanceTrackId).toBe(
+      performanceTrack.id
+    );
+  });
+});
+
+describe("resolvePlaybackSchedules", () => {
+  it("includes performance tracks even when no loop slots are active", async () => {
+    const performanceTrack: PerformanceTrack = {
+      id: "perf-only",
+      instrument: "keyboard",
+      color: "#abcdef",
+      notes: [
+        { time: "0:0:0", note: "C4", duration: "4n", velocity: 1 },
+        { time: "2:0:0", note: "E4", duration: "4n", velocity: 0.7 },
+      ],
+    };
+
+    const performanceRow: SongRow = {
+      slots: [null, null, null],
+      muted: false,
+      velocity: 1,
+      solo: false,
+      performanceTrackId: performanceTrack.id,
+    };
+
+    const project: StoredProjectData = {
+      packIndex: 0,
+      bpm: 100,
+      subdivision: "16n",
+      isPlaying: false,
+      tracks: [],
+      patternGroups: [],
+      songRows: [performanceRow],
+      performanceTracks: [performanceTrack],
+      selectedGroupId: null,
+      currentSectionIndex: 0,
+    };
+
+    const { resolvePlaybackSchedules } = await import("./exporter");
+
+    const { schedules, duration } = resolvePlaybackSchedules(project, "song");
+
+    expect(duration).toBeGreaterThan(0);
+    expect(schedules.some((schedule) => schedule.kind === "performance")).toBe(
+      true
+    );
+    expect(
+      schedules.filter((schedule) => schedule.kind === "pattern").length
+    ).toBe(0);
   });
 });

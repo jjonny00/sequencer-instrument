@@ -862,9 +862,14 @@ export const resolvePlaybackSchedules = (
   project: StoredProjectData,
   viewMode: "track" | "song"
 ) => {
+  const performanceTracks = project.performanceTracks ?? [];
+  const hasPerformanceNotes = performanceTracks.some(
+    (track) => (track.notes?.length ?? 0) > 0
+  );
   const hasSongArrangement =
     viewMode === "song" &&
-    project.songRows.some((row) => row.slots.some((slot) => Boolean(slot)));
+    (project.songRows.some((row) => row.slots.some((slot) => Boolean(slot))) ||
+      hasPerformanceNotes);
 
   let scheduleResult = hasSongArrangement
     ? buildSongSchedules(project)
