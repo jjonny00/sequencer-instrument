@@ -496,7 +496,7 @@ export function SongView({
   const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
   const liveRecordingNotesRef = useRef<PerformanceNote[]>([]);
-  const recordingActiveRef = useRef(false);
+  const wasRecordingRef = useRef(false);
   const recordingActive = Boolean(
     isPlaying &&
       isPlayInstrumentOpen &&
@@ -572,7 +572,7 @@ export function SongView({
       sustain?: number,
       chunk?: Chunk
     ) => {
-      if (!recordingActiveRef.current || !playInstrumentRowTrackId) {
+      if (!recordingActive || !playInstrumentRowTrackId) {
         return;
       }
       const resolvedVelocity =
@@ -620,6 +620,7 @@ export function SongView({
       setLiveGhostNotes((prev) => [...prev, noteEntry]);
     },
     [
+      recordingActive,
       isQuantizedRecording,
       playInstrumentPattern.note,
       playInstrumentPattern.sustain,
@@ -654,12 +655,12 @@ export function SongView({
   }, [isQuantizedRecording]);
 
   useEffect(() => {
-    if (recordingActive && !recordingActiveRef.current) {
-      recordingActiveRef.current = true;
+    if (recordingActive && !wasRecordingRef.current) {
+      wasRecordingRef.current = true;
       liveRecordingNotesRef.current = [];
       setLiveGhostNotes([]);
-    } else if (!recordingActive && recordingActiveRef.current) {
-      recordingActiveRef.current = false;
+    } else if (!recordingActive && wasRecordingRef.current) {
+      wasRecordingRef.current = false;
       finalizeRecording();
     }
   }, [recordingActive, finalizeRecording]);
@@ -673,7 +674,7 @@ export function SongView({
   }, [finalizeRecording]);
 
   useEffect(() => {
-    if (recordingActiveRef.current) return;
+    if (wasRecordingRef.current) return;
     liveRecordingNotesRef.current = [];
     setLiveGhostNotes([]);
   }, [playInstrument, playInstrumentRowTrackId]);
@@ -1769,7 +1770,8 @@ export function SongView({
               setIsRecordEnabled((prev) => !prev);
             }}
             style={{
-              minWidth: 0,
+              width: 44,
+              height: 44,
               ...(isRecordEnabled
                 ? {
                     background: recordingActive ? "#E02749" : "#2b121d",
@@ -1784,7 +1786,7 @@ export function SongView({
             label="Play Instrument"
             tone={isPlayInstrumentOpen ? "accent" : "default"}
             onClick={handleTogglePlayInstrumentPanel}
-            style={{ minWidth: 0 }}
+            style={{ width: 44, height: 44 }}
           />
           <button
             aria-label={isPlaying ? "Stop" : "Play"}
