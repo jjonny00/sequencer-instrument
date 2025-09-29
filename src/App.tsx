@@ -1399,10 +1399,14 @@ export default function App() {
 
   const ensurePerformanceRow = useCallback(
     (instrument: TrackInstrument, existingId?: string | null): string | null => {
+      if (!instrument) {
+        return null;
+      }
       const color = getInstrumentColor(instrument);
       const pack = packs[packIndex];
       const { packId, characterId: defaultCharacterId } =
         resolvePerformanceTrackSourceForPack(pack, instrument, null);
+      const allowCreateNew = !existingId;
       let ensuredId: string | null =
         existingId ?? activePerformanceTrackId ?? null;
 
@@ -1438,6 +1442,14 @@ export default function App() {
             };
             return next;
           }
+          if (!allowCreateNew) {
+            ensuredId = null;
+            return prev;
+          }
+        }
+
+        if (!allowCreateNew) {
+          return prev;
         }
 
         const nextId = createPerformanceTrackId();

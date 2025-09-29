@@ -721,10 +721,22 @@ export function SongView({
 
   useEffect(() => {
     if (!isPlayInstrumentOpen) return;
-    setPlayInstrumentRowTrackId((currentId) =>
-      onEnsurePerformanceRow(playInstrument, currentId) ?? currentId
-    );
-  }, [isPlayInstrumentOpen, playInstrument, onEnsurePerformanceRow]);
+    setPlayInstrumentRowTrackId((currentId) => {
+      const ensuredId = onEnsurePerformanceRow(playInstrument, currentId);
+      if (ensuredId) {
+        return ensuredId;
+      }
+      if (currentId && !performanceTrackMap.has(currentId)) {
+        return null;
+      }
+      return currentId;
+    });
+  }, [
+    isPlayInstrumentOpen,
+    playInstrument,
+    onEnsurePerformanceRow,
+    performanceTrackMap,
+  ]);
 
   useEffect(() => {
     if (!activePerformanceTrackId) {
