@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as Tone from "tone";
 import type {
   CSSProperties,
   Dispatch,
@@ -7,7 +8,12 @@ import type {
 } from "react";
 
 import type { Chunk } from "./chunks";
-import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
+import type {
+  PatternGroup,
+  PerformanceNote,
+  PerformanceTrack,
+  SongRow,
+} from "./song";
 import { createSongRow } from "./song";
 import { getInstrumentColor, withAlpha } from "./utils/color";
 import {
@@ -39,6 +45,11 @@ interface SongViewProps {
   ) => string | null;
   activePerformanceTrackId: string | null;
   onPlayInstrumentOpenChange?: (open: boolean) => void;
+  onUpdatePerformanceTrack?: (
+    trackId: string,
+    updater: (track: PerformanceTrack) => PerformanceTrack
+  ) => void;
+  onRemovePerformanceTrack?: (trackId: string) => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -56,13 +67,85 @@ const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
 
+const TICKS_PER_QUARTER = Tone.Transport.PPQ;
+const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
+const TICKS_PER_MEASURE = TICKS_PER_SIXTEENTH * 16;
+
+const toTicks = (value: string | number | undefined | null): number => {
+  if (value === undefined || value === null) {
+    return 0;
+  }
+  if (typeof value === "number") {
+    return value * TICKS_PER_MEASURE;
+  }
+  try {
+    return Tone.Time(value).toTicks();
+  } catch (error) {
+    console.warn("Failed to convert time to ticks", value, error);
+    return 0;
+  }
+};
+
+const ensurePositiveTicks = (ticks: number, fallback: number) =>
+  Number.isFinite(ticks) && ticks > 0 ? ticks : fallback;
+
+const getPerformanceNoteRangeTicks = (note: PerformanceNote) => {
+  const startTicks = toTicks(note.time);
+  const durationTicks = ensurePositiveTicks(
+    toTicks(note.duration),
+    TICKS_PER_SIXTEENTH
+  );
+  return {
+    startTicks,
+    endTicks: startTicks + durationTicks,
+    durationTicks,
+  };
+};
+
+const sortPerformanceNotes = (a: PerformanceNote, b: PerformanceNote) => {
+  const { startTicks: aStart } = getPerformanceNoteRangeTicks(a);
+  const { startTicks: bStart } = getPerformanceNoteRangeTicks(b);
+  return aStart - bStart;
+};
+
+const countPerformanceNotesInRange = (
+  notes: PerformanceNote[],
+  columnStartTicks: number,
+  columnEndTicks: number
+) =>
+  notes.filter((note) => {
+    const { startTicks, endTicks } = getPerformanceNoteRangeTicks(note);
+    return endTicks > columnStartTicks && startTicks < columnEndTicks;
+  }).length;
+
+const ticksToTransportString = (ticks: number) =>
+  Tone.Ticks(Math.max(0, ticks)).toBarsBeatsSixteenths();
+
+const ticksToDurationString = (ticks: number) => {
+  const safeTicks = Math.max(TICKS_PER_SIXTEENTH / 4, ticks);
+  const notation = Tone.Ticks(safeTicks).toNotation();
+  if (notation && notation !== "0") {
+    return notation;
+  }
+  const seconds = Tone.Ticks(safeTicks).toSeconds();
+  return `${seconds.toFixed(3)}s`;
+};
+
+const getColumnTickBounds = (columnIndex: number) => ({
+  startTicks: columnIndex * TICKS_PER_MEASURE,
+  endTicks: (columnIndex + 1) * TICKS_PER_MEASURE,
+});
+
 const PLAYABLE_INSTRUMENTS: TrackInstrument[] = [
   "arp",
   "keyboard",
   "harmonia",
 ];
 
-const createPerformancePattern = (instrument: TrackInstrument): Chunk => ({
+const createPerformancePattern = (
+  instrument: TrackInstrument,
+  timingMode: "sync" | "free" = "sync"
+): Chunk => ({
   id: `live-${instrument}-${Math.random().toString(36).slice(2, 8)}`,
   name: `${instrument}-performance`,
   instrument,
@@ -71,7 +154,7 @@ const createPerformancePattern = (instrument: TrackInstrument): Chunk => ({
   note: "C4",
   sustain: 0.8,
   velocityFactor: 1,
-  timingMode: "sync",
+  timingMode,
   noteEvents: [],
 });
 
@@ -247,10 +330,20 @@ const renderLoopSlotPreview = (group: PatternGroup | undefined) => {
 const renderPerformanceSlotPreview = (
   performanceTrack: PerformanceTrack | undefined,
   columnStart: number,
-  columnEnd: number
+  columnEnd: number,
+  accent: string | null,
+  ghostNotes?: PerformanceNote[],
+  ghostNoteRefs?: Set<PerformanceNote>
 ) => {
   const height = PREVIEW_HEIGHT;
-  if (!performanceTrack || performanceTrack.notes.length === 0) {
+  const columnStartTicks = columnStart * TICKS_PER_MEASURE;
+  const columnEndTicks = columnEnd * TICKS_PER_MEASURE;
+  const combinedNotes = [
+    ...(performanceTrack?.notes ?? []),
+    ...(ghostNotes ?? []),
+  ];
+
+  if (combinedNotes.length === 0) {
     return (
       <div
         style={{
@@ -263,10 +356,10 @@ const renderPerformanceSlotPreview = (
     );
   }
 
-  const { notes } = performanceTrack;
-  const trackNotes = notes.filter(
-    (note) => note.time + note.duration > columnStart && note.time < columnEnd
-  );
+  const trackNotes = combinedNotes.filter((note) => {
+    const { startTicks, endTicks } = getPerformanceNoteRangeTicks(note);
+    return endTicks > columnStartTicks && startTicks < columnEndTicks;
+  });
 
   if (trackNotes.length === 0) {
     return (
@@ -281,9 +374,13 @@ const renderPerformanceSlotPreview = (
     );
   }
 
-  const range = columnEnd - columnStart;
-  const accent =
-    performanceTrack.color || getInstrumentColor(performanceTrack.instrument);
+  const range = columnEndTicks - columnStartTicks;
+  const baseAccent =
+    accent ||
+    performanceTrack?.color ||
+    (performanceTrack
+      ? getInstrumentColor(performanceTrack.instrument)
+      : "#27E0B0");
   const dotSize = PERFORMANCE_DOT_SIZE;
 
   return (
@@ -298,8 +395,19 @@ const renderPerformanceSlotPreview = (
       }}
     >
       {trackNotes.map((note, index) => {
-        const start = Math.max(note.time, columnStart);
-        const startRatio = (start - columnStart) / range;
+        const { startTicks } = getPerformanceNoteRangeTicks(note);
+        const clampedStart = Math.max(startTicks, columnStartTicks);
+        const startRatio = range > 0 ? (clampedStart - columnStartTicks) / range : 0;
+        const isGhost = ghostNoteRefs?.has(note) ?? false;
+        const backgroundColor = isGhost
+          ? withAlpha(baseAccent, 0.35)
+          : baseAccent;
+        const shadow = isGhost
+          ? `0 0 6px ${withAlpha(baseAccent, 0.2)}`
+          : `0 0 6px ${withAlpha(baseAccent, 0.35)}`;
+        const border = isGhost
+          ? `1px dashed ${withAlpha(baseAccent, 0.8)}`
+          : "none";
         return (
           <span
             key={`perf-note-${index}`}
@@ -312,8 +420,9 @@ const renderPerformanceSlotPreview = (
               marginLeft: -(dotSize / 2),
               marginTop: -(dotSize / 2),
               borderRadius: dotSize,
-              background: accent,
-              boxShadow: `0 0 6px ${withAlpha(accent, 0.35)}`,
+              background: backgroundColor,
+              boxShadow: shadow,
+              border,
             }}
           />
         );
@@ -338,6 +447,8 @@ export function SongView({
   onEnsurePerformanceRow,
   activePerformanceTrackId,
   onPlayInstrumentOpenChange,
+  onUpdatePerformanceTrack,
+  onRemovePerformanceTrack,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -353,6 +464,13 @@ export function SongView({
   const [playInstrumentRowTrackId, setPlayInstrumentRowTrackId] = useState<
     string | null
   >(activePerformanceTrackId);
+  const [isQuantizedRecording, setIsQuantizedRecording] = useState(true);
+  const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
+  const liveRecordingNotesRef = useRef<PerformanceNote[]>([]);
+  const recordingActiveRef = useRef(false);
+  const recordingActive = Boolean(
+    isPlaying && isPlayInstrumentOpen && playInstrumentRowTrackId
+  );
 
   useEffect(() => {
     onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
@@ -393,6 +511,87 @@ export function SongView({
     [playInstrument]
   );
 
+  const finalizeRecording = useCallback(() => {
+    const pending = liveRecordingNotesRef.current;
+    if (!pending.length) {
+      liveRecordingNotesRef.current = [];
+      setLiveGhostNotes([]);
+      return;
+    }
+    if (playInstrumentRowTrackId && onUpdatePerformanceTrack) {
+      const sortedNotes = pending.slice().sort(sortPerformanceNotes);
+      onUpdatePerformanceTrack(playInstrumentRowTrackId, (track: PerformanceTrack) => ({
+        ...track,
+        notes: [...track.notes, ...sortedNotes].sort(sortPerformanceNotes),
+      }));
+    }
+    liveRecordingNotesRef.current = [];
+    setLiveGhostNotes([]);
+  }, [onUpdatePerformanceTrack, playInstrumentRowTrackId]);
+
+  const capturePerformanceNote = useCallback(
+    (
+      time: number | string,
+      velocity?: number,
+      noteName?: string,
+      sustain?: number,
+      chunk?: Chunk
+    ) => {
+      if (!recordingActiveRef.current || !playInstrumentRowTrackId) {
+        return;
+      }
+      const resolvedVelocity =
+        velocity !== undefined ? Math.max(0, Math.min(1, velocity)) : 1;
+      const fallbackNote = chunk?.note ?? playInstrumentPattern.note ?? "C4";
+      const resolvedNote = noteName ?? fallbackNote;
+
+      let startTicks =
+        typeof time === "number"
+          ? Tone.Transport.getTicksAtTime(time)
+          : toTicks(time);
+      if (!Number.isFinite(startTicks) || startTicks < 0) {
+        startTicks = Math.max(0, Tone.Transport.ticks);
+      }
+      if (isQuantizedRecording) {
+        startTicks =
+          Math.round(startTicks / TICKS_PER_SIXTEENTH) * TICKS_PER_SIXTEENTH;
+      }
+
+      const sustainSource =
+        sustain ?? chunk?.sustain ?? playInstrumentPattern.sustain ?? 0.5;
+      let durationTicks = Tone.Time(sustainSource).toTicks();
+      if (!Number.isFinite(durationTicks) || durationTicks <= 0) {
+        durationTicks = TICKS_PER_SIXTEENTH;
+      }
+      if (isQuantizedRecording) {
+        durationTicks = Math.max(
+          TICKS_PER_SIXTEENTH,
+          Math.round(durationTicks / TICKS_PER_SIXTEENTH) *
+            TICKS_PER_SIXTEENTH
+        );
+      }
+
+      const noteEntry: PerformanceNote = {
+        time: ticksToTransportString(startTicks),
+        note: resolvedNote,
+        duration: ticksToDurationString(durationTicks),
+        velocity: resolvedVelocity,
+      };
+
+      liveRecordingNotesRef.current = [
+        ...liveRecordingNotesRef.current,
+        noteEntry,
+      ];
+      setLiveGhostNotes((prev) => [...prev, noteEntry]);
+    },
+    [
+      isQuantizedRecording,
+      playInstrumentPattern.note,
+      playInstrumentPattern.sustain,
+      playInstrumentRowTrackId,
+    ]
+  );
+
   useEffect(() => {
     if (!isPlayInstrumentOpen) return;
     setPlayInstrumentRowTrackId((currentId) =>
@@ -408,6 +607,41 @@ export function SongView({
   useEffect(() => {
     setPlayInstrumentPattern(createPerformancePattern(playInstrument));
   }, [playInstrument]);
+
+  useEffect(() => {
+    setPlayInstrumentPattern((prev) => {
+      const nextMode = isQuantizedRecording ? "sync" : "free";
+      if (prev.timingMode === nextMode) {
+        return prev;
+      }
+      return { ...prev, timingMode: nextMode };
+    });
+  }, [isQuantizedRecording]);
+
+  useEffect(() => {
+    if (recordingActive && !recordingActiveRef.current) {
+      recordingActiveRef.current = true;
+      liveRecordingNotesRef.current = [];
+      setLiveGhostNotes([]);
+    } else if (!recordingActive && recordingActiveRef.current) {
+      recordingActiveRef.current = false;
+      finalizeRecording();
+    }
+  }, [recordingActive, finalizeRecording]);
+
+  useEffect(() => {
+    return () => {
+      if (liveRecordingNotesRef.current.length > 0) {
+        finalizeRecording();
+      }
+    };
+  }, [finalizeRecording]);
+
+  useEffect(() => {
+    if (recordingActiveRef.current) return;
+    liveRecordingNotesRef.current = [];
+    setLiveGhostNotes([]);
+  }, [playInstrument, playInstrumentRowTrackId]);
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -501,6 +735,14 @@ export function SongView({
     );
   };
 
+  const handleToggleRowSolo = (rowIndex: number) => {
+    setSongRows((rows) =>
+      rows.map((row, idx) =>
+        idx === rowIndex ? { ...row, solo: !(row.solo ?? false) } : row
+      )
+    );
+  };
+
   const handleRowVelocityChange = (rowIndex: number, value: number) => {
     setSongRows((rows) =>
       rows.map((row, idx) =>
@@ -538,6 +780,10 @@ export function SongView({
 
   const handleDeleteRow = useCallback(
     (rowIndex: number) => {
+      const targetRow = songRows[rowIndex];
+      if (targetRow?.performanceTrackId) {
+        onRemovePerformanceTrack?.(targetRow.performanceTrackId);
+      }
       setSongRows((rows) => {
         if (rowIndex < 0 || rowIndex >= rows.length) {
           return rows;
@@ -551,7 +797,12 @@ export function SongView({
         return current;
       });
     },
-    [setSongRows]
+    [songRows, onRemovePerformanceTrack, setSongRows]
+  );
+
+  const liveGhostNoteSet = useMemo(
+    () => new Set(liveGhostNotes),
+    [liveGhostNotes]
   );
 
   const showEmptyTimeline = sectionCount === 0;
@@ -611,7 +862,8 @@ export function SongView({
       note?: string,
       sustain?: number,
       chunk?: Chunk
-    ) =>
+    ) => {
+      capturePerformanceNote(time, velocity, note, sustain, chunk);
       trigger(
         time,
         velocity,
@@ -621,11 +873,13 @@ export function SongView({
         chunk,
         playInstrumentCharacterId || undefined
       );
+    };
   }, [
     playInstrumentSource,
     playInstrument,
     triggers,
     playInstrumentCharacterId,
+    capturePerformanceNote,
   ]);
   const liveRowIndex = useMemo(() => {
     if (!playInstrumentRowTrackId) return -1;
@@ -790,7 +1044,12 @@ export function SongView({
                     longPressTriggered = false;
                     return;
                   }
-                  handleToggleRowMute(rowIndex);
+                  const detail = event.detail ?? 0;
+                  if (detail >= 2) {
+                    handleToggleRowSolo(rowIndex);
+                  } else {
+                    handleToggleRowMute(rowIndex);
+                  }
                 };
 
                 const handleLabelPointerLeave = () => {
@@ -819,7 +1078,19 @@ export function SongView({
                   ? getInstrumentColor(loopAccentInstrument)
                   : null;
                 const rowAccent = performanceAccent ?? loopAccent ?? null;
-                const labelBackground = rowMuted ? "#1b2332" : "#111827";
+                const rowSolo = row.solo ?? false;
+                const labelBackground = rowMuted
+                  ? "#1b2332"
+                  : rowSolo
+                  ? "#14241d"
+                  : "#111827";
+                const isRecordingRow =
+                  recordingActive &&
+                  row.performanceTrackId === playInstrumentRowTrackId;
+                const rowGhostNotes = isRecordingRow ? liveGhostNotes : [];
+                const rowGhostNoteSet = isRecordingRow
+                  ? liveGhostNoteSet
+                  : undefined;
 
                 return (
                   <div
@@ -864,8 +1135,10 @@ export function SongView({
                         }}
                         title={
                           rowMuted
-                            ? "Tap to unmute. Long press for settings."
-                            : "Tap to mute. Long press for settings."
+                            ? "Tap to unmute. Double tap to solo. Long press for settings."
+                            : rowSolo
+                            ? "Tap to mute. Double tap to clear solo. Long press for settings."
+                            : "Tap to mute. Double tap to solo. Long press for settings."
                         }
                       >
                         <div
@@ -873,7 +1146,7 @@ export function SongView({
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "center",
-                            gap: 6,
+                            gap: rowSolo ? 4 : 6,
                           }}
                         >
                           <span
@@ -889,6 +1162,18 @@ export function SongView({
                             }}
                           />
                           <span>{rowIndex + 1}</span>
+                          {rowSolo ? (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                letterSpacing: 0.6,
+                                color: "#facc15",
+                              }}
+                            >
+                              SOLO
+                            </span>
+                          ) : null}
                         </div>
                         {rowSelected && (
                           <span
@@ -944,28 +1229,46 @@ export function SongView({
                           const assigned = Boolean(group);
                           const columnStart = columnIndex;
                           const columnEnd = columnIndex + 1;
-                              const columnPerformanceNotes = performanceTrack
-                                ? performanceTrack.notes.filter(
-                                    (note) =>
-                                      note.time + note.duration > columnStart &&
-                                      note.time < columnEnd
-                                  )
-                                : [];
-                              const hasPerformance = Boolean(performanceTrack);
-                              const hasContent = assigned || hasPerformance;
+                              const columnBounds = getColumnTickBounds(
+                                columnIndex
+                              );
+                              const combinedPerformanceNotes = [
+                                ...(performanceTrack?.notes ?? []),
+                                ...rowGhostNotes,
+                              ];
+                              const columnNoteCount = countPerformanceNotesInRange(
+                                combinedPerformanceNotes,
+                                columnBounds.startTicks,
+                                columnBounds.endTicks
+                              );
+                              const hasPerformanceContent =
+                                combinedPerformanceNotes.length > 0;
+                              const hasContent = assigned || hasPerformanceContent;
                               const textColor = hasContent ? "#e6f2ff" : "#94a3b8";
                               const descriptionColor = hasContent
                                 ? "#94a3b8"
                                 : "#475569";
-                              const description = hasPerformance
-                                ? columnPerformanceNotes.length > 0
-                                  ? formatNoteCount(columnPerformanceNotes.length)
+                              const description = hasPerformanceContent
+                                ? columnNoteCount > 0
+                                  ? formatNoteCount(columnNoteCount)
+                                  : isRecordingRow
+                                  ? "Recording…"
                                   : "No notes yet"
                                 : assigned
                                 ? null
                                 : patternGroups.length > 0
                                 ? "Tap to assign"
                                 : "Save a sequence in Track view";
+                              const performanceInstrumentLabel = performanceTrack
+                                ? formatInstrumentLabel(performanceTrack.instrument)
+                                : isRecordingRow
+                                ? formatInstrumentLabel(playInstrument)
+                                : null;
+                              const slotStatusLabel = isRecordingRow
+                                ? "Recording"
+                                : hasPerformanceContent
+                                ? "Live"
+                                : null;
 
                               const showSlotLabel = !isPlayInstrumentOpen;
                               const buttonStyles: CSSProperties = {
@@ -975,12 +1278,16 @@ export function SongView({
                                 border: `1px solid ${
                                   highlight
                                     ? "#27E0B0"
+                                    : isRecordingRow
+                                    ? withAlpha(playInstrumentColor, 0.6)
                                     : hasContent
                                     ? "#2f384a"
                                     : "#1f2937"
                                 }`,
                                 background: highlight
                                   ? "rgba(39, 224, 176, 0.12)"
+                                  : isRecordingRow
+                                  ? withAlpha(playInstrumentColor, 0.12)
                                   : hasContent
                                   ? "#0f1a2a"
                                   : "#0b111d",
@@ -1056,13 +1363,11 @@ export function SongView({
                                         >
                                           <span style={{ fontWeight: 600 }}>
                                             {group?.name ??
-                                              (hasPerformance
-                                                ? `${formatInstrumentLabel(
-                                                    performanceTrack?.instrument
-                                                  )} Performance`
+                                              (performanceInstrumentLabel
+                                                ? `${performanceInstrumentLabel} Performance`
                                                 : "Empty")}
                                           </span>
-                                          {hasPerformance && (
+                                          {slotStatusLabel && (
                                             <span
                                               style={{
                                                 marginLeft: "auto",
@@ -1072,17 +1377,20 @@ export function SongView({
                                                 textTransform: "uppercase",
                                               }}
                                             >
-                                              Live
+                                              {slotStatusLabel}
                                             </span>
                                           )}
                                         </div>
                                       ) : null}
                                       <div style={{ width: "100%" }}>
-                                        {hasPerformance
+                                        {hasPerformanceContent
                                           ? renderPerformanceSlotPreview(
                                               performanceTrack,
                                               columnStart,
-                                              columnEnd
+                                              columnEnd,
+                                              performanceAccent ?? rowAccent,
+                                              rowGhostNotes,
+                                              rowGhostNoteSet
                                             )
                                           : renderLoopSlotPreview(group)}
                                       </div>
@@ -1333,11 +1641,52 @@ export function SongView({
                   {formatInstrumentLabel(playInstrument)} Instrument
                 </span>
               </div>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                {liveRowLabel
-                  ? `${liveRowLabel} captures this performance`
-                  : "Live row added to your timeline"}
-              </span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                  {liveRowLabel
+                    ? `${liveRowLabel} captures this performance`
+                    : "Live row added to your timeline"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIsQuantizedRecording((prev) => !prev)
+                  }
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: `1px solid ${
+                      isQuantizedRecording
+                        ? playInstrumentColor
+                        : "#2a3344"
+                    }`,
+                    background: isQuantizedRecording
+                      ? withAlpha(playInstrumentColor, 0.18)
+                      : "#0f172a",
+                    color: "#e6f2ff",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                  title={
+                    isQuantizedRecording
+                      ? "Quantized recording is on — notes snap to the grid."
+                      : "Quantized recording is off — capture free timing."
+                  }
+                >
+                  Quantize {isQuantizedRecording ? "On" : "Off"}
+                </button>
+              </div>
             </div>
             <div
               style={{
@@ -1391,6 +1740,7 @@ export function SongView({
                 allTracks={[]}
                 onUpdatePattern={handlePlayInstrumentPatternUpdate}
                 trigger={playInstrumentTrigger}
+                isRecording={recordingActive}
               />
             </div>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>
