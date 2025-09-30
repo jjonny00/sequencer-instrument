@@ -1,5 +1,7 @@
 import * as Tone from "tone";
 
+import { unlockAudio } from "./audioUnlock";
+
 const MIN_FILTER_FREQUENCY = 80;
 const MAX_FILTER_FREQUENCY = 12000;
 
@@ -34,24 +36,29 @@ export const activateAudio = async (): Promise<boolean> => {
 
   if (!audioActivationPromise) {
     audioActivationPromise = (async () => {
+      let running = false;
+
       try {
-        await Tone.start();
-        console.log("Tone.js audio started successfully");
-      } catch (error) {
-        console.warn("Tone.js failed to start:", error);
-      }
-
-      const context = Tone.getContext();
-      if (context.state === "suspended") {
         try {
-          await context.resume();
-        } catch (resumeError) {
-          console.warn("AudioContext.resume() failed:", resumeError);
+          await unlockAudio();
+        } catch (unlockError) {
+          console.warn("unlockAudio threw during activation:", unlockError);
         }
+
+        const context = Tone.getContext();
+        if (context.state === "suspended") {
+          try {
+            await context.resume();
+          } catch (resumeError) {
+            console.warn("AudioContext.resume() failed:", resumeError);
+          }
+        }
+
+        running = updateAudioReadyFlag();
+      } finally {
+        audioActivationPromise = null;
       }
 
-      const running = updateAudioReadyFlag();
-      audioActivationPromise = null;
       return running;
     })();
   }
