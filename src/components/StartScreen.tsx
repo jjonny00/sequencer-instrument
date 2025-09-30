@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+  type TouchEvent,
+} from "react";
 import * as Tone from "tone";
 
 interface StartScreenProps {
@@ -8,6 +15,8 @@ interface StartScreenProps {
   savedSongs: string[];
 }
 
+const isAudioRunning = () => Tone.context.state === "running";
+
 function StartScreen({
   onNewSong,
   onLoadSong,
@@ -15,39 +24,47 @@ function StartScreen({
   savedSongs,
 }: StartScreenProps) {
   const [showAudioOverlay, setShowAudioOverlay] = useState(false);
-  const isUnlockingRef = useRef(false);
 
-  const isAudioRunning = useCallback(
-    () => (Tone.context.state as AudioContextState) === "running",
-    []
-  );
+  const unlockAudio = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!isAudioRunning()) {
+        await Tone.start();
+      }
+    } catch (error) {
+      console.error("Audio unlock failed:", error);
+    }
+
+    const running = isAudioRunning();
+    setShowAudioOverlay(!running);
+    return running;
+  }, []);
 
   const handleUnlock = useCallback(
     async (action?: () => void) => {
-      if (isUnlockingRef.current) {
-        return;
-      }
-
-      isUnlockingRef.current = true;
-
-      try {
-        await Tone.start();
-
-        if (isAudioRunning()) {
-          setShowAudioOverlay(false);
-          action?.();
-        } else {
-          setShowAudioOverlay(true);
-        }
-      } catch (error) {
-        console.error("Audio unlock failed:", error);
-        setShowAudioOverlay(true);
-      } finally {
-        isUnlockingRef.current = false;
+      const unlocked = await unlockAudio();
+      if (unlocked) {
+        action?.();
       }
     },
-    [isAudioRunning]
+    [unlockAudio]
   );
+
+  const createUnlockHandler = useCallback(
+    (action?: () => void) =>
+      (event: MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => {
+        if (event.type === "touchstart") {
+          event.preventDefault();
+        }
+        void handleUnlock(action);
+      },
+    [handleUnlock]
+  );
+
+  useEffect(() => {
+    if (!isAudioRunning()) {
+      setShowAudioOverlay(true);
+    }
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -64,115 +81,100 @@ function StartScreen({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isAudioRunning]);
-
-  useEffect(() => {
-    const context = Tone.getContext();
-
-    const handleStateChange = (state: AudioContextState) => {
-      if (state === "running") {
-        setShowAudioOverlay(false);
-      } else {
-        setShowAudioOverlay(true);
-      }
-    };
-
-    context.on("statechange", handleStateChange);
-
-    return () => {
-      context.off("statechange", handleStateChange);
-    };
   }, []);
 
-  const savedSongsContent =
-    savedSongs.length === 0 ? (
-      <div
+  const savedSongsContent = useMemo(() => {
+    if (savedSongs.length === 0) {
+      return (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 16,
+            padding: 20,
+            borderRadius: 16,
+            border: "1px dashed #1f2937",
+            background: "#0b1624",
+            textAlign: "center",
+          }}
+        >
+          <div
+            aria-hidden="true"
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(39,224,176,0.12)",
+              color: "#27E0B0",
+              fontSize: 36,
+            }}
+          >
+            🎶
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              color: "#cbd5f5",
+              fontSize: 14,
+            }}
+          >
+            <strong style={{ fontSize: 16 }}>Start your first jam!</strong>
+            <span>
+              Save your creations to see them listed here, or dive in with our
+              ready-made groove.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={createUnlockHandler(onLoadDemoSong)}
+            onTouchStart={createUnlockHandler(onLoadDemoSong)}
+            style={{
+              padding: "12px 20px",
+              borderRadius: 999,
+              border: "none",
+              background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
+              color: "#0b1220",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: "pointer",
+              boxShadow: "0 12px 24px rgba(39,224,176,0.25)",
+            }}
+          >
+            Try Demo Song
+          </button>
+        </div>
+      );
+    }
+
+    return savedSongs.map((name) => (
+      <button
+        key={name}
+        type="button"
+        onClick={createUnlockHandler(() => onLoadSong(name))}
+        onTouchStart={createUnlockHandler(() => onLoadSong(name))}
         style={{
+          padding: "12px 16px",
+          borderRadius: 14,
+          border: "1px solid #1f2937",
+          background: "#0f172a",
+          color: "#e6f2ff",
+          textAlign: "left",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          gap: 16,
-          padding: 20,
-          borderRadius: 16,
-          border: "1px dashed #1f2937",
-          background: "#0b1624",
-          textAlign: "center",
+          gap: 4,
         }}
       >
-        <div
-          aria-hidden="true"
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(39,224,176,0.12)",
-            color: "#27E0B0",
-            fontSize: 36,
-          }}
-        >
-          🎶
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-            color: "#cbd5f5",
-            fontSize: 14,
-          }}
-        >
-          <strong style={{ fontSize: 16 }}>Start your first jam!</strong>
-          <span>
-            Save your creations to see them listed here, or dive in with our
-            ready-made groove.
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => handleUnlock(onLoadDemoSong)}
-          onTouchStart={() => handleUnlock(onLoadDemoSong)}
-          style={{
-            padding: "12px 20px",
-            borderRadius: 999,
-            border: "none",
-            background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
-            color: "#0b1220",
-            fontWeight: 600,
-            fontSize: 14,
-            cursor: "pointer",
-            boxShadow: "0 12px 24px rgba(39,224,176,0.25)",
-          }}
-        >
-          Try Demo Song
-        </button>
-      </div>
-    ) : (
-      savedSongs.map((name) => (
-        <button
-          key={name}
-          type="button"
-          onClick={() => handleUnlock(() => onLoadSong(name))}
-          onTouchStart={() => handleUnlock(() => onLoadSong(name))}
-          style={{
-            padding: "12px 16px",
-            borderRadius: 14,
-            border: "1px solid #1f2937",
-            background: "#0f172a",
-            color: "#e6f2ff",
-            textAlign: "left",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          }}
-        >
-          <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>Tap to load song</span>
-        </button>
-      ))
-    );
+        <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
+        <span style={{ fontSize: 11, color: "#94a3b8" }}>Tap to load song</span>
+      </button>
+    ));
+  }, [createUnlockHandler, onLoadDemoSong, onLoadSong, savedSongs]);
 
   return (
     <div
@@ -194,8 +196,8 @@ function StartScreen({
       >
         <button
           type="button"
-          onClick={() => handleUnlock(onNewSong)}
-          onTouchStart={() => handleUnlock(onNewSong)}
+          onClick={createUnlockHandler(onNewSong)}
+          onTouchStart={createUnlockHandler(onNewSong)}
           style={{
             padding: "18px 24px",
             fontSize: "1.25rem",
@@ -236,7 +238,7 @@ function StartScreen({
           </div>
         </div>
       </div>
-      {showAudioOverlay && !isAudioRunning() && (
+      {showAudioOverlay && (
         <div
           className="audio-overlay"
           style={{
@@ -247,8 +249,7 @@ function StartScreen({
             justifyContent: "center",
             alignItems: "center",
             zIndex: 999,
-            pointerEvents:
-              showAudioOverlay && !isAudioRunning() ? "auto" : "none",
+            pointerEvents: showAudioOverlay ? "auto" : "none",
           }}
         >
           <div
@@ -269,8 +270,8 @@ function StartScreen({
             </p>
             <button
               type="button"
-              onClick={() => handleUnlock()}
-              onTouchStart={() => handleUnlock()}
+              onClick={createUnlockHandler()}
+              onTouchStart={createUnlockHandler()}
               style={{
                 padding: "10px 18px",
                 borderRadius: 999,
