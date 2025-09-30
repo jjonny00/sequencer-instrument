@@ -25,29 +25,21 @@ function StartScreen({
 }: StartScreenProps) {
   const [showAudioOverlay, setShowAudioOverlay] = useState(false);
 
-  const unlockAudio = useCallback(async (): Promise<boolean> => {
-    try {
-      if (!isAudioRunning()) {
-        await Tone.start();
-      }
-    } catch (error) {
-      console.error("Audio unlock failed:", error);
-    }
-
-    const running = isAudioRunning();
-    setShowAudioOverlay(!running);
-    return running;
+  const handleUnlock = useCallback((action?: () => void) => {
+    Tone.start()
+      .then(() => {
+        if (isAudioRunning()) {
+          setShowAudioOverlay(false);
+          action?.();
+        } else {
+          setShowAudioOverlay(true);
+        }
+      })
+      .catch((error) => {
+        console.error("Audio unlock failed:", error);
+        setShowAudioOverlay(true);
+      });
   }, []);
-
-  const handleUnlock = useCallback(
-    async (action?: () => void) => {
-      const unlocked = await unlockAudio();
-      if (unlocked) {
-        action?.();
-      }
-    },
-    [unlockAudio]
-  );
 
   const createUnlockHandler = useCallback(
     (action?: () => void) =>
@@ -55,16 +47,10 @@ function StartScreen({
         if (event.type === "touchstart") {
           event.preventDefault();
         }
-        void handleUnlock(action);
+        handleUnlock(action);
       },
     [handleUnlock]
   );
-
-  useEffect(() => {
-    if (!isAudioRunning()) {
-      setShowAudioOverlay(true);
-    }
-  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
