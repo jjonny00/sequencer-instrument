@@ -48,6 +48,8 @@ interface SongViewProps {
     existingId?: string | null
   ) => string | null;
   activePerformanceTrackId: string | null;
+  onAddPerformanceTrack?: () => void;
+  onSelectPerformanceTrack?: (trackId: string | null) => void;
   onPlayInstrumentOpenChange?: (open: boolean) => void;
   onUpdatePerformanceTrack?: (
     trackId: string,
@@ -139,12 +141,6 @@ const getColumnTickBounds = (columnIndex: number) => ({
   startTicks: columnIndex * TICKS_PER_MEASURE,
   endTicks: (columnIndex + 1) * TICKS_PER_MEASURE,
 });
-
-const PLAYABLE_INSTRUMENTS: TrackInstrument[] = [
-  "arp",
-  "keyboard",
-  "harmonia",
-];
 
 const createPerformancePattern = (
   instrument: TrackInstrument,
@@ -499,6 +495,8 @@ export function SongView({
   triggers,
   onEnsurePerformanceRow,
   activePerformanceTrackId,
+  onAddPerformanceTrack,
+  onSelectPerformanceTrack,
   onPlayInstrumentOpenChange,
   onUpdatePerformanceTrack,
   onRemovePerformanceTrack,
@@ -530,6 +528,18 @@ export function SongView({
     isRecordEnabled && !isPlayInstrumentOpen && hasPerformanceTarget
   );
 
+  const patternGroupMap = useMemo(
+    () => new Map(patternGroups.map((group) => [group.id, group])),
+    [patternGroups]
+  );
+  const performanceTrackMap = useMemo(
+    () =>
+      new Map(
+        performanceTracks.map((track) => [track.id, track] as const)
+      ),
+    [performanceTracks]
+  );
+
   useEffect(() => {
     onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
   }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
@@ -549,17 +559,6 @@ export function SongView({
       }));
     },
     [onUpdatePerformanceTrack, playInstrumentRowTrackId]
-  );
-
-  const handleTogglePlayInstrumentPanel = useCallback(() => {
-    setPlayInstrumentOpen((prev) => !prev);
-  }, []);
-
-  const handleSelectPlayInstrument = useCallback(
-    (instrument: TrackInstrument) => {
-      setPlayInstrument(instrument);
-    },
-    []
   );
 
   const handlePlayInstrumentPatternUpdate = useCallback(
@@ -591,6 +590,47 @@ export function SongView({
   const clearLiveRecording = useCallback(() => {
     setLiveGhostNotes([]);
   }, []);
+
+  const handleCloseInstrumentPanel = useCallback(() => {
+    setPlayInstrumentOpen(false);
+    setPlayInstrumentRowTrackId(null);
+    setIsRecordEnabled(false);
+    clearLiveRecording();
+    onSelectPerformanceTrack?.(null);
+  }, [clearLiveRecording, onSelectPerformanceTrack]);
+
+  const handleSelectPerformanceTrackRow = useCallback(
+    (trackId: string | null) => {
+      if (!trackId) {
+        handleCloseInstrumentPanel();
+        return;
+      }
+      const track = performanceTrackMap.get(trackId);
+      if (track?.instrument) {
+        setPlayInstrument(track.instrument);
+      }
+      setPlayInstrumentRowTrackId(trackId);
+      setPlayInstrumentOpen(true);
+      setIsRecordEnabled(false);
+      clearLiveRecording();
+      onSelectPerformanceTrack?.(trackId);
+    },
+    [
+      clearLiveRecording,
+      handleCloseInstrumentPanel,
+      onSelectPerformanceTrack,
+      performanceTrackMap,
+    ]
+  );
+
+  const handleClearRecording = useCallback(() => {
+    if (!playInstrumentRowTrackId) return;
+    clearLiveRecording();
+    onUpdatePerformanceTrack?.(playInstrumentRowTrackId, (track) => ({
+      ...track,
+      notes: [],
+    }));
+  }, [clearLiveRecording, onUpdatePerformanceTrack, playInstrumentRowTrackId]);
 
   const handlePerformanceNoteRecorded = useCallback(
     ({
@@ -681,15 +721,38 @@ export function SongView({
 
   useEffect(() => {
     if (!isPlayInstrumentOpen) return;
-    setPlayInstrumentRowTrackId((currentId) =>
-      onEnsurePerformanceRow(playInstrument, currentId) ?? currentId
-    );
-  }, [isPlayInstrumentOpen, playInstrument, onEnsurePerformanceRow]);
+    setPlayInstrumentRowTrackId((currentId) => {
+      const ensuredId = onEnsurePerformanceRow(playInstrument, currentId);
+      if (ensuredId) {
+        return ensuredId;
+      }
+      if (currentId && !performanceTrackMap.has(currentId)) {
+        return null;
+      }
+      return currentId;
+    });
+  }, [
+    isPlayInstrumentOpen,
+    playInstrument,
+    onEnsurePerformanceRow,
+    performanceTrackMap,
+  ]);
 
   useEffect(() => {
-    if (isPlayInstrumentOpen) return;
-    setPlayInstrumentRowTrackId(activePerformanceTrackId ?? null);
-  }, [activePerformanceTrackId, isPlayInstrumentOpen]);
+    if (!activePerformanceTrackId) {
+      setPlayInstrumentRowTrackId(null);
+      setPlayInstrumentOpen(false);
+      return;
+    }
+    setPlayInstrumentRowTrackId(activePerformanceTrackId);
+    const track = performanceTrackMap.get(activePerformanceTrackId);
+    if (track?.instrument) {
+      setPlayInstrument((prev) =>
+        prev === track.instrument ? prev : track.instrument
+      );
+    }
+    setPlayInstrumentOpen(true);
+  }, [activePerformanceTrackId, performanceTrackMap]);
 
   useEffect(() => {
     const pattern = createPerformancePattern(playInstrument);
@@ -736,18 +799,6 @@ export function SongView({
     if (wasRecordingRef.current) return;
     setLiveGhostNotes([]);
   }, [playInstrument, playInstrumentRowTrackId]);
-
-  const patternGroupMap = useMemo(
-    () => new Map(patternGroups.map((group) => [group.id, group])),
-    [patternGroups]
-  );
-  const performanceTrackMap = useMemo(
-    () =>
-      new Map(
-        performanceTracks.map((track) => [track.id, track] as const)
-      ),
-    [performanceTracks]
-  );
 
   const activePerformanceTrack = useMemo(() => {
     if (playInstrumentRowTrackId) {
@@ -844,6 +895,43 @@ export function SongView({
       }));
     });
   };
+
+  const handleAddPerformanceTrack = useCallback(() => {
+    if (!onAddPerformanceTrack) return;
+    setRowSettingsIndex(null);
+    setEditingSlot(null);
+    onAddPerformanceTrack();
+  }, [onAddPerformanceTrack, setEditingSlot, setRowSettingsIndex]);
+
+  const handleDeleteColumn = useCallback(
+    (columnIndex: number) => {
+      if (columnIndex < 0) return;
+      setSongRows((rows) =>
+        rows.map((row) => {
+          if (columnIndex >= row.slots.length) {
+            return row;
+          }
+          const nextSlots = row.slots.slice();
+          nextSlots.splice(columnIndex, 1);
+          return { ...row, slots: nextSlots };
+        })
+      );
+      setEditingSlot((current) => {
+        if (!current) return current;
+        if (current.columnIndex === columnIndex) {
+          return null;
+        }
+        if (current.columnIndex > columnIndex) {
+          return {
+            rowIndex: current.rowIndex,
+            columnIndex: current.columnIndex - 1,
+          };
+        }
+        return current;
+      });
+    },
+    [setSongRows, setEditingSlot]
+  );
 
   const handleAddRow = () => {
     setSongRows((rows) => {
@@ -1086,6 +1174,11 @@ export function SongView({
     : isRecordArmed
     ? "Armed"
     : "Record On";
+  const canClearRecording = Boolean(
+    playInstrumentRowTrackId &&
+      ((activePerformanceTrack?.notes.length ?? 0) > 0 ||
+        liveGhostNotes.length > 0)
+  );
   const hasRowSettings =
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length;
   const rowSettingsRow =
@@ -1122,62 +1215,82 @@ export function SongView({
           minHeight: 0,
         }}
       >
-        {!isPlayInstrumentOpen ? (
-          <div
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <h2
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
+              margin: 0,
+              fontSize: 16,
+              fontWeight: 600,
+              color: "#e6f2ff",
             }}
           >
-            <h2
+            Timeline
+          </h2>
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+            <IconButton
+              icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
+              label={timelineToggleLabel}
+              onClick={() => setTimelineExpanded((previous) => !previous)}
+              style={{ minWidth: 0 }}
+            />
+            <button
+              onClick={handleAddPerformanceTrack}
+              disabled={!onAddPerformanceTrack}
               style={{
-                margin: 0,
-                fontSize: 16,
+                padding: "6px 14px",
+                borderRadius: 20,
+                border: "1px solid #27E0B0",
+                background: onAddPerformanceTrack ? "#27E0B0" : "#273041",
+                color: onAddPerformanceTrack ? "#0b1220" : "#475569",
+                fontSize: 12,
                 fontWeight: 600,
-                color: "#e6f2ff",
+                letterSpacing: 0.3,
+                whiteSpace: "nowrap",
+                cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
+                boxShadow: onAddPerformanceTrack
+                  ? "0 2px 8px rgba(39,224,176,0.35)"
+                  : "none",
+                transition: "background 0.2s ease, border 0.2s ease",
               }}
             >
-              Timeline
-            </h2>
-            <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-              <IconButton
-                icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
-                label={timelineToggleLabel}
-                onClick={() => setTimelineExpanded((previous) => !previous)}
-                style={{ minWidth: 0 }}
-              />
-              <button
-                onClick={handleAddRow}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 20,
-                  border: "1px solid #333",
-                  background: "#273041",
-                  color: "#e6f2ff",
-                  fontSize: 12,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                + Row
-              </button>
-              <button
-                onClick={handleAddSection}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 20,
-                  border: "1px solid #333",
-                  background: "#273041",
-                  color: "#e6f2ff",
-                  fontSize: 12,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                + Sequence
-              </button>
-            </div>
+              + Track
+            </button>
+            <button
+              onClick={handleAddRow}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 20,
+                border: "1px solid #333",
+                background: "#273041",
+                color: "#e6f2ff",
+                fontSize: 12,
+                whiteSpace: "nowrap",
+              }}
+            >
+              + Row
+            </button>
+            <button
+              onClick={handleAddSection}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 20,
+                border: "1px solid #333",
+                background: "#273041",
+                color: "#e6f2ff",
+                fontSize: 12,
+                whiteSpace: "nowrap",
+              }}
+            >
+              + Sequence
+            </button>
           </div>
-        ) : null}
+        </div>
         <div
           className="scrollable"
           style={{
@@ -1187,6 +1300,55 @@ export function SongView({
             maxHeight: `${timelineViewportHeight}px`,
           }}
         >
+          {sectionCount > 0 ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: 8,
+                paddingRight: shouldEnableVerticalScroll ? 6 : 0,
+              }}
+            >
+              <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
+                    gap: SLOT_GAP,
+                    width: timelineWidthStyle,
+                    minWidth: timelineWidthStyle,
+                  }}
+                >
+                  {Array.from({ length: sectionCount }, (_, columnIndex) => (
+                    <button
+                      key={`delete-column-${columnIndex}`}
+                      type="button"
+                      onClick={() => handleDeleteColumn(columnIndex)}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 16,
+                        border: "1px solid #2a3344",
+                        background: "#111827",
+                        color: "#e2e8f0",
+                        fontSize: 11,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                        delete
+                      </span>
+                      <span>Seq {columnIndex + 1}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div
             style={{
               maxHeight: `${timelineViewportHeight}px`,
@@ -1258,7 +1420,6 @@ export function SongView({
                 };
 
                 const rowMuted = row.muted;
-                const rowSelected = rowSettingsIndex === rowIndex;
                 const performanceTrack = row.performanceTrackId
                   ? performanceTrackMap.get(row.performanceTrackId)
                   : undefined;
@@ -1267,6 +1428,11 @@ export function SongView({
                     getInstrumentColor(performanceTrack.instrument)
                   : null;
                 const isPerformanceRow = Boolean(row.performanceTrackId);
+                const isSelectedPerformanceRow =
+                  isPerformanceRow &&
+                  row.performanceTrackId === playInstrumentRowTrackId;
+                const rowSelected =
+                  rowSettingsIndex === rowIndex || isSelectedPerformanceRow;
                 const firstAssignedGroupId =
                   row.slots.find((slotId) => slotId !== null) ?? null;
                 const firstGroup = firstAssignedGroupId
@@ -1285,13 +1451,9 @@ export function SongView({
                   : rowSolo
                   ? "#14241d"
                   : "#111827";
-                const isRecordingRow =
-                  recordingActive &&
-                  row.performanceTrackId === playInstrumentRowTrackId;
+                const isRecordingRow = recordingActive && isSelectedPerformanceRow;
                 const isArmedRow =
-                  !isRecordingRow &&
-                  isRecordArmed &&
-                  row.performanceTrackId === playInstrumentRowTrackId;
+                  !isRecordingRow && isRecordArmed && isSelectedPerformanceRow;
                 const rowGhostNotes = isRecordingRow ? liveGhostNotes : [];
                 const rowGhostNoteSet = isRecordingRow
                   ? liveGhostNoteSet
@@ -1328,11 +1490,10 @@ export function SongView({
                     ? "Live"
                     : null
                   : null;
-                const performanceInstrumentLabel = isPerformanceRow
-                  ? performanceTrack
+                const performanceInstrumentLabel =
+                  isPerformanceRow && performanceTrack
                     ? formatInstrumentLabel(performanceTrack.instrument)
-                    : formatInstrumentLabel(playInstrument)
-                  : null;
+                    : null;
                 const performanceDescription = isPerformanceRow
                   ? isRecordingRow
                     ? "Recording…"
@@ -1352,6 +1513,15 @@ export function SongView({
                     style={{ display: "flex", flexDirection: "column", gap: 6 }}
                   >
                     <div
+                      onPointerDown={() => {
+                        if (isPerformanceRow) {
+                          handleSelectPerformanceTrackRow(
+                            row.performanceTrackId ?? null
+                          );
+                        } else if (playInstrumentRowTrackId) {
+                          handleSelectPerformanceTrackRow(null);
+                        }
+                      }}
                       style={{
                         display: "flex",
                         alignItems: "stretch",
@@ -1919,32 +2089,6 @@ export function SongView({
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <IconButton
-            icon="fiber_manual_record"
-            label={recordingActive ? "Recording" : "Record"}
-            tone={isRecordEnabled ? "danger" : "default"}
-            onClick={() => {
-              setIsRecordEnabled((prev) => !prev);
-            }}
-            style={{
-              width: 44,
-              height: 44,
-              ...(isRecordEnabled
-                ? {
-                    background: recordingActive ? "#E02749" : "#2b121d",
-                    border: `1px solid ${recordingActive ? "#E02749" : "#831843"}`,
-                    color: "#ffe4e6",
-                  }
-                : {}),
-            }}
-          />
-          <IconButton
-            icon="piano"
-            label="Play Instrument"
-            tone={isPlayInstrumentOpen ? "accent" : "default"}
-            onClick={handleTogglePlayInstrumentPanel}
-            style={{ width: 44, height: 44 }}
-          />
           <button
             aria-label={isPlaying ? "Stop" : "Play"}
             onPointerDown={onToggleTransport}
@@ -2029,127 +2173,117 @@ export function SongView({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
+                  gap: 8,
                   flexWrap: "wrap",
                   justifyContent: "flex-end",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    justifyContent: "flex-end",
-                  }}
-                >
-                  {isRecordEnabled ? (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: 0.6,
-                        textTransform: "uppercase",
-                        background: recordingActive
-                          ? "rgba(248, 113, 113, 0.24)"
-                          : "rgba(248, 113, 113, 0.14)",
-                        border: `1px solid ${
-                          recordingActive ? "#f87171" : "#fb7185"
-                        }`,
-                        color: "#fecdd3",
-                        boxShadow: recordingActive
-                          ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
-                          : "none",
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: 14 }}
-                        aria-hidden="true"
-                      >
-                        fiber_manual_record
-                      </span>
-                      {recordIndicatorLabel}
-                    </span>
-                  ) : null}
-                  <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                    {liveRowMessage}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setIsQuantizedRecording((prev) => !prev)
-                  }
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 999,
-                    border: `1px solid ${
-                      isQuantizedRecording
-                        ? playInstrumentColor
-                        : "#2a3344"
-                    }`,
-                    background: isQuantizedRecording
-                      ? withAlpha(playInstrumentColor, 0.18)
-                      : "#0f172a",
-                    color: "#e6f2ff",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    letterSpacing: 0.8,
-                    textTransform: "uppercase",
-                    cursor: "pointer",
-                  }}
-                  title={
-                    isQuantizedRecording
-                      ? "Quantized recording is on — notes snap to the grid."
-                      : "Quantized recording is off — capture free timing."
-                  }
-                >
-                  Quantize {isQuantizedRecording ? "On" : "Off"}
-                </button>
+                <IconButton
+                  icon="close"
+                  label="Close"
+                  showLabel
+                  onClick={handleCloseInstrumentPanel}
+                />
+                <IconButton
+                  icon={recordingActive ? "stop" : "fiber_manual_record"}
+                  label={recordingActive ? "Stop" : "Record"}
+                  showLabel
+                  tone={recordingActive ? "danger" : "default"}
+                  onClick={() => setIsRecordEnabled((prev) => !prev)}
+                  disabled={!hasPerformanceTarget}
+                />
+                <IconButton
+                  icon="delete"
+                  label="Clear"
+                  showLabel
+                  tone="danger"
+                  onClick={handleClearRecording}
+                  disabled={!canClearRecording}
+                />
               </div>
             </div>
             <div
               style={{
                 display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
                 flexWrap: "wrap",
-                gap: 10,
+                gap: 12,
               }}
             >
-              {PLAYABLE_INSTRUMENTS.map((instrumentOption) => {
-                const selected = instrumentOption === playInstrument;
-                const accent = getInstrumentColor(instrumentOption);
-                return (
-                  <button
-                    key={instrumentOption}
-                    type="button"
-                    onClick={() => handleSelectPlayInstrument(instrumentOption)}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                {isRecordEnabled ? (
+                  <span
                     style={{
-                      padding: "6px 14px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 10px",
                       borderRadius: 999,
-                      border: selected
-                        ? `1px solid ${accent}`
-                        : "1px solid #2a3344",
-                      background: selected
-                        ? withAlpha(accent, 0.22)
-                        : "#0f172a",
-                      color: selected ? "#e6f2ff" : "#94a3b8",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      letterSpacing: 0.4,
-                      cursor: "pointer",
-                      transition: "background 0.2s ease, border 0.2s ease",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      textTransform: "uppercase",
+                      background: recordingActive
+                        ? "rgba(248, 113, 113, 0.24)"
+                        : "rgba(248, 113, 113, 0.14)",
+                      border: `1px solid ${
+                        recordingActive ? "#f87171" : "#fb7185"
+                      }`,
+                      color: "#fecdd3",
+                      boxShadow: recordingActive
+                        ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
+                        : "none",
                     }}
                   >
-                    {formatInstrumentLabel(instrumentOption)}
-                  </button>
-                );
-              })}
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 14 }}
+                      aria-hidden="true"
+                    >
+                      fiber_manual_record
+                    </span>
+                    {recordIndicatorLabel}
+                  </span>
+                ) : null}
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                  {liveRowMessage}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuantizedRecording((prev) => !prev)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  border: `1px solid ${
+                    isQuantizedRecording ? playInstrumentColor : "#2a3344"
+                  }`,
+                  background: isQuantizedRecording
+                    ? withAlpha(playInstrumentColor, 0.18)
+                    : "#0f172a",
+                  color: "#e6f2ff",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+                title={
+                  isQuantizedRecording
+                    ? "Quantized recording is on — notes snap to the grid."
+                    : "Quantized recording is off — capture free timing."
+                }
+              >
+                Quantize {isQuantizedRecording ? "On" : "Off"}
+              </button>
             </div>
             <div
               style={{
@@ -2171,8 +2305,7 @@ export function SongView({
               />
             </div>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Play and record directly into the live performance row from this
-              panel.
+              Audition sounds or capture a new take for this performance row.
             </span>
           </div>
         ) : (

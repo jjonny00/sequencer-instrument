@@ -32,6 +32,7 @@ import {
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import {
   createPatternGroupId,
+  createPerformanceSettingsSnapshot,
   createPerformanceTrackId,
   createSongRow,
   getPerformanceTracksSpanMeasures,
@@ -52,8 +53,13 @@ import {
   saveProject as saveStoredProject,
   type StoredProjectData,
 } from "./storage";
-import { isUserPresetId } from "./presets";
+import {
+  isUserPresetId,
+  loadInstrumentPreset,
+  stripUserPresetPrefix,
+} from "./presets";
 import { getInstrumentColor } from "./utils/color";
+import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -168,6 +174,7 @@ interface AddTrackModalState {
   instrumentId: string;
   characterId: string;
   presetId: string | null;
+  context: "track" | "song";
 }
 
 type ProjectAction =
@@ -188,6 +195,7 @@ const createDefaultAddTrackState = (): AddTrackModalState => ({
   instrumentId: "",
   characterId: "",
   presetId: null,
+  context: "track",
 });
 
 const cloneChunkState = (chunk: Chunk): Chunk => ({
@@ -692,6 +700,15 @@ export default function App() {
     setAddTrackModalState({
       ...createDefaultAddTrackState(),
       isOpen: true,
+      context: "track",
+    });
+  }, []);
+
+  const openAddPerformanceTrackModal = useCallback(() => {
+    setAddTrackModalState({
+      ...createDefaultAddTrackState(),
+      isOpen: true,
+      context: "song",
     });
   }, []);
 
@@ -791,6 +808,7 @@ export default function App() {
         instrumentId,
         characterId,
         presetId,
+        context: "track",
       });
     },
     [packIndex, setPackIndex]
@@ -1381,10 +1399,14 @@ export default function App() {
 
   const ensurePerformanceRow = useCallback(
     (instrument: TrackInstrument, existingId?: string | null): string | null => {
+      if (!instrument) {
+        return null;
+      }
       const color = getInstrumentColor(instrument);
       const pack = packs[packIndex];
       const { packId, characterId: defaultCharacterId } =
         resolvePerformanceTrackSourceForPack(pack, instrument, null);
+      const allowCreateNew = !existingId;
       let ensuredId: string | null =
         existingId ?? activePerformanceTrackId ?? null;
 
@@ -1420,6 +1442,14 @@ export default function App() {
             };
             return next;
           }
+          if (!allowCreateNew) {
+            ensuredId = null;
+            return prev;
+          }
+        }
+
+        if (!allowCreateNew) {
+          return prev;
         }
 
         const nextId = createPerformanceTrackId();
@@ -2180,6 +2210,82 @@ export default function App() {
       closeAddTrackModal();
       return;
     }
+
+    if (addTrackModalState.context === "song") {
+      const pack = packs.find((candidate) => candidate.id === addTrackModalState.packId);
+      if (!pack) {
+        closeAddTrackModal();
+        return;
+      }
+
+      const instrumentId = addTrackModalState.instrumentId as TrackInstrument;
+      const instrumentDefinition = pack.instruments[instrumentId];
+
+      const resolvePreset = () => {
+        const presetId = addTrackModalState.presetId;
+        if (!presetId) return null;
+        if (isUserPresetId(presetId)) {
+          const stored = loadInstrumentPreset(
+            addTrackModalState.packId,
+            addTrackModalState.instrumentId,
+            stripUserPresetPrefix(presetId)
+          );
+          if (!stored) return null;
+          return {
+            chunk: stored.pattern,
+            characterId: stored.characterId ?? null,
+          };
+        }
+        const presetChunk = pack.chunks.find((chunk) => chunk.id === presetId);
+        if (!presetChunk) return null;
+        return {
+          chunk: presetChunk,
+          characterId: presetChunk.characterId ?? null,
+        };
+      };
+
+      const presetPayload = resolvePreset();
+      const resolvedCharacterId = resolveInstrumentCharacterId(
+        instrumentDefinition,
+        addTrackModalState.characterId || null,
+        presetPayload?.characterId ?? null,
+        null
+      );
+
+      const settings = presetPayload?.chunk
+        ? createPerformanceSettingsSnapshot(presetPayload.chunk)
+        : undefined;
+      const performanceTrackId = createPerformanceTrackId();
+      const color = getInstrumentColor(instrumentId);
+
+      setPerformanceTracks((prev) => [
+        ...prev,
+        {
+          id: performanceTrackId,
+          instrument: instrumentId,
+          color,
+          packId: addTrackModalState.packId,
+          characterId: resolvedCharacterId ?? null,
+          settings,
+          notes: [],
+        },
+      ]);
+
+      setSongRows((rows) => {
+        const maxColumns = rows.reduce(
+          (max, row) => Math.max(max, row.slots.length),
+          0
+        );
+        const newRow = createSongRow(maxColumns > 0 ? maxColumns : 1);
+        newRow.performanceTrackId = performanceTrackId;
+        return [...rows, newRow];
+      });
+
+      setActivePerformanceTrackId(performanceTrackId);
+      closeAddTrackModal();
+      return;
+    }
+
     if (
       addTrackModalState.mode === "edit" &&
       addTrackModalState.targetTrackId !== null
@@ -2202,7 +2308,14 @@ export default function App() {
       });
     }
     closeAddTrackModal();
-  }, [addTrackModalState, closeAddTrackModal]);
+  }, [
+    addTrackModalState,
+    closeAddTrackModal,
+    packs,
+    setPerformanceTracks,
+    setSongRows,
+    setActivePerformanceTrackId,
+  ]);
 
   const handleDeleteTrackFromModal = useCallback(() => {
     if (
@@ -3166,6 +3279,8 @@ export default function App() {
                 triggers={triggers}
                 onEnsurePerformanceRow={ensurePerformanceRow}
                 activePerformanceTrackId={activePerformanceTrackId}
+                onAddPerformanceTrack={openAddPerformanceTrackModal}
+                onSelectPerformanceTrack={setActivePerformanceTrackId}
                 onUpdatePerformanceTrack={updatePerformanceTrack}
                 onRemovePerformanceTrack={removePerformanceTrack}
                 onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
