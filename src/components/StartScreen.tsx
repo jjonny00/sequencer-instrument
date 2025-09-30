@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type MouseEvent,
-  type TouchEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Tone from "tone";
 
 interface StartScreenProps {
@@ -28,38 +21,21 @@ const StartScreen = ({
   );
 
   const handleUnlock = useCallback((action?: () => void) => {
-    const startPromise = Tone.start();
-    console.log("Tone context state:", Tone.context.state);
+    Tone.start();
 
-    startPromise
-      .then(() => {
-        console.log("Tone context state after unlock:", Tone.context.state);
-        if (isAudioRunning()) {
-          setShowAudioOverlay(false);
-          action?.();
-        } else {
-          setShowAudioOverlay(true);
-        }
-      })
-      .catch((error) => {
-        console.error("Audio unlock failed:", error);
-        setShowAudioOverlay(true);
-      });
+    if (isAudioRunning()) {
+      setShowAudioOverlay(false);
+      action?.();
+    } else {
+      console.warn("Tone.js context still suspended");
+      setShowAudioOverlay(true);
+    }
   }, []);
 
   const createGestureHandler = useCallback(
-    (action?: () => void) =>
-      (
-        event:
-          | MouseEvent<HTMLButtonElement>
-          | TouchEvent<HTMLButtonElement>
-      ) => {
-        if (event.type === "touchend") {
-          event.preventDefault();
-        }
-
-        handleUnlock(action);
-      },
+    (action?: () => void) => () => {
+      handleUnlock(action);
+    },
     [handleUnlock]
   );
 
