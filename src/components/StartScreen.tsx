@@ -1,3 +1,6 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import * as Tone from "tone";
+
 interface StartScreenProps {
   onNewSong: () => void;
   onLoadSong: (name: string) => void;
@@ -11,6 +14,80 @@ function StartScreen({
   onLoadDemoSong,
   savedSongs,
 }: StartScreenProps) {
+  const [showAudioOverlay, setShowAudioOverlay] = useState(
+    Tone.context.state !== "running"
+  );
+  const isUnlockingRef = useRef(false);
+
+  const unlockAudio = useCallback(async () => {
+    try {
+      if (Tone.context.state !== "running") {
+        await Tone.start();
+      }
+      setShowAudioOverlay(false);
+    } catch (error) {
+      console.error("Audio unlock failed:", error);
+      setShowAudioOverlay(true);
+    }
+  }, []);
+
+  const handleUnlock = useCallback(
+    async (action: () => void) => {
+      if (isUnlockingRef.current) {
+        return;
+      }
+
+      isUnlockingRef.current = true;
+
+      try {
+        await unlockAudio();
+
+        if (Tone.context.state === "running") {
+          action();
+        }
+      } finally {
+        isUnlockingRef.current = false;
+      }
+    },
+    [unlockAudio]
+  );
+
+  useEffect(() => {
+    if (Tone.context.state !== "running") {
+      setShowAudioOverlay(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === "visible" &&
+        Tone.context.state !== "running"
+      ) {
+        setShowAudioOverlay(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const context = Tone.getContext();
+    const handleStateChange = (state: AudioContextState) => {
+      setShowAudioOverlay(state !== "running");
+    };
+
+    context.on("statechange", handleStateChange);
+
+    return () => {
+      context.off("statechange", handleStateChange);
+    };
+  }, []);
+
   const savedSongsContent =
     savedSongs.length === 0 ? (
       <div
@@ -59,7 +136,8 @@ function StartScreen({
         </div>
         <button
           type="button"
-          onClick={onLoadDemoSong}
+          onClick={() => handleUnlock(onLoadDemoSong)}
+          onTouchStart={() => handleUnlock(onLoadDemoSong)}
           style={{
             padding: "12px 20px",
             borderRadius: 999,
@@ -80,7 +158,8 @@ function StartScreen({
         <button
           key={name}
           type="button"
-          onClick={() => onLoadSong(name)}
+          onClick={() => handleUnlock(() => onLoadSong(name))}
+          onTouchStart={() => handleUnlock(() => onLoadSong(name))}
           style={{
             padding: "12px 16px",
             borderRadius: 14,
@@ -119,7 +198,8 @@ function StartScreen({
       >
         <button
           type="button"
-          onClick={onNewSong}
+          onClick={() => handleUnlock(onNewSong)}
+          onTouchStart={() => handleUnlock(onNewSong)}
           style={{
             padding: "18px 24px",
             fontSize: "1.25rem",
@@ -160,6 +240,55 @@ function StartScreen({
           </div>
         </div>
       </div>
+      {showAudioOverlay && Tone.context.state !== "running" && (
+        <div
+          className="audio-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+            pointerEvents: showAudioOverlay ? "auto" : "none",
+          }}
+        >
+          <div
+            className="overlay-content"
+            style={{
+              background: "#ffffff",
+              padding: "20px 30px",
+              borderRadius: 8,
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              minWidth: 200,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 16, color: "#0b1220" }}>
+              Audio is paused
+            </p>
+            <button
+              type="button"
+              onClick={unlockAudio}
+              onTouchStart={unlockAudio}
+              style={{
+                padding: "10px 18px",
+                borderRadius: 999,
+                border: "none",
+                background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
+                color: "#0b1220",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Enable Audio
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
