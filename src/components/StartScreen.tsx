@@ -1,8 +1,11 @@
+// src/components/StartScreen.tsx
 import {
   useCallback,
+  useEffect,
   useMemo,
   type MouseEvent,
   type TouchEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import * as Tone from "tone";
 
@@ -21,37 +24,77 @@ const StartScreen = ({
   onLoadDemoSong,
   savedSongs,
 }: StartScreenProps) => {
-  const handleUnlock = useCallback((action?: () => void) => {
-    // Call Tone.start() synchronously inside the gesture
-    Tone.start();
+  /**
+   * HARD RULES FOR iOS PWA:
+   *  - Never await Tone.start() in a lifecycle hook.
+   *  - Call Tone.start() directly inside a *real* user gesture (pointer/click).
+   *  - Provide a global, capture-phase pointer trap as a safety net,
+   *    so the very first touch anywhere unlocks audio even if React
+   *    handlers don’t fire for some reason.
+   */
 
+  // 1) One-time, capture-phase global unlock (safety net)
+  useEffect(() => {
+    if (isAudioRunning()) return;
+
+    const unlockOnce = () => {
+      // Synchronous call—no await/then.
+      try {
+        Tone.start();
+      } catch {
+        // ignore
+      }
+      // We don’t remove this manually because we register with { once: true }.
+    };
+
+    // Capture phase to run even if something stops propagation,
+    // and once:true so it only tries on the very first pointer interaction.
+    window.addEventListener("pointerdown", unlockOnce, { capture: true, once: true });
+
+    // Cleanup in case component unmounts before the first interaction.
+    return () => {
+      window.removeEventListener("pointerdown", unlockOnce, true);
+    };
+  }, []);
+
+  // 2) Button-level unlock + action (no overlay on start screen)
+  const handleUnlockAnd = useCallback((action?: () => void) => {
+    // Synchronous—don’t await or chain .then()
+    try {
+      Tone.start();
+    } catch {
+      // ignore
+    }
     if (isAudioRunning()) {
       action?.();
     } else {
-      console.warn("Tone.js context still suspended after gesture");
+      // If still suspended, we *still* run action to keep UI responsive;
+      // other views may show their audio overlay if needed.
+      action?.();
     }
   }, []);
 
-  const createGestureHandler = useCallback(
+  // Pointer-first handlers (works for mouse/touch/pen)
+  const createPointerHandler = useCallback(
     (action?: () => void) =>
       (
-        _event:
+        _e:
+          | ReactPointerEvent<HTMLButtonElement>
           | MouseEvent<HTMLButtonElement>
           | TouchEvent<HTMLButtonElement>
       ) => {
-        // Use onClick + onTouchEnd only, no preventDefault
-        handleUnlock(action);
+        handleUnlockAnd(action);
       },
-    [handleUnlock]
+    [handleUnlockAnd]
   );
 
   const newSongHandler = useMemo(
-    () => createGestureHandler(onNewSong),
-    [createGestureHandler, onNewSong]
+    () => createPointerHandler(onNewSong),
+    [createPointerHandler, onNewSong]
   );
   const demoSongHandler = useMemo(
-    () => createGestureHandler(onLoadDemoSong),
-    [createGestureHandler, onLoadDemoSong]
+    () => createPointerHandler(onLoadDemoSong),
+    [createPointerHandler, onLoadDemoSong]
   );
 
   const savedSongsContent = useMemo(() => {
@@ -103,8 +146,8 @@ const StartScreen = ({
           </div>
           <button
             type="button"
+            onPointerUp={demoSongHandler}
             onClick={demoSongHandler}
-            onTouchEnd={demoSongHandler}
             style={{
               padding: "12px 20px",
               borderRadius: 999,
@@ -115,6 +158,7 @@ const StartScreen = ({
               fontSize: 14,
               cursor: "pointer",
               boxShadow: "0 12px 24px rgba(39,224,176,0.25)",
+              touchAction: "manipulation",
             }}
           >
             Try Demo Song
@@ -124,13 +168,13 @@ const StartScreen = ({
     }
 
     return savedSongs.map((name) => {
-      const loadSavedSongHandler = createGestureHandler(() => onLoadSong(name));
+      const loadSavedSongHandler = createPointerHandler(() => onLoadSong(name));
       return (
         <button
           key={name}
           type="button"
+          onPointerUp={loadSavedSongHandler}
           onClick={loadSavedSongHandler}
-          onTouchEnd={loadSavedSongHandler}
           style={{
             padding: "12px 16px",
             borderRadius: 14,
@@ -141,6 +185,7 @@ const StartScreen = ({
             display: "flex",
             flexDirection: "column",
             gap: 4,
+            touchAction: "manipulation",
           }}
         >
           <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
@@ -150,7 +195,7 @@ const StartScreen = ({
         </button>
       );
     });
-  }, [createGestureHandler, demoSongHandler, onLoadSong, savedSongs]);
+  }, [createPointerHandler, demoSongHandler, onLoadSong, savedSongs]);
 
   return (
     <div
@@ -172,8 +217,8 @@ const StartScreen = ({
       >
         <button
           type="button"
+          onPointerUp={newSongHandler}
           onClick={newSongHandler}
-          onTouchEnd={newSongHandler}
           style={{
             padding: "18px 24px",
             fontSize: "1.25rem",
@@ -187,17 +232,13 @@ const StartScreen = ({
             alignItems: "center",
             justifyContent: "center",
             gap: 12,
+            touchAction: "manipulation",
           }}
         >
           + New Song
         </button>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: "#e6f2ff" }}>
             Saved Songs
           </div>

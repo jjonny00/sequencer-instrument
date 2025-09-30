@@ -166,3 +166,13 @@ button:focus-visible {
   opacity: 0;
   visibility: hidden;
 }
+
+/* Ensure taps aren’t interpreted as gestures or cause delayed clicks */
+button,
+[role="button"],
+.btn {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
