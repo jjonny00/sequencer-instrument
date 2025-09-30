@@ -60,6 +60,7 @@ import {
 } from "./presets";
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
+import { unlockAudio } from "./utils/audioUnlock";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -2071,6 +2072,18 @@ export default function App() {
     };
   }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
 
+  const unlockAndRun = useCallback((action?: () => void) => {
+    void (async () => {
+      try {
+        await unlockAudio();
+      } catch (error) {
+        console.warn("unlockAudio failed before action:", error);
+      } finally {
+        action?.();
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     refreshProjectList();
   }, [refreshProjectList]);
@@ -2559,7 +2572,7 @@ export default function App() {
                         icon="folder_open"
                         label={`Load song ${name}`}
                         tone="accent"
-                        onClick={() => loadProject(name)}
+                        onClick={() => unlockAndRun(() => loadProject(name))}
                       />
                       <IconButton
                         icon="delete"
@@ -2753,7 +2766,7 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={createNewProject}
+              onClick={() => unlockAndRun(createNewProject)}
               style={{
                 padding: "18px 24px",
                 fontSize: "1.25rem",
@@ -2839,7 +2852,7 @@ export default function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={handleLoadDemoSong}
+                      onClick={() => unlockAndRun(handleLoadDemoSong)}
                       style={{
                         padding: "12px 20px",
                         borderRadius: 999,
@@ -2859,7 +2872,7 @@ export default function App() {
                   projectList.map((name) => (
                     <button
                       key={name}
-                      onClick={() => loadProject(name)}
+                      onClick={() => unlockAndRun(() => loadProject(name))}
                       style={{
                         padding: "12px 16px",
                         borderRadius: 14,
