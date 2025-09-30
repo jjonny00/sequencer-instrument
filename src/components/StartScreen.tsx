@@ -17,33 +17,48 @@ interface StartScreenProps {
 
 const isAudioRunning = () => Tone.context.state === "running";
 
-function StartScreen({
+const StartScreen = ({
   onNewSong,
   onLoadSong,
   onLoadDemoSong,
   savedSongs,
-}: StartScreenProps) {
-  const [showAudioOverlay, setShowAudioOverlay] = useState(false);
+}: StartScreenProps) => {
+  const [showAudioOverlay, setShowAudioOverlay] = useState(
+    () => !isAudioRunning()
+  );
 
-  const handleUnlock = useCallback((action?: () => void) => {
-    Tone.start()
-      .then(() => {
-        if (isAudioRunning()) {
-          setShowAudioOverlay(false);
-          action?.();
-        } else {
+  const handleUnlock = useCallback(
+    (action?: () => void) => {
+      if (isAudioRunning()) {
+        setShowAudioOverlay(false);
+        action?.();
+        return;
+      }
+
+      Tone.start()
+        .then(() => {
+          if (isAudioRunning()) {
+            setShowAudioOverlay(false);
+            action?.();
+          } else {
+            setShowAudioOverlay(true);
+          }
+        })
+        .catch((error) => {
+          console.error("Audio unlock failed:", error);
           setShowAudioOverlay(true);
-        }
-      })
-      .catch((error) => {
-        console.error("Audio unlock failed:", error);
-        setShowAudioOverlay(true);
-      });
-  }, []);
+        });
+    },
+    []
+  );
 
-  const createUnlockHandler = useCallback(
+  const createGestureHandler = useCallback(
     (action?: () => void) =>
-      (event: MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => {
+      (
+        event:
+          | MouseEvent<HTMLButtonElement>
+          | TouchEvent<HTMLButtonElement>
+      ) => {
         if (event.type === "touchstart") {
           event.preventDefault();
         }
@@ -51,6 +66,25 @@ function StartScreen({
       },
     [handleUnlock]
   );
+
+  const enableAudioHandler = useMemo(
+    () => createGestureHandler(),
+    [createGestureHandler]
+  );
+  const newSongHandler = useMemo(
+    () => createGestureHandler(onNewSong),
+    [createGestureHandler, onNewSong]
+  );
+  const demoSongHandler = useMemo(
+    () => createGestureHandler(onLoadDemoSong),
+    [createGestureHandler, onLoadDemoSong]
+  );
+
+  useEffect(() => {
+    if (!isAudioRunning()) {
+      setShowAudioOverlay(true);
+    }
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -65,9 +99,18 @@ function StartScreen({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
     };
   }, []);
+
+  useEffect(() => {
+    if (showAudioOverlay && isAudioRunning()) {
+      setShowAudioOverlay(false);
+    }
+  }, [showAudioOverlay]);
 
   const savedSongsContent = useMemo(() => {
     if (savedSongs.length === 0) {
@@ -118,8 +161,8 @@ function StartScreen({
           </div>
           <button
             type="button"
-            onClick={createUnlockHandler(onLoadDemoSong)}
-            onTouchStart={createUnlockHandler(onLoadDemoSong)}
+            onClick={demoSongHandler}
+            onTouchStart={demoSongHandler}
             style={{
               padding: "12px 20px",
               borderRadius: 999,
@@ -138,29 +181,34 @@ function StartScreen({
       );
     }
 
-    return savedSongs.map((name) => (
-      <button
-        key={name}
-        type="button"
-        onClick={createUnlockHandler(() => onLoadSong(name))}
-        onTouchStart={createUnlockHandler(() => onLoadSong(name))}
-        style={{
-          padding: "12px 16px",
-          borderRadius: 14,
-          border: "1px solid #1f2937",
-          background: "#0f172a",
-          color: "#e6f2ff",
-          textAlign: "left",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-        }}
-      >
-        <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
-        <span style={{ fontSize: 11, color: "#94a3b8" }}>Tap to load song</span>
-      </button>
-    ));
-  }, [createUnlockHandler, onLoadDemoSong, onLoadSong, savedSongs]);
+    return savedSongs.map((name) => {
+      const loadSavedSongHandler = createGestureHandler(() =>
+        onLoadSong(name)
+      );
+      return (
+        <button
+          key={name}
+          type="button"
+          onClick={loadSavedSongHandler}
+          onTouchStart={loadSavedSongHandler}
+          style={{
+            padding: "12px 16px",
+            borderRadius: 14,
+            border: "1px solid #1f2937",
+            background: "#0f172a",
+            color: "#e6f2ff",
+            textAlign: "left",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>Tap to load song</span>
+        </button>
+      );
+    });
+  }, [createGestureHandler, demoSongHandler, onLoadSong, savedSongs]);
 
   return (
     <div
@@ -182,8 +230,8 @@ function StartScreen({
       >
         <button
           type="button"
-          onClick={createUnlockHandler(onNewSong)}
-          onTouchStart={createUnlockHandler(onNewSong)}
+          onClick={newSongHandler}
+          onTouchStart={newSongHandler}
           style={{
             padding: "18px 24px",
             fontSize: "1.25rem",
@@ -224,7 +272,7 @@ function StartScreen({
           </div>
         </div>
       </div>
-      {showAudioOverlay && (
+      {showAudioOverlay ? (
         <div
           className="audio-overlay"
           style={{
@@ -256,8 +304,8 @@ function StartScreen({
             </p>
             <button
               type="button"
-              onClick={createUnlockHandler()}
-              onTouchStart={createUnlockHandler()}
+              onClick={enableAudioHandler}
+              onTouchStart={enableAudioHandler}
               style={{
                 padding: "10px 18px",
                 borderRadius: 999,
@@ -272,9 +320,9 @@ function StartScreen({
             </button>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
-}
+};
 
 export default StartScreen;
