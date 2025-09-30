@@ -14,25 +14,16 @@ function StartScreen({
   onLoadDemoSong,
   savedSongs,
 }: StartScreenProps) {
-  const [showAudioOverlay, setShowAudioOverlay] = useState(
-    Tone.context.state !== "running"
-  );
+  const [showAudioOverlay, setShowAudioOverlay] = useState(false);
   const isUnlockingRef = useRef(false);
 
-  const unlockAudio = useCallback(async () => {
-    try {
-      if (Tone.context.state !== "running") {
-        await Tone.start();
-      }
-      setShowAudioOverlay(false);
-    } catch (error) {
-      console.error("Audio unlock failed:", error);
-      setShowAudioOverlay(true);
-    }
-  }, []);
+  const isAudioRunning = useCallback(
+    () => (Tone.context.state as AudioContextState) === "running",
+    []
+  );
 
   const handleUnlock = useCallback(
-    async (action: () => void) => {
+    async (action?: () => void) => {
       if (isUnlockingRef.current) {
         return;
       }
@@ -40,29 +31,29 @@ function StartScreen({
       isUnlockingRef.current = true;
 
       try {
-        await unlockAudio();
+        await Tone.start();
 
-        if (Tone.context.state === "running") {
-          action();
+        if (isAudioRunning()) {
+          setShowAudioOverlay(false);
+          action?.();
+        } else {
+          setShowAudioOverlay(true);
         }
+      } catch (error) {
+        console.error("Audio unlock failed:", error);
+        setShowAudioOverlay(true);
       } finally {
         isUnlockingRef.current = false;
       }
     },
-    [unlockAudio]
+    [isAudioRunning]
   );
-
-  useEffect(() => {
-    if (Tone.context.state !== "running") {
-      setShowAudioOverlay(true);
-    }
-  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (
         document.visibilityState === "visible" &&
-        Tone.context.state !== "running"
+        !isAudioRunning()
       ) {
         setShowAudioOverlay(true);
       }
@@ -73,12 +64,17 @@ function StartScreen({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [isAudioRunning]);
 
   useEffect(() => {
     const context = Tone.getContext();
+
     const handleStateChange = (state: AudioContextState) => {
-      setShowAudioOverlay(state !== "running");
+      if (state === "running") {
+        setShowAudioOverlay(false);
+      } else {
+        setShowAudioOverlay(true);
+      }
     };
 
     context.on("statechange", handleStateChange);
@@ -240,7 +236,7 @@ function StartScreen({
           </div>
         </div>
       </div>
-      {showAudioOverlay && Tone.context.state !== "running" && (
+      {showAudioOverlay && !isAudioRunning() && (
         <div
           className="audio-overlay"
           style={{
@@ -251,7 +247,8 @@ function StartScreen({
             justifyContent: "center",
             alignItems: "center",
             zIndex: 999,
-            pointerEvents: showAudioOverlay ? "auto" : "none",
+            pointerEvents:
+              showAudioOverlay && !isAudioRunning() ? "auto" : "none",
           }}
         >
           <div
@@ -272,8 +269,8 @@ function StartScreen({
             </p>
             <button
               type="button"
-              onClick={unlockAudio}
-              onTouchStart={unlockAudio}
+              onClick={() => handleUnlock()}
+              onTouchStart={() => handleUnlock()}
               style={{
                 padding: "10px 18px",
                 borderRadius: 999,
