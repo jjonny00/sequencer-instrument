@@ -118,3 +118,51 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+.overlay-hidden,
+.overlay--inactive,
+.dismissed-overlay {
+  pointer-events: none !important;
+}
+
+.audio-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.audio-overlay .overlay-content {
+  background: #ffffff;
+  padding: 20px 30px;
+  border-radius: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 200px;
+  color: #0b1220;
+}
+
+.audio-overlay .overlay-content p {
+  margin: 0;
+  font-size: 16px;
+}
+
+.audio-overlay .overlay-content button {
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #27e0b0, #6ae0ff);
+  color: #0b1220;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 10px 18px;
+}
+
+.audio-overlay.overlay-hidden {
+  opacity: 0;
+  visibility: hidden;
+}

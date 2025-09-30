@@ -27,30 +27,25 @@ const StartScreen = ({
     () => !isAudioRunning()
   );
 
-  const handleUnlock = useCallback(
-    (action?: () => void) => {
-      if (isAudioRunning()) {
-        setShowAudioOverlay(false);
-        action?.();
-        return;
-      }
+  const handleUnlock = useCallback((action?: () => void) => {
+    const startPromise = Tone.start();
+    console.log("Tone context state:", Tone.context.state);
 
-      Tone.start()
-        .then(() => {
-          if (isAudioRunning()) {
-            setShowAudioOverlay(false);
-            action?.();
-          } else {
-            setShowAudioOverlay(true);
-          }
-        })
-        .catch((error) => {
-          console.error("Audio unlock failed:", error);
+    startPromise
+      .then(() => {
+        console.log("Tone context state after unlock:", Tone.context.state);
+        if (isAudioRunning()) {
+          setShowAudioOverlay(false);
+          action?.();
+        } else {
           setShowAudioOverlay(true);
-        });
-    },
-    []
-  );
+        }
+      })
+      .catch((error) => {
+        console.error("Audio unlock failed:", error);
+        setShowAudioOverlay(true);
+      });
+  }, []);
 
   const createGestureHandler = useCallback(
     (action?: () => void) =>
@@ -59,9 +54,10 @@ const StartScreen = ({
           | MouseEvent<HTMLButtonElement>
           | TouchEvent<HTMLButtonElement>
       ) => {
-        if (event.type === "touchstart") {
+        if (event.type === "touchend") {
           event.preventDefault();
         }
+
         handleUnlock(action);
       },
     [handleUnlock]
@@ -99,10 +95,7 @@ const StartScreen = ({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -111,6 +104,10 @@ const StartScreen = ({
       setShowAudioOverlay(false);
     }
   }, [showAudioOverlay]);
+
+  const overlayClassName = showAudioOverlay
+    ? "audio-overlay"
+    : "audio-overlay overlay-hidden";
 
   const savedSongsContent = useMemo(() => {
     if (savedSongs.length === 0) {
@@ -162,7 +159,7 @@ const StartScreen = ({
           <button
             type="button"
             onClick={demoSongHandler}
-            onTouchStart={demoSongHandler}
+            onTouchEnd={demoSongHandler}
             style={{
               padding: "12px 20px",
               borderRadius: 999,
@@ -182,15 +179,14 @@ const StartScreen = ({
     }
 
     return savedSongs.map((name) => {
-      const loadSavedSongHandler = createGestureHandler(() =>
-        onLoadSong(name)
-      );
+      const loadSavedSongHandler = createGestureHandler(() => onLoadSong(name));
+
       return (
         <button
           key={name}
           type="button"
           onClick={loadSavedSongHandler}
-          onTouchStart={loadSavedSongHandler}
+          onTouchEnd={loadSavedSongHandler}
           style={{
             padding: "12px 16px",
             borderRadius: 14,
@@ -231,7 +227,7 @@ const StartScreen = ({
         <button
           type="button"
           onClick={newSongHandler}
-          onTouchStart={newSongHandler}
+          onTouchEnd={newSongHandler}
           style={{
             padding: "18px 24px",
             fontSize: "1.25rem",
@@ -272,55 +268,18 @@ const StartScreen = ({
           </div>
         </div>
       </div>
-      {showAudioOverlay ? (
-        <div
-          className="audio-overlay"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.6)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 999,
-            pointerEvents: showAudioOverlay ? "auto" : "none",
-          }}
-        >
-          <div
-            className="overlay-content"
-            style={{
-              background: "#ffffff",
-              padding: "20px 30px",
-              borderRadius: 8,
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              minWidth: 200,
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 16, color: "#0b1220" }}>
-              Audio is paused
-            </p>
-            <button
-              type="button"
-              onClick={enableAudioHandler}
-              onTouchStart={enableAudioHandler}
-              style={{
-                padding: "10px 18px",
-                borderRadius: 999,
-                border: "none",
-                background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
-                color: "#0b1220",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Enable Audio
-            </button>
-          </div>
+      <div
+        className={overlayClassName}
+        aria-hidden={!showAudioOverlay}
+        hidden={!showAudioOverlay}
+      >
+        <div className="overlay-content">
+          <p>Audio is paused</p>
+          <button type="button" onClick={enableAudioHandler} onTouchEnd={enableAudioHandler}>
+            Enable Audio
+          </button>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 };
