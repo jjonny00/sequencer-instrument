@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  type MouseEvent,
+  type TouchEvent,
+} from "react";
 import * as Tone from "tone";
 
 interface StartScreenProps {
@@ -16,33 +21,30 @@ const StartScreen = ({
   onLoadDemoSong,
   savedSongs,
 }: StartScreenProps) => {
-  const [showAudioOverlay, setShowAudioOverlay] = useState(
-    () => !isAudioRunning()
-  );
-
   const handleUnlock = useCallback((action?: () => void) => {
+    // Call Tone.start() synchronously inside the gesture
     Tone.start();
 
     if (isAudioRunning()) {
-      setShowAudioOverlay(false);
       action?.();
     } else {
-      console.warn("Tone.js context still suspended");
-      setShowAudioOverlay(true);
+      console.warn("Tone.js context still suspended after gesture");
     }
   }, []);
 
   const createGestureHandler = useCallback(
-    (action?: () => void) => () => {
-      handleUnlock(action);
-    },
+    (action?: () => void) =>
+      (
+        _event:
+          | MouseEvent<HTMLButtonElement>
+          | TouchEvent<HTMLButtonElement>
+      ) => {
+        // Use onClick + onTouchEnd only, no preventDefault
+        handleUnlock(action);
+      },
     [handleUnlock]
   );
 
-  const enableAudioHandler = useMemo(
-    () => createGestureHandler(),
-    [createGestureHandler]
-  );
   const newSongHandler = useMemo(
     () => createGestureHandler(onNewSong),
     [createGestureHandler, onNewSong]
@@ -51,39 +53,6 @@ const StartScreen = ({
     () => createGestureHandler(onLoadDemoSong),
     [createGestureHandler, onLoadDemoSong]
   );
-
-  useEffect(() => {
-    if (!isAudioRunning()) {
-      setShowAudioOverlay(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (
-        document.visibilityState === "visible" &&
-        !isAudioRunning()
-      ) {
-        setShowAudioOverlay(true);
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (showAudioOverlay && isAudioRunning()) {
-      setShowAudioOverlay(false);
-    }
-  }, [showAudioOverlay]);
-
-  const overlayClassName = showAudioOverlay
-    ? "audio-overlay"
-    : "audio-overlay overlay-hidden";
 
   const savedSongsContent = useMemo(() => {
     if (savedSongs.length === 0) {
@@ -156,7 +125,6 @@ const StartScreen = ({
 
     return savedSongs.map((name) => {
       const loadSavedSongHandler = createGestureHandler(() => onLoadSong(name));
-
       return (
         <button
           key={name}
@@ -176,7 +144,9 @@ const StartScreen = ({
           }}
         >
           <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>Tap to load song</span>
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>
+            Tap to load song
+          </span>
         </button>
       );
     });
@@ -242,18 +212,6 @@ const StartScreen = ({
           >
             {savedSongsContent}
           </div>
-        </div>
-      </div>
-      <div
-        className={overlayClassName}
-        aria-hidden={!showAudioOverlay}
-        hidden={!showAudioOverlay}
-      >
-        <div className="overlay-content">
-          <p>Audio is paused</p>
-          <button type="button" onClick={enableAudioHandler} onTouchEnd={enableAudioHandler}>
-            Enable Audio
-          </button>
         </div>
       </div>
     </div>
