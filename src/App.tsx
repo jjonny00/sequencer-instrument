@@ -27,7 +27,6 @@ import {
   filterValueToFrequency,
   isIOSPWA,
   refreshAudioReadyState,
-  audioReady,
 } from "./utils/audio";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import {
@@ -361,7 +360,9 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [packIndex, setPackIndex] = useState(0);
   const [toneGraphVersion, setToneGraphVersion] = useState(0);
-  const [showAudioUnlockPrompt, setShowAudioUnlockPrompt] = useState(false);
+  const [audioOverlayVisible, setAudioOverlayVisible] = useState(false);
+  const [hasAudioUnlockBeenRequested, setHasAudioUnlockBeenRequested] =
+    useState(false);
   const [handlerVersion, setHandlerVersion] = useState(0);
 
   // Instruments (kept across renders)
@@ -386,6 +387,8 @@ export default function App() {
     >
   >({});
   const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
+  const pendingAudioActionRef =
+    useRef<(() => void | Promise<void>) | null>(null);
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [performanceTracks, setPerformanceTracks] = useState<
@@ -473,6 +476,59 @@ export default function App() {
   const restorationRef = useRef(false);
   const previousStartedRef = useRef(started);
 
+  const flushPendingAudioAction = useCallback(() => {
+    const pendingAction = pendingAudioActionRef.current;
+    if (!pendingAction) {
+      return;
+    }
+    pendingAudioActionRef.current = null;
+    void (async () => {
+      try {
+        await pendingAction();
+      } catch (error) {
+        console.error("Pending audio action failed:", error);
+      }
+    })();
+  }, []);
+
+  const ensureAudioRunning = useCallback(async () => {
+    try {
+      await activateAudio();
+    } catch (error) {
+      console.warn("Audio activation attempt failed:", error);
+    }
+    return refreshAudioReadyState();
+  }, []);
+
+  const requestAudioUnlock = useCallback(
+    async (action: () => void | Promise<void>) => {
+      setHasAudioUnlockBeenRequested(true);
+      const running = await ensureAudioRunning();
+      if (running) {
+        setAudioOverlayVisible(false);
+        pendingAudioActionRef.current = null;
+        try {
+          await action();
+        } catch (error) {
+          console.error("Audio-gated action failed:", error);
+        }
+        return;
+      }
+      pendingAudioActionRef.current = action;
+      setAudioOverlayVisible(true);
+    },
+    [ensureAudioRunning]
+  );
+
+  const handleAudioOverlayEnable = useCallback(async () => {
+    setHasAudioUnlockBeenRequested(true);
+    const running = await ensureAudioRunning();
+    if (running) {
+      setAudioOverlayVisible(false);
+      flushPendingAudioAction();
+    }
+  }, [ensureAudioRunning, flushPendingAudioAction]);
+
   useEffect(() => {
     latestTracksRef.current = tracks;
   }, [tracks]);
@@ -522,7 +578,8 @@ export default function App() {
   useEffect(() => {
     if (previousStartedRef.current && !started) {
       setHandlerVersion((version) => version + 1);
-      setShowAudioUnlockPrompt(false);
+      setAudioOverlayVisible(false);
+      pendingAudioActionRef.current = null;
     }
     previousStartedRef.current = started;
     refreshAudioReadyState();
@@ -542,7 +599,12 @@ export default function App() {
     const handleStateChange = () => {
       const running = refreshAudioReadyState();
       if (running) {
-        setShowAudioUnlockPrompt(false);
+        setAudioOverlayVisible(false);
+        flushPendingAudioAction();
+        return;
+      }
+      if (hasAudioUnlockBeenRequested) {
+        setAudioOverlayVisible(true);
       }
     };
 
@@ -570,7 +632,7 @@ export default function App() {
         context.onstatechange = previousHandler ?? null;
       }
     };
-  }, []);
+  }, [flushPendingAudioAction, hasAudioUnlockBeenRequested]);
 
   const updateLoopBaseline = useCallback(
     (tracksData: Track[], patternGroupData: PatternGroup[]) => {
@@ -2010,12 +2072,7 @@ export default function App() {
     void handlerVersion;
 
     const runProjectAction = (action: ProjectAction) => {
-      void (async () => {
-        if (!audioReady) {
-          await activateAudio();
-        }
-        refreshAudioReadyState();
-
+      void requestAudioUnlock(async () => {
         const readyPromise = ensureAudioReady().catch((error) => {
           console.warn("Audio preparation failed:", error);
           return false;
@@ -2049,7 +2106,7 @@ export default function App() {
               );
           }
         }
-      })();
+      });
     };
 
     const createNewProjectHandler = () => {
@@ -2070,7 +2127,13 @@ export default function App() {
       loadProject: loadProjectHandler,
       handleLoadDemoSong: handleLoadDemoSongHandler,
     };
-  }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
+  }, [
+    ensureAudioReady,
+    handlerVersion,
+    requestAudioUnlock,
+    requestProjectAction,
+    started,
+  ]);
 
   useEffect(() => {
     refreshProjectList();
@@ -2118,42 +2181,19 @@ export default function App() {
       Tone.Transport.stop();
       setIsPlaying(false);
       setCurrentSectionIndex(0);
-      setShowAudioUnlockPrompt(false);
+      setAudioOverlayVisible(false);
+      pendingAudioActionRef.current = null;
       return;
     }
 
-    let unlocked = true;
-    if (!audioReady) {
-      unlocked = await activateAudio();
-    } else if (!refreshAudioReadyState()) {
-      unlocked = await activateAudio();
-    }
-
-    const running = refreshAudioReadyState();
-
-    if (Tone.Transport.state === "stopped") {
-      setCurrentSectionIndex(0);
-    }
-    Tone.Transport.start();
-    setIsPlaying(true);
-
-    if (!unlocked || !running) {
-      setShowAudioUnlockPrompt(true);
-    } else {
-      setShowAudioUnlockPrompt(false);
-    }
-  };
-
-  const handleAudioUnlockPromptTap = useCallback(async () => {
-    const unlocked = await activateAudio();
-    const running = refreshAudioReadyState();
-    if (unlocked && running) {
-      setShowAudioUnlockPrompt(false);
-      if (isPlaying) {
-        Tone.Transport.start();
+    await requestAudioUnlock(async () => {
+      if (Tone.Transport.state === "stopped") {
+        setCurrentSectionIndex(0);
       }
-    }
-  }, [isPlaying]);
+      Tone.Transport.start();
+      setIsPlaying(true);
+    });
+  };
 
   useEffect(() => {
     if (!started) return;
@@ -2174,24 +2214,23 @@ export default function App() {
         return;
       }
 
-      console.log("Document visible, refreshing audio context state");
-      void initAudioContext()
-        .then(() => {
-          refreshAudioReadyState();
-          if (Tone.getContext().state === "running") {
-            setShowAudioUnlockPrompt(false);
-          }
-        })
-        .catch((error) => {
-          console.warn("Failed to refresh audio context:", error);
-        });
+      const running = refreshAudioReadyState() && Tone.getContext().state === "running";
+      if (running) {
+        setAudioOverlayVisible(false);
+        flushPendingAudioAction();
+        return;
+      }
+
+      if (hasAudioUnlockBeenRequested) {
+        setAudioOverlayVisible(true);
+      }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [flushPendingAudioAction, hasAudioUnlockBeenRequested]);
 
   const handleSelectLoopFromSongView = useCallback(
     (groupId: string) => {
@@ -2356,36 +2395,61 @@ export default function App() {
         flexDirection: "column"
       }}
     >
-      {started && showAudioUnlockPrompt ? (
+      {audioOverlayVisible ? (
         <div
+          role="dialog"
+          aria-modal="true"
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(15, 20, 32, 0.6)",
+            background: "rgba(9, 14, 23, 0.72)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 2000,
             pointerEvents: "auto",
+            padding: 24,
           }}
         >
-          <button
-            type="button"
-            onClick={handleAudioUnlockPromptTap}
+          <div
             style={{
-              padding: "14px 26px",
-              borderRadius: 999,
-              border: "1px solid #27E0B0",
-              background: "rgba(39, 224, 176, 0.15)",
-              color: "#27E0B0",
-              fontWeight: 600,
-              fontSize: 16,
-              cursor: "pointer",
-              boxShadow: "0 8px 24px rgba(39, 224, 176, 0.3)",
+              background: "#0f172a",
+              color: "#e2e8f0",
+              borderRadius: 16,
+              padding: "28px 32px",
+              boxShadow: "0 20px 40px rgba(15, 23, 42, 0.45)",
+              maxWidth: 360,
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              textAlign: "center",
             }}
           >
-            Tap to enable sound
-          </button>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>
+              Audio is paused
+            </h2>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>
+              Tap the button below to resume playback.
+            </p>
+            <button
+              type="button"
+              onClick={handleAudioOverlayEnable}
+              style={{
+                padding: "12px 24px",
+                borderRadius: 999,
+                border: "none",
+                background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
+                color: "#071021",
+                fontWeight: 600,
+                fontSize: 15,
+                cursor: "pointer",
+                boxShadow: "0 12px 32px rgba(39, 224, 176, 0.35)",
+              }}
+            >
+              Enable Audio
+            </button>
+          </div>
         </div>
       ) : null}
 

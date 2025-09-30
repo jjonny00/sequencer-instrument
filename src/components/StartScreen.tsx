@@ -1,7 +1,3 @@
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useState } from "react";
-import * as Tone from "tone";
-
 interface StartScreenProps {
   onNewSong: () => void;
   onLoadSong: (name: string) => void;
@@ -9,132 +5,12 @@ interface StartScreenProps {
   savedSongs: string[];
 }
 
-const overlayContainerStyle: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(9, 14, 23, 0.7)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 999,
-  padding: "24px",
-};
-
-const overlayContentStyle: CSSProperties = {
-  background: "#0f172a",
-  color: "#e2e8f0",
-  borderRadius: 16,
-  padding: "28px 32px",
-  boxShadow: "0 20px 40px rgba(15, 23, 42, 0.45)",
-  display: "flex",
-  flexDirection: "column",
-  gap: 16,
-  alignItems: "center",
-  textAlign: "center",
-  maxWidth: 360,
-  width: "100%",
-};
-
-const overlayButtonStyle: CSSProperties = {
-  padding: "12px 24px",
-  borderRadius: 999,
-  border: "none",
-  background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
-  color: "#071021",
-  fontWeight: 600,
-  fontSize: 15,
-  cursor: "pointer",
-  boxShadow: "0 10px 30px rgba(39, 224, 176, 0.35)",
-};
-
-export function StartScreen({
+function StartScreen({
   onNewSong,
   onLoadSong,
   onLoadDemoSong,
   savedSongs,
 }: StartScreenProps) {
-  const [showAudioOverlay, setShowAudioOverlay] = useState(() => {
-    try {
-      return Tone.getContext().state !== "running";
-    } catch (error) {
-      console.warn("Unable to read Tone.js context state on mount:", error);
-      return false;
-    }
-  });
-
-  const hideOverlayIfRunning = useCallback(() => {
-    const contextState = Tone.getContext().state;
-    if (contextState === "running") {
-      setShowAudioOverlay(false);
-    }
-  }, []);
-
-  const unlockAudio = useCallback(async () => {
-    try {
-      const context = Tone.getContext();
-      if (context.state !== "running") {
-        await Tone.start();
-      }
-      if (context.state === "suspended") {
-        await context.resume();
-      }
-    } catch (error) {
-      console.error("Audio unlock failed:", error);
-    } finally {
-      hideOverlayIfRunning();
-    }
-  }, [hideOverlayIfRunning]);
-
-  const handleUnlock = useCallback(
-    async (action: () => void | Promise<void>) => {
-      await unlockAudio();
-      await action();
-    },
-    [unlockAudio]
-  );
-
-  useEffect(() => {
-    if (Tone.getContext().state !== "running") {
-      setShowAudioOverlay(true);
-    } else {
-      setShowAudioOverlay(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (
-        document.visibilityState === "visible" &&
-        Tone.getContext().state !== "running"
-      ) {
-        setShowAudioOverlay(true);
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const context = Tone.getContext();
-    const rawContext = (context.rawContext ?? null) as AudioContext | null;
-
-    if (!rawContext?.addEventListener) {
-      return undefined;
-    }
-
-    const handleStateChange = () => {
-      setShowAudioOverlay(rawContext.state !== "running");
-    };
-
-    rawContext.addEventListener("statechange", handleStateChange);
-    return () => {
-      rawContext.removeEventListener("statechange", handleStateChange);
-    };
-  }, []);
-
   const savedSongsContent =
     savedSongs.length === 0 ? (
       <div
@@ -183,8 +59,7 @@ export function StartScreen({
         </div>
         <button
           type="button"
-          onClick={() => handleUnlock(onLoadDemoSong)}
-          onTouchStart={() => handleUnlock(onLoadDemoSong)}
+          onClick={onLoadDemoSong}
           style={{
             padding: "12px 20px",
             borderRadius: 999,
@@ -204,8 +79,8 @@ export function StartScreen({
       savedSongs.map((name) => (
         <button
           key={name}
-          onClick={() => handleUnlock(() => onLoadSong(name))}
-          onTouchStart={() => handleUnlock(() => onLoadSong(name))}
+          type="button"
+          onClick={() => onLoadSong(name)}
           style={{
             padding: "12px 16px",
             borderRadius: 14,
@@ -244,8 +119,7 @@ export function StartScreen({
       >
         <button
           type="button"
-          onClick={() => handleUnlock(onNewSong)}
-          onTouchStart={() => handleUnlock(onNewSong)}
+          onClick={onNewSong}
           style={{
             padding: "18px 24px",
             fontSize: "1.25rem",
@@ -286,27 +160,6 @@ export function StartScreen({
           </div>
         </div>
       </div>
-      {showAudioOverlay ? (
-        <div style={overlayContainerStyle}>
-          <div style={overlayContentStyle}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>
-              Audio is paused
-            </h2>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>
-              Tap the button below so we can enable audio playback for your
-              session.
-            </p>
-            <button
-              type="button"
-              onClick={unlockAudio}
-              onTouchStart={unlockAudio}
-              style={overlayButtonStyle}
-            >
-              Enable Audio
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
