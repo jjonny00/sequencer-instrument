@@ -100,8 +100,10 @@
     const log = document.getElementById("log");
     const errorBanner = document.getElementById("error");
 
-    const toneContext = Tone.getContext();
-    const rawContext = toneContext?.rawContext ?? Tone.context?.rawContext ?? null;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    let toneContext = Tone.getContext();
+    let rawContext = toneContext?.rawContext ?? Tone.context?.rawContext ?? null;
+    let detachStateListener = null;
 
     function setStatus(message) {
       status.textContent = message;
@@ -127,6 +129,24 @@
       entry.textContent = `[${time}] ${message}`;
       log.appendChild(entry);
       log.scrollTop = log.scrollHeight;
+    }
+
+    function attachStateListener(context) {
+      if (detachStateListener) {
+        detachStateListener();
+        detachStateListener = null;
+      }
+      if (!context || typeof context.addEventListener !== "function") {
+        return;
+      }
+      const handler = () => {
+        logMessage(`AudioContext statechange → ${context.state}`);
+        refreshState("statechange");
+      };
+      context.addEventListener("statechange", handler);
+      detachStateListener = () => {
+        context.removeEventListener("statechange", handler);
+      };
     }
 
     function refreshState(tag = "") {
@@ -252,7 +272,25 @@
         await ensureToneStarted("final");
       }
 
-      const contextsRunning = Tone.context?.state === "running" && rawContext?.state === "running";
+      let contextsRunning = Tone.context?.state === "running" && rawContext?.state === "running";
+
+      if (!contextsRunning && AudioContextClass) {
+        try {
+          logMessage("Fallback: creating fresh AudioContext and wiring Tone to it");
+          const freshRaw = new AudioContextClass();
+          Tone.setContext(freshRaw);
+          toneContext = Tone.getContext();
+          rawContext = toneContext?.rawContext ?? freshRaw;
+          attachStateListener(rawContext);
+          refreshState("fresh-context");
+          await tryResumeRawContext("fresh-context");
+          await ensureToneStarted("fresh-context");
+          contextsRunning = Tone.context?.state === "running" && rawContext?.state === "running";
+        } catch (err) {
+          logMessage(`Fallback AudioContext error → ${err.message || err}`);
+        }
+      }
+
       if (contextsRunning) {
         const tonePlayed = await playTestTone();
         if (!tonePlayed) {
@@ -274,12 +312,7 @@
       });
     });
 
-    if (rawContext && typeof rawContext.addEventListener === "function") {
-      rawContext.addEventListener("statechange", () => {
-        logMessage(`AudioContext statechange → ${rawContext.state}`);
-        refreshState("statechange");
-      });
-    }
+    attachStateListener(rawContext);
 
     refreshState("initial");
   </script>
