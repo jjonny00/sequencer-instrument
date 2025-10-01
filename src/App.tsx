@@ -64,7 +64,8 @@ import {
 } from "./presets";
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
-import { unlockAudio } from "./utils/audioUnlock";
+import { unlockAudioSync } from "./utils/audioUnlock";
+import { initFirstGestureUnlock } from "./utils/initFirstGestureUnlock";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -2114,16 +2115,8 @@ export default function App() {
     };
   }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
 
-  const unlockAndRun = useCallback((action?: () => void) => {
-    void (async () => {
-      try {
-        await unlockAudio();
-      } catch (error) {
-        console.warn("unlockAudio failed before action:", error);
-      } finally {
-        action?.();
-      }
-    })();
+  useEffect(() => {
+    initFirstGestureUnlock();
   }, []);
 
   useEffect(() => {
@@ -2614,7 +2607,10 @@ export default function App() {
                         icon="folder_open"
                         label={`Load song ${name}`}
                         tone="accent"
-                        onClick={() => unlockAndRun(() => loadProject(name))}
+                        onClick={() => {
+                          unlockAudioSync();
+                          loadProject(name);
+                        }}
                       />
                       <IconButton
                         icon="delete"
@@ -2847,7 +2843,10 @@ export default function App() {
           </div>
           <button
             type="button"
-            onClick={() => unlockAndRun(createNewProject)}
+            onClick={() => {
+              unlockAudioSync();
+              createNewProject();
+            }}
             style={{
               padding: "20px 48px",
               borderRadius: 999,
@@ -2884,12 +2883,16 @@ export default function App() {
               projects={projectList}
               sortOrder={projectSortOrder}
               onChangeSortOrder={handleChangeProjectSortOrder}
-              onSelectProject={(name) =>
-                unlockAndRun(() => loadProject(name))
-              }
+              onSelectProject={(name) => {
+                unlockAudioSync();
+                loadProject(name);
+              }}
               onRenameProject={handleRenameProject}
               onDeleteProject={handleDeleteProject}
-              onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
+              onTryDemoSong={() => {
+                unlockAudioSync();
+                handleLoadDemoSong();
+              }}
             />
           </div>
         </div>
