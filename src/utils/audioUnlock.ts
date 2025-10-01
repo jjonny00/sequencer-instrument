@@ -1,8 +1,8 @@
 import * as Tone from "tone";
 
 /**
- * Handles "suspended" and "interrupted" (iOS 26.0.1),
- * then tickles the engine with a silent buffer if needed.
+ * Proven unlock: handle "interrupted" (iOS 26.0.1) and nudge with a silent buffer.
+ * This function may be async internally, but callers on the start screen must NOT await it.
  */
 export async function unlockAudio(): Promise<void> {
   try {
@@ -11,9 +11,10 @@ export async function unlockAudio(): Promise<void> {
     // Try Tone's own unlock first
     await Tone.start();
 
-    // iOS 26.0.1 bug: "interrupted" state won't resume via Tone
-    // @ts-expect-error -- lib.dom.d.ts does not yet include the "interrupted" state
-    if (Tone.context.state === "interrupted") {
+    // iOS 26.0.1: context may be "interrupted" and ignore Tone.start()
+    const state = Tone.context.state as string;
+
+    if (state === "interrupted") {
       try {
         await (Tone.context.rawContext as AudioContext).resume();
       } catch (err) {
@@ -21,9 +22,8 @@ export async function unlockAudio(): Promise<void> {
       }
     }
 
-    // If still not running, play a 1-frame silent buffer to coax the engine
-    // @ts-expect-error -- state may report "interrupted" even after Tone.start()
-    if (Tone.context.state !== "running") {
+    // Still not running? Play a 1-frame silent buffer to wake the engine.
+    if ((Tone.context.state as string) !== "running") {
       const ctx = Tone.context.rawContext as AudioContext;
       const buffer = ctx.createBuffer(1, 1, 22050);
       const src = ctx.createBufferSource();

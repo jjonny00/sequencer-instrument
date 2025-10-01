@@ -40,8 +40,7 @@ import {
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
-import { SavedSongsList } from "./components/SavedSongsList";
-import { StartScreen } from "./components/StartScreen";
+import StartScreen from "./components/StartScreen";
 import { ViewHeader } from "./components/ViewHeader";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
@@ -52,10 +51,8 @@ import {
   listProjects,
   loadLoopDraft,
   loadProject as loadStoredProject,
-  renameProject as renameStoredProject,
   saveLoopDraft,
   saveProject as saveStoredProject,
-  type ProjectSortOrder,
   type StoredProjectData,
   type StoredProjectSummary,
 } from "./storage";
@@ -67,20 +64,6 @@ import {
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { unlockAudio } from "./utils/audioUnlock";
-
-// IMPORTANT: This must be synchronous in the gesture handler.
-// No async/await, no .then() inside the onClick/onTouchEnd path.
-function gestureUnlockThen(action?: () => void) {
-  try {
-    // Kick the unlock flow (it contains async fallbacks internally),
-    // but DO NOT await it here so we stay in the trusted gesture.
-    void unlockAudio();
-  } catch {
-    // ignore
-  }
-  // Run the app action immediately to keep UI responsive
-  if (action) action();
-}
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -445,8 +428,6 @@ export default function App() {
   );
   const [projectNameInput, setProjectNameInput] = useState("");
   const [projectList, setProjectList] = useState<StoredProjectSummary[]>([]);
-  const [projectSortOrder, setProjectSortOrder] =
-    useState<ProjectSortOrder>("recent");
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
@@ -1931,38 +1912,6 @@ export default function App() {
       refreshProjectList();
       setActiveProjectName((current) => (current === name ? "untitled" : current));
     },
-    [refreshProjectList, renameStoredProject]
-  );
-
-  const handleRenameProject = useCallback(
-    (name: string) => {
-      const nextName = window.prompt("Rename song", name);
-      if (!nextName) {
-        return;
-      }
-      const trimmed = nextName.trim();
-      if (!trimmed || trimmed === name) {
-        return;
-      }
-
-      try {
-        const renamed = renameStoredProject(name, trimmed);
-        if (!renamed) {
-          window.alert("Unable to rename song. It may have been deleted or moved.");
-          return;
-        }
-        setActiveProjectName((current) =>
-          current === name ? trimmed : current
-        );
-        setProjectNameInput((current) =>
-          current.trim() === name ? trimmed : current
-        );
-        refreshProjectList();
-      } catch (error) {
-        console.error("Failed to rename song", error);
-        window.alert("A song with that name already exists. Try another name.");
-      }
-    },
     [refreshProjectList]
   );
 
@@ -2020,10 +1969,6 @@ export default function App() {
     activeProjectName,
     requestProjectAction,
   ]);
-
-  const handleChangeProjectSortOrder = useCallback((order: ProjectSortOrder) => {
-    setProjectSortOrder(order);
-  }, []);
 
   const unsavedChangesSubtitle =
     pendingProjectLoad?.action.kind === "new"
@@ -2618,7 +2563,10 @@ export default function App() {
                         icon="folder_open"
                         label={`Load song ${name}`}
                         tone="accent"
-                        onClick={() => gestureUnlockThen(() => loadProject(name))}
+                        onClick={() => {
+                          void unlockAudio();
+                          loadProject(name);
+                        }}
                       />
                       <IconButton
                         icon="delete"
@@ -2795,20 +2743,19 @@ export default function App() {
       ) : null}
       {!started ? (
         <StartScreen
-          onNewSong={() => gestureUnlockThen(createNewProject)}
-          renderSavedList={() => (
-            <SavedSongsList
-              projects={projectList}
-              sortOrder={projectSortOrder}
-              onChangeSortOrder={handleChangeProjectSortOrder}
-              onSelectProject={(name) =>
-                gestureUnlockThen(() => loadProject(name))
-              }
-              onRenameProject={handleRenameProject}
-              onDeleteProject={handleDeleteProject}
-              onTryDemoSong={() => gestureUnlockThen(handleLoadDemoSong)}
-            />
-          )}
+          onNewSong={() => {
+            void unlockAudio();
+            createNewProject();
+          }}
+          onLoadSong={(name) => {
+            void unlockAudio();
+            loadProject(name);
+          }}
+          onLoadDemoSong={() => {
+            void unlockAudio();
+            handleLoadDemoSong();
+          }}
+          savedSongs={projectList.map((project) => project.name)}
         />
       ) : (
         <>
