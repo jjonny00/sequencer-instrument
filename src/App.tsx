@@ -65,6 +65,7 @@ import {
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { unlockAudio } from "./utils/audioUnlock";
+import { AudioDebugHUD } from "./components/AudioDebugHUD";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -3309,6 +3310,7 @@ export default function App() {
           />
         </>
       )}
+      {process.env.NODE_ENV !== "production" && <AudioDebugHUD />}
     </div>
   );
 }

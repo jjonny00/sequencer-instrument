@@ -1,56 +1,60 @@
 import * as Tone from "tone";
 
+/**
+ * Unlock WebAudio on iOS 26.0.1:
+ * 1) If already running, bail.
+ * 2) Try Tone.start() (Tone's wrapper).
+ * 3) If state is still "interrupted", call raw AudioContext.resume().
+ * 4) If still not running, play a 1-frame silent buffer to nudge the graph.
+ */
 export async function unlockAudio(): Promise<void> {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const context = Tone.getContext();
-  const rawContext = context.rawContext as AudioContext | undefined;
-
   try {
-    let state = context.state as string;
-
-    if (state === "running") {
+    if (typeof window === "undefined") {
       return;
     }
 
-    try {
-      await Tone.start();
-    } catch (error) {
-      console.warn("Tone.js failed to start during unlock:", error);
-    }
+    const getContextState = () =>
+      (Tone.context.state as AudioContextState | "interrupted");
 
-    state = context.state as string;
+    // Case 1: Already running
+    if (getContextState() === "running") return;
 
-    if (state === "interrupted" && rawContext) {
-      console.warn("Audio context is 'interrupted', trying low-level resume");
+    // Case 2: Suspended or interrupted — try Tone’s resume
+    await Tone.start();
+
+    // iOS 26 can report "interrupted" and ignore Tone.start()
+    if (getContextState() === "interrupted") {
+      console.warn("[audioUnlock] Context is 'interrupted' — trying raw resume()");
       try {
-        await rawContext.resume();
-      } catch (resumeError) {
-        console.error("Direct resume failed:", resumeError);
+        await (Tone.context.rawContext as AudioContext).resume();
+      } catch (err) {
+        console.error("[audioUnlock] Raw resume failed:", err);
       }
-      state = context.state as string;
     }
 
-    const rawState = rawContext?.state as string | undefined;
-
-    if (state !== "running" && rawState !== "running" && rawContext) {
-      console.warn("Audio context still not running, playing silent buffer");
+    // Case 3: Still not running — silent buffer hack (one-time nudge)
+    if (getContextState() !== "running") {
+      console.warn("[audioUnlock] Still not running — playing silent buffer nudge");
       try {
-        const buffer = rawContext.createBuffer(1, 1, rawContext.sampleRate);
-        const source = rawContext.createBufferSource();
+        const ctx = Tone.context.rawContext as AudioContext;
+        const buffer = ctx.createBuffer(1, 1, 22050); // 1 frame @ 22.05kHz is fine
+        const source = ctx.createBufferSource();
         source.buffer = buffer;
-        source.connect(rawContext.destination);
-        source.start();
-        source.onended = () => {
-          source.disconnect();
-        };
-      } catch (bufferError) {
-        console.error("Silent buffer trick failed:", bufferError);
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch (err) {
+        console.error("[audioUnlock] Silent buffer trick failed:", err);
       }
     }
-  } catch (error) {
-    console.error("unlockAudio error:", error);
+  } catch (err) {
+    console.error("[audioUnlock] unlockAudio error:", err);
   }
+}
+
+/** Small helpers (useful for debugging/testing) */
+export function getAudioState(): AudioContextState {
+  return (Tone.context?.state ?? "suspended") as AudioContextState;
+}
+export function isAudioRunning(): boolean {
+  return getAudioState() === "running";
 }
