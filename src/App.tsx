@@ -64,7 +64,7 @@ import {
 } from "./presets";
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
-import { unlockAudio } from "./utils/audioUnlock";
+import { unlockAudioSync, unlockAudio } from "./utils/audioUnlock";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -2115,15 +2115,23 @@ export default function App() {
   }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
 
   const unlockAndRun = useCallback((action?: () => void) => {
-    void (async () => {
-      try {
-        await unlockAudio();
-      } catch (error) {
-        console.warn("unlockAudio failed before action:", error);
-      } finally {
-        action?.();
-      }
-    })();
+    try {
+      unlockAudioSync();
+    } catch (error) {
+      console.warn("unlockAudioSync failed before action:", error);
+    }
+
+    try {
+      action?.();
+    } finally {
+      void (async () => {
+        try {
+          await unlockAudio();
+        } catch (unlockError) {
+          console.warn("unlockAudio failed after sync unlock:", unlockError);
+        }
+      })();
+    }
   }, []);
 
   useEffect(() => {
@@ -2848,6 +2856,10 @@ export default function App() {
           <button
             type="button"
             onClick={() => unlockAndRun(createNewProject)}
+            onTouchEnd={(event) => {
+              event.preventDefault();
+              unlockAndRun(createNewProject);
+            }}
             style={{
               padding: "20px 48px",
               borderRadius: 999,
