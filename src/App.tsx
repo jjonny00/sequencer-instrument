@@ -104,7 +104,7 @@ const isPWARestore = () => {
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
-  name: "sequence01",
+  name: "Loop 01",
   tracks: [],
 });
 

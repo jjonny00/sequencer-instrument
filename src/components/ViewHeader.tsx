@@ -72,7 +72,7 @@ export const ViewHeader = ({
           }}
         >
           {([
-            { id: "track", label: "Tracks" },
+            { id: "track", label: "Loops" },
             { id: "song", label: "Song" },
           ] as const).map((tab) => {
             const isActive = activeTab === tab.id;
