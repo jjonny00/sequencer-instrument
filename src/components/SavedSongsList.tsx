@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 
 import type { ProjectSortOrder, StoredProjectSummary } from "../storage";
 
@@ -120,6 +120,10 @@ export const SavedSongsList = ({
 }: SavedSongsListProps) => {
   const [activeRow, setActiveRow] = useState<string | null>(null);
 
+  const handleTryDemoSong = useCallback(() => {
+    onTryDemoSong();
+  }, [onTryDemoSong]);
+
   const orderedProjects = useMemo(() => {
     if (sortOrder === "recent") {
       return [...projects].sort(
@@ -176,7 +180,8 @@ export const SavedSongsList = ({
       </div>
       <button
         type="button"
-        onClick={onTryDemoSong}
+        onClick={handleTryDemoSong}
+        onTouchEnd={handleTryDemoSong}
         style={{
           padding: "12px 24px",
           borderRadius: 999,
@@ -302,6 +307,9 @@ export const SavedSongsList = ({
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {group.items.map((project) => {
                   const isActive = activeRow === project.name;
+                  const handleSelectProject = () => {
+                    onSelectProject(project.name);
+                  };
                   return (
                     <div
                       key={project.name}
@@ -333,7 +341,8 @@ export const SavedSongsList = ({
                     >
                       <button
                         type="button"
-                        onClick={() => onSelectProject(project.name)}
+                        onClick={handleSelectProject}
+                        onTouchEnd={handleSelectProject}
                         style={{
                           display: "flex",
                           flexDirection: "column",

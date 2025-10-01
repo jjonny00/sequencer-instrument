@@ -1,42 +1,35 @@
 import * as Tone from "tone";
 
 /**
- * Ensure Tone.js AudioContext is running on iOS (including PWA).
- * Handles "suspended" and "interrupted" states with fallbacks.
+ * Handles "suspended" and "interrupted" (iOS 26.0.1),
+ * then tickles the engine with a silent buffer if needed.
  */
 export async function unlockAudio(): Promise<void> {
   try {
-    let state = Tone.context.state as string;
+    if (Tone.context.state === "running") return;
 
-    if (state === "running") return;
-
-    // First try Tone's own unlock
+    // Try Tone's own unlock first
     await Tone.start();
 
-    state = Tone.context.state as string;
-
-    if (state === "interrupted") {
-      console.warn("Audio context is 'interrupted', trying raw resume");
+    // iOS 26.0.1 bug: "interrupted" state won't resume via Tone
+    // @ts-expect-error -- lib.dom.d.ts does not yet include the "interrupted" state
+    if (Tone.context.state === "interrupted") {
       try {
         await (Tone.context.rawContext as AudioContext).resume();
       } catch (err) {
         console.error("Raw resume failed:", err);
       }
-      state = Tone.context.state as string;
     }
 
-    if (state !== "running") {
-      console.warn("Audio context still not running, using silent buffer hack");
-      try {
-        const ctx = Tone.context.rawContext as AudioContext;
-        const buffer = ctx.createBuffer(1, 1, 22050);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start(0);
-      } catch (err) {
-        console.error("Silent buffer hack failed:", err);
-      }
+    // If still not running, play a 1-frame silent buffer to coax the engine
+    // @ts-expect-error -- state may report "interrupted" even after Tone.start()
+    if (Tone.context.state !== "running") {
+      const ctx = Tone.context.rawContext as AudioContext;
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.start(0);
     }
   } catch (err) {
     console.error("unlockAudio error:", err);

@@ -68,6 +68,20 @@ import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { unlockAudio } from "./utils/audioUnlock";
 
+// IMPORTANT: This must be synchronous in the gesture handler.
+// No async/await, no .then() inside the onClick/onTouchEnd path.
+function gestureUnlockThen(action?: () => void) {
+  try {
+    // Kick the unlock flow (it contains async fallbacks internally),
+    // but DO NOT await it here so we stay in the trusted gesture.
+    void unlockAudio();
+  } catch {
+    // ignore
+  }
+  // Run the app action immediately to keep UI responsive
+  if (action) action();
+}
+
 const isPWARestore = () => {
   if (typeof window === "undefined") {
     return false;
@@ -2116,18 +2130,6 @@ export default function App() {
     };
   }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
 
-  const unlockAndRun = useCallback((action?: () => void) => {
-    void (async () => {
-      try {
-        await unlockAudio();
-      } catch (error) {
-        console.warn("unlockAudio failed before action:", error);
-      } finally {
-        action?.();
-      }
-    })();
-  }, []);
-
   useEffect(() => {
     refreshProjectList();
   }, [refreshProjectList]);
@@ -2616,7 +2618,7 @@ export default function App() {
                         icon="folder_open"
                         label={`Load song ${name}`}
                         tone="accent"
-                        onClick={() => unlockAndRun(() => loadProject(name))}
+                        onClick={() => gestureUnlockThen(() => loadProject(name))}
                       />
                       <IconButton
                         icon="delete"
@@ -2792,19 +2794,22 @@ export default function App() {
         </Modal>
       ) : null}
       {!started ? (
-        <StartScreen onNewSong={createNewProject}>
-          <SavedSongsList
-            projects={projectList}
-            sortOrder={projectSortOrder}
-            onChangeSortOrder={handleChangeProjectSortOrder}
-            onSelectProject={(name) =>
-              unlockAndRun(() => loadProject(name))
-            }
-            onRenameProject={handleRenameProject}
-            onDeleteProject={handleDeleteProject}
-            onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
-          />
-        </StartScreen>
+        <StartScreen
+          onNewSong={() => gestureUnlockThen(createNewProject)}
+          renderSavedList={() => (
+            <SavedSongsList
+              projects={projectList}
+              sortOrder={projectSortOrder}
+              onChangeSortOrder={handleChangeProjectSortOrder}
+              onSelectProject={(name) =>
+                gestureUnlockThen(() => loadProject(name))
+              }
+              onRenameProject={handleRenameProject}
+              onDeleteProject={handleDeleteProject}
+              onTryDemoSong={() => gestureUnlockThen(handleLoadDemoSong)}
+            />
+          )}
+        />
       ) : (
         <>
           <ViewHeader

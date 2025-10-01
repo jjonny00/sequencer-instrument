@@ -1,16 +1,12 @@
 import type { ReactNode } from "react";
-import { unlockAudio } from "../utils/audioUnlock";
 
 interface StartScreenProps {
   onNewSong: () => void;
-  children?: ReactNode;
+  renderSavedList?: () => ReactNode;
 }
 
-export function StartScreen({ onNewSong, children }: StartScreenProps) {
-  const handleNewSong = () => {
-    unlockAudio();
-    onNewSong();
-  };
+export function StartScreen({ onNewSong, renderSavedList }: StartScreenProps) {
+  const savedList = renderSavedList?.();
 
   return (
     <div
@@ -76,8 +72,8 @@ export function StartScreen({ onNewSong, children }: StartScreenProps) {
       >
         <button
           type="button"
-          onClick={handleNewSong}
-          onTouchEnd={handleNewSong}
+          onClick={onNewSong}
+          onTouchEnd={onNewSong}
           style={{
             padding: "18px 36px",
             borderRadius: 999,
@@ -104,7 +100,7 @@ export function StartScreen({ onNewSong, children }: StartScreenProps) {
           New Song
         </button>
       </div>
-      {children ? (
+      {savedList ? (
         <div
           style={{
             width: "100%",
@@ -112,7 +108,7 @@ export function StartScreen({ onNewSong, children }: StartScreenProps) {
             justifyContent: "center",
           }}
         >
-          {children}
+          {savedList}
         </div>
       ) : null}
     </div>
