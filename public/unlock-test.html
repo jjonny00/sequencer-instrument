@@ -54,6 +54,13 @@
       font-size: 1.1em;
       text-align: center;
     }
+    #error {
+      margin-top: 0.75em;
+      color: #ff9c9c;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
     #log {
       margin-top: 1.5em;
       width: min(32rem, 90vw);
@@ -82,6 +89,7 @@
   </p>
   <button id="unlock">Unlock Audio</button>
   <div id="status">State: (checking)</div>
+  <div id="error" role="status" aria-live="polite"></div>
   <div id="log" role="log" aria-live="polite" aria-atomic="false">
     <p>Waiting for interaction…</p>
   </div>
@@ -90,6 +98,7 @@
     const btn = document.getElementById("unlock");
     const status = document.getElementById("status");
     const log = document.getElementById("log");
+    const errorBanner = document.getElementById("error");
 
     const toneContext = Tone.getContext();
     const rawContext = toneContext?.rawContext ?? Tone.context?.rawContext ?? null;
@@ -100,6 +109,16 @@
 
     function formatState(state) {
       return state || "unknown";
+    }
+
+    function setError(message) {
+      if (!message) {
+        errorBanner.textContent = "";
+        errorBanner.style.display = "none";
+        return;
+      }
+      errorBanner.textContent = message;
+      errorBanner.style.display = "block";
     }
 
     function logMessage(message) {
@@ -192,8 +211,28 @@
       }
     }
 
+    async function playTestTone() {
+      try {
+        const osc = new Tone.Oscillator(440, "sine");
+        const gain = new Tone.Gain(0.05);
+        osc.connect(gain);
+        gain.toDestination();
+        osc.start();
+        await Tone.sleep(0.2);
+        osc.stop();
+        osc.dispose();
+        gain.dispose();
+        logMessage("Played 200ms test tone");
+        return true;
+      } catch (err) {
+        logMessage(`Test tone error → ${err.message || err}`);
+        return false;
+      }
+    }
+
     async function unlockAudio() {
       refreshState("before unlock");
+      setError("");
 
       const resumeBefore = await tryResumeRawContext("initial");
       const toneBefore = await ensureToneStarted("initial");
@@ -213,6 +252,16 @@
         await ensureToneStarted("final");
       }
 
+      const contextsRunning = Tone.context?.state === "running" && rawContext?.state === "running";
+      if (contextsRunning) {
+        const tonePlayed = await playTestTone();
+        if (!tonePlayed) {
+          setError("Tone.js started but the verification tone could not play.");
+        }
+      } else {
+        setError("Audio context is still suspended. Check the log below for detailed attempts.");
+      }
+
       refreshState("after unlock");
     }
 
@@ -220,6 +269,7 @@
       unlockAudio().catch((err) => {
         console.error("Unlock error", err);
         logMessage(`Unhandled unlock error → ${err.message || err}`);
+        setError(`Unlock error: ${err.message || err}`);
         refreshState("error");
       });
     });
