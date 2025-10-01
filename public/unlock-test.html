@@ -76,7 +76,10 @@
 </head>
 <body>
   <h1>iOS PWA Audio Unlock Test</h1>
-  <p>Tap the button below once after launching from the home screen to force Tone.js to start an audio context.</p>
+  <p>
+    Tap the button below once after launching from the home screen to force Tone.js to start an audio
+    context. Logs will show each resume attempt and any errors Safari reports.
+  </p>
   <button id="unlock">Unlock Audio</button>
   <div id="status">State: (checking)</div>
   <div id="log" role="log" aria-live="polite" aria-atomic="false">
@@ -88,14 +91,15 @@
     const status = document.getElementById("status");
     const log = document.getElementById("log");
 
-    const rawContext = Tone.getContext().rawContext;
+    const toneContext = Tone.getContext();
+    const rawContext = toneContext?.rawContext ?? Tone.context?.rawContext ?? null;
 
     function setStatus(message) {
       status.textContent = message;
     }
 
     function formatState(state) {
-      return state ? state : "unknown";
+      return state || "unknown";
     }
 
     function logMessage(message) {
@@ -107,39 +111,116 @@
     }
 
     function refreshState(tag = "") {
-      const toneState = formatState(Tone.context.state);
+      const toneState = formatState(Tone.context?.state);
       const audioContextState = rawContext ? formatState(rawContext.state) : "(no rawContext)";
       const label = tag ? `${tag} → ` : "";
       setStatus(`${label}Tone: ${toneState} | AudioContext: ${audioContextState}`);
     }
 
-    async function unlockAudio() {
-      refreshState("before unlock");
+    async function tryResumeRawContext(tag) {
+      if (!rawContext) {
+        return false;
+      }
+      if (rawContext.state === "running") {
+        logMessage(`${tag}: raw context already running`);
+        return true;
+      }
       try {
-        logMessage("Calling Tone.start()…");
-        await Tone.start();
-        logMessage(`Tone.start() resolved with state: ${Tone.context.state}`);
+        logMessage(`${tag}: calling rawContext.resume()`);
+        await rawContext.resume();
+        logMessage(`${tag}: resume() resolved with raw state: ${rawContext.state}`);
+        return rawContext.state === "running";
+      } catch (err) {
+        logMessage(`${tag}: rawContext.resume() error → ${err.message || err}`);
+        return false;
+      }
+    }
 
-        if (rawContext && rawContext.state === "suspended") {
-          logMessage("Raw AudioContext still suspended, attempting resume()");
-          await rawContext.resume();
-          logMessage(`resume() resolved with raw state: ${rawContext.state}`);
+    async function primeWithSilentBuffer() {
+      if (!rawContext) {
+        logMessage("No raw AudioContext available to prime");
+        return false;
+      }
+      logMessage("Priming with silent bufferSource");
+
+      const buffer = rawContext.createBuffer(1, Math.max(128, rawContext.sampleRate / 10), rawContext.sampleRate);
+      const source = rawContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(rawContext.destination);
+
+      return new Promise((resolve) => {
+        let finished = false;
+
+        function cleanup(result) {
+          if (finished) return;
+          finished = true;
+          try {
+            source.stop();
+          } catch (_) {}
+          source.disconnect();
+          resolve(result);
         }
 
-        // Give the browser a beat to flip states after resuming
-        setTimeout(() => {
-          refreshState("after unlock");
-        }, 50);
-      } catch (err) {
-        logMessage(`Unlock error: ${err.message || err}`);
-        refreshState("error");
-        throw err;
+        source.onended = () => {
+          logMessage("Silent bufferSource ended");
+          cleanup(true);
+        };
+
+        try {
+          source.start();
+          setTimeout(() => cleanup(true), 100);
+        } catch (err) {
+          logMessage(`Silent bufferSource error → ${err.message || err}`);
+          cleanup(false);
+        }
+      });
+    }
+
+    async function ensureToneStarted(tag) {
+      if (Tone.context?.state === "running") {
+        logMessage(`${tag}: Tone context already running`);
+        return true;
       }
+      try {
+        logMessage(`${tag}: calling Tone.start()`);
+        await Tone.start();
+        logMessage(`${tag}: Tone.start() resolved with state ${Tone.context?.state}`);
+        return Tone.context?.state === "running";
+      } catch (err) {
+        logMessage(`${tag}: Tone.start() error → ${err.message || err}`);
+        return false;
+      }
+    }
+
+    async function unlockAudio() {
+      refreshState("before unlock");
+
+      const resumeBefore = await tryResumeRawContext("initial");
+      const toneBefore = await ensureToneStarted("initial");
+
+      if (!toneBefore || Tone.context?.state !== "running") {
+        const primed = await primeWithSilentBuffer();
+        if (primed) {
+          await tryResumeRawContext("post-prime");
+          await ensureToneStarted("post-prime");
+        }
+      }
+
+      if (rawContext?.state !== "running") {
+        await tryResumeRawContext("final");
+      }
+      if (Tone.context?.state !== "running") {
+        await ensureToneStarted("final");
+      }
+
+      refreshState("after unlock");
     }
 
     btn.addEventListener("click", () => {
       unlockAudio().catch((err) => {
         console.error("Unlock error", err);
+        logMessage(`Unhandled unlock error → ${err.message || err}`);
+        refreshState("error");
       });
     });
 
