@@ -2792,11 +2792,7 @@ export default function App() {
         </Modal>
       ) : null}
       {!started ? (
-        <StartScreen
-          onNewSong={createNewProject}
-          onLoadSong={openLoadProjectModal}
-          onLoadDemoSong={handleLoadDemoSong}
-        >
+        <StartScreen onNewSong={createNewProject}>
           <SavedSongsList
             projects={projectList}
             sortOrder={projectSortOrder}

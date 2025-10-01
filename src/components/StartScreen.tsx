@@ -1,38 +1,16 @@
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { unlockAudio } from "../utils/audioUnlock";
 
 interface StartScreenProps {
   onNewSong: () => void;
-  onLoadSong: () => void;
-  onLoadDemoSong: () => void;
   children?: ReactNode;
 }
 
-export function StartScreen({
-  onNewSong,
-  onLoadSong,
-  onLoadDemoSong,
-  children,
-}: StartScreenProps) {
-  const runWithAudioUnlock = (action?: () => void) => {
+export function StartScreen({ onNewSong, children }: StartScreenProps) {
+  const handleNewSong = () => {
     unlockAudio();
-    action?.();
+    onNewSong();
   };
-
-  const handleNewSong = useMemo(
-    () => () => runWithAudioUnlock(onNewSong),
-    [onNewSong]
-  );
-
-  const handleLoadSong = useMemo(
-    () => () => runWithAudioUnlock(onLoadSong),
-    [onLoadSong]
-  );
-
-  const handleLoadDemoSong = useMemo(
-    () => () => runWithAudioUnlock(onLoadDemoSong),
-    [onLoadDemoSong]
-  );
 
   return (
     <div
@@ -93,9 +71,7 @@ export function StartScreen({
       <div
         style={{
           display: "flex",
-          flexWrap: "wrap",
           justifyContent: "center",
-          gap: 16,
         }}
       >
         <button
@@ -126,62 +102,6 @@ export function StartScreen({
             add
           </span>
           New Song
-        </button>
-        <button
-          type="button"
-          onClick={handleLoadSong}
-          onTouchEnd={handleLoadSong}
-          style={{
-            padding: "16px 28px",
-            borderRadius: 999,
-            border: "1px solid rgba(148,163,184,0.4)",
-            background: "rgba(15,23,42,0.65)",
-            color: "#e2e8f0",
-            fontSize: 16,
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            cursor: "pointer",
-            backdropFilter: "blur(12px)",
-          }}
-        >
-          <span
-            className="material-symbols-outlined"
-            aria-hidden="true"
-            style={{ fontSize: 20 }}
-          >
-            library_music
-          </span>
-          Saved Songs
-        </button>
-        <button
-          type="button"
-          onClick={handleLoadDemoSong}
-          onTouchEnd={handleLoadDemoSong}
-          style={{
-            padding: "16px 28px",
-            borderRadius: 999,
-            border: "1px solid rgba(56,189,248,0.35)",
-            background: "rgba(8,47,73,0.6)",
-            color: "#bae6fd",
-            fontSize: 16,
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            cursor: "pointer",
-            backdropFilter: "blur(12px)",
-          }}
-        >
-          <span
-            className="material-symbols-outlined"
-            aria-hidden="true"
-            style={{ fontSize: 20 }}
-          >
-            play_circle
-          </span>
-          Demo Song
         </button>
       </div>
       {children ? (

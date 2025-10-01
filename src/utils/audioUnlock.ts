@@ -1,56 +1,44 @@
 import * as Tone from "tone";
 
+/**
+ * Ensure Tone.js AudioContext is running on iOS (including PWA).
+ * Handles "suspended" and "interrupted" states with fallbacks.
+ */
 export async function unlockAudio(): Promise<void> {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const context = Tone.getContext();
-  const rawContext = context.rawContext as AudioContext | undefined;
-
   try {
-    let state = context.state as string;
+    let state = Tone.context.state as string;
 
-    if (state === "running") {
-      return;
-    }
+    if (state === "running") return;
 
-    try {
-      await Tone.start();
-    } catch (error) {
-      console.warn("Tone.js failed to start during unlock:", error);
-    }
+    // First try Tone's own unlock
+    await Tone.start();
 
-    state = context.state as string;
+    state = Tone.context.state as string;
 
-    if (state === "interrupted" && rawContext) {
-      console.warn("Audio context is 'interrupted', trying low-level resume");
+    if (state === "interrupted") {
+      console.warn("Audio context is 'interrupted', trying raw resume");
       try {
-        await rawContext.resume();
-      } catch (resumeError) {
-        console.error("Direct resume failed:", resumeError);
+        await (Tone.context.rawContext as AudioContext).resume();
+      } catch (err) {
+        console.error("Raw resume failed:", err);
       }
-      state = context.state as string;
+      state = Tone.context.state as string;
     }
 
-    const rawState = rawContext?.state as string | undefined;
-
-    if (state !== "running" && rawState !== "running" && rawContext) {
-      console.warn("Audio context still not running, playing silent buffer");
+    if (state !== "running") {
+      console.warn("Audio context still not running, using silent buffer hack");
       try {
-        const buffer = rawContext.createBuffer(1, 1, rawContext.sampleRate);
-        const source = rawContext.createBufferSource();
+        const ctx = Tone.context.rawContext as AudioContext;
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
         source.buffer = buffer;
-        source.connect(rawContext.destination);
-        source.start();
-        source.onended = () => {
-          source.disconnect();
-        };
-      } catch (bufferError) {
-        console.error("Silent buffer trick failed:", bufferError);
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch (err) {
+        console.error("Silent buffer hack failed:", err);
       }
     }
-  } catch (error) {
-    console.error("unlockAudio error:", error);
+  } catch (err) {
+    console.error("unlockAudio error:", err);
   }
 }
