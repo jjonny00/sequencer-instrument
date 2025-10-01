@@ -225,6 +225,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     { trackId: number; index: number } | null
   >(null);
   const [isLoopsLibraryOpen, setIsLoopsLibraryOpen] = useState(false);
+  const [isLoopPreviewExpanded, setIsLoopPreviewExpanded] = useState(false);
   const swipeRef = useRef(0);
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const labelLongPressRef = useRef<Map<number, boolean>>(new Map());
@@ -234,6 +235,12 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   );
   const addTrackEnabled = canAddTrack;
   const isHeroAddTrack = tracks.length === 0;
+
+  useEffect(() => {
+    if (tracks.length === 0) {
+      setIsLoopPreviewExpanded(true);
+    }
+  }, [tracks.length]);
 
   useEffect(() => {
     console.log("Track view mounted");
@@ -251,6 +258,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     if (!selectedGroupId) return null;
     return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
   }, [patternGroups, selectedGroupId]);
+
+  const loopLabel = selectedGroup?.name ?? getNextGroupName();
 
   const getNextGroupName = (groups: PatternGroup[] = patternGroups) => {
     const existingNames = new Set(
@@ -841,74 +850,239 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          flexDirection: "column",
           gap: 12,
-          flexWrap: "wrap",
           marginBottom: 8,
         }}
       >
-        <button
-          type="button"
-          onClick={() =>
-            setIsLoopsLibraryOpen((open) => !open && patternGroups.length > 0)
-          }
-          disabled={patternGroups.length === 0}
+        <div
           style={{
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: "1px solid #333",
-            background: "#1f2532",
-            color: patternGroups.length === 0 ? "#475569" : "#e6f2ff",
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0.3,
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
-          <span>Loop: {selectedGroup?.name ?? "None"}</span>
-          <span aria-hidden="true" style={{ fontSize: 10 }}>
-            ▴
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (!addTrackEnabled) return;
-            onAddTrack();
-          }}
-          disabled={!addTrackEnabled}
-          style={{
-            padding: isHeroAddTrack ? "14px 28px" : "6px 16px",
-            borderRadius: 999,
-            border: isHeroAddTrack ? "none" : "1px solid #333",
-            background: addTrackEnabled
-              ? isHeroAddTrack
-                ? "linear-gradient(135deg, #27E0B0, #6AE0FF)"
-                : "#27E0B0"
-              : "#1f2532",
-            color: addTrackEnabled
-              ? isHeroAddTrack
-                ? "#0b1220"
-                : "#1F2532"
-              : "#475569",
-            fontSize: isHeroAddTrack ? 16 : 13,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-            cursor: addTrackEnabled ? "pointer" : "not-allowed",
-            boxShadow: addTrackEnabled
-              ? isHeroAddTrack
-                ? "0 16px 30px rgba(39,224,176,0.35)"
-                : "0 2px 6px rgba(15, 20, 32, 0.35)"
-              : "none",
-            transition: "transform 0.2s ease, box-shadow 0.2s ease",
-          }}
-        >
-          + Track
-        </button>
+          <button
+            type="button"
+            onClick={() => setIsLoopPreviewExpanded((expanded) => !expanded)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: "1px solid #2a3344",
+              background: "#111827",
+              color: "#e6f2ff",
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              transition: "background 0.2s ease, color 0.2s ease",
+            }}
+          >
+            <span>Loop: {loopLabel}</span>
+            <span aria-hidden="true" style={{ fontSize: 10 }}>
+              {isLoopPreviewExpanded ? "▴" : "▾"}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!addTrackEnabled) return;
+              onAddTrack();
+            }}
+            disabled={!addTrackEnabled}
+            style={{
+              padding: isHeroAddTrack ? "14px 32px" : "8px 20px",
+              borderRadius: 999,
+              border: "none",
+              background: addTrackEnabled
+                ? isHeroAddTrack
+                  ? "linear-gradient(135deg, #27E0B0, #6AE0FF)"
+                  : "#27E0B0"
+                : "#1f2532",
+              color: addTrackEnabled ? "#0b1220" : "#475569",
+              fontSize: isHeroAddTrack ? 16 : 14,
+              fontWeight: 700,
+              letterSpacing: 0.3,
+              cursor: addTrackEnabled ? "pointer" : "not-allowed",
+              boxShadow: addTrackEnabled
+                ? isHeroAddTrack
+                  ? "0 16px 30px rgba(39,224,176,0.35)"
+                  : "0 6px 18px rgba(39,224,176,0.25)"
+                : "none",
+              transition: "transform 0.2s ease, box-shadow 0.2s ease",
+            }}
+          >
+            + Track
+          </button>
+        </div>
+        {isLoopPreviewExpanded && (
+          <div
+            style={{
+              background: "#111827",
+              borderRadius: 12,
+              border: "1px solid #2a3344",
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                <span
+                  style={{
+                    color: "#e6f2ff",
+                    fontWeight: 600,
+                    marginRight: 4,
+                  }}
+                >
+                  {pack?.name ?? "Current pack"}
+                </span>
+                presets ready to explore
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLoopsLibraryOpen(true)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  border: "1px solid #2a3344",
+                  background: "#1f2532",
+                  color: "#e6f2ff",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
+                  cursor: "pointer",
+                }}
+              >
+                Manage loops
+              </button>
+            </div>
+            <div
+              className="scrollable"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                maxHeight: 160,
+                overflowY: "auto",
+              }}
+            >
+              {patternGroups.length > 0 ? (
+                patternGroups.map((group) => {
+                  const instrumentLabels = Array.from(
+                    new Set(
+                      group.tracks
+                        .map((track) => track.instrument)
+                        .filter((instrument): instrument is string => Boolean(instrument))
+                    )
+                  ).map((instrumentId) => {
+                    const definition = pack?.instruments[instrumentId];
+                    return definition?.name ?? instrumentId;
+                  });
+                  const description = instrumentLabels.length
+                    ? instrumentLabels.join(" · ")
+                    : "Empty loop — add instruments to this preset.";
+                  const isActive = selectedGroup?.id === group.id;
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => setSelectedGroupId(group.id)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "10px 14px",
+                        borderRadius: 10,
+                        border: `1px solid ${isActive ? "#27E0B0" : "#2a3344"}`,
+                        background: isActive ? "#1f2532" : "#0f172a",
+                        color: "#e6f2ff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            letterSpacing: 0.3,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <span aria-hidden="true">📼</span>
+                          {group.name}
+                        </span>
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: 12,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {description}
+                        </span>
+                      </div>
+                      <span
+                        className="material-symbols-outlined"
+                        aria-hidden="true"
+                        style={{
+                          fontSize: 20,
+                          color: "#27E0B0",
+                        }}
+                      >
+                        play_arrow
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div
+                  style={{
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px dashed #2a3344",
+                    color: "#94a3b8",
+                    textAlign: "center",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  You don't have any saved loops yet. Open the loop manager to
+                  capture patterns you like.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       <div
         ref={trackAreaRef}
@@ -926,14 +1100,20 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         {tracks.length === 0 && (
           <div
             style={{
-              padding: 16,
+              padding: 20,
               textAlign: "center",
               fontSize: 14,
               color: "#94a3b8",
-              lineHeight: 1.5,
+              lineHeight: 1.6,
             }}
           >
-            No beats yet — add a track to get the groove started.
+            <strong style={{ color: "#e6f2ff" }}>This loop is empty.</strong>
+            <br />
+            Tap <strong style={{ color: "#27E0B0" }}>+ Track</strong> above to
+            choose an instrument and start building your groove.
+            <br />
+            Need ideas? Browse the loop presets to preview ready-made patterns
+            before committing.
           </div>
         )}
         {tracks.map((t) => {
