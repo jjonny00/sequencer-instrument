@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unlock Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/tone@next/build/Tone.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background: #111;
+      color: #fff;
+    }
+    button {
+      padding: 1em 2em;
+      font-size: 1.2em;
+      border-radius: 8px;
+    }
+    #status {
+      margin-top: 1em;
+      font-size: 1.1em;
+    }
+  </style>
+</head>
+<body>
+  <button id="unlock">Unlock Audio</button>
+  <div id="status">State: (not checked yet)</div>
+
+  <script>
+    const btn = document.getElementById("unlock");
+    const status = document.getElementById("status");
+
+    function updateState() {
+      status.textContent = "State: " + Tone.context.state;
+    }
+
+    btn.addEventListener("click", async () => {
+      try {
+        await Tone.start();
+        updateState();
+        console.log("Tone.start() called, state:", Tone.context.state);
+      } catch (err) {
+        console.error("Unlock error:", err);
+      }
+    });
+
+    updateState();
+  </script>
+</body>
+</html>
