@@ -250,6 +250,48 @@
       }
     }
 
+    async function adoptFreshContext(tag) {
+      if (!AudioContextClass) {
+        logMessage(`${tag}: AudioContext API not available`);
+        return false;
+      }
+
+      logMessage(`${tag}: creating fresh AudioContext for manual unlock`);
+      const freshContext = new AudioContextClass();
+
+      try {
+        await freshContext.resume();
+        logMessage(`${tag}: fresh AudioContext resume() resolved with state ${freshContext.state}`);
+      } catch (err) {
+        logMessage(`${tag}: fresh AudioContext resume() error → ${err.message || err}`);
+      }
+
+      try {
+        const osc = freshContext.createOscillator();
+        const gain = freshContext.createGain();
+        gain.gain.value = 0.0001;
+        osc.connect(gain);
+        gain.connect(freshContext.destination);
+        osc.start();
+        osc.stop(freshContext.currentTime + 0.1);
+        logMessage(`${tag}: started silent oscillator prime`);
+      } catch (err) {
+        logMessage(`${tag}: silent oscillator prime error → ${err.message || err}`);
+      }
+
+      try {
+        Tone.setContext(freshContext);
+        toneContext = Tone.getContext();
+        rawContext = toneContext?.rawContext ?? freshContext;
+        attachStateListener(rawContext);
+        logMessage(`${tag}: Tone now bound to fresh AudioContext`);
+        return true;
+      } catch (err) {
+        logMessage(`${tag}: Tone.setContext error → ${err.message || err}`);
+        return false;
+      }
+    }
+
     async function unlockAudio() {
       refreshState("before unlock");
       setError("");
@@ -274,20 +316,13 @@
 
       let contextsRunning = Tone.context?.state === "running" && rawContext?.state === "running";
 
-      if (!contextsRunning && AudioContextClass) {
-        try {
-          logMessage("Fallback: creating fresh AudioContext and wiring Tone to it");
-          const freshRaw = new AudioContextClass();
-          Tone.setContext(freshRaw);
-          toneContext = Tone.getContext();
-          rawContext = toneContext?.rawContext ?? freshRaw;
-          attachStateListener(rawContext);
+      if (!contextsRunning) {
+        const adopted = await adoptFreshContext("fallback");
+        if (adopted) {
           refreshState("fresh-context");
           await tryResumeRawContext("fresh-context");
           await ensureToneStarted("fresh-context");
           contextsRunning = Tone.context?.state === "running" && rawContext?.state === "running";
-        } catch (err) {
-          logMessage(`Fallback AudioContext error → ${err.message || err}`);
         }
       }
 
