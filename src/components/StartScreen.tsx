@@ -1,8 +1,4 @@
-import type {
-  MouseEvent,
-  ReactNode,
-  TouchEvent,
-} from "react";
+import { useMemo, type ReactNode } from "react";
 import { unlockAudio } from "../utils/audioUnlock";
 
 interface StartScreenProps {
@@ -12,39 +8,31 @@ interface StartScreenProps {
   children?: ReactNode;
 }
 
-type StartScreenButtonEvent =
-  | MouseEvent<HTMLButtonElement>
-  | TouchEvent<HTMLButtonElement>;
-
 export function StartScreen({
   onNewSong,
   onLoadSong,
   onLoadDemoSong,
   children,
 }: StartScreenProps) {
-  const handleNewSong = (event: StartScreenButtonEvent) => {
-    if (event.type === "touchend") {
-      event.preventDefault();
-    }
+  const runWithAudioUnlock = (action?: () => void) => {
     unlockAudio();
-    onNewSong();
+    action?.();
   };
 
-  const handleLoadSong = (event: StartScreenButtonEvent) => {
-    if (event.type === "touchend") {
-      event.preventDefault();
-    }
-    unlockAudio();
-    onLoadSong();
-  };
+  const handleNewSong = useMemo(
+    () => () => runWithAudioUnlock(onNewSong),
+    [onNewSong]
+  );
 
-  const handleLoadDemoSong = (event: StartScreenButtonEvent) => {
-    if (event.type === "touchend") {
-      event.preventDefault();
-    }
-    unlockAudio();
-    onLoadDemoSong();
-  };
+  const handleLoadSong = useMemo(
+    () => () => runWithAudioUnlock(onLoadSong),
+    [onLoadSong]
+  );
+
+  const handleLoadDemoSong = useMemo(
+    () => () => runWithAudioUnlock(onLoadDemoSong),
+    [onLoadDemoSong]
+  );
 
   return (
     <div
