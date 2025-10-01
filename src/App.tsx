@@ -64,6 +64,7 @@ import {
 } from "./presets";
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
+import { initFirstGestureUnlock } from "./utils/initFirstGestureUnlock";
 import { unlockAudioSync, unlockAudio } from "./utils/audioUnlock";
 
 const isPWARestore = () => {
@@ -367,6 +368,10 @@ export default function App() {
   const [toneGraphVersion, setToneGraphVersion] = useState(0);
   const [showAudioUnlockPrompt, setShowAudioUnlockPrompt] = useState(false);
   const [handlerVersion, setHandlerVersion] = useState(0);
+
+  useEffect(() => {
+    initFirstGestureUnlock();
+  }, []);
 
   // Instruments (kept across renders)
   type ToneInstrument = Tone.ToneAudioNode & {

@@ -1,60 +1,68 @@
 import * as Tone from "tone";
 
 /**
- * Synchronous unlock for use inside user gestures (e.g. start screen buttons).
- * No await, no .then(). iOS PWA requires touching AudioContext immediately.
+ * Synchronous unlock for use INSIDE a user gesture (tap/click).
+ * No await/.then(). Touches the raw AudioContext and tickles it silently.
  */
 export function unlockAudioSync(): void {
   try {
-    const ctx = Tone.getContext().rawContext as AudioContext;
+    const ctx = (Tone.getContext?.() ?? Tone.context)?.rawContext as
+      | AudioContext
+      | undefined;
 
-    if (ctx.state === "running") return;
+    if (!ctx || ctx.state === "running") {
+      return;
+    }
 
-    // Try resume (do not await)
     try {
-      ctx.resume();
+      ctx.resume?.();
     } catch {}
 
-    // Silent oscillator tickle
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    gain.gain.value = 0;
-    osc.connect(gain).connect(ctx.destination);
-    const now = ctx.currentTime;
-    osc.start(now);
-    osc.stop(now + 0.001);
-  } catch (err) {
-    console.error("unlockAudioSync failed:", err);
     try {
-      (Tone.start as any)?.();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain).connect(ctx.destination);
+      const now = ctx.currentTime;
+      osc.start(now);
+      osc.stop(now + 0.001);
+    } catch {}
+  } catch (err) {
+    try {
+      (Tone.start as unknown as (() => void) | undefined)?.();
     } catch {}
   }
 }
 
 /**
- * Async unlock for non-gesture contexts (background resume, overlays, etc).
+ * Async unlock for non-gesture contexts (resume after background, overlays).
  * Handles iOS 26.0.1 "interrupted" state and uses a silent buffer fallback.
  */
 export async function unlockAudio(): Promise<void> {
   try {
-    const context = Tone.context;
-    const initialState = context.state as AudioContextState | "interrupted";
-    if (initialState === "running") return;
+    type ExtendedAudioState = AudioContextState | "interrupted";
+
+    let state = Tone.context.state as ExtendedAudioState;
+
+    if (state === "running") {
+      return;
+    }
 
     await Tone.start();
 
-    let currentState = context.state as AudioContextState | "interrupted";
-    if (currentState === "interrupted") {
+    state = Tone.context.state as ExtendedAudioState;
+
+    if (state === "interrupted") {
       try {
-        await (context.rawContext as AudioContext).resume();
+        await (Tone.context.rawContext as AudioContext).resume();
       } catch (err) {
         console.error("Raw resume failed:", err);
       }
-      currentState = context.state as AudioContextState | "interrupted";
+      state = Tone.context.state as ExtendedAudioState;
     }
 
-    if (currentState !== "running") {
-      const ctx = context.rawContext as AudioContext;
+    if (state !== "running") {
+      const ctx = Tone.context.rawContext as AudioContext;
       const buffer = ctx.createBuffer(1, 1, 22050);
       const src = ctx.createBufferSource();
       src.buffer = buffer;
