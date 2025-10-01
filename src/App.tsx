@@ -40,6 +40,7 @@ import {
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
+import { SavedSongsList } from "./components/SavedSongsList";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
@@ -49,9 +50,12 @@ import {
   listProjects,
   loadLoopDraft,
   loadProject as loadStoredProject,
+  renameProject as renameStoredProject,
   saveLoopDraft,
   saveProject as saveStoredProject,
+  type ProjectSortOrder,
   type StoredProjectData,
+  type StoredProjectSummary,
 } from "./storage";
 import {
   isUserPresetId,
@@ -424,7 +428,9 @@ export default function App() {
     null
   );
   const [projectNameInput, setProjectNameInput] = useState("");
-  const [projectList, setProjectList] = useState<string[]>([]);
+  const [projectList, setProjectList] = useState<StoredProjectSummary[]>([]);
+  const [projectSortOrder, setProjectSortOrder] =
+    useState<ProjectSortOrder>("recent");
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
@@ -1909,6 +1915,38 @@ export default function App() {
       refreshProjectList();
       setActiveProjectName((current) => (current === name ? "untitled" : current));
     },
+    [refreshProjectList, renameStoredProject]
+  );
+
+  const handleRenameProject = useCallback(
+    (name: string) => {
+      const nextName = window.prompt("Rename song", name);
+      if (!nextName) {
+        return;
+      }
+      const trimmed = nextName.trim();
+      if (!trimmed || trimmed === name) {
+        return;
+      }
+
+      try {
+        const renamed = renameStoredProject(name, trimmed);
+        if (!renamed) {
+          window.alert("Unable to rename song. It may have been deleted or moved.");
+          return;
+        }
+        setActiveProjectName((current) =>
+          current === name ? trimmed : current
+        );
+        setProjectNameInput((current) =>
+          current.trim() === name ? trimmed : current
+        );
+        refreshProjectList();
+      } catch (error) {
+        console.error("Failed to rename song", error);
+        window.alert("A song with that name already exists. Try another name.");
+      }
+    },
     [refreshProjectList]
   );
 
@@ -1966,6 +2004,10 @@ export default function App() {
     activeProjectName,
     requestProjectAction,
   ]);
+
+  const handleChangeProjectSortOrder = useCallback((order: ProjectSortOrder) => {
+    setProjectSortOrder(order);
+  }, []);
 
   const unsavedChangesSubtitle =
     pendingProjectLoad?.action.kind === "new"
@@ -2488,7 +2530,7 @@ export default function App() {
                     No songs saved yet
                   </div>
                 ) : (
-                  projectList.map((name) => {
+                  projectList.map(({ name }) => {
                     const isActive = projectNameInput.trim() === name;
                     return (
                       <div
@@ -2547,7 +2589,7 @@ export default function App() {
                   No songs saved yet
                 </div>
               ) : (
-                projectList.map((name) => (
+                projectList.map(({ name }) => (
                   <div
                     key={name}
                     style={{
@@ -2752,148 +2794,103 @@ export default function App() {
           style={{
             display: "flex",
             flex: 1,
-            justifyContent: "center",
-            padding: 24,
+            flexDirection: "column",
+            alignItems: "center",
+            padding: "48px 24px 32px",
+            gap: 32,
           }}
         >
           <div
             style={{
-              width: "min(440px, 100%)",
+              width: "min(760px, 100%)",
               display: "flex",
               flexDirection: "column",
-              gap: 24,
+              gap: 12,
+              textAlign: "center",
+              alignItems: "center",
             }}
           >
-            <button
-              type="button"
-              onClick={() => unlockAndRun(createNewProject)}
+            <span
               style={{
-                padding: "18px 24px",
-                fontSize: "1.25rem",
-                borderRadius: 16,
-                border: "1px solid #333",
-                background: "#27E0B0",
-                color: "#1F2532",
+                fontSize: 12,
+                letterSpacing: 4,
+                textTransform: "uppercase",
+                color: "#38bdf8",
                 fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 12,
               }}
             >
-              + New Song
-            </button>
-            <div
+              Welcome back
+            </span>
+            <h1
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
+                margin: 0,
+                fontSize: "2.5rem",
+                color: "#e6f2ff",
+                fontWeight: 700,
+                letterSpacing: 0.4,
               }}
             >
-              <div style={{ fontSize: 16, fontWeight: 600, color: "#e6f2ff" }}>
-                Saved Songs
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  maxHeight: "60vh",
-                  overflowY: "auto",
-                }}
-              >
-                {projectList.length === 0 ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 16,
-                      padding: 20,
-                      borderRadius: 16,
-                      border: "1px dashed #1f2937",
-                      background: "#0b1624",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        background: "rgba(39,224,176,0.12)",
-                        color: "#27E0B0",
-                        fontSize: 36,
-                      }}
-                    >
-                      🎶
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                        color: "#cbd5f5",
-                        fontSize: 14,
-                      }}
-                    >
-                      <strong style={{ fontSize: 16 }}>
-                        Start your first jam!
-                      </strong>
-                      <span>
-                        Save your creations to see them listed here, or dive in with
-                        our ready-made groove.
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => unlockAndRun(handleLoadDemoSong)}
-                      style={{
-                        padding: "12px 20px",
-                        borderRadius: 999,
-                        border: "none",
-                        background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
-                        color: "#0b1220",
-                        fontWeight: 600,
-                        fontSize: 14,
-                        cursor: "pointer",
-                        boxShadow: "0 12px 24px rgba(39,224,176,0.25)",
-                      }}
-                    >
-                      Try Demo Song
-                    </button>
-                  </div>
-                ) : (
-                  projectList.map((name) => (
-                    <button
-                      key={name}
-                      onClick={() => unlockAndRun(() => loadProject(name))}
-                      style={{
-                        padding: "12px 16px",
-                        borderRadius: 14,
-                        border: "1px solid #1f2937",
-                        background: "#0f172a",
-                        color: "#e6f2ff",
-                        textAlign: "left",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                      }}
-                    >
-                      <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                        Tap to load song
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
+              Craft your next groove
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                maxWidth: 520,
+                color: "#94a3b8",
+                fontSize: 15,
+                lineHeight: 1.6,
+              }}
+            >
+              Jump straight into a fresh idea or pick up a saved session. Everything
+              stays synced across your local library.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => unlockAndRun(createNewProject)}
+            style={{
+              padding: "20px 48px",
+              borderRadius: 999,
+              border: "1px solid rgba(39,224,176,0.4)",
+              background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
+              color: "#0b1220",
+              fontSize: 18,
+              fontWeight: 700,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 12,
+              cursor: "pointer",
+              boxShadow: "0 24px 48px rgba(39,224,176,0.25)",
+              letterSpacing: 0.2,
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              aria-hidden="true"
+              style={{ fontSize: 22 }}
+            >
+              add
+            </span>
+            New Song
+          </button>
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <SavedSongsList
+              projects={projectList}
+              sortOrder={projectSortOrder}
+              onChangeSortOrder={handleChangeProjectSortOrder}
+              onSelectProject={(name) =>
+                unlockAndRun(() => loadProject(name))
+              }
+              onRenameProject={handleRenameProject}
+              onDeleteProject={handleDeleteProject}
+              onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
+            />
           </div>
         </div>
       ) : (
