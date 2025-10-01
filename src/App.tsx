@@ -41,6 +41,7 @@ import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { SavedSongsList } from "./components/SavedSongsList";
+import { StartScreen } from "./components/StartScreen";
 import { ViewHeader } from "./components/ViewHeader";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
@@ -2791,109 +2792,23 @@ export default function App() {
         </Modal>
       ) : null}
       {!started ? (
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            flexDirection: "column",
-            alignItems: "center",
-            padding: "48px 24px 32px",
-            gap: 32,
-          }}
+        <StartScreen
+          onNewSong={createNewProject}
+          onLoadSong={openLoadProjectModal}
+          onLoadDemoSong={handleLoadDemoSong}
         >
-          <div
-            style={{
-              width: "min(760px, 100%)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              textAlign: "center",
-              alignItems: "center",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 12,
-                letterSpacing: 4,
-                textTransform: "uppercase",
-                color: "#38bdf8",
-                fontWeight: 600,
-              }}
-            >
-              Welcome back
-            </span>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "2.5rem",
-                color: "#e6f2ff",
-                fontWeight: 700,
-                letterSpacing: 0.4,
-              }}
-            >
-              Craft your next groove
-            </h1>
-            <p
-              style={{
-                margin: 0,
-                maxWidth: 520,
-                color: "#94a3b8",
-                fontSize: 15,
-                lineHeight: 1.6,
-              }}
-            >
-              Jump straight into a fresh idea or pick up a saved session. Everything
-              stays synced across your local library.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => unlockAndRun(createNewProject)}
-            style={{
-              padding: "20px 48px",
-              borderRadius: 999,
-              border: "1px solid rgba(39,224,176,0.4)",
-              background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
-              color: "#0b1220",
-              fontSize: 18,
-              fontWeight: 700,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              cursor: "pointer",
-              boxShadow: "0 24px 48px rgba(39,224,176,0.25)",
-              letterSpacing: 0.2,
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              aria-hidden="true"
-              style={{ fontSize: 22 }}
-            >
-              add
-            </span>
-            New Song
-          </button>
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <SavedSongsList
-              projects={projectList}
-              sortOrder={projectSortOrder}
-              onChangeSortOrder={handleChangeProjectSortOrder}
-              onSelectProject={(name) =>
-                unlockAndRun(() => loadProject(name))
-              }
-              onRenameProject={handleRenameProject}
-              onDeleteProject={handleDeleteProject}
-              onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
-            />
-          </div>
-        </div>
+          <SavedSongsList
+            projects={projectList}
+            sortOrder={projectSortOrder}
+            onChangeSortOrder={handleChangeProjectSortOrder}
+            onSelectProject={(name) =>
+              unlockAndRun(() => loadProject(name))
+            }
+            onRenameProject={handleRenameProject}
+            onDeleteProject={handleDeleteProject}
+            onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
+          />
+        </StartScreen>
       ) : (
         <>
           <ViewHeader
