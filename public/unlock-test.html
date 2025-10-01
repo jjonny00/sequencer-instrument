@@ -6,51 +6,151 @@
   <title>Unlock Test</title>
   <script src="https://cdn.jsdelivr.net/npm/tone@next/build/Tone.js"></script>
   <style>
+    :root {
+      color-scheme: dark;
+    }
     body {
-      font-family: sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
-      background: #111;
+      background: radial-gradient(circle at top, #1e1e1e, #0b0b0b 70%);
       color: #fff;
+      padding: 2rem;
+      box-sizing: border-box;
+    }
+    h1 {
+      margin-bottom: 0.75rem;
+      font-size: clamp(1.4rem, 2vw + 1rem, 2.5rem);
+      text-align: center;
+    }
+    p {
+      margin: 0.25rem 0 1.5rem;
+      max-width: 40rem;
+      text-align: center;
+      opacity: 0.8;
     }
     button {
-      padding: 1em 2em;
+      padding: 1em 2.5em;
       font-size: 1.2em;
-      border-radius: 8px;
+      border-radius: 999px;
+      border: none;
+      background: #ffd55a;
+      color: #111;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.25);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button:active {
+      transform: scale(0.97);
+      box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.3);
     }
     #status {
-      margin-top: 1em;
+      margin-top: 1.5em;
       font-size: 1.1em;
+      text-align: center;
+    }
+    #log {
+      margin-top: 1.5em;
+      width: min(32rem, 90vw);
+      max-height: 12rem;
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 1rem;
+      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      box-shadow: inset 0 0.75rem 1.5rem rgba(0, 0, 0, 0.25);
+    }
+    #log p {
+      margin: 0;
+      white-space: pre-wrap;
+      text-align: left;
     }
   </style>
 </head>
 <body>
+  <h1>iOS PWA Audio Unlock Test</h1>
+  <p>Tap the button below once after launching from the home screen to force Tone.js to start an audio context.</p>
   <button id="unlock">Unlock Audio</button>
-  <div id="status">State: (not checked yet)</div>
+  <div id="status">State: (checking)</div>
+  <div id="log" role="log" aria-live="polite" aria-atomic="false">
+    <p>Waiting for interaction…</p>
+  </div>
 
   <script>
     const btn = document.getElementById("unlock");
     const status = document.getElementById("status");
+    const log = document.getElementById("log");
 
-    function updateState() {
-      status.textContent = "State: " + Tone.context.state;
+    const rawContext = Tone.getContext().rawContext;
+
+    function setStatus(message) {
+      status.textContent = message;
     }
 
-    btn.addEventListener("click", async () => {
+    function formatState(state) {
+      return state ? state : "unknown";
+    }
+
+    function logMessage(message) {
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement("p");
+      entry.textContent = `[${time}] ${message}`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function refreshState(tag = "") {
+      const toneState = formatState(Tone.context.state);
+      const audioContextState = rawContext ? formatState(rawContext.state) : "(no rawContext)";
+      const label = tag ? `${tag} → ` : "";
+      setStatus(`${label}Tone: ${toneState} | AudioContext: ${audioContextState}`);
+    }
+
+    async function unlockAudio() {
+      refreshState("before unlock");
       try {
+        logMessage("Calling Tone.start()…");
         await Tone.start();
-        updateState();
-        console.log("Tone.start() called, state:", Tone.context.state);
+        logMessage(`Tone.start() resolved with state: ${Tone.context.state}`);
+
+        if (rawContext && rawContext.state === "suspended") {
+          logMessage("Raw AudioContext still suspended, attempting resume()");
+          await rawContext.resume();
+          logMessage(`resume() resolved with raw state: ${rawContext.state}`);
+        }
+
+        // Give the browser a beat to flip states after resuming
+        setTimeout(() => {
+          refreshState("after unlock");
+        }, 50);
       } catch (err) {
-        console.error("Unlock error:", err);
+        logMessage(`Unlock error: ${err.message || err}`);
+        refreshState("error");
+        throw err;
       }
+    }
+
+    btn.addEventListener("click", () => {
+      unlockAudio().catch((err) => {
+        console.error("Unlock error", err);
+      });
     });
 
-    updateState();
+    if (rawContext && typeof rawContext.addEventListener === "function") {
+      rawContext.addEventListener("statechange", () => {
+        logMessage(`AudioContext statechange → ${rawContext.state}`);
+        refreshState("statechange");
+      });
+    }
+
+    refreshState("initial");
   </script>
 </body>
 </html>
