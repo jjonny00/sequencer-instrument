@@ -3,15 +3,32 @@ import { unlockAudioSync } from "./audioUnlock";
 let installed = false;
 
 /**
- * On the first pointerup/touchend/click, run unlockAudioSync() once.
+ * On the first pointer/touch/click, run unlockAudioSync() once at capture time.
  */
 export function initFirstGestureUnlock() {
-  if (installed) {
+  if (installed || typeof window === "undefined") {
     return;
   }
   installed = true;
 
+  const eventTypes: Array<keyof WindowEventMap> = [
+    "pointerdown",
+    "pointerup",
+    "touchstart",
+    "touchend",
+    "click",
+  ];
+
+  const options: AddEventListenerOptions = { capture: true };
+
+  const cleanup = () => {
+    for (const type of eventTypes) {
+      window.removeEventListener(type, handler, options);
+    }
+  };
+
   const handler = () => {
+    cleanup();
     try {
       unlockAudioSync();
     } catch {
@@ -19,7 +36,7 @@ export function initFirstGestureUnlock() {
     }
   };
 
-  window.addEventListener("pointerup", handler, { capture: true, once: true });
-  window.addEventListener("touchend", handler, { capture: true, once: true });
-  window.addEventListener("click", handler, { capture: true, once: true });
+  for (const type of eventTypes) {
+    window.addEventListener(type, handler, options);
+  }
 }
