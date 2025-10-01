@@ -3,7 +3,7 @@ import { unlockAudioSync } from "./audioUnlock";
 let installed = false;
 
 /**
- * On the first pointer/touch/click, run unlockAudioSync() once at capture time.
+ * On the very first gesture, synchronously unlock audio and forward the click.
  */
 export function initFirstGestureUnlock() {
   if (installed || typeof window === "undefined") {
@@ -11,32 +11,27 @@ export function initFirstGestureUnlock() {
   }
   installed = true;
 
-  const eventTypes: Array<keyof WindowEventMap> = [
-    "pointerdown",
-    "pointerup",
-    "touchstart",
-    "touchend",
-    "click",
-  ];
-
-  const options: AddEventListenerOptions = { capture: true };
-
-  const cleanup = () => {
-    for (const type of eventTypes) {
-      window.removeEventListener(type, handler, options);
-    }
-  };
-
-  const handler = () => {
-    cleanup();
+  const handler = (event: Event) => {
     try {
       unlockAudioSync();
+      const target = event.target as HTMLElement | null;
+      if (target?.click) {
+        queueMicrotask(() => {
+          try {
+            target.click();
+          } catch {
+            // ignore synthetic click failures
+          }
+        });
+      }
     } catch {
-      // ignore
+      // ignore unlock failures
     }
   };
 
-  for (const type of eventTypes) {
-    window.addEventListener(type, handler, options);
-  }
+  const options: AddEventListenerOptions = { capture: true, once: true };
+
+  window.addEventListener("pointerdown", handler, options);
+  window.addEventListener("touchstart", handler, options);
+  window.addEventListener("mousedown", handler, options);
 }
