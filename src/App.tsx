@@ -64,7 +64,9 @@ import {
 } from "./presets";
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
-import { unlockAudio } from "./utils/audioUnlock";
+import { installFirstGestureGate } from "./utils/installFirstGestureGate";
+import { unlockAudio, isAudioRunning } from "./utils/audioUnlock";
+import { AudioGateOverlay } from "./components/AudioGateOverlay";
 import { AudioDebugHUD } from "./components/AudioDebugHUD";
 
 const isPWARestore = () => {
@@ -367,6 +369,7 @@ export default function App() {
   const [packIndex, setPackIndex] = useState(0);
   const [toneGraphVersion, setToneGraphVersion] = useState(0);
   const [showAudioUnlockPrompt, setShowAudioUnlockPrompt] = useState(false);
+  const [needsAudioGate, setNeedsAudioGate] = useState(false);
   const [handlerVersion, setHandlerVersion] = useState(0);
 
   // Instruments (kept across renders)
@@ -435,6 +438,52 @@ export default function App() {
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
+
+  useEffect(() => {
+    installFirstGestureGate();
+
+    const onVisibility = async () => {
+      if (document.visibilityState === "visible") {
+        await unlockAudio();
+        if (isAudioRunning()) {
+          setNeedsAudioGate(false);
+        }
+      }
+    };
+
+    const onPageShow = async () => {
+      await unlockAudio();
+      if (isAudioRunning()) {
+        setNeedsAudioGate(false);
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onPageShow);
+
+    let handledFirstGesture = false;
+    const checkAfterGesture = () => {
+      if (handledFirstGesture) return;
+      handledFirstGesture = true;
+      setTimeout(() => {
+        if (!isAudioRunning()) {
+          setNeedsAudioGate(true);
+        }
+      }, 100);
+    };
+
+    window.addEventListener("pointerup", checkAfterGesture, true);
+    window.addEventListener("touchend", checkAfterGesture, true);
+    window.addEventListener("mouseup", checkAfterGesture, true);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("pointerup", checkAfterGesture, true);
+      window.removeEventListener("touchend", checkAfterGesture, true);
+      window.removeEventListener("mouseup", checkAfterGesture, true);
+    };
+  }, []);
 
   useEffect(() => {
     const pack = packs[packIndex];
@@ -2119,6 +2168,9 @@ export default function App() {
     void (async () => {
       try {
         await unlockAudio();
+        if (isAudioRunning()) {
+          setNeedsAudioGate(false);
+        }
       } catch (error) {
         console.warn("unlockAudio failed before action:", error);
       } finally {
@@ -3310,6 +3362,10 @@ export default function App() {
           />
         </>
       )}
+      <AudioGateOverlay
+        show={needsAudioGate}
+        onUnlocked={() => setNeedsAudioGate(false)}
+      />
       {process.env.NODE_ENV !== "production" && <AudioDebugHUD />}
     </div>
   );
