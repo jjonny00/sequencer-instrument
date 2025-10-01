@@ -225,7 +225,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     { trackId: number; index: number } | null
   >(null);
   const [isLoopsLibraryOpen, setIsLoopsLibraryOpen] = useState(false);
-  const [isLoopPreviewExpanded, setIsLoopPreviewExpanded] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const swipeRef = useRef(0);
@@ -239,12 +238,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   );
   const addTrackEnabled = canAddTrack;
   const isHeroAddTrack = tracks.length === 0;
-
-  useEffect(() => {
-    if (tracks.length === 0) {
-      setIsLoopPreviewExpanded(true);
-    }
-  }, [tracks.length]);
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) {
@@ -939,37 +932,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           <button
             type="button"
             onClick={() => {
-              openCreateGroup();
-              setIsMoreMenuOpen(false);
-              setIsLoopsLibraryOpen(true);
-            }}
-            aria-label="Add loop"
-            title="Add loop"
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 999,
-              border: "1px solid #2a3344",
-              background: "#111827",
-              color: "#e6f2ff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              cursor: "pointer",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              aria-hidden="true"
-              style={{ fontSize: 22 }}
-            >
-              add
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
               setIsLoopsLibraryOpen(true);
               setIsMoreMenuOpen(false);
             }}
@@ -1247,7 +1209,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               }}
               disabled={!addTrackEnabled}
               style={{
-                padding: isHeroAddTrack ? "14px 32px" : "10px 24px",
+                padding: isHeroAddTrack ? "14px 28px" : "10px 20px",
                 borderRadius: 999,
                 border: "none",
                 background: addTrackEnabled
@@ -1273,202 +1235,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             </button>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsLoopPreviewExpanded((expanded) => !expanded)}
-          aria-expanded={isLoopPreviewExpanded}
-          style={{
-            alignSelf: "flex-start",
-            padding: "6px 12px",
-            borderRadius: 999,
-            border: "1px solid #2a3344",
-            background: "#111827",
-            color: "#94a3b8",
-            fontSize: 12,
-            letterSpacing: 0.3,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: "pointer",
-          }}
-        >
-          <span>
-            Preview loops from {pack?.name ?? "this pack"}
-          </span>
-          <span
-            className="material-symbols-outlined"
-            aria-hidden="true"
-            style={{ fontSize: 18 }}
-          >
-            {isLoopPreviewExpanded ? "expand_less" : "expand_more"}
-          </span>
-        </button>
-        {isLoopPreviewExpanded && (
-          <div
-            style={{
-              background: "#111827",
-              borderRadius: 12,
-              border: "1px solid #2a3344",
-              padding: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <div
-                style={{
-                  color: "#cbd5f5",
-                  fontSize: 13,
-                }}
-              >
-                Sample patterns from
-                {" "}
-                <span
-                  style={{
-                    color: "#e6f2ff",
-                    fontWeight: 600,
-                  }}
-                >
-                  {pack?.name ?? "your current pack"}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLoopsLibraryOpen(true);
-                  setIsMoreMenuOpen(false);
-                }}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 999,
-                  border: "1px solid #2a3344",
-                  background: "#1f2532",
-                  color: "#e6f2ff",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  letterSpacing: 0.3,
-                  cursor: "pointer",
-                }}
-              >
-                Open Loops Library
-              </button>
-            </div>
-            <div
-              className="scrollable"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                maxHeight: 180,
-                overflowY: "auto",
-              }}
-            >
-              {patternGroups.length > 0 ? (
-                patternGroups.map((group) => {
-                  const instrumentLabels = Array.from(
-                    new Set(
-                      group.tracks
-                        .map((track) => track.instrument)
-                        .filter((instrument): instrument is string => Boolean(instrument))
-                    )
-                  ).map((instrumentId) => {
-                    const definition = pack?.instruments[instrumentId];
-                    return definition?.name ?? instrumentId;
-                  });
-                  const description = instrumentLabels.length
-                    ? instrumentLabels.join(" · ")
-                    : "Empty loop — add instruments to this preset.";
-                  const isActive = selectedGroup?.id === group.id;
-                  return (
-                    <button
-                      key={group.id}
-                      type="button"
-                      onClick={() => setSelectedGroupId(group.id)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "10px 14px",
-                        borderRadius: 10,
-                        border: `1px solid ${isActive ? "#27E0B0" : "#2a3344"}`,
-                        background: isActive ? "#1f2532" : "#0f172a",
-                        color: "#e6f2ff",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 4,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            letterSpacing: 0.3,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <span aria-hidden="true">📼</span>
-                          {group.name}
-                        </span>
-                        <span
-                          style={{
-                            color: "#94a3b8",
-                            fontSize: 12,
-                            lineHeight: 1.4,
-                          }}
-                        >
-                          {description}
-                        </span>
-                      </div>
-                      <span
-                        className="material-symbols-outlined"
-                        aria-hidden="true"
-                        style={{
-                          fontSize: 20,
-                          color: "#27E0B0",
-                        }}
-                      >
-                        play_arrow
-                      </span>
-                    </button>
-                  );
-                })
-              ) : (
-                <div
-                  style={{
-                    padding: 12,
-                    borderRadius: 10,
-                    border: "1px dashed #2a3344",
-                    color: "#94a3b8",
-                    textAlign: "center",
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  No loops yet. Tap <strong>+</strong> to create one and start
-                  building your library.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
       <div
         ref={trackAreaRef}
@@ -1498,8 +1264,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             Tap <strong style={{ color: "#27E0B0" }}>+ Track</strong> above to
             choose an instrument and start building your groove.
             <br />
-            Need ideas? Browse the loop presets to preview ready-made patterns
-            before committing.
+            Need ideas? Open the Loops Library to explore saved patterns before
+            committing.
           </div>
         )}
         {tracks.map((t) => {
