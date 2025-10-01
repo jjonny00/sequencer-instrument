@@ -1370,7 +1370,7 @@ export function SongView({
                   fontSize: 13,
                 }}
               >
-                Add a sequence to start placing loops into the timeline.
+                Add a loop to start placing patterns into the timeline.
               </div>
             ) : (
               songRows.map((row, rowIndex) => {
@@ -1801,7 +1801,7 @@ export function SongView({
                                   ? null
                                   : patternGroups.length > 0
                                   ? "Tap to assign"
-                                  : "Save a sequence in Track view";
+                                  : "Save a loop in Loop view";
                                 const performanceSlotStatus = isRecordingRow
                                   ? "Recording"
                                   : hasPerformanceContent
@@ -2344,7 +2344,7 @@ export function SongView({
                   color: "#94a3b8",
                 }}
               >
-                Save and edit loops in Track view, then place them onto the song
+                Save and edit loops in Loop view, then place them onto the song
                 timeline.
               </span>
             </div>
@@ -2358,7 +2358,7 @@ export function SongView({
                   fontSize: 13,
                 }}
               >
-                No loops yet. Create loops in Track view to start arranging
+                No loops yet. Create loops in Loop view to start arranging
                 the song.
               </div>
             ) : (
@@ -2393,7 +2393,7 @@ export function SongView({
                         cursor: "pointer",
                         color: "#e6f2ff",
                       }}
-                      title={`Open ${group.name} in Track view`}
+                      title={`Open ${group.name} in Loop view`}
                     >
                       <div
                         style={{

@@ -40,7 +40,8 @@ import {
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
-import { SavedSongsList } from "./components/SavedSongsList";
+import StartScreen from "./components/StartScreen";
+import { ViewHeader } from "./components/ViewHeader";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
@@ -50,10 +51,8 @@ import {
   listProjects,
   loadLoopDraft,
   loadProject as loadStoredProject,
-  renameProject as renameStoredProject,
   saveLoopDraft,
   saveProject as saveStoredProject,
-  type ProjectSortOrder,
   type StoredProjectData,
   type StoredProjectSummary,
 } from "./storage";
@@ -103,7 +102,7 @@ const isPWARestore = () => {
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
-  name: "sequence01",
+  name: "Loop 01",
   tracks: [],
 });
 
@@ -429,8 +428,6 @@ export default function App() {
   );
   const [projectNameInput, setProjectNameInput] = useState("");
   const [projectList, setProjectList] = useState<StoredProjectSummary[]>([]);
-  const [projectSortOrder, setProjectSortOrder] =
-    useState<ProjectSortOrder>("recent");
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
@@ -1915,38 +1912,6 @@ export default function App() {
       refreshProjectList();
       setActiveProjectName((current) => (current === name ? "untitled" : current));
     },
-    [refreshProjectList, renameStoredProject]
-  );
-
-  const handleRenameProject = useCallback(
-    (name: string) => {
-      const nextName = window.prompt("Rename song", name);
-      if (!nextName) {
-        return;
-      }
-      const trimmed = nextName.trim();
-      if (!trimmed || trimmed === name) {
-        return;
-      }
-
-      try {
-        const renamed = renameStoredProject(name, trimmed);
-        if (!renamed) {
-          window.alert("Unable to rename song. It may have been deleted or moved.");
-          return;
-        }
-        setActiveProjectName((current) =>
-          current === name ? trimmed : current
-        );
-        setProjectNameInput((current) =>
-          current.trim() === name ? trimmed : current
-        );
-        refreshProjectList();
-      } catch (error) {
-        console.error("Failed to rename song", error);
-        window.alert("A song with that name already exists. Try another name.");
-      }
-    },
     [refreshProjectList]
   );
 
@@ -2004,10 +1969,6 @@ export default function App() {
     activeProjectName,
     requestProjectAction,
   ]);
-
-  const handleChangeProjectSortOrder = useCallback((order: ProjectSortOrder) => {
-    setProjectSortOrder(order);
-  }, []);
 
   const unsavedChangesSubtitle =
     pendingProjectLoad?.action.kind === "new"
@@ -2113,18 +2074,6 @@ export default function App() {
       handleLoadDemoSong: handleLoadDemoSongHandler,
     };
   }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
-
-  const unlockAndRun = useCallback((action?: () => void) => {
-    void (async () => {
-      try {
-        await unlockAudio();
-      } catch (error) {
-        console.warn("unlockAudio failed before action:", error);
-      } finally {
-        action?.();
-      }
-    })();
-  }, []);
 
   useEffect(() => {
     refreshProjectList();
@@ -2614,7 +2563,10 @@ export default function App() {
                         icon="folder_open"
                         label={`Load song ${name}`}
                         tone="accent"
-                        onClick={() => unlockAndRun(() => loadProject(name))}
+                        onClick={() => {
+                          void unlockAudio();
+                          loadProject(name);
+                        }}
                       />
                       <IconButton
                         icon="delete"
@@ -2790,225 +2742,62 @@ export default function App() {
         </Modal>
       ) : null}
       {!started ? (
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            flexDirection: "column",
-            alignItems: "center",
-            padding: "48px 24px 32px",
-            gap: 32,
+        <StartScreen
+          onNewSong={() => {
+            void unlockAudio();
+            createNewProject();
           }}
-        >
-          <div
-            style={{
-              width: "min(760px, 100%)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              textAlign: "center",
-              alignItems: "center",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 12,
-                letterSpacing: 4,
-                textTransform: "uppercase",
-                color: "#38bdf8",
-                fontWeight: 600,
-              }}
-            >
-              Welcome back
-            </span>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "2.5rem",
-                color: "#e6f2ff",
-                fontWeight: 700,
-                letterSpacing: 0.4,
-              }}
-            >
-              Craft your next groove
-            </h1>
-            <p
-              style={{
-                margin: 0,
-                maxWidth: 520,
-                color: "#94a3b8",
-                fontSize: 15,
-                lineHeight: 1.6,
-              }}
-            >
-              Jump straight into a fresh idea or pick up a saved session. Everything
-              stays synced across your local library.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => unlockAndRun(createNewProject)}
-            style={{
-              padding: "20px 48px",
-              borderRadius: 999,
-              border: "1px solid rgba(39,224,176,0.4)",
-              background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
-              color: "#0b1220",
-              fontSize: 18,
-              fontWeight: 700,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              cursor: "pointer",
-              boxShadow: "0 24px 48px rgba(39,224,176,0.25)",
-              letterSpacing: 0.2,
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              aria-hidden="true"
-              style={{ fontSize: 22 }}
-            >
-              add
-            </span>
-            New Song
-          </button>
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <SavedSongsList
-              projects={projectList}
-              sortOrder={projectSortOrder}
-              onChangeSortOrder={handleChangeProjectSortOrder}
-              onSelectProject={(name) =>
-                unlockAndRun(() => loadProject(name))
-              }
-              onRenameProject={handleRenameProject}
-              onDeleteProject={handleDeleteProject}
-              onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
-            />
-          </div>
-        </div>
+          onLoadSong={(name) => {
+            void unlockAudio();
+            loadProject(name);
+          }}
+          onLoadDemoSong={() => {
+            void unlockAudio();
+            handleLoadDemoSong();
+          }}
+          savedSongs={projectList.map((project) => project.name)}
+        />
       ) : (
         <>
-          <div
-            style={{
-              padding: "16px 16px 0",
+          <ViewHeader
+            activeTab={viewMode}
+            onBack={handleReturnToSongSelection}
+            onSelectTab={(tab) => {
+              if (tab === "track") {
+                skipLoopDraftRestoreRef.current = false;
+                setViewMode("track");
+              } else {
+                setEditing(null);
+                setViewMode("song");
+              }
             }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                type="button"
-                onClick={handleReturnToSongSelection}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#111827",
-                  color: "#e6f2ff",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: 0.3,
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  aria-hidden="true"
-                  style={{ fontSize: 18 }}
-                >
-                  arrow_back
-                </span>
-                Back to Songs
-              </button>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
-                <button
-                  onClick={() => {
-                    skipLoopDraftRestoreRef.current = false;
-                    setViewMode("track");
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "8px 0",
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: viewMode === "track" ? "#27E0B0" : "#1f2532",
-                    color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
-                  }}
-                >
-                  Tracks
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(null);
-                    setViewMode("song");
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "8px 0",
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: viewMode === "song" ? "#27E0B0" : "#1f2532",
-                    color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
-                  }}
-                >
-                  Song
-                </button>
-              </div>
-            </div>
-            {viewMode === "song" && !isSongInstrumentPanelOpen ? (
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <IconButton
-                  icon="save"
-                  label="Save song"
-                  onClick={openSaveProjectModal}
-                />
-                <IconButton
-                  icon="folder_open"
-                  label="Load song"
-                  onClick={openLoadProjectModal}
-                />
-                <IconButton
-                  icon="file_download"
-                  label="Open export options"
-                  onClick={() => {
-                    setAudioExportMessage("Preparing export…");
-                    setIsExportModalOpen(true);
-                  }}
-                  disabled={isAudioExporting}
-                />
-              </div>
-            ) : null}
-          </div>
+            actions={
+              viewMode === "song" && !isSongInstrumentPanelOpen ? (
+                <>
+                  <IconButton
+                    icon="save"
+                    label="Save song"
+                    onClick={openSaveProjectModal}
+                  />
+                  <IconButton
+                    icon="folder_open"
+                    label="Load song"
+                    onClick={openLoadProjectModal}
+                  />
+                  <IconButton
+                    icon="file_download"
+                    label="Open export options"
+                    onClick={() => {
+                      setAudioExportMessage("Preparing export…");
+                      setIsExportModalOpen(true);
+                    }}
+                    disabled={isAudioExporting}
+                  />
+                </>
+              )
+                : undefined
+            }
+          />
           {viewMode === "track" && (
             <LoopStrip
               ref={loopStripRef}

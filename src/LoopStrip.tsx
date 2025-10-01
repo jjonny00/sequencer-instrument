@@ -225,7 +225,11 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     { trackId: number; index: number } | null
   >(null);
   const [isLoopsLibraryOpen, setIsLoopsLibraryOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const swipeRef = useRef(0);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const labelLongPressRef = useRef<Map<number, boolean>>(new Map());
   const pack = packs[packIndex];
@@ -235,8 +239,55 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const addTrackEnabled = canAddTrack;
   const isHeroAddTrack = tracks.length === 0;
 
+  const showToast = useCallback((message: string) => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setToastMessage(message);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+      toastTimerRef.current = null;
+    }, 2400);
+  }, []);
+
   useEffect(() => {
-    console.log("Track view mounted");
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!moreMenuRef.current) return;
+      if (!moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isMoreMenuOpen]);
+
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMoreMenuOpen]);
+
+  useEffect(() => {
+    console.log("Loop view mounted");
     if (isIOSPWA()) {
       void Tone.start()
         .then(() => {
@@ -258,13 +309,15 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     );
     let index = 1;
     while (true) {
-      const candidate = `sequence${String(index).padStart(2, "0")}`;
+      const candidate = `Loop ${String(index).padStart(2, "0")}`;
       if (!existingNames.has(candidate.toLowerCase())) {
         return candidate;
       }
       index += 1;
     }
   };
+
+  const loopLabel = selectedGroup?.name ?? getNextGroupName();
 
   const captureCurrentTracks = () => tracks.map((track) => cloneTrack(track));
 
@@ -279,8 +332,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   );
 
   const isCreatingGroup = groupEditor?.mode === "create";
-  const isEditingCurrentGroup =
-    groupEditor?.mode === "edit" && groupEditor.groupId === selectedGroupId;
 
   useEffect(() => {
     if (patternGroups.length === 0) {
@@ -737,8 +788,23 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     if (created) {
       setSelectedGroupId(newId);
       applyGroupTracks(created);
+      showToast("Loop duplicated.");
     }
     setGroupEditor(null);
+  };
+
+  const handleQuickRename = () => {
+    if (!selectedGroup) return;
+    const nextName = window.prompt("Rename loop", selectedGroup.name);
+    if (nextName === null) return;
+    const trimmed = nextName.trim();
+    if (!trimmed || trimmed === selectedGroup.name) return;
+    setPatternGroups((groups) =>
+      groups.map((group) =>
+        group.id === selectedGroup.id ? { ...group, name: trimmed } : group
+      )
+    );
+    showToast("Loop renamed.");
   };
 
   const handleSnapshotSelectedGroup = () => {
@@ -752,12 +818,15 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         };
       })
     );
+    showToast("Loop saved.");
   };
 
   const handleDeleteGroup = () => {
     if (!selectedGroupId) return;
     if (patternGroups.length <= 1) return;
-    const confirmed = window.confirm("Delete this sequence? This action cannot be undone.");
+    const confirmed = window.confirm(
+      "Delete this loop? This action cannot be undone."
+    );
     if (!confirmed) return;
     setPatternGroups((groups) => {
       const filtered = groups.filter((group) => group.id !== selectedGroupId);
@@ -782,6 +851,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       return filtered;
     });
     setGroupEditor(null);
+    showToast("Loop deleted.");
   };
 
   const handleCancelGroupEdit = () => {
@@ -824,6 +894,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     );
   };
 
+  const hasSelectedGroup = Boolean(selectedGroup);
+  const isMobileLibraryLayout =
+    typeof window !== "undefined" ? window.innerWidth <= 640 : false;
+
   return (
     <div
       style={{
@@ -841,74 +915,326 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          flexDirection: "column",
           gap: 12,
-          flexWrap: "wrap",
           marginBottom: 8,
         }}
       >
-        <button
-          type="button"
-          onClick={() =>
-            setIsLoopsLibraryOpen((open) => !open && patternGroups.length > 0)
-          }
-          disabled={patternGroups.length === 0}
+        <div
           style={{
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: "1px solid #333",
-            background: "#1f2532",
-            color: patternGroups.length === 0 ? "#475569" : "#e6f2ff",
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0.3,
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
+            gap: 8,
+            flexWrap: "wrap",
+            rowGap: 8,
           }}
         >
-          <span>Loop: {selectedGroup?.name ?? "None"}</span>
-          <span aria-hidden="true" style={{ fontSize: 10 }}>
-            ▴
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (!addTrackEnabled) return;
-            onAddTrack();
-          }}
-          disabled={!addTrackEnabled}
-          style={{
-            padding: isHeroAddTrack ? "14px 28px" : "6px 16px",
-            borderRadius: 999,
-            border: isHeroAddTrack ? "none" : "1px solid #333",
-            background: addTrackEnabled
-              ? isHeroAddTrack
-                ? "linear-gradient(135deg, #27E0B0, #6AE0FF)"
-                : "#27E0B0"
-              : "#1f2532",
-            color: addTrackEnabled
-              ? isHeroAddTrack
-                ? "#0b1220"
-                : "#1F2532"
-              : "#475569",
-            fontSize: isHeroAddTrack ? 16 : 13,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-            cursor: addTrackEnabled ? "pointer" : "not-allowed",
-            boxShadow: addTrackEnabled
-              ? isHeroAddTrack
-                ? "0 16px 30px rgba(39,224,176,0.35)"
-                : "0 2px 6px rgba(15, 20, 32, 0.35)"
-              : "none",
-            transition: "transform 0.2s ease, box-shadow 0.2s ease",
-          }}
-        >
-          + Track
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsLoopsLibraryOpen(true);
+              setIsMoreMenuOpen(false);
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "10px 16px",
+              borderRadius: 999,
+              border: "1px solid #2a3344",
+              background: "#111827",
+              color: "#e6f2ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              cursor: "pointer",
+            }}
+            aria-label="Open loops library"
+          >
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontWeight: 600,
+                letterSpacing: 0.3,
+              }}
+            >
+              {loopLabel}
+            </span>
+            <span
+              className="material-symbols-outlined"
+              aria-hidden="true"
+              style={{ fontSize: 20 }}
+            >
+              expand_more
+            </span>
+          </button>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                if (!hasSelectedGroup) return;
+                handleSnapshotSelectedGroup();
+              }}
+              disabled={!hasSelectedGroup}
+              aria-label="Save loop"
+              title="Save loop"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 999,
+                border: "1px solid #2a3344",
+                background: hasSelectedGroup ? "#111827" : "#1f2532",
+                color: hasSelectedGroup ? "#e6f2ff" : "#475569",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: hasSelectedGroup ? "pointer" : "not-allowed",
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                aria-hidden="true"
+                style={{ fontSize: 22 }}
+              >
+                save
+              </span>
+            </button>
+            <div
+              ref={moreMenuRef}
+              style={{
+                position: "relative",
+                flexShrink: 0,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (!hasSelectedGroup) return;
+                  setIsMoreMenuOpen((open) => !open);
+                }}
+                disabled={!hasSelectedGroup}
+                aria-label="More loop actions"
+                title="More loop actions"
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 999,
+                  border: "1px solid #2a3344",
+                  background: hasSelectedGroup ? "#111827" : "#1f2532",
+                  color: hasSelectedGroup ? "#e6f2ff" : "#475569",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: hasSelectedGroup ? "pointer" : "not-allowed",
+                }}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  aria-hidden="true"
+                  style={{ fontSize: 24 }}
+                >
+                  more_horiz
+                </span>
+              </button>
+              {isMoreMenuOpen && hasSelectedGroup && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 6px)",
+                    minWidth: 200,
+                    borderRadius: 12,
+                    border: "1px solid #1f2937",
+                    background: "#0f172a",
+                    boxShadow: "0 20px 40px rgba(8, 12, 20, 0.55)",
+                    padding: 8,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                    zIndex: 5,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      openEditGroup();
+                      setIsLoopsLibraryOpen(true);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6f2ff",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      aria-hidden="true"
+                      style={{ fontSize: 20 }}
+                    >
+                      tune
+                    </span>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      handleDuplicateGroup();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6f2ff",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      aria-hidden="true"
+                      style={{ fontSize: 20 }}
+                    >
+                      content_copy
+                    </span>
+                    Duplicate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      handleDeleteGroup();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "none",
+                      background: "transparent",
+                      color: "#fca5a5",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      aria-hidden="true"
+                      style={{ fontSize: 20 }}
+                    >
+                      delete
+                    </span>
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      handleQuickRename();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6f2ff",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      aria-hidden="true"
+                      style={{ fontSize: 20 }}
+                    >
+                      drive_file_rename_outline
+                    </span>
+                    Rename
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+              marginLeft: "auto",
+            }}
+          >
+            <div
+              aria-hidden="true"
+              style={{
+                width: 1,
+                height: 32,
+                background: "#1f2937",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (!addTrackEnabled) return;
+                onAddTrack();
+              }}
+              disabled={!addTrackEnabled}
+              style={{
+                padding: isHeroAddTrack ? "14px 28px" : "10px 20px",
+                borderRadius: 999,
+                border: "none",
+                background: addTrackEnabled
+                  ? isHeroAddTrack
+                    ? "linear-gradient(135deg, #27E0B0, #6AE0FF)"
+                    : "#27E0B0"
+                  : "#1f2532",
+                color: addTrackEnabled ? "#0b1220" : "#475569",
+                fontSize: isHeroAddTrack ? 16 : 14,
+                fontWeight: 700,
+                letterSpacing: 0.3,
+                cursor: addTrackEnabled ? "pointer" : "not-allowed",
+                boxShadow: addTrackEnabled
+                  ? isHeroAddTrack
+                    ? "0 16px 30px rgba(39,224,176,0.35)"
+                    : "0 6px 18px rgba(39,224,176,0.25)"
+                  : "none",
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                flexShrink: 0,
+              }}
+            >
+              + Track
+            </button>
+          </div>
+        </div>
       </div>
       <div
         ref={trackAreaRef}
@@ -926,14 +1252,20 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         {tracks.length === 0 && (
           <div
             style={{
-              padding: 16,
+              padding: 20,
               textAlign: "center",
               fontSize: 14,
               color: "#94a3b8",
-              lineHeight: 1.5,
+              lineHeight: 1.6,
             }}
           >
-            No beats yet — add a track to get the groove started.
+            <strong style={{ color: "#e6f2ff" }}>This loop is empty.</strong>
+            <br />
+            Tap <strong style={{ color: "#27E0B0" }}>+ Track</strong> above to
+            choose an instrument and start building your groove.
+            <br />
+            Need ideas? Open the Loops Library to explore saved patterns before
+            committing.
           </div>
         )}
         {tracks.map((t) => {
@@ -1129,31 +1461,37 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       </div>
       {isLoopsLibraryOpen && (
         <div
-          onClick={() => setIsLoopsLibraryOpen(false)}
+          onClick={() => {
+            setIsLoopsLibraryOpen(false);
+            setGroupEditor(null);
+            setIsMoreMenuOpen(false);
+          }}
           style={{
             position: "fixed",
             inset: 0,
             zIndex: 40,
             background: "rgba(8, 12, 20, 0.72)",
             display: "flex",
-            alignItems: "center",
+            alignItems: isMobileLibraryLayout ? "flex-end" : "center",
             justifyContent: "center",
-            padding: 16,
+            padding: isMobileLibraryLayout ? 0 : 24,
           }}
         >
           <div
             onClick={(event) => event.stopPropagation()}
             style={{
               width: "100%",
-              maxWidth: 480,
-              background: "#111827",
-              border: "1px solid #2a3344",
-              borderRadius: 12,
-              padding: 20,
+              maxWidth: isMobileLibraryLayout ? "100%" : 520,
+              maxHeight: isMobileLibraryLayout ? "100%" : "min(80vh, 640px)",
+              height: isMobileLibraryLayout ? "100%" : "auto",
+              background: "#0b1220",
+              border: "1px solid #1f2937",
+              borderRadius: isMobileLibraryLayout ? "24px 24px 0 0" : 16,
+              padding: isMobileLibraryLayout ? "24px 20px 32px" : 24,
               display: "flex",
               flexDirection: "column",
               gap: 16,
-              boxShadow: "0 18px 40px rgba(8, 12, 20, 0.6)",
+              boxShadow: "0 24px 48px rgba(8, 12, 20, 0.65)",
             }}
           >
             <div
@@ -1166,8 +1504,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               <h3
                 style={{
                   margin: 0,
-                  fontSize: 16,
-                  fontWeight: 600,
+                  fontSize: 18,
+                  fontWeight: 700,
                   color: "#e6f2ff",
                 }}
               >
@@ -1175,222 +1513,280 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               </h3>
               <button
                 type="button"
-                onClick={() => setIsLoopsLibraryOpen(false)}
+                onClick={() => {
+                  setIsLoopsLibraryOpen(false);
+                  setGroupEditor(null);
+                  setIsMoreMenuOpen(false);
+                }}
+                aria-label="Close loops library"
                 style={{
                   marginLeft: "auto",
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #333",
-                  background: "#1f2532",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 999,
+                  border: "1px solid #1f2937",
+                  background: "#111827",
                   color: "#e6f2ff",
-                  cursor: "pointer",
-                }}
-              >
-                Close
-              </button>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-                alignItems: "center",
-              }}
-            >
-              <button
-                type="button"
-                onClick={openCreateGroup}
-                aria-label="Create new loop"
-                title="Create new loop"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: isCreatingGroup ? "#27E0B0" : "#1f2532",
-                  color: isCreatingGroup ? "#1F2532" : "#e6f2ff",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  cursor: "pointer",
                 }}
               >
                 <span
                   className="material-symbols-outlined"
-                  style={{ fontSize: 22 }}
+                  aria-hidden="true"
+                  style={{ fontSize: 20 }}
                 >
-                  add
+                  close
                 </span>
               </button>
-              <select
-                aria-label="Current loop"
-                value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSelectedGroupId(value || null);
-                  setGroupEditor(null);
-                  setIsLoopsLibraryOpen(false);
-                }}
-                style={{
-                  flex: "1 1 auto",
-                  minWidth: 0,
-                  padding: 8,
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#1f2532",
-                  color: "#e6f2ff",
-                }}
-              >
-                {patternGroups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    📼 {group.name}
-                  </option>
-                ))}
-              </select>
             </div>
             <div
               style={{
                 display: "flex",
+                alignItems: "center",
+                gap: 12,
                 flexWrap: "wrap",
-                gap: 8,
-                justifyContent: "space-between",
               }}
             >
               <button
                 type="button"
-                onClick={handleSnapshotSelectedGroup}
-                disabled={!selectedGroup}
-                aria-label="Save sequence"
-                title="Save sequence"
+                onClick={() => {
+                  openCreateGroup();
+                  setIsMoreMenuOpen(false);
+                }}
+                aria-label="Create a new loop"
                 style={{
-                  flex: "1 1 100px",
-                  minWidth: 0,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: selectedGroup ? "#27E0B0" : "#1f2532",
-                  color: selectedGroup ? "#1F2532" : "#64748b",
-                  cursor: selectedGroup ? "pointer" : "default",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
+                  gap: 8,
+                  padding: "10px 16px",
+                  borderRadius: 999,
+                  border: "1px solid #1f2937",
+                  background: isCreatingGroup ? "#27E0B0" : "#111827",
+                  color: isCreatingGroup ? "#0b1220" : "#e6f2ff",
                   fontWeight: 600,
+                  letterSpacing: 0.3,
+                  cursor: "pointer",
                 }}
               >
-                <span className="material-symbols-outlined">save</span>
-                Save
+                <span
+                  className="material-symbols-outlined"
+                  aria-hidden="true"
+                  style={{ fontSize: 18 }}
+                >
+                  add
+                </span>
+                New Loop
               </button>
-              <button
-                type="button"
-                onClick={openEditGroup}
-                disabled={!selectedGroup}
-                aria-label="Edit sequence"
+              <span
                 style={{
-                  flex: "1 1 100px",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                  lineHeight: 1.4,
+                  flex: "1 1 220px",
                   minWidth: 0,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: isEditingCurrentGroup ? "#27E0B0" : "#1f2532",
-                  color: selectedGroup
-                    ? isEditingCurrentGroup
-                      ? "#1F2532"
-                      : "#e6f2ff"
-                    : "#64748b",
-                  cursor: selectedGroup ? "pointer" : "default",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  fontWeight: 600,
                 }}
               >
-                <span className="material-symbols-outlined">edit</span>
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={handleDuplicateGroup}
-                disabled={!selectedGroup}
-                aria-label="Duplicate sequence"
-                style={{
-                  flex: "1 1 110px",
-                  minWidth: 0,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#1f2532",
-                  color: selectedGroup ? "#e6f2ff" : "#64748b",
-                  cursor: selectedGroup ? "pointer" : "default",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  fontWeight: 600,
-                }}
-              >
-                <span className="material-symbols-outlined">content_copy</span>
-                Duplicate
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteGroup}
-                disabled={!selectedGroup || patternGroups.length <= 1}
-                aria-label="Delete loop"
-                style={{
-                  flex: "1 1 110px",
-                  minWidth: 0,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#1f2532",
-                  color:
-                    selectedGroup && patternGroups.length > 1
-                      ? "#fca5a5"
-                      : "#64748b",
-                  cursor:
-                    selectedGroup && patternGroups.length > 1
-                      ? "pointer"
-                      : "default",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  fontWeight: 600,
-                }}
-              >
-                <span className="material-symbols-outlined">delete</span>
-                Delete
-              </button>
+                Saved loops remember track patterns and mute states so you can
+                reuse ideas quickly.
+              </span>
             </div>
-            {groupEditor ? (
+            <div
+              className="scrollable"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              {patternGroups.length > 0 ? (
+                patternGroups.map((group) => {
+                  const instrumentLabels = Array.from(
+                    new Set(
+                      group.tracks
+                        .map((track) => track.instrument)
+                        .filter((instrument): instrument is string => Boolean(instrument))
+                    )
+                  ).map((instrumentId) => {
+                    const definition = pack?.instruments[instrumentId];
+                    return definition?.name ?? instrumentId;
+                  });
+                  const description = instrumentLabels.length
+                    ? instrumentLabels.join(" · ")
+                    : "Empty loop — add instruments to this preset.";
+                  const isActive = selectedGroup?.id === group.id;
+                  const trackCount = group.tracks.length;
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroupId(group.id);
+                        setGroupEditor(null);
+                        setIsLoopsLibraryOpen(false);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "12px 16px",
+                        borderRadius: 12,
+                        border: `1px solid ${isActive ? "#27E0B0" : "#1f2937"}` ,
+                        background: isActive ? "#111f2f" : "#0f172a",
+                        color: "#e6f2ff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        cursor: "pointer",
+                        transition: "border 0.2s ease, background 0.2s ease",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            fontWeight: 600,
+                            letterSpacing: 0.3,
+                          }}
+                        >
+                          <span aria-hidden="true">📼</span>
+                          {group.name}
+                        </span>
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: 12,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {description}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          color: "#94a3b8",
+                          fontSize: 12,
+                        }}
+                      >
+                        <span>{trackCount} track{trackCount === 1 ? "" : "s"}</span>
+                        <span
+                          className="material-symbols-outlined"
+                          aria-hidden="true"
+                          style={{ fontSize: 20, color: "#27E0B0" }}
+                        >
+                          play_arrow
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div
+                  style={{
+                    padding: 20,
+                    borderRadius: 12,
+                    border: "1px dashed #1f2937",
+                    color: "#94a3b8",
+                    textAlign: "center",
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  No loops yet. Tap <strong>New Loop</strong> to capture your
+                  first idea.
+                </div>
+              )}
+            </div>
+            {groupEditor && (
               <div
                 style={{
+                  borderTop: "1px solid #1f2937",
+                  paddingTop: 12,
                   display: "flex",
                   flexDirection: "column",
                   gap: 12,
                 }}
               >
-                <input
-                  value={groupEditor.name}
-                  onChange={(event) =>
-                    handleEditorNameChange(event.target.value)
-                  }
-                  placeholder={getNextGroupName()}
+                <div
                   style={{
-                    padding: 8,
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: "#1f2532",
-                    color: "#e6f2ff",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
                   }}
-                />
-                <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                >
+                  <label
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: 0.3,
+                      color: "#cbd5f5",
+                    }}
+                  >
+                    Loop name
+                  </label>
+                  <input
+                    value={groupEditor.name}
+                    onChange={(event) =>
+                      handleEditorNameChange(event.target.value)
+                    }
+                    placeholder={getNextGroupName()}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid #1f2937",
+                      background: "#111827",
+                      color: "#e6f2ff",
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>
                   {groupEditor.mode === "create"
-                    ? "New loops start blank. Name it to keep things organized."
-                    : "Rename this loop."}
+                    ? "Give your loop a memorable name so it's easy to spot later."
+                    : "Update the loop name to keep your library organized."}
                 </span>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCancelGroupEdit();
+                    }}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 999,
+                      border: "1px solid #1f2937",
+                      background: "#111827",
+                      color: "#e6f2ff",
+                      fontWeight: 600,
+                      letterSpacing: 0.3,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -1398,49 +1794,48 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                       setIsLoopsLibraryOpen(false);
                     }}
                     style={{
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #333",
+                      padding: "8px 16px",
+                      borderRadius: 999,
+                      border: "none",
                       background: "#27E0B0",
-                      color: "#1F2532",
-                      fontWeight: 600,
+                      color: "#0b1220",
+                      fontWeight: 700,
+                      letterSpacing: 0.3,
                       cursor: "pointer",
+                      boxShadow: "0 10px 22px rgba(39,224,176,0.35)",
                     }}
                   >
                     {groupEditor.mode === "create"
-                      ? "Create New Loop"
-                      : "Save Changes"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancelGroupEdit}
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #333",
-                      background: "#1f2532",
-                      color: "#e6f2ff",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Cancel
+                      ? "Create loop"
+                      : "Save name"}
                   </button>
                 </div>
               </div>
-            ) : selectedGroup ? (
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                {selectedGroup.tracks.length === 0
-                  ? "Save this beat to use again later!"
-                  : `${selectedGroup.tracks.length} saved track${
-                      selectedGroup.tracks.length === 1 ? "" : "s"
-                    } including mute states.`}
-              </span>
-            ) : (
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                Create a loop to capture the current track mix.
-              </span>
             )}
           </div>
+        </div>
+      )}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 24,
+            transform: "translateX(-50%)",
+            background: "#0f172a",
+            color: "#e6f2ff",
+            padding: "12px 18px",
+            borderRadius: 999,
+            border: "1px solid #27E0B0",
+            boxShadow: "0 18px 36px rgba(15, 23, 42, 0.55)",
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            zIndex: 45,
+          }}
+        >
+          {toastMessage}
         </div>
       )}
       {stepEditing && (() => {

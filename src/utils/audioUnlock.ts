@@ -1,56 +1,37 @@
 import * as Tone from "tone";
 
+/**
+ * Proven unlock: handle "interrupted" (iOS 26.0.1) and nudge with a silent buffer.
+ * This function may be async internally, but callers on the start screen must NOT await it.
+ */
 export async function unlockAudio(): Promise<void> {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const context = Tone.getContext();
-  const rawContext = context.rawContext as AudioContext | undefined;
-
   try {
-    let state = context.state as string;
+    if (Tone.context.state === "running") return;
 
-    if (state === "running") {
-      return;
-    }
+    // Try Tone's own unlock first
+    await Tone.start();
 
-    try {
-      await Tone.start();
-    } catch (error) {
-      console.warn("Tone.js failed to start during unlock:", error);
-    }
+    // iOS 26.0.1: context may be "interrupted" and ignore Tone.start()
+    const state = Tone.context.state as string;
 
-    state = context.state as string;
-
-    if (state === "interrupted" && rawContext) {
-      console.warn("Audio context is 'interrupted', trying low-level resume");
+    if (state === "interrupted") {
       try {
-        await rawContext.resume();
-      } catch (resumeError) {
-        console.error("Direct resume failed:", resumeError);
-      }
-      state = context.state as string;
-    }
-
-    const rawState = rawContext?.state as string | undefined;
-
-    if (state !== "running" && rawState !== "running" && rawContext) {
-      console.warn("Audio context still not running, playing silent buffer");
-      try {
-        const buffer = rawContext.createBuffer(1, 1, rawContext.sampleRate);
-        const source = rawContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(rawContext.destination);
-        source.start();
-        source.onended = () => {
-          source.disconnect();
-        };
-      } catch (bufferError) {
-        console.error("Silent buffer trick failed:", bufferError);
+        await (Tone.context.rawContext as AudioContext).resume();
+      } catch (err) {
+        console.error("Raw resume failed:", err);
       }
     }
-  } catch (error) {
-    console.error("unlockAudio error:", error);
+
+    // Still not running? Play a 1-frame silent buffer to wake the engine.
+    if ((Tone.context.state as string) !== "running") {
+      const ctx = Tone.context.rawContext as AudioContext;
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.start(0);
+    }
+  } catch (err) {
+    console.error("unlockAudio error:", err);
   }
 }
