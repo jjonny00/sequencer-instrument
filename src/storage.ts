@@ -162,9 +162,21 @@ const writeAllLoopDrafts = (drafts: StoredLoopDraftMap) => {
   }
 };
 
-export const listProjects = (): string[] => {
+export interface StoredProjectSummary {
+  name: string;
+  updatedAt: number;
+}
+
+export type ProjectSortOrder = "alphabetical" | "recent";
+
+export const listProjects = (): StoredProjectSummary[] => {
   const projects = readAllProjects();
-  return Object.keys(projects).sort((a, b) => a.localeCompare(b));
+  return Object.entries(projects)
+    .map(([name, payload]) => ({
+      name,
+      updatedAt: payload?.updatedAt ?? 0,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 };
 
 export const saveProject = (
@@ -202,10 +214,35 @@ export const deleteProject = (name: string): void => {
   const trimmedName = name.trim();
   if (!trimmedName) return;
   const projects = readAllProjects();
-  if (projects[trimmedName]) {
-    delete projects[trimmedName];
-    writeAllProjects(projects);
+  if (!projects[trimmedName]) return;
+  delete projects[trimmedName];
+  writeAllProjects(projects);
+};
+
+export const renameProject = (oldName: string, newName: string): boolean => {
+  const trimmedOld = oldName.trim();
+  const trimmedNew = newName.trim();
+  if (!trimmedOld || !trimmedNew) {
+    return false;
   }
+
+  const projects = readAllProjects();
+  const existing = projects[trimmedOld];
+  if (!existing) {
+    return false;
+  }
+
+  if (projects[trimmedNew]) {
+    throw new Error("A song with that name already exists");
+  }
+
+  projects[trimmedNew] = {
+    ...existing,
+    updatedAt: Date.now(),
+  };
+  delete projects[trimmedOld];
+  writeAllProjects(projects);
+  return true;
 };
 
 export const saveLoopDraft = (name: string, draft: StoredLoopDraftData): void => {
