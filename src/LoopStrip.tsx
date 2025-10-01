@@ -259,8 +259,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
   }, [patternGroups, selectedGroupId]);
 
-  const loopLabel = selectedGroup?.name ?? getNextGroupName();
-
   const getNextGroupName = (groups: PatternGroup[] = patternGroups) => {
     const existingNames = new Set(
       groups.map((group) => group.name.toLowerCase())
@@ -274,6 +272,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       index += 1;
     }
   };
+
+  const loopLabel = selectedGroup?.name ?? getNextGroupName();
 
   const captureCurrentTracks = () => tracks.map((track) => cloneTrack(track));
 
