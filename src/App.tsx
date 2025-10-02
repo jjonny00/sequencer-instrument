@@ -41,6 +41,7 @@ import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { SavedSongsList } from "./components/SavedSongsList";
+import { ViewHeader } from "./components/ViewHeader";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
@@ -103,7 +104,7 @@ const isPWARestore = () => {
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
-  name: "sequence01",
+  name: "Loop 01",
   tracks: [],
 });
 
@@ -2895,120 +2896,43 @@ export default function App() {
         </div>
       ) : (
         <>
-          <div
-            style={{
-              padding: "16px 16px 0",
+          <ViewHeader
+            viewMode={viewMode}
+            onBack={handleReturnToSongSelection}
+            onSelectTrack={() => {
+              skipLoopDraftRestoreRef.current = false;
+              setViewMode("track");
             }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                type="button"
-                onClick={handleReturnToSongSelection}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#111827",
-                  color: "#e6f2ff",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: 0.3,
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  aria-hidden="true"
-                  style={{ fontSize: 18 }}
-                >
-                  arrow_back
-                </span>
-                Back to Songs
-              </button>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
-                <button
-                  onClick={() => {
-                    skipLoopDraftRestoreRef.current = false;
-                    setViewMode("track");
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "8px 0",
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: viewMode === "track" ? "#27E0B0" : "#1f2532",
-                    color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
-                  }}
-                >
-                  Tracks
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(null);
-                    setViewMode("song");
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "8px 0",
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: viewMode === "song" ? "#27E0B0" : "#1f2532",
-                    color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
-                  }}
-                >
-                  Song
-                </button>
-              </div>
-            </div>
-            {viewMode === "song" && !isSongInstrumentPanelOpen ? (
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <IconButton
-                  icon="save"
-                  label="Save song"
-                  onClick={openSaveProjectModal}
-                />
-                <IconButton
-                  icon="folder_open"
-                  label="Load song"
-                  onClick={openLoadProjectModal}
-                />
-                <IconButton
-                  icon="file_download"
-                  label="Open export options"
-                  onClick={() => {
-                    setAudioExportMessage("Preparing export…");
-                    setIsExportModalOpen(true);
-                  }}
-                  disabled={isAudioExporting}
-                />
-              </div>
-            ) : null}
-          </div>
+            onSelectSong={() => {
+              setEditing(null);
+              setViewMode("song");
+            }}
+            actions={
+              viewMode === "song" && !isSongInstrumentPanelOpen ? (
+                <>
+                  <IconButton
+                    icon="save"
+                    label="Save song"
+                    onClick={openSaveProjectModal}
+                  />
+                  <IconButton
+                    icon="folder_open"
+                    label="Load song"
+                    onClick={openLoadProjectModal}
+                  />
+                  <IconButton
+                    icon="file_download"
+                    label="Open export options"
+                    onClick={() => {
+                      setAudioExportMessage("Preparing export…");
+                      setIsExportModalOpen(true);
+                    }}
+                    disabled={isAudioExporting}
+                  />
+                </>
+              ) : undefined
+            }
+          />
           {viewMode === "track" && (
             <LoopStrip
               ref={loopStripRef}
