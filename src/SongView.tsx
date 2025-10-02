@@ -40,8 +40,6 @@ interface SongViewProps {
   setBpm: Dispatch<SetStateAction<number>>;
   onToggleTransport: () => void;
   onCreateLoop?: () => void;
-  selectedGroupId: string | null;
-  onSelectLoop: (groupId: string) => void;
   performanceTracks: PerformanceTrack[];
   triggers: TriggerMap;
   onEnsurePerformanceRow: (
@@ -76,6 +74,31 @@ const SLOT_PADDING = "4px 10px";
 const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
+
+const CONTROL_BUTTON_SIZE = 44;
+
+const controlButtonBaseStyle: CSSProperties = {
+  width: CONTROL_BUTTON_SIZE,
+  height: CONTROL_BUTTON_SIZE,
+  minWidth: CONTROL_BUTTON_SIZE,
+  minHeight: CONTROL_BUTTON_SIZE,
+  borderRadius: CONTROL_BUTTON_SIZE / 2,
+  border: "1px solid #333",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+};
+
+const controlIconStyle: CSSProperties = {
+  fontSize: 24,
+};
+
+const transportDividerStyle: CSSProperties = {
+  width: 1,
+  height: 24,
+  background: "#333",
+};
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
@@ -494,8 +517,6 @@ export function SongView({
   setBpm,
   onToggleTransport,
   onCreateLoop,
-  selectedGroupId,
-  onSelectLoop,
   performanceTracks,
   triggers,
   onEnsurePerformanceRow,
@@ -516,6 +537,7 @@ export function SongView({
   const [isTimelineExpanded, setTimelineExpanded] = useState(false);
   const [isPlayInstrumentOpen, setPlayInstrumentOpen] = useState(false);
   const [isOverflowMenuOpen, setOverflowMenuOpen] = useState(false);
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [playInstrument, setPlayInstrument] =
     useState<TrackInstrument>("keyboard");
   const [playInstrumentPattern, setPlayInstrumentPattern] = useState<Chunk>(() =>
@@ -553,6 +575,19 @@ export function SongView({
   useEffect(() => {
     onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
   }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
+
+  useEffect(() => {
+    if (selectedRowIndex === null) {
+      return;
+    }
+    if (songRows.length === 0) {
+      setSelectedRowIndex(null);
+      return;
+    }
+    if (selectedRowIndex >= songRows.length) {
+      setSelectedRowIndex(songRows.length - 1);
+    }
+  }, [selectedRowIndex, songRows.length]);
 
   useEffect(() => {
     if (!isOverflowMenuOpen) return;
@@ -627,6 +662,7 @@ export function SongView({
 
   const handleSelectPerformanceTrackRow = useCallback(
     (trackId: string | null) => {
+      setSelectedRowIndex(null);
       if (!trackId) {
         handleCloseInstrumentPanel();
         return;
@@ -646,6 +682,7 @@ export function SongView({
       handleCloseInstrumentPanel,
       onSelectPerformanceTrack,
       performanceTrackMap,
+      setSelectedRowIndex,
     ]
   );
 
@@ -925,8 +962,14 @@ export function SongView({
     if (!onAddPerformanceTrack) return;
     setRowSettingsIndex(null);
     setEditingSlot(null);
+    setSelectedRowIndex(null);
     onAddPerformanceTrack();
-  }, [onAddPerformanceTrack, setEditingSlot, setRowSettingsIndex]);
+  }, [
+    onAddPerformanceTrack,
+    setEditingSlot,
+    setRowSettingsIndex,
+    setSelectedRowIndex,
+  ]);
 
   const handleDeleteColumn = useCallback(
     (columnIndex: number) => {
@@ -971,6 +1014,22 @@ export function SongView({
       return [...rows, newRow];
     });
   };
+
+  const handleClearRow = useCallback(
+    (rowIndex: number) => {
+      setSongRows((rows) =>
+        rows.map((row, idx) =>
+          idx === rowIndex
+            ? { ...row, slots: row.slots.map(() => null) }
+            : row
+        )
+      );
+      setEditingSlot((current) =>
+        current && current.rowIndex === rowIndex ? null : current
+      );
+    },
+    [setSongRows, setEditingSlot]
+  );
 
   const handleAssignSlot = (
     rowIndex: number,
@@ -1059,8 +1118,14 @@ export function SongView({
         if (current > rowIndex) return current - 1;
         return current;
       });
+      setSelectedRowIndex((current) => {
+        if (current === null) return current;
+        if (current === rowIndex) return null;
+        if (current > rowIndex) return current - 1;
+        return current;
+      });
     },
-    [songRows, onRemovePerformanceTrack, setSongRows]
+    [songRows, onRemovePerformanceTrack, setSongRows, setSelectedRowIndex]
   );
 
   const liveGhostNoteSet = useMemo(
@@ -1221,6 +1286,17 @@ export function SongView({
   const timelineToggleLabel = isTimelineExpanded
     ? "Collapse timeline height"
     : "Expand timeline height";
+  const activeRow =
+    selectedRowIndex !== null &&
+    selectedRowIndex >= 0 &&
+    selectedRowIndex < songRows.length
+      ? songRows[selectedRowIndex]
+      : null;
+  const showRowToolbar = Boolean(activeRow) && !activeRow?.performanceTrackId;
+  const canClearSelectedRow = Boolean(
+    showRowToolbar && activeRow?.slots.some((slotId) => slotId !== null)
+  );
+  const shouldShowContextToolbar = showPerformanceToolbar || showRowToolbar;
 
   return (
     <div
@@ -1234,14 +1310,11 @@ export function SongView({
     >
       <div
         style={{
-          border: "1px solid #333",
-          borderRadius: 12,
-          background: "#1b2130",
-          padding: 16,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          flex: 1,
           minHeight: 0,
+          gap: 16,
         }}
       >
         <div
@@ -1252,121 +1325,124 @@ export function SongView({
             flexWrap: "wrap",
           }}
         >
+          <span
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: "#e2e8f0",
+              letterSpacing: 0.3,
+            }}
+          >
+            Timeline
+          </span>
+          <button
+            aria-label={isPlaying ? "Stop" : "Play"}
+            onPointerDown={onToggleTransport}
+            onPointerUp={(event) => event.currentTarget.blur()}
+            style={{
+              ...controlButtonBaseStyle,
+              background: isPlaying ? "#E02749" : "#27E0B0",
+              color: isPlaying ? "#ffe4e6" : "#1F2532",
+              fontSize: 24,
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={controlIconStyle}
+            >
+              {isPlaying ? "stop" : "play_arrow"}
+            </span>
+          </button>
+          <div style={transportDividerStyle} />
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
+              flexDirection: "column",
+              gap: 4,
+              minWidth: 96,
             }}
           >
-            <IconButton
-              icon="add"
-              label="Create new loop"
-              onClick={() => onCreateLoop?.()}
-              title="Create new loop"
-              disabled={!onCreateLoop}
+            <label
               style={{
-                minWidth: 40,
-                minHeight: 40,
-                borderRadius: 999,
-                background: "#1f2532",
-              }}
-            />
-            <button
-              aria-label={isPlaying ? "Stop" : "Play"}
-              onPointerDown={onToggleTransport}
-              onPointerUp={(event) => event.currentTarget.blur()}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                border: "1px solid #333",
-                background: isPlaying ? "#E02749" : "#27E0B0",
-                color: isPlaying ? "#ffe4e6" : "#1F2532",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 24,
+                fontSize: 12,
+                letterSpacing: 0.2,
+                color: "#cbd5f5",
+                whiteSpace: "nowrap",
               }}
             >
-              <span className="material-symbols-outlined">
-                {isPlaying ? "stop" : "play_arrow"}
-              </span>
-            </button>
-            <div
+              BPM
+            </label>
+            <select
+              value={bpm}
+              onChange={(event) =>
+                setBpm(parseInt(event.target.value, 10))
+              }
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                minWidth: 96,
+                padding: 8,
+                borderRadius: 8,
+                background: "#121827",
+                color: "#e6f2ff",
+                border: "1px solid #2a3344",
+                minWidth: 0,
               }}
             >
-              <label
-                style={{
-                  fontSize: 12,
-                  letterSpacing: 0.2,
-                  color: "#cbd5f5",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                BPM
-              </label>
-              <select
-                value={bpm}
-                onChange={(event) =>
-                  setBpm(parseInt(event.target.value, 10))
-                }
-                style={{
-                  padding: 8,
-                  borderRadius: 8,
-                  background: "#121827",
-                  color: "#e6f2ff",
-                  border: "1px solid #2a3344",
-                  minWidth: 0,
-                }}
-              >
-                {[90, 100, 110, 120, 130].map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </div>
+              {[90, 100, 110, 120, 130].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
           </div>
-          <select
-            aria-label="Current loop"
-            value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              onSelectLoop(value);
-              setRowSettingsIndex(null);
-              setEditingSlot(null);
-            }}
+          <IconButton
+            icon="library_add"
+            label="Add loop column"
+            onClick={handleAddLoopColumn}
             style={{
-              flex: "1 1 160px",
-              minWidth: 0,
-              padding: 10,
-              borderRadius: 12,
-              border: "1px solid #2f384a",
-              background: "#111827",
-              color: "#e6f2ff",
+              borderRadius: CONTROL_BUTTON_SIZE / 2,
+              width: CONTROL_BUTTON_SIZE,
+              height: CONTROL_BUTTON_SIZE,
             }}
-          >
-            {patternGroups.map((group) => (
-              <option key={group.id} value={group.id}>
-                📼 {group.name}
-              </option>
-            ))}
-          </select>
+          />
+          <IconButton
+            icon="table_rows"
+            label="Add timeline row"
+            onClick={handleAddRow}
+            style={{
+              borderRadius: CONTROL_BUTTON_SIZE / 2,
+              width: CONTROL_BUTTON_SIZE,
+              height: CONTROL_BUTTON_SIZE,
+            }}
+          />
+          <IconButton
+            icon="multitrack_audio"
+            label="Add performance track"
+            onClick={handleAddPerformanceTrack}
+            tone="accent"
+            disabled={!onAddPerformanceTrack}
+            style={{
+              borderRadius: CONTROL_BUTTON_SIZE / 2,
+              width: CONTROL_BUTTON_SIZE,
+              height: CONTROL_BUTTON_SIZE,
+            }}
+          />
           <div
             style={{
+              marginLeft: "auto",
               display: "flex",
               alignItems: "center",
               gap: 8,
-              marginLeft: "auto",
             }}
           >
+            <IconButton
+              icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
+              label={timelineToggleLabel}
+              onClick={() => setTimelineExpanded((previous) => !previous)}
+              style={{
+                borderRadius: CONTROL_BUTTON_SIZE / 2,
+                width: CONTROL_BUTTON_SIZE,
+                height: CONTROL_BUTTON_SIZE,
+              }}
+            />
             <IconButton
               icon="save"
               label="Save song"
@@ -1377,20 +1453,26 @@ export function SongView({
                 onSaveSong?.();
               }}
               disabled={!onSaveSong}
+              style={{
+                borderRadius: CONTROL_BUTTON_SIZE / 2,
+                width: CONTROL_BUTTON_SIZE,
+                height: CONTROL_BUTTON_SIZE,
+              }}
             />
             <div
               ref={overflowMenuRef}
-              style={{
-                position: "relative",
-                display: "flex",
-              }}
+              style={{ position: "relative", display: "flex" }}
             >
               <IconButton
                 icon="more_horiz"
                 label="Song options"
                 title="Song options"
                 onClick={() => setOverflowMenuOpen((previous) => !previous)}
-                style={{ minWidth: 44 }}
+                style={{
+                  borderRadius: CONTROL_BUTTON_SIZE / 2,
+                  width: CONTROL_BUTTON_SIZE,
+                  height: CONTROL_BUTTON_SIZE,
+                }}
               />
               {isOverflowMenuOpen ? (
                 <div
@@ -1403,13 +1485,34 @@ export function SongView({
                     borderRadius: 12,
                     padding: 8,
                     boxShadow: "0 18px 40px rgba(8,15,28,0.6)",
-                    minWidth: 180,
+                    minWidth: 200,
                     display: "flex",
                     flexDirection: "column",
                     gap: 4,
                     zIndex: 50,
                   }}
                 >
+                  {onCreateLoop ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOverflowMenuOpen(false);
+                        onCreateLoop?.();
+                      }}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: "1px solid transparent",
+                        background: "transparent",
+                        color: "#e2e8f0",
+                        textAlign: "left",
+                        fontSize: 13,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Create new loop
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
@@ -1426,6 +1529,7 @@ export function SongView({
                       textAlign: "left",
                       fontSize: 13,
                       cursor: onOpenLoadSong ? "pointer" : "not-allowed",
+                      opacity: onOpenLoadSong ? 1 : 0.6,
                     }}
                   >
                     Load song
@@ -1446,6 +1550,7 @@ export function SongView({
                       textAlign: "left",
                       fontSize: 13,
                       cursor: onOpenExportSong ? "pointer" : "not-allowed",
+                      opacity: onOpenExportSong ? 1 : 0.6,
                     }}
                   >
                     Export audio
@@ -1455,64 +1560,16 @@ export function SongView({
             </div>
           </div>
         </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-          }}
-        >
-          {showPerformanceToolbar ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                flexWrap: "wrap",
-              }}
-            >
-              <IconButton
-                icon={isPlaying ? "stop" : "play_arrow"}
-                label={isPlaying ? "Stop playback" : "Play song"}
-                onClick={onToggleTransport}
-                style={{ minWidth: 44 }}
-              />
-              <IconButton
-                icon="cleaning_services"
-                label="Clear performance row"
-                onClick={handleClearRecording}
-                disabled={!canClearRecording}
-                style={{ minWidth: 44 }}
-              />
-              <IconButton
-                icon="tune"
-                label="Open row settings"
-                onClick={() => {
-                  if (liveRowIndex >= 0) {
-                    setRowSettingsIndex(liveRowIndex);
-                  }
-                }}
-                disabled={liveRowIndex < 0}
-                style={{ minWidth: 44 }}
-              />
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-                flex: 1,
-              }}
-            >
-              {showEmptyTimeline ? (
-                <span style={{ fontSize: 13, color: "#94a3b8" }}>
-                  Add loops and tracks to build your song timeline.
-                </span>
-              ) : null}
+        {shouldShowContextToolbar ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            {showPerformanceToolbar ? (
               <div
                 style={{
                   display: "flex",
@@ -1521,68 +1578,93 @@ export function SongView({
                   flexWrap: "wrap",
                 }}
               >
-                <button
-                  onClick={handleAddLoopColumn}
+                <IconButton
+                  icon={recordingActive ? "stop" : "fiber_manual_record"}
+                  label={recordingActive ? "Stop recording" : "Record"}
+                  tone={recordingActive ? "danger" : "default"}
+                  onClick={() => setIsRecordEnabled((prev) => !prev)}
+                  disabled={!hasPerformanceTarget}
                   style={{
-                    padding: "8px 16px",
-                    borderRadius: 999,
-                    border: "1px solid #2f384a",
-                    background: "#111827",
-                    color: "#e6f2ff",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    letterSpacing: 0.3,
-                    cursor: "pointer",
+                    borderRadius: CONTROL_BUTTON_SIZE / 2,
+                    width: CONTROL_BUTTON_SIZE,
+                    height: CONTROL_BUTTON_SIZE,
                   }}
-                >
-                  + Loop
-                </button>
-                <button
-                  onClick={handleAddRow}
+                />
+                <IconButton
+                  icon="close"
+                  label="Close performance controls"
+                  onClick={handleCloseInstrumentPanel}
                   style={{
-                    padding: "8px 16px",
-                    borderRadius: 999,
-                    border: "1px solid #2f384a",
-                    background: "#111827",
-                    color: "#e6f2ff",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    letterSpacing: 0.3,
-                    cursor: "pointer",
+                    borderRadius: CONTROL_BUTTON_SIZE / 2,
+                    width: CONTROL_BUTTON_SIZE,
+                    height: CONTROL_BUTTON_SIZE,
                   }}
-                >
-                  + Row
-                </button>
-                <button
-                  onClick={handleAddPerformanceTrack}
-                  disabled={!onAddPerformanceTrack}
+                />
+                <IconButton
+                  icon="cleaning_services"
+                  label="Clear performance row"
+                  onClick={handleClearRecording}
+                  disabled={!canClearRecording}
                   style={{
-                    padding: "8px 16px",
-                    borderRadius: 999,
-                    border: "1px solid #27E0B0",
-                    background: onAddPerformanceTrack ? "#27E0B0" : "#1f2532",
-                    color: onAddPerformanceTrack ? "#0b1624" : "#475569",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    letterSpacing: 0.3,
-                    cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
-                    boxShadow: onAddPerformanceTrack
-                      ? "0 2px 6px rgba(39,224,176,0.35)"
-                      : "none",
+                    borderRadius: CONTROL_BUTTON_SIZE / 2,
+                    width: CONTROL_BUTTON_SIZE,
+                    height: CONTROL_BUTTON_SIZE,
                   }}
-                >
-                  + Track
-                </button>
+                />
               </div>
-            </div>
-          )}
-          <IconButton
-            icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
-            label={timelineToggleLabel}
-            onClick={() => setTimelineExpanded((previous) => !previous)}
-            style={{ minWidth: 44 }}
-          />
-        </div>
+            ) : showRowToolbar ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <IconButton
+                  icon={isPlaying ? "stop" : "play_arrow"}
+                  label={isPlaying ? "Stop playback" : "Play song"}
+                  onClick={onToggleTransport}
+                  style={{
+                    borderRadius: CONTROL_BUTTON_SIZE / 2,
+                    width: CONTROL_BUTTON_SIZE,
+                    height: CONTROL_BUTTON_SIZE,
+                  }}
+                />
+                <IconButton
+                  icon="cleaning_services"
+                  label="Clear row"
+                  onClick={() => {
+                    if (selectedRowIndex !== null) {
+                      handleClearRow(selectedRowIndex);
+                    }
+                  }}
+                  disabled={!canClearSelectedRow || selectedRowIndex === null}
+                  style={{
+                    borderRadius: CONTROL_BUTTON_SIZE / 2,
+                    width: CONTROL_BUTTON_SIZE,
+                    height: CONTROL_BUTTON_SIZE,
+                  }}
+                />
+                <IconButton
+                  icon="tune"
+                  label="Row settings"
+                  onClick={() => {
+                    if (selectedRowIndex !== null) {
+                      setRowSettingsIndex(selectedRowIndex);
+                    }
+                  }}
+                  disabled={selectedRowIndex === null}
+                  style={{
+                    borderRadius: CONTROL_BUTTON_SIZE / 2,
+                    width: CONTROL_BUTTON_SIZE,
+                    height: CONTROL_BUTTON_SIZE,
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div
           className="scrollable"
           style={{
@@ -1678,6 +1760,12 @@ export function SongView({
                 ) => {
                   event.preventDefault();
                   event.stopPropagation();
+                  if (!isPerformanceRow) {
+                    if (playInstrumentRowTrackId) {
+                      handleCloseInstrumentPanel();
+                    }
+                    setSelectedRowIndex(rowIndex);
+                  }
                   longPressTriggered = false;
                   if (labelTimer) window.clearTimeout(labelTimer);
                   labelTimer = window.setTimeout(() => {
@@ -1704,6 +1792,9 @@ export function SongView({
                   } else {
                     handleToggleRowMute(rowIndex);
                   }
+                  if (!isPerformanceRow) {
+                    setSelectedRowIndex(rowIndex);
+                  }
                 };
 
                 const handleLabelPointerLeave = () => {
@@ -1723,8 +1814,12 @@ export function SongView({
                 const isSelectedPerformanceRow =
                   isPerformanceRow &&
                   row.performanceTrackId === playInstrumentRowTrackId;
+                const isActiveRow =
+                  selectedRowIndex === rowIndex && !isPerformanceRow;
                 const rowSelected =
-                  rowSettingsIndex === rowIndex || isSelectedPerformanceRow;
+                  isActiveRow ||
+                  rowSettingsIndex === rowIndex ||
+                  isSelectedPerformanceRow;
                 const firstAssignedGroupId =
                   row.slots.find((slotId) => slotId !== null) ?? null;
                 const firstGroup = firstAssignedGroupId
@@ -1807,11 +1902,15 @@ export function SongView({
                     <div
                       onPointerDown={() => {
                         if (isPerformanceRow) {
+                          setSelectedRowIndex(null);
                           handleSelectPerformanceTrackRow(
                             row.performanceTrackId ?? null
                           );
-                        } else if (playInstrumentRowTrackId) {
-                          handleSelectPerformanceTrackRow(null);
+                        } else {
+                          if (playInstrumentRowTrackId) {
+                            handleCloseInstrumentPanel();
+                          }
+                          setSelectedRowIndex(rowIndex);
                         }
                       }}
                       style={{
@@ -2172,15 +2271,19 @@ export function SongView({
                                         ))}
                                       </select>
                                     ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (patternGroups.length === 0) return;
-                                          setRowSettingsIndex(null);
-                                          setEditingSlot({ rowIndex, columnIndex });
-                                        }}
-                                        style={buttonStyles}
-                                        disabled={patternGroups.length === 0}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (patternGroups.length === 0) return;
+                                        if (playInstrumentRowTrackId) {
+                                          handleCloseInstrumentPanel();
+                                        }
+                                        setSelectedRowIndex(rowIndex);
+                                        setRowSettingsIndex(null);
+                                        setEditingSlot({ rowIndex, columnIndex });
+                                      }}
+                                      style={buttonStyles}
+                                      disabled={patternGroups.length === 0}
                                       >
                                         {showSlotLabel ? (
                                           <div

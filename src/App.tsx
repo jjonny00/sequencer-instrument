@@ -2278,19 +2278,6 @@ export default function App() {
     };
   }, []);
 
-  const handleSelectLoopFromSongView = useCallback(
-    (groupId: string) => {
-      setSelectedGroupId(groupId);
-      setEditing(null);
-      if (viewMode !== "track") {
-        skipLoopDraftRestoreRef.current = true;
-        setViewMode("track");
-        setPendingLoopStripAction(null);
-      }
-    },
-    [setSelectedGroupId, setEditing, viewMode, setPendingLoopStripAction]
-  );
-
   const handleCreateLoopFromSongView = useCallback(() => {
     const newId = createPatternGroupId();
     setPatternGroups((groups) => {
@@ -3346,8 +3333,6 @@ export default function App() {
                 setBpm={setBpm}
                 onToggleTransport={handlePlayStop}
                 onCreateLoop={handleCreateLoopFromSongView}
-                selectedGroupId={selectedGroupId}
-                onSelectLoop={handleSelectLoopFromSongView}
                 performanceTracks={performanceTracks}
                 triggers={triggers}
                 onEnsurePerformanceRow={ensurePerformanceRow}
