@@ -210,8 +210,9 @@
         <button id="reset" class="secondary">Reset log &amp; reload page</button>
       </div>
       <div id="notes">
-        The full sequence performs the same steps available below in order. If a step hangs or fails,
-        continue with the manual controls to isolate the culprit.
+        The full sequence performs the same steps available below in order, including a microphone
+        permission prompt and a final Tone.start()/resume retry. If a step hangs or fails, continue
+        with the manual controls to isolate the culprit.
       </div>
     </section>
 
@@ -223,11 +224,12 @@
         <button data-action="prime">Step 3 · Play silent buffer</button>
         <button data-action="inline-audio">Step 4 · HTMLAudio probe</button>
         <button data-action="fresh-context">Step 5 · Adopt fresh AudioContext</button>
-        <button data-action="mic" class="secondary">Request microphone access</button>
+        <button data-action="mic" class="secondary">Step 6 · Request microphone access</button>
       </div>
       <div id="notes">
-        Trigger one step at a time right after tapping the shortcut icon. Report which actions succeed
-        or time out so we can compare with Safari.
+        Trigger one step at a time right after tapping the shortcut icon. Repeat Tone.start()/resume
+        after installing the fresh context and grant microphone access if prompted. Report which
+        actions succeed or time out so we can compare with Safari.
       </div>
     </section>
 
@@ -493,6 +495,9 @@
         () => runInlineAudio(),
         () => runFreshContext(),
         () => runResumeRawContext("AudioContext.resume() after fresh context"),
+        () => runMicrophoneRequest(),
+        () => runToneStart(),
+        () => runResumeRawContext("AudioContext.resume() after microphone"),
       ];
       let hadError = false;
       for (const step of steps) {
