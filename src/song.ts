@@ -37,6 +37,20 @@ export interface SongRow {
 export const createPatternGroupId = () =>
   `pg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+export const getNextPatternGroupName = (
+  groups: PatternGroup[]
+): string => {
+  const existing = new Set(groups.map((group) => group.name.toLowerCase()));
+  let index = 1;
+  while (true) {
+    const candidate = `Loop ${String(index).padStart(2, "0")}`;
+    if (!existing.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+    index += 1;
+  }
+};
+
 export const createSongRow = (length = 0): SongRow => ({
   slots: Array.from({ length }, () => null),
   muted: false,

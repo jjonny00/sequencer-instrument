@@ -27,7 +27,7 @@ import { packs, type InstrumentDefinition } from "./packs";
 import { IconButton } from "./components/IconButton";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
-import { createPatternGroupId } from "./song";
+import { createPatternGroupId, getNextPatternGroupName } from "./song";
 import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { isIOSPWA } from "./utils/audio";
@@ -249,20 +249,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     if (!selectedGroupId) return null;
     return patternGroups.find((group) => group.id === selectedGroupId) ?? null;
   }, [patternGroups, selectedGroupId]);
-
-  const getNextGroupName = (groups: PatternGroup[] = patternGroups) => {
-    const existingNames = new Set(
-      groups.map((group) => group.name.toLowerCase())
-    );
-    let index = 1;
-    while (true) {
-      const candidate = `Loop ${String(index).padStart(2, "0")}`;
-      if (!existingNames.has(candidate.toLowerCase())) {
-        return candidate;
-      }
-      index += 1;
-    }
-  };
 
   const captureCurrentTracks = () => tracks.map((track) => cloneTrack(track));
 
@@ -650,7 +636,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const openCreateGroup = () => {
     setGroupEditor({
       mode: "create",
-      name: getNextGroupName(),
+      name: getNextPatternGroupName(patternGroups),
     });
   };
 
@@ -658,7 +644,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     const newId = createPatternGroupId();
     let created: PatternGroup | null = null;
     setPatternGroups((groups) => {
-      const name = getNextGroupName(groups);
+      const name = getNextPatternGroupName(groups);
       created = {
         id: newId,
         name,
@@ -710,7 +696,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     const trimmed = groupEditor.name.trim();
     let created: PatternGroup | null = null;
     setPatternGroups((groups) => {
-      const name = trimmed || getNextGroupName(groups);
+      const name = trimmed || getNextPatternGroupName(groups);
       created = {
         id: newId,
         name,
@@ -787,7 +773,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       if (filtered.length === 0) {
         const fallbackGroup: PatternGroup = {
           id: createPatternGroupId(),
-          name: getNextGroupName([]),
+          name: getNextPatternGroupName([]),
           tracks: [],
         };
         setSelectedGroupId(fallbackGroup.id);
@@ -1454,7 +1440,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   onChange={(event) =>
                     handleEditorNameChange(event.target.value)
                   }
-                  placeholder={getNextGroupName()}
+                  placeholder={getNextPatternGroupName(patternGroups)}
                   style={{
                     padding: 8,
                     borderRadius: 8,
