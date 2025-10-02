@@ -56,6 +56,8 @@ interface SongViewProps {
     updater: (track: PerformanceTrack) => PerformanceTrack
   ) => void;
   onRemovePerformanceTrack?: (trackId: string) => void;
+  onSaveSong?: () => void;
+  onOpenSongOptions?: () => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -72,6 +74,54 @@ const SLOT_PADDING = "4px 10px";
 const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
+
+const CONTROL_BUTTON_SIZE = 44;
+
+const controlButtonBaseStyle: CSSProperties = {
+  width: CONTROL_BUTTON_SIZE,
+  height: CONTROL_BUTTON_SIZE,
+  borderRadius: CONTROL_BUTTON_SIZE / 2,
+  border: "1px solid #333",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+};
+
+const controlIconStyle: CSSProperties = {
+  fontSize: 24,
+};
+
+const transportDividerStyle: CSSProperties = {
+  width: 1,
+  height: 24,
+  background: "#333",
+};
+
+const bpmLabelStyle: CSSProperties = {
+  fontSize: 12,
+  letterSpacing: 0.2,
+  color: "#cbd5f5",
+  whiteSpace: "nowrap",
+};
+
+const bpmSelectStyle: CSSProperties = {
+  padding: 8,
+  borderRadius: 8,
+  background: "#121827",
+  color: "#e6f2ff",
+  width: "100%",
+  minWidth: 0,
+};
+
+const toolbarActionButtonBaseStyle: CSSProperties = {
+  minWidth: 40,
+  minHeight: 40,
+  borderRadius: 999,
+  border: "1px solid #2f384a",
+  background: "#1f2532",
+  color: "#94a3b8",
+};
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
@@ -500,6 +550,8 @@ export function SongView({
   onPlayInstrumentOpenChange,
   onUpdatePerformanceTrack,
   onRemovePerformanceTrack,
+  onSaveSong,
+  onOpenSongOptions,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -2060,56 +2112,99 @@ export function SongView({
           display: "flex",
           alignItems: "center",
           gap: 12,
+          flexWrap: "nowrap",
         }}
       >
+        <span
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            color: "#e6f2ff",
+          }}
+        >
+          Timeline
+        </span>
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 12,
+            flex: 1,
+            minWidth: 0,
+            flexWrap: "nowrap",
           }}
         >
-          <label>BPM</label>
-          <select
-            value={bpm}
-            onChange={(e) => setBpm(parseInt(e.target.value, 10))}
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              background: "#121827",
-              color: "white",
-            }}
-          >
-            {[90, 100, 110, 120, 130].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <button
             aria-label={isPlaying ? "Stop" : "Play"}
             onPointerDown={onToggleTransport}
             onPointerUp={(e) => e.currentTarget.blur()}
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 8,
-              border: "1px solid #333",
+              ...controlButtonBaseStyle,
               background: isPlaying ? "#E02749" : "#27E0B0",
               color: isPlaying ? "#ffe4e6" : "#1F2532",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
               fontSize: 24,
             }}
           >
-            <span className="material-symbols-outlined">
+            <span
+              className="material-symbols-outlined"
+              style={controlIconStyle}
+            >
               {isPlaying ? "stop" : "play_arrow"}
             </span>
           </button>
+          <div style={transportDividerStyle} />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              flex: "0 1 120px",
+              minWidth: 0,
+            }}
+          >
+            <label style={bpmLabelStyle}>BPM</label>
+            <select
+              value={bpm}
+              onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+              style={bpmSelectStyle}
+            >
+              {[90, 100, 110, 120, 130].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <IconButton
+            icon="save"
+            label="Save song"
+            onClick={onSaveSong}
+            disabled={!onSaveSong}
+            style={{
+              ...toolbarActionButtonBaseStyle,
+              background: onSaveSong ? "#27E0B0" : "#1f2532",
+              border: `1px solid ${onSaveSong ? "#27E0B0" : "#2f384a"}`,
+              color: onSaveSong ? "#0b1220" : "#94a3b8",
+            }}
+            title="Save song"
+          />
+          <IconButton
+            icon="more_horiz"
+            label="Song options"
+            onClick={onOpenSongOptions}
+            disabled={!onOpenSongOptions}
+            style={toolbarActionButtonBaseStyle}
+            title="Song options"
+          />
         </div>
       </div>
 
