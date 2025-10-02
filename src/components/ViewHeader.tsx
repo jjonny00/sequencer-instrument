@@ -94,7 +94,7 @@ export function ViewHeader({
             }}
             aria-pressed={trackActive}
           >
-            Tracks
+            Loops
           </button>
           <button
             type="button"
