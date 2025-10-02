@@ -128,6 +128,9 @@
     const errorEl = document.getElementById("error");
 
     let observedRawContext = null;
+    let autoRecoveryActive = false;
+    let autoRecoveryCount = 0;
+    const MAX_AUTO_RECOVERY = 3;
 
     function getToneContext() {
       if (typeof Tone.getContext === "function") {
@@ -182,9 +185,13 @@
         return;
       }
       observedRawContext = rawCtx;
-      rawCtx.addEventListener("statechange", () => {
-        log(`AudioContext statechange -> ${rawCtx.state}`);
+      rawCtx.addEventListener("statechange", async () => {
+        const state = rawCtx.state;
+        log(`AudioContext statechange -> ${state}`);
         updateStatus();
+        if ((state === "suspended" || state === "interrupted") && !autoRecoveryActive && autoRecoveryCount < MAX_AUTO_RECOVERY) {
+          await attemptAutoRecovery(`statechange -> ${state}`);
+        }
       });
       log("Listening for AudioContext state changes");
     }
@@ -310,10 +317,54 @@
       }
     }
 
+    async function attemptAutoRecovery(trigger) {
+      const rawCtx = getRawContext();
+      if (!rawCtx) {
+        return;
+      }
+      autoRecoveryActive = true;
+      autoRecoveryCount += 1;
+      log(`Auto-recovery #${autoRecoveryCount} triggered by ${trigger}`);
+      try {
+        let recovered = await startToneWithTimeout();
+        updateStatus();
+
+        let currentRaw = getRawContext();
+        if (!recovered && currentRaw?.state !== "running") {
+          recovered = await resumeContext(currentRaw, `${trigger} auto`);
+          updateStatus();
+        }
+
+        currentRaw = getRawContext();
+        if (!recovered && currentRaw?.state !== "running") {
+          recovered = await primeWithSilentBuffer(currentRaw);
+          updateStatus();
+        }
+
+        currentRaw = getRawContext();
+        if (!recovered && currentRaw?.state !== "running") {
+          recovered = await resumeContext(currentRaw, `${trigger} post-prime`);
+          updateStatus();
+        }
+
+        currentRaw = getRawContext();
+        if (currentRaw?.state === "running") {
+          log("Auto-recovery succeeded");
+        } else {
+          log(`Auto-recovery finished; AudioContext still ${currentRaw?.state ?? "unknown"}`, "warn");
+        }
+      } finally {
+        autoRecoveryActive = false;
+        updateStatus();
+      }
+    }
+
     async function runUnlockSequence() {
       setError("");
       updateStatus();
       attachStateObservers();
+
+      autoRecoveryCount = 0;
 
       const toneCtx = getToneContext();
       const rawCtx = getRawContext();
