@@ -41,6 +41,7 @@ import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { SavedSongsList } from "./components/SavedSongsList";
+import { ViewHeader } from "./components/ViewHeader";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
@@ -103,7 +104,7 @@ const isPWARestore = () => {
 
 const createInitialPatternGroup = (): PatternGroup => ({
   id: createPatternGroupId(),
-  name: "sequence01",
+  name: "Loop 01",
   tracks: [],
 });
 
@@ -124,6 +125,12 @@ const controlButtonBaseStyle: CSSProperties = {
 
 const controlIconStyle: CSSProperties = {
   fontSize: 24,
+};
+
+const transportDividerStyle: CSSProperties = {
+  width: 1,
+  height: 24,
+  background: "#333",
 };
 
 const pickCharacterForInstrument = (
@@ -434,6 +441,9 @@ export default function App() {
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window === "undefined" ? 1024 : window.innerWidth
+  );
 
   useEffect(() => {
     const pack = packs[packIndex];
@@ -690,6 +700,26 @@ export default function App() {
   useEffect(() => {
     setIsRecording(false);
   }, [editing]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  const isCompactTransport = viewportWidth < 430;
+  const canAddTrack = useMemo(
+    () => packs.some((candidate) => Object.keys(candidate.instruments).length > 0),
+    []
+  );
 
   const canRecordSelectedTrack = useMemo(() => {
     if (!selectedTrack || !selectedTrack.instrument) return false;
@@ -2895,120 +2925,43 @@ export default function App() {
         </div>
       ) : (
         <>
-          <div
-            style={{
-              padding: "16px 16px 0",
+          <ViewHeader
+            viewMode={viewMode}
+            onBack={handleReturnToSongSelection}
+            onSelectTrack={() => {
+              skipLoopDraftRestoreRef.current = false;
+              setViewMode("track");
             }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                type="button"
-                onClick={handleReturnToSongSelection}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #333",
-                  background: "#111827",
-                  color: "#e6f2ff",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: 0.3,
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  aria-hidden="true"
-                  style={{ fontSize: 18 }}
-                >
-                  arrow_back
-                </span>
-                Back to Songs
-              </button>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
-                <button
-                  onClick={() => {
-                    skipLoopDraftRestoreRef.current = false;
-                    setViewMode("track");
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "8px 0",
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: viewMode === "track" ? "#27E0B0" : "#1f2532",
-                    color: viewMode === "track" ? "#1F2532" : "#e6f2ff",
-                  }}
-                >
-                  Tracks
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(null);
-                    setViewMode("song");
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "8px 0",
-                    borderRadius: 8,
-                    border: "1px solid #333",
-                    background: viewMode === "song" ? "#27E0B0" : "#1f2532",
-                    color: viewMode === "song" ? "#1F2532" : "#e6f2ff",
-                  }}
-                >
-                  Song
-                </button>
-              </div>
-            </div>
-            {viewMode === "song" && !isSongInstrumentPanelOpen ? (
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <IconButton
-                  icon="save"
-                  label="Save song"
-                  onClick={openSaveProjectModal}
-                />
-                <IconButton
-                  icon="folder_open"
-                  label="Load song"
-                  onClick={openLoadProjectModal}
-                />
-                <IconButton
-                  icon="file_download"
-                  label="Open export options"
-                  onClick={() => {
-                    setAudioExportMessage("Preparing export…");
-                    setIsExportModalOpen(true);
-                  }}
-                  disabled={isAudioExporting}
-                />
-              </div>
-            ) : null}
-          </div>
+            onSelectSong={() => {
+              setEditing(null);
+              setViewMode("song");
+            }}
+            actions={
+              viewMode === "song" && !isSongInstrumentPanelOpen ? (
+                <>
+                  <IconButton
+                    icon="save"
+                    label="Save song"
+                    onClick={openSaveProjectModal}
+                  />
+                  <IconButton
+                    icon="folder_open"
+                    label="Load song"
+                    onClick={openLoadProjectModal}
+                  />
+                  <IconButton
+                    icon="file_download"
+                    label="Open export options"
+                    onClick={() => {
+                      setAudioExportMessage("Preparing export…");
+                      setIsExportModalOpen(true);
+                    }}
+                    disabled={isAudioExporting}
+                  />
+                </>
+              ) : undefined
+            }
+          />
           {viewMode === "track" && (
             <LoopStrip
               ref={loopStripRef}
@@ -3023,7 +2976,6 @@ export default function App() {
               setPatternGroups={setPatternGroups}
               selectedGroupId={selectedGroupId}
               setSelectedGroupId={setSelectedGroupId}
-              onAddTrack={openAddTrackModal}
               onRequestTrackModal={handleRequestTrackModal}
             />
           )}
@@ -3045,22 +2997,38 @@ export default function App() {
                     display: "flex",
                     alignItems: "center",
                     marginBottom: 12,
+                    gap: 12,
+                    flexWrap: "nowrap",
                   }}
                 >
-                  <div
+                  <button
+                    aria-label={isPlaying ? "Stop" : "Play"}
+                    onPointerDown={handlePlayStop}
+                    onPointerUp={(e) => e.currentTarget.blur()}
                     style={{
-                      display: "flex",
-                      gap: 12,
-                      alignItems: "center",
-                      flex: 1,
+                      ...controlButtonBaseStyle,
+                      background: isPlaying ? "#E02749" : "#27E0B0",
+                      color: isPlaying ? "#ffe4e6" : "#1F2532",
+                      fontSize: 24,
                     }}
                   >
-                    {editing !== null ? (
+                    <span
+                      className="material-symbols-outlined"
+                      style={controlIconStyle}
+                    >
+                      {isPlaying ? "stop" : "play_arrow"}
+                    </span>
+                  </button>
+                  <div style={transportDividerStyle} />
+                  {editing !== null ? (
+                    <>
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
                           gap: 10,
+                          flex: 1,
+                          minWidth: 0,
                         }}
                       >
                         <button
@@ -3085,7 +3053,7 @@ export default function App() {
                               isRecording ? "Stop recording" : "Start recording"
                             }
                             onClick={handleToggleRecording}
-                          style={{
+                            style={{
                               ...controlButtonBaseStyle,
                               background: isRecording ? "#E02749" : "#111827",
                               border: `1px solid ${isRecording ? "#E02749" : "#333"}`,
@@ -3125,75 +3093,132 @@ export default function App() {
                           </span>
                         </button>
                       </div>
-                    ) : (
-                      <>
-                        <label>BPM</label>
-                        <select
-                          value={bpm}
-                          onChange={(e) =>
-                            setBpm(parseInt(e.target.value, 10))
-                          }
-                          style={{
-                            padding: 8,
-                            borderRadius: 8,
-                            background: "#121827",
-                            color: "white",
-                          }}
-                        >
-                          {[90, 100, 110, 120, 130].map((v) => (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          ))}
-                        </select>
-                        <label style={{ marginLeft: 12 }}>Quantize</label>
-                        <select
-                          value={subdiv}
-                          onChange={(e) =>
-                            setSubdiv(e.target.value as Subdivision)
-                          }
-                          style={{
-                            padding: 8,
-                            borderRadius: 8,
-                            background: "#121827",
-                            color: "white",
-                          }}
-                        >
-                          <option value="16n">1/16</option>
-                          <option value="8n">1/8</option>
-                          <option value="4n">1/4</option>
-                        </select>
-                      </>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      width: 1,
-                      height: 24,
-                      background: "#333",
-                      margin: "0 12px",
-                    }}
-                  />
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <button
-                      aria-label={isPlaying ? "Stop" : "Play"}
-                      onPointerDown={handlePlayStop}
-                      onPointerUp={(e) => e.currentTarget.blur()}
-                      style={{
-                        ...controlButtonBaseStyle,
-                        background: isPlaying ? "#E02749" : "#27E0B0",
-                        color: isPlaying ? "#ffe4e6" : "#1F2532",
-                        fontSize: 24,
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={controlIconStyle}
+                      <div style={transportDividerStyle} />
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: isCompactTransport ? 8 : 12,
+                          flex: 1,
+                          minWidth: 0,
+                          flexWrap: "nowrap",
+                        }}
                       >
-                        {isPlaying ? "stop" : "play_arrow"}
-                      </span>
-                    </button>
-                  </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                            flex: "1 1 0",
+                            minWidth: 0,
+                          }}
+                        >
+                          <label
+                            style={{
+                              fontSize: 12,
+                              letterSpacing: 0.2,
+                              color: "#cbd5f5",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            BPM
+                          </label>
+                          <select
+                            value={bpm}
+                            onChange={(e) =>
+                              setBpm(parseInt(e.target.value, 10))
+                            }
+                            style={{
+                              padding: 8,
+                              borderRadius: 8,
+                              background: "#121827",
+                              color: "white",
+                              width: "100%",
+                              minWidth: 0,
+                            }}
+                          >
+                            {[90, 100, 110, 120, 130].map((v) => (
+                              <option key={v} value={v}>
+                                {v}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                            flex: "1 1 0",
+                            minWidth: 0,
+                          }}
+                        >
+                          <label
+                            style={{
+                              fontSize: 12,
+                              letterSpacing: 0.2,
+                              color: "#cbd5f5",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Quantize
+                          </label>
+                          <select
+                            value={subdiv}
+                            onChange={(e) =>
+                              setSubdiv(e.target.value as Subdivision)
+                            }
+                            style={{
+                              padding: 8,
+                              borderRadius: 8,
+                              background: "#121827",
+                              color: "white",
+                              width: "100%",
+                              minWidth: 0,
+                            }}
+                          >
+                            <option value="16n">1/16</option>
+                            <option value="8n">1/8</option>
+                            <option value="4n">1/4</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={transportDividerStyle} />
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!canAddTrack) return;
+                      openAddTrackModal();
+                    }}
+                    disabled={!canAddTrack}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "10px 20px",
+                      borderRadius: 999,
+                      border: "none",
+                      background: canAddTrack ? "#27E0B0" : "#1f2532",
+                      color: canAddTrack ? "#1F2532" : "#475569",
+                      fontWeight: 700,
+                      letterSpacing: 0.3,
+                      cursor: canAddTrack ? "pointer" : "not-allowed",
+                      boxShadow: canAddTrack
+                        ? "0 2px 6px rgba(15, 20, 32, 0.35)"
+                        : "none",
+                      transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                      flexShrink: 0,
+                      minHeight: 44,
+                    }}
+                  >
+                    + Track
+                  </button>
                 </div>
 
                 <div

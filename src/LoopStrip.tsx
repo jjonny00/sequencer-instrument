@@ -24,6 +24,7 @@ import type {
 } from "./instruments/harmonia";
 import { isScaleName, type ScaleName } from "./music/scales";
 import { packs, type InstrumentDefinition } from "./packs";
+import { IconButton } from "./components/IconButton";
 import { StepModal } from "./StepModal";
 import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
@@ -190,7 +191,6 @@ interface LoopStripProps {
   setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
   selectedGroupId: string | null;
   setSelectedGroupId: Dispatch<SetStateAction<string | null>>;
-  onAddTrack: () => void;
   onRequestTrackModal: (track: Track) => void;
 }
 
@@ -214,7 +214,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       setPatternGroups,
       selectedGroupId,
       setSelectedGroupId,
-      onAddTrack,
       onRequestTrackModal,
     },
     ref
@@ -233,7 +232,6 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     (candidate) => Object.keys(candidate.instruments).length > 0
   );
   const addTrackEnabled = canAddTrack;
-  const isHeroAddTrack = tracks.length === 0;
 
   useEffect(() => {
     console.log("Track view mounted");
@@ -258,7 +256,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     );
     let index = 1;
     while (true) {
-      const candidate = `sequence${String(index).padStart(2, "0")}`;
+      const candidate = `Loop ${String(index).padStart(2, "0")}`;
       if (!existingNames.has(candidate.toLowerCase())) {
         return candidate;
       }
@@ -656,6 +654,29 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     });
   };
 
+  const handleCreateLoop = () => {
+    const newId = createPatternGroupId();
+    let created: PatternGroup | null = null;
+    setPatternGroups((groups) => {
+      const name = getNextGroupName(groups);
+      created = {
+        id: newId,
+        name,
+        tracks: [],
+      };
+      return [...groups, created];
+    });
+    setGroupEditor(null);
+    setIsLoopsLibraryOpen(false);
+    if (created) {
+      setSelectedGroupId(newId);
+      applyGroupTracks(created);
+    } else {
+      setSelectedGroupId(newId);
+      applyGroupTracks(null);
+    }
+  };
+
   const openEditGroup = () => {
     if (!selectedGroup) return;
     setGroupEditor({
@@ -757,7 +778,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
   const handleDeleteGroup = () => {
     if (!selectedGroupId) return;
     if (patternGroups.length <= 1) return;
-    const confirmed = window.confirm("Delete this sequence? This action cannot be undone.");
+    const confirmed = window.confirm(
+      "Delete this loop? This action cannot be undone."
+    );
     if (!confirmed) return;
     setPatternGroups((groups) => {
       const filtered = groups.filter((group) => group.id !== selectedGroupId);
@@ -848,67 +871,82 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           marginBottom: 8,
         }}
       >
-        <button
-          type="button"
-          onClick={() =>
-            setIsLoopsLibraryOpen((open) => !open && patternGroups.length > 0)
-          }
-          disabled={patternGroups.length === 0}
+        <div
           style={{
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: "1px solid #333",
-            background: "#1f2532",
-            color: patternGroups.length === 0 ? "#475569" : "#e6f2ff",
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0.3,
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            cursor: patternGroups.length === 0 ? "not-allowed" : "pointer",
+            gap: 8,
+            flex: "1 1 260px",
+            minWidth: 0,
+            flexWrap: "wrap",
           }}
         >
-          <span>Loop: {selectedGroup?.name ?? "None"}</span>
-          <span aria-hidden="true" style={{ fontSize: 10 }}>
-            ▴
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (!addTrackEnabled) return;
-            onAddTrack();
-          }}
-          disabled={!addTrackEnabled}
-          style={{
-            padding: isHeroAddTrack ? "14px 28px" : "6px 16px",
-            borderRadius: 999,
-            border: isHeroAddTrack ? "none" : "1px solid #333",
-            background: addTrackEnabled
-              ? isHeroAddTrack
-                ? "linear-gradient(135deg, #27E0B0, #6AE0FF)"
-                : "#27E0B0"
-              : "#1f2532",
-            color: addTrackEnabled
-              ? isHeroAddTrack
-                ? "#0b1220"
-                : "#1F2532"
-              : "#475569",
-            fontSize: isHeroAddTrack ? 16 : 13,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-            cursor: addTrackEnabled ? "pointer" : "not-allowed",
-            boxShadow: addTrackEnabled
-              ? isHeroAddTrack
-                ? "0 16px 30px rgba(39,224,176,0.35)"
-                : "0 2px 6px rgba(15, 20, 32, 0.35)"
-              : "none",
-            transition: "transform 0.2s ease, box-shadow 0.2s ease",
-          }}
-        >
-          + Track
-        </button>
+          <IconButton
+            icon="add"
+            label="Create new loop"
+            onClick={handleCreateLoop}
+            title="Create new loop"
+            style={{
+              minWidth: 40,
+              minHeight: 40,
+              borderRadius: 999,
+              background: "#1f2532",
+            }}
+          />
+          <select
+            aria-label="Current loop"
+            value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSelectedGroupId(value || null);
+              setGroupEditor(null);
+              setIsLoopsLibraryOpen(false);
+            }}
+            style={{
+              flex: "1 1 160px",
+              minWidth: 0,
+              padding: 10,
+              borderRadius: 12,
+              border: "1px solid #2f384a",
+              background: "#111827",
+              color: "#e6f2ff",
+            }}
+          >
+            {patternGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                📼 {group.name}
+              </option>
+            ))}
+          </select>
+          <IconButton
+            icon="save"
+            label="Save loop"
+            onClick={handleSnapshotSelectedGroup}
+            title="Save loop"
+            disabled={!selectedGroup}
+            style={{
+              minWidth: 40,
+              minHeight: 40,
+              borderRadius: 999,
+              background: selectedGroup ? "#27E0B0" : "#1f2532",
+              border: selectedGroup ? "1px solid #27E0B0" : "1px solid #2f384a",
+              color: selectedGroup ? "#0b1220" : "#94a3b8",
+            }}
+          />
+          <IconButton
+            icon="more_horiz"
+            label="Open loop options"
+            onClick={() => setIsLoopsLibraryOpen(true)}
+            title="Loop options"
+            disabled={patternGroups.length === 0}
+            style={{
+              minWidth: 40,
+              minHeight: 40,
+              borderRadius: 999,
+              background: "#1f2532",
+            }}
+          />
+        </div>
       </div>
       <div
         ref={trackAreaRef}
@@ -926,14 +964,24 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         {tracks.length === 0 && (
           <div
             style={{
-              padding: 16,
+              margin: "32px auto 16px",
+              padding: "20px 24px",
+              maxWidth: 440,
+              borderRadius: 16,
+              border: "1px dashed #334155",
+              background: "rgba(15,23,42,0.65)",
               textAlign: "center",
               fontSize: 14,
               color: "#94a3b8",
-              lineHeight: 1.5,
+              lineHeight: 1.6,
             }}
           >
-            No beats yet — add a track to get the groove started.
+            <strong style={{ display: "block", marginBottom: 6, color: "#e2e8f0" }}>
+              This loop is waiting for its first track.
+            </strong>
+            Use the green <em style={{ color: "#27E0B0", fontStyle: "normal" }}>+ Track</em>{" "}
+            button beside the Play controls above to add an instrument and start building
+            your beat.
           </div>
         )}
         {tracks.map((t) => {
@@ -1171,7 +1219,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   color: "#e6f2ff",
                 }}
               >
-                Loops Library
+                Loop options
               </h3>
               <button
                 type="button"
@@ -1189,6 +1237,17 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 Close
               </button>
             </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: "#94a3b8",
+              }}
+            >
+              Rename, duplicate, or remove loops. Use the plus button in Tracks view to
+              spin up new ideas quickly.
+            </p>
             <div
               style={{
                 display: "flex",
@@ -1259,8 +1318,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 type="button"
                 onClick={handleSnapshotSelectedGroup}
                 disabled={!selectedGroup}
-                aria-label="Save sequence"
-                title="Save sequence"
+                aria-label="Save loop"
+                title="Save loop"
                 style={{
                   flex: "1 1 100px",
                   minWidth: 0,
@@ -1284,7 +1343,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 type="button"
                 onClick={openEditGroup}
                 disabled={!selectedGroup}
-                aria-label="Edit sequence"
+                aria-label="Edit loop"
                 style={{
                   flex: "1 1 100px",
                   minWidth: 0,
@@ -1312,7 +1371,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 type="button"
                 onClick={handleDuplicateGroup}
                 disabled={!selectedGroup}
-                aria-label="Duplicate sequence"
+                aria-label="Duplicate loop"
                 style={{
                   flex: "1 1 110px",
                   minWidth: 0,
