@@ -127,6 +127,69 @@
     const logEl = document.getElementById("log");
     const errorEl = document.getElementById("error");
 
+    const HTML_AUDIO_DATA_URL = "data:audio/wav;base64," +
+      "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" +
+      "";
+
     let observedRawContext = null;
     let autoRecoveryActive = false;
     let autoRecoveryCount = 0;
@@ -266,6 +329,55 @@
       }
     }
 
+    async function playHtmlAudioProbe() {
+      log("HTMLAudio: creating inline probe");
+      const audio = document.createElement("audio");
+      audio.src = HTML_AUDIO_DATA_URL;
+      audio.preload = "auto";
+      audio.volume = 0.3;
+      audio.setAttribute("playsinline", "true");
+      audio.style.display = "none";
+      document.body.appendChild(audio);
+      try {
+        await raceWithTimeout(audio.play(), 1200, "HTMLAudioElement.play() timed out");
+        log("HTMLAudio: play() resolved");
+        await raceWithTimeout(
+          new Promise((resolve, reject) => {
+            const cleanup = () => {
+              audio.removeEventListener("ended", handleEnded);
+              audio.removeEventListener("pause", handlePause);
+              audio.removeEventListener("error", handleError);
+            };
+            const handleEnded = () => {
+              cleanup();
+              resolve();
+            };
+            const handlePause = () => {
+              cleanup();
+              resolve();
+            };
+            const handleError = () => {
+              cleanup();
+              reject(new Error("HTMLAudioElement error event"));
+            };
+            audio.addEventListener("ended", handleEnded, { once: true });
+            audio.addEventListener("pause", handlePause, { once: true });
+            audio.addEventListener("error", handleError, { once: true });
+          }),
+          1500,
+          "HTMLAudioElement did not finish playback"
+        );
+        log("HTMLAudio: playback finished");
+        return true;
+      } catch (err) {
+        log(`HTMLAudio: failed -> ${err.message || err}`, "warn");
+        return false;
+      } finally {
+        audio.pause();
+        audio.remove();
+      }
+    }
+
     async function adoptFreshContext() {
       if (typeof Tone.Context !== "function" || typeof Tone.setContext !== "function") {
         log("Fresh context: Tone.setContext unavailable", "warn");
@@ -341,6 +453,12 @@
           updateStatus();
         }
 
+        if (!recovered) {
+          const htmlAudioResult = await playHtmlAudioProbe();
+          recovered = recovered || htmlAudioResult;
+          updateStatus();
+        }
+
         currentRaw = getRawContext();
         if (!recovered && currentRaw?.state !== "running") {
           recovered = await resumeContext(currentRaw, `${trigger} post-prime`);
@@ -384,6 +502,12 @@
       if (!unlocked && currentRaw?.state !== "running") {
         const primed = await primeWithSilentBuffer(currentRaw);
         unlocked = unlocked || primed;
+        updateStatus();
+      }
+
+      if (!unlocked) {
+        const htmlAudioResult = await playHtmlAudioProbe();
+        unlocked = unlocked || htmlAudioResult;
         updateStatus();
       }
 
