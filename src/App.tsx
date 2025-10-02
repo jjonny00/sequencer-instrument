@@ -2972,6 +2972,7 @@ export default function App() {
               setEditing={setEditing}
               setTracks={setTracks}
               packIndex={packIndex}
+              triggers={triggers}
               patternGroups={patternGroups}
               setPatternGroups={setPatternGroups}
               selectedGroupId={selectedGroupId}
