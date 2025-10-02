@@ -3100,24 +3100,33 @@ export default function App() {
                       <div
                         style={{
                           display: "flex",
-                          flexDirection: isCompactTransport ? "column" : "row",
-                          alignItems: isCompactTransport ? "stretch" : "center",
+                          flexDirection: "row",
+                          alignItems: "center",
                           gap: isCompactTransport ? 8 : 12,
                           flex: 1,
                           minWidth: 0,
+                          flexWrap: "nowrap",
                         }}
                       >
                         <div
                           style={{
                             display: "flex",
-                            flexDirection: isCompactTransport ? "column" : "row",
-                            alignItems: isCompactTransport ? "stretch" : "center",
-                            gap: isCompactTransport ? 4 : 8,
-                            flex: isCompactTransport ? "1 1 0" : "1 1 140px",
-                            minWidth: isCompactTransport ? 0 : 120,
+                            flexDirection: "column",
+                            gap: 4,
+                            flex: "1 1 0",
+                            minWidth: 0,
                           }}
                         >
-                          <label>BPM</label>
+                          <label
+                            style={{
+                              fontSize: 12,
+                              letterSpacing: 0.2,
+                              color: "#cbd5f5",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            BPM
+                          </label>
                           <select
                             value={bpm}
                             onChange={(e) =>
@@ -3128,7 +3137,8 @@ export default function App() {
                               borderRadius: 8,
                               background: "#121827",
                               color: "white",
-                              width: isCompactTransport ? "100%" : undefined,
+                              width: "100%",
+                              minWidth: 0,
                             }}
                           >
                             {[90, 100, 110, 120, 130].map((v) => (
@@ -3141,14 +3151,22 @@ export default function App() {
                         <div
                           style={{
                             display: "flex",
-                            flexDirection: isCompactTransport ? "column" : "row",
-                            alignItems: isCompactTransport ? "stretch" : "center",
-                            gap: isCompactTransport ? 4 : 8,
-                            flex: isCompactTransport ? "1 1 0" : "1 1 140px",
-                            minWidth: isCompactTransport ? 0 : 120,
+                            flexDirection: "column",
+                            gap: 4,
+                            flex: "1 1 0",
+                            minWidth: 0,
                           }}
                         >
-                          <label>Quantize</label>
+                          <label
+                            style={{
+                              fontSize: 12,
+                              letterSpacing: 0.2,
+                              color: "#cbd5f5",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Quantize
+                          </label>
                           <select
                             value={subdiv}
                             onChange={(e) =>
@@ -3159,7 +3177,8 @@ export default function App() {
                               borderRadius: 8,
                               background: "#121827",
                               color: "white",
-                              width: isCompactTransport ? "100%" : undefined,
+                              width: "100%",
+                              minWidth: 0,
                             }}
                           >
                             <option value="16n">1/16</option>
