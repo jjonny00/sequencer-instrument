@@ -177,6 +177,10 @@ export const SavedSongsList = ({
       <button
         type="button"
         onClick={onTryDemoSong}
+        onTouchEnd={(event) => {
+          event.preventDefault();
+          onTryDemoSong();
+        }}
         style={{
           padding: "12px 24px",
           borderRadius: 999,
@@ -334,6 +338,10 @@ export const SavedSongsList = ({
                       <button
                         type="button"
                         onClick={() => onSelectProject(project.name)}
+                        onTouchEnd={(event) => {
+                          event.preventDefault();
+                          onSelectProject(project.name);
+                        }}
                         style={{
                           display: "flex",
                           flexDirection: "column",
@@ -371,6 +379,11 @@ export const SavedSongsList = ({
                             event.stopPropagation();
                             onRenameProject(project.name);
                           }}
+                          onTouchEnd={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onRenameProject(project.name);
+                          }}
                           style={{
                             width: 32,
                             height: 32,
@@ -396,6 +409,11 @@ export const SavedSongsList = ({
                         <button
                           type="button"
                           onClick={(event) => {
+                            event.stopPropagation();
+                            onDeleteProject(project.name);
+                          }}
+                          onTouchEnd={(event) => {
+                            event.preventDefault();
                             event.stopPropagation();
                             onDeleteProject(project.name);
                           }}

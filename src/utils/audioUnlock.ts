@@ -1,56 +1,75 @@
 import * as Tone from "tone";
 
-export async function unlockAudio(): Promise<void> {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const context = Tone.getContext();
-  const rawContext = context.rawContext as AudioContext | undefined;
-
+/**
+ * Synchronous unlock for use INSIDE a user gesture (tap/click).
+ * No await/.then(). Touches the raw AudioContext and tickles it silently.
+ */
+export function unlockAudioSync(): void {
   try {
-    let state = context.state as string;
+    const ctx = (Tone.getContext?.() ?? Tone.context)?.rawContext as
+      | AudioContext
+      | undefined;
+
+    if (!ctx || ctx.state === "running") {
+      return;
+    }
+
+    try {
+      ctx.resume?.();
+    } catch {}
+
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain).connect(ctx.destination);
+      const now = ctx.currentTime;
+      osc.start(now);
+      osc.stop(now + 0.001);
+    } catch {}
+  } catch (err) {
+    try {
+      (Tone.start as unknown as (() => void) | undefined)?.();
+    } catch {}
+  }
+}
+
+/**
+ * Async unlock for non-gesture contexts (resume after background, overlays).
+ * Handles iOS 26.0.1 "interrupted" state and uses a silent buffer fallback.
+ */
+export async function unlockAudio(): Promise<void> {
+  try {
+    type ExtendedAudioState = AudioContextState | "interrupted";
+
+    let state = Tone.context.state as ExtendedAudioState;
 
     if (state === "running") {
       return;
     }
 
-    try {
-      await Tone.start();
-    } catch (error) {
-      console.warn("Tone.js failed to start during unlock:", error);
-    }
+    await Tone.start();
 
-    state = context.state as string;
+    state = Tone.context.state as ExtendedAudioState;
 
-    if (state === "interrupted" && rawContext) {
-      console.warn("Audio context is 'interrupted', trying low-level resume");
+    if (state === "interrupted") {
       try {
-        await rawContext.resume();
-      } catch (resumeError) {
-        console.error("Direct resume failed:", resumeError);
+        await (Tone.context.rawContext as AudioContext).resume();
+      } catch (err) {
+        console.error("Raw resume failed:", err);
       }
-      state = context.state as string;
+      state = Tone.context.state as ExtendedAudioState;
     }
 
-    const rawState = rawContext?.state as string | undefined;
-
-    if (state !== "running" && rawState !== "running" && rawContext) {
-      console.warn("Audio context still not running, playing silent buffer");
-      try {
-        const buffer = rawContext.createBuffer(1, 1, rawContext.sampleRate);
-        const source = rawContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(rawContext.destination);
-        source.start();
-        source.onended = () => {
-          source.disconnect();
-        };
-      } catch (bufferError) {
-        console.error("Silent buffer trick failed:", bufferError);
-      }
+    if (state !== "running") {
+      const ctx = Tone.context.rawContext as AudioContext;
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.start(0);
     }
-  } catch (error) {
-    console.error("unlockAudio error:", error);
+  } catch (err) {
+    console.error("unlockAudio error:", err);
   }
 }
