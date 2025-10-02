@@ -136,6 +136,20 @@ const initializeHarmoniaPattern = (
 const LABEL_WIDTH = 60;
 const ROW_HEIGHT = 40;
 
+interface TrackEditingContext {
+  track: Track;
+  pattern: Chunk;
+  trackLabel: string;
+  color: string;
+  instrumentName: string;
+  characterName: string | null;
+  hoverLabel: string;
+  velocityFactor: number;
+  pitchOffset: number;
+  swingValue: number;
+  hasActiveSteps: boolean;
+}
+
 const cloneChunk = (chunk: Chunk): Chunk => ({
   ...chunk,
   steps: chunk.steps.slice(),
@@ -967,6 +981,8 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     });
   };
 
+  let activeEditingContext: TrackEditingContext | null = null;
+
   return (
     <div
       style={{
@@ -1175,6 +1191,22 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             labelLongPressRef.current.set(t.id, false);
           };
 
+          if (isEditing && trackPattern) {
+            activeEditingContext = {
+              track: t,
+              pattern: trackPattern,
+              trackLabel,
+              color,
+              instrumentName,
+              characterName,
+              hoverLabel,
+              velocityFactor,
+              pitchOffset,
+              swingValue,
+              hasActiveSteps,
+            };
+          }
+
           return (
             <div
               key={t.id}
@@ -1237,183 +1269,75 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   style={{
                     flex: 1,
                     display: "flex",
-                    flexDirection: isEditing ? "column" : "row",
-                    alignItems: isEditing ? "stretch" : "center",
-                    padding: isEditing ? "12px 16px" : "0 8px",
+                    alignItems: "center",
+                    padding: "0 8px",
                     background: isEditing ? withAlpha(color, 0.12) : "#161d2b",
                     position: "relative",
                     overflow: "hidden",
                     opacity: isMuted ? 0.3 : 1,
                     filter: isMuted ? "grayscale(0.7)" : "none",
-                    gap: isEditing ? 12 : 0,
                     transition:
                       "opacity 0.2s ease, filter 0.2s ease, background 0.2s ease",
                   }}
                 >
-                  {t.pattern ? (
-                    isEditing ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 12,
-                          width: "100%",
-                          height: "100%",
-                        }}
-                      >
-                        <PatternEditor
-                          label={trackLabel}
-                          steps={t.pattern.steps}
-                          onToggle={(i) => {
-                            const next = t.pattern!.steps.slice();
-                            next[i] = next[i] ? 0 : 1;
-                            updatePattern(t.id, next);
-                          }}
-                          onStepLongPress={(i) =>
-                            setStepEditing({ trackId: t.id, index: i })
-                          }
-                          color={color}
-                          currentStep={step}
-                          instrumentLabel={instrumentName}
-                          noteLabel={hoverLabel}
-                        />
-                        <InstrumentSettingsPanel
-                          instrumentName={instrumentName}
-                          styleName={characterName}
-                          color={color}
-                          velocity={velocityFactor}
-                          pitch={pitchOffset}
-                          swing={swingValue}
-                          onVelocityChange={(value) =>
-                            mutatePattern(
-                              t.id,
-                              (pattern) => ({
-                                ...pattern,
-                                velocityFactor: value,
-                              }),
-                              { preview: true }
-                            )
-                          }
-                          onPitchChange={(value) =>
-                            mutatePattern(
-                              t.id,
-                              (pattern) => ({
-                                ...pattern,
-                                pitchOffset: value,
-                              }),
-                              { preview: true }
-                            )
-                          }
-                          onSwingChange={(value) =>
-                            mutatePattern(
-                              t.id,
-                              (pattern) => ({
-                                ...pattern,
-                                swing: value,
-                              }),
-                              { preview: true }
-                            )
-                          }
-                        />
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 12,
-                            flexWrap: "wrap",
-                          }}
-                        >
+                  {trackPattern ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(16, 1fr)",
+                        gap: 3,
+                        width: "100%",
+                        height: "100%",
+                        padding: "8px 10px",
+                        background: withAlpha(color, isEditing ? 0.12 : 0.08),
+                        borderRadius: 10,
+                      }}
+                    >
+                      {Array.from({ length: 16 }).map((_, i) => {
+                        const active = trackPattern.steps[i] ?? 0;
+                        const isCurrentColumn = step === i;
+                        const playing = isCurrentColumn && active;
+                        const accentColor = lightenColor(color, 0.25);
+                        const measureIndex = Math.floor(i / 4);
+                        const isEvenMeasure = measureIndex % 2 === 0;
+                        const baseBackground = isEvenMeasure
+                          ? withAlpha(color, 0.16)
+                          : withAlpha(color, 0.1);
+                        const background = active
+                          ? isCurrentColumn
+                            ? accentColor
+                            : lightenColor(color, 0.05)
+                          : baseBackground;
+                        const borderColor = isCurrentColumn
+                          ? lightenColor(color, 0.4)
+                          : withAlpha("#ffffff", 0.06);
+                        return (
                           <div
+                            key={i}
                             style={{
-                              display: "flex",
-                              gap: 8,
-                              alignItems: "center",
+                              position: "relative",
+                              border: `1px solid ${borderColor}`,
+                              borderLeft:
+                                i % 4 === 0
+                                  ? `2px solid ${withAlpha("#ffffff", 0.18)}`
+                                  : undefined,
+                              background,
+                              opacity: active
+                                ? 1
+                                : isCurrentColumn
+                                  ? 0.45
+                                  : 0.25,
+                              borderRadius: 6,
+                              boxShadow: playing
+                                ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
+                                : "none",
+                              transition:
+                                "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
                             }}
-                          >
-                            <IconButton
-                              icon="check"
-                              label="Apply pattern"
-                              tone="accent"
-                              onClick={() => setEditing(null)}
-                              style={{ minWidth: 40, minHeight: 40 }}
-                            />
-                            <IconButton
-                              icon="backspace"
-                              label="Clear pattern"
-                              onClick={() => handleClearTrackPattern(t.id)}
-                              disabled={!hasActiveSteps}
-                              style={{ minWidth: 40, minHeight: 40 }}
-                            />
-                          </div>
-                          <IconButton
-                            icon="play_arrow"
-                            label="Play pattern"
-                            onClick={() => void previewTrackPattern(t, t.pattern ?? null)}
-                            disabled={!t.pattern || !t.instrument}
-                            style={{ minWidth: 40, minHeight: 40 }}
                           />
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(16, 1fr)",
-                          gap: 3,
-                          width: "100%",
-                          height: "100%",
-                          padding: "8px 10px",
-                          background: withAlpha(color, 0.08),
-                          borderRadius: 10,
-                        }}
-                      >
-                        {Array.from({ length: 16 }).map((_, i) => {
-                          const active = t.pattern?.steps[i] ?? 0;
-                          const isCurrentColumn = step === i;
-                          const playing = isCurrentColumn && active;
-                          const accentColor = lightenColor(color, 0.25);
-                          const measureIndex = Math.floor(i / 4);
-                          const isEvenMeasure = measureIndex % 2 === 0;
-                          const baseBackground = isEvenMeasure
-                            ? withAlpha(color, 0.16)
-                            : withAlpha(color, 0.1);
-                          const background = active
-                            ? isCurrentColumn
-                              ? accentColor
-                              : lightenColor(color, 0.05)
-                            : baseBackground;
-                          const borderColor = isCurrentColumn
-                            ? lightenColor(color, 0.4)
-                            : withAlpha("#ffffff", 0.06);
-                          return (
-                            <div
-                              key={i}
-                              style={{
-                                position: "relative",
-                                border: `1px solid ${borderColor}`,
-                                borderLeft:
-                                  i % 4 === 0
-                                    ? `2px solid ${withAlpha("#ffffff", 0.18)}`
-                                    : undefined,
-                                background,
-                                opacity: active
-                                  ? 1
-                                  : isCurrentColumn
-                                    ? 0.45
-                                    : 0.25,
-                                borderRadius: 6,
-                                boxShadow: playing
-                                  ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
-                                  : "none",
-                                transition:
-                                  "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
-                    )
+                        );
+                      })}
+                    </div>
                   ) : (
                     <button
                       onClick={() => addPattern(t.id)}
@@ -1441,6 +1365,122 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             </div>
           );
         })}
+        {activeEditingContext
+          ? ((context: TrackEditingContext) => (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 16,
+                  padding: 16,
+                  borderRadius: 12,
+                  background: withAlpha(context.color, 0.12),
+                  border: `1px solid ${withAlpha(context.color, 0.35)}`,
+                  boxShadow: "0 12px 24px rgba(8, 12, 20, 0.45)",
+                }}
+              >
+                <PatternEditor
+                  label={context.trackLabel}
+                  steps={context.pattern.steps}
+                  onToggle={(index) => {
+                    const next = context.pattern.steps.slice();
+                    next[index] = next[index] ? 0 : 1;
+                    updatePattern(context.track.id, next);
+                  }}
+                  onStepLongPress={(index) =>
+                    setStepEditing({
+                      trackId: context.track.id,
+                      index,
+                    })
+                  }
+                  color={context.color}
+                  currentStep={step}
+                  instrumentLabel={context.instrumentName}
+                  noteLabel={context.hoverLabel}
+                />
+                <InstrumentSettingsPanel
+                  instrumentName={context.instrumentName}
+                  styleName={context.characterName}
+                  color={context.color}
+                  velocity={context.velocityFactor}
+                  pitch={context.pitchOffset}
+                  swing={context.swingValue}
+                  onVelocityChange={(value) =>
+                    mutatePattern(
+                      context.track.id,
+                      (pattern) => ({
+                        ...pattern,
+                        velocityFactor: value,
+                      }),
+                      { preview: true }
+                    )
+                  }
+                  onPitchChange={(value) =>
+                    mutatePattern(
+                      context.track.id,
+                      (pattern) => ({
+                        ...pattern,
+                        pitchOffset: value,
+                      }),
+                      { preview: true }
+                    )
+                  }
+                  onSwingChange={(value) =>
+                    mutatePattern(
+                      context.track.id,
+                      (pattern) => ({
+                        ...pattern,
+                        swing: value,
+                      }),
+                      { preview: true }
+                    )
+                  }
+                />
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <IconButton
+                      icon="check"
+                      label="Apply pattern"
+                      tone="accent"
+                      onClick={() => setEditing(null)}
+                      style={{ minWidth: 40, minHeight: 40 }}
+                    />
+                    <IconButton
+                      icon="backspace"
+                      label="Clear pattern"
+                      onClick={() => handleClearTrackPattern(context.track.id)}
+                      disabled={!context.hasActiveSteps}
+                      style={{ minWidth: 40, minHeight: 40 }}
+                    />
+                  </div>
+                  <IconButton
+                    icon="play_arrow"
+                    label="Play pattern"
+                    onClick={() =>
+                      void previewTrackPattern(context.track, context.pattern)
+                    }
+                    disabled={!context.pattern || !context.track.instrument}
+                    style={{ minWidth: 40, minHeight: 40 }}
+                  />
+                </div>
+              </div>
+            ))(activeEditingContext)
+          : null}
       </div>
       {isLoopsLibraryOpen && (
         <div
