@@ -435,6 +435,9 @@ export default function App() {
   const [projectModalError, setProjectModalError] = useState<string | null>(
     null
   );
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window === "undefined" ? 1024 : window.innerWidth
+  );
 
   useEffect(() => {
     const pack = packs[packIndex];
@@ -691,6 +694,26 @@ export default function App() {
   useEffect(() => {
     setIsRecording(false);
   }, [editing]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  const isCompactTransport = viewportWidth < 375;
+  const canAddTrack = useMemo(
+    () => packs.some((candidate) => Object.keys(candidate.instruments).length > 0),
+    []
+  );
 
   const canRecordSelectedTrack = useMemo(() => {
     if (!selectedTrack || !selectedTrack.instrument) return false;
@@ -2947,7 +2970,6 @@ export default function App() {
               setPatternGroups={setPatternGroups}
               selectedGroupId={selectedGroupId}
               setSelectedGroupId={setSelectedGroupId}
-              onAddTrack={openAddTrackModal}
               onRequestTrackModal={handleRequestTrackModal}
             />
           )}
@@ -2969,22 +2991,19 @@ export default function App() {
                     display: "flex",
                     alignItems: "center",
                     marginBottom: 12,
+                    gap: 12,
+                    flexWrap: "nowrap",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 12,
-                      alignItems: "center",
-                      flex: 1,
-                    }}
-                  >
-                    {editing !== null ? (
+                  {editing !== null ? (
+                    <>
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
                           gap: 10,
+                          flex: 1,
+                          minWidth: 0,
                         }}
                       >
                         <button
@@ -3009,7 +3028,7 @@ export default function App() {
                               isRecording ? "Stop recording" : "Start recording"
                             }
                             onClick={handleToggleRecording}
-                          style={{
+                            style={{
                               ...controlButtonBaseStyle,
                               background: isRecording ? "#E02749" : "#111827",
                               border: `1px solid ${isRecording ? "#E02749" : "#333"}`,
@@ -3049,56 +3068,104 @@ export default function App() {
                           </span>
                         </button>
                       </div>
-                    ) : (
-                      <>
-                        <label>BPM</label>
-                        <select
-                          value={bpm}
-                          onChange={(e) =>
-                            setBpm(parseInt(e.target.value, 10))
-                          }
+                      <div
+                        style={{
+                          width: 1,
+                          height: 24,
+                          background: "#333",
+                          margin: "0 12px",
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: isCompactTransport ? "column" : "row",
+                          alignItems: isCompactTransport ? "stretch" : "center",
+                          gap: isCompactTransport ? 8 : 12,
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <div
                           style={{
-                            padding: 8,
-                            borderRadius: 8,
-                            background: "#121827",
-                            color: "white",
+                            display: "flex",
+                            flexDirection: isCompactTransport ? "column" : "row",
+                            alignItems: isCompactTransport ? "stretch" : "center",
+                            gap: isCompactTransport ? 4 : 8,
+                            flex: isCompactTransport ? "1 1 0" : "0 0 auto",
                           }}
                         >
-                          {[90, 100, 110, 120, 130].map((v) => (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          ))}
-                        </select>
-                        <label style={{ marginLeft: 12 }}>Quantize</label>
-                        <select
-                          value={subdiv}
-                          onChange={(e) =>
-                            setSubdiv(e.target.value as Subdivision)
-                          }
+                          <label>BPM</label>
+                          <select
+                            value={bpm}
+                            onChange={(e) =>
+                              setBpm(parseInt(e.target.value, 10))
+                            }
+                            style={{
+                              padding: 8,
+                              borderRadius: 8,
+                              background: "#121827",
+                              color: "white",
+                              width: isCompactTransport ? "100%" : undefined,
+                            }}
+                          >
+                            {[90, 100, 110, 120, 130].map((v) => (
+                              <option key={v} value={v}>
+                                {v}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div
                           style={{
-                            padding: 8,
-                            borderRadius: 8,
-                            background: "#121827",
-                            color: "white",
+                            display: "flex",
+                            flexDirection: isCompactTransport ? "column" : "row",
+                            alignItems: isCompactTransport ? "stretch" : "center",
+                            gap: isCompactTransport ? 4 : 8,
+                            flex: isCompactTransport ? "1 1 0" : "0 0 auto",
                           }}
                         >
-                          <option value="16n">1/16</option>
-                          <option value="8n">1/8</option>
-                          <option value="4n">1/4</option>
-                        </select>
-                      </>
-                    )}
-                  </div>
+                          <label>Quantize</label>
+                          <select
+                            value={subdiv}
+                            onChange={(e) =>
+                              setSubdiv(e.target.value as Subdivision)
+                            }
+                            style={{
+                              padding: 8,
+                              borderRadius: 8,
+                              background: "#121827",
+                              color: "white",
+                              width: isCompactTransport ? "100%" : undefined,
+                            }}
+                          >
+                            <option value="16n">1/16</option>
+                            <option value="8n">1/8</option>
+                            <option value="4n">1/4</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          width: 1,
+                          height: 24,
+                          background: "#333",
+                          margin: "0 12px",
+                        }}
+                      />
+                    </>
+                  )}
                   <div
                     style={{
-                      width: 1,
-                      height: 24,
-                      background: "#333",
-                      margin: "0 12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      flexShrink: 0,
                     }}
-                  />
-                  <div style={{ display: "flex", gap: 12 }}>
+                  >
                     <button
                       aria-label={isPlaying ? "Stop" : "Play"}
                       onPointerDown={handlePlayStop}
@@ -3116,6 +3183,35 @@ export default function App() {
                       >
                         {isPlaying ? "stop" : "play_arrow"}
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canAddTrack) return;
+                        openAddTrackModal();
+                      }}
+                      disabled={!canAddTrack}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "10px 20px",
+                        borderRadius: 999,
+                        border: "none",
+                        background: canAddTrack ? "#27E0B0" : "#1f2532",
+                        color: canAddTrack ? "#1F2532" : "#475569",
+                        fontWeight: 700,
+                        letterSpacing: 0.3,
+                        cursor: canAddTrack ? "pointer" : "not-allowed",
+                        boxShadow: canAddTrack
+                          ? "0 2px 6px rgba(15, 20, 32, 0.35)"
+                          : "none",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        flexShrink: 0,
+                        minHeight: 44,
+                      }}
+                    >
+                      + Track
                     </button>
                   </div>
                 </div>
