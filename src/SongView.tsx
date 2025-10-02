@@ -1336,7 +1336,7 @@ export function SongView({
             value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
             onChange={(event) => {
               const value = event.target.value;
-              onSelectLoop(value || null);
+              onSelectLoop(value);
               setRowSettingsIndex(null);
               setEditingSlot(null);
             }}
