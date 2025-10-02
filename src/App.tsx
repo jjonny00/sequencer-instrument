@@ -3108,6 +3108,28 @@ export default function App() {
                             cleaning_services
                           </span>
                         </button>
+                        <button
+                          aria-label="Edit track settings"
+                          onClick={() =>
+                            selectedTrack && handleRequestTrackModal(selectedTrack)
+                          }
+                          disabled={!selectedTrack}
+                          style={{
+                            ...controlButtonBaseStyle,
+                            background: "#111827",
+                            border: "1px solid #333",
+                            color: selectedTrack ? "#38bdf8" : "#475569",
+                            cursor: selectedTrack ? "pointer" : "not-allowed",
+                            opacity: selectedTrack ? 1 : 0.6,
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={controlIconStyle}
+                          >
+                            tune
+                          </span>
+                        </button>
                       </div>
                       <div style={transportDividerStyle} />
                     </>
