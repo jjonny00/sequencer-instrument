@@ -127,6 +127,12 @@ const controlIconStyle: CSSProperties = {
   fontSize: 24,
 };
 
+const transportDividerStyle: CSSProperties = {
+  width: 1,
+  height: 24,
+  background: "#333",
+};
+
 const pickCharacterForInstrument = (
   pack: Pack | undefined,
   instrument: TrackInstrument,
@@ -709,7 +715,7 @@ export default function App() {
     };
   }, []);
 
-  const isCompactTransport = viewportWidth < 375;
+  const isCompactTransport = viewportWidth < 430;
   const canAddTrack = useMemo(
     () => packs.some((candidate) => Object.keys(candidate.instruments).length > 0),
     []
@@ -2995,6 +3001,25 @@ export default function App() {
                     flexWrap: "nowrap",
                   }}
                 >
+                  <button
+                    aria-label={isPlaying ? "Stop" : "Play"}
+                    onPointerDown={handlePlayStop}
+                    onPointerUp={(e) => e.currentTarget.blur()}
+                    style={{
+                      ...controlButtonBaseStyle,
+                      background: isPlaying ? "#E02749" : "#27E0B0",
+                      color: isPlaying ? "#ffe4e6" : "#1F2532",
+                      fontSize: 24,
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={controlIconStyle}
+                    >
+                      {isPlaying ? "stop" : "play_arrow"}
+                    </span>
+                  </button>
+                  <div style={transportDividerStyle} />
                   {editing !== null ? (
                     <>
                       <div
@@ -3068,14 +3093,7 @@ export default function App() {
                           </span>
                         </button>
                       </div>
-                      <div
-                        style={{
-                          width: 1,
-                          height: 24,
-                          background: "#333",
-                          margin: "0 12px",
-                        }}
-                      />
+                      <div style={transportDividerStyle} />
                     </>
                   ) : (
                     <>
@@ -3095,7 +3113,8 @@ export default function App() {
                             flexDirection: isCompactTransport ? "column" : "row",
                             alignItems: isCompactTransport ? "stretch" : "center",
                             gap: isCompactTransport ? 4 : 8,
-                            flex: isCompactTransport ? "1 1 0" : "0 0 auto",
+                            flex: isCompactTransport ? "1 1 0" : "1 1 140px",
+                            minWidth: isCompactTransport ? 0 : 120,
                           }}
                         >
                           <label>BPM</label>
@@ -3125,7 +3144,8 @@ export default function App() {
                             flexDirection: isCompactTransport ? "column" : "row",
                             alignItems: isCompactTransport ? "stretch" : "center",
                             gap: isCompactTransport ? 4 : 8,
-                            flex: isCompactTransport ? "1 1 0" : "0 0 auto",
+                            flex: isCompactTransport ? "1 1 0" : "1 1 140px",
+                            minWidth: isCompactTransport ? 0 : 120,
                           }}
                         >
                           <label>Quantize</label>
@@ -3148,72 +3168,38 @@ export default function App() {
                           </select>
                         </div>
                       </div>
-                      <div
-                        style={{
-                          width: 1,
-                          height: 24,
-                          background: "#333",
-                          margin: "0 12px",
-                        }}
-                      />
+                      <div style={transportDividerStyle} />
                     </>
                   )}
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!canAddTrack) return;
+                      openAddTrackModal();
+                    }}
+                    disabled={!canAddTrack}
                     style={{
-                      display: "flex",
+                      display: "inline-flex",
                       alignItems: "center",
-                      gap: 12,
+                      justifyContent: "center",
+                      padding: "10px 20px",
+                      borderRadius: 999,
+                      border: "none",
+                      background: canAddTrack ? "#27E0B0" : "#1f2532",
+                      color: canAddTrack ? "#1F2532" : "#475569",
+                      fontWeight: 700,
+                      letterSpacing: 0.3,
+                      cursor: canAddTrack ? "pointer" : "not-allowed",
+                      boxShadow: canAddTrack
+                        ? "0 2px 6px rgba(15, 20, 32, 0.35)"
+                        : "none",
+                      transition: "transform 0.2s ease, box-shadow 0.2s ease",
                       flexShrink: 0,
+                      minHeight: 44,
                     }}
                   >
-                    <button
-                      aria-label={isPlaying ? "Stop" : "Play"}
-                      onPointerDown={handlePlayStop}
-                      onPointerUp={(e) => e.currentTarget.blur()}
-                      style={{
-                        ...controlButtonBaseStyle,
-                        background: isPlaying ? "#E02749" : "#27E0B0",
-                        color: isPlaying ? "#ffe4e6" : "#1F2532",
-                        fontSize: 24,
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={controlIconStyle}
-                      >
-                        {isPlaying ? "stop" : "play_arrow"}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!canAddTrack) return;
-                        openAddTrackModal();
-                      }}
-                      disabled={!canAddTrack}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "10px 20px",
-                        borderRadius: 999,
-                        border: "none",
-                        background: canAddTrack ? "#27E0B0" : "#1f2532",
-                        color: canAddTrack ? "#1F2532" : "#475569",
-                        fontWeight: 700,
-                        letterSpacing: 0.3,
-                        cursor: canAddTrack ? "pointer" : "not-allowed",
-                        boxShadow: canAddTrack
-                          ? "0 2px 6px rgba(15, 20, 32, 0.35)"
-                          : "none",
-                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                        flexShrink: 0,
-                        minHeight: 44,
-                      }}
-                    >
-                      + Track
-                    </button>
-                  </div>
+                    + Track
+                  </button>
                 </div>
 
                 <div
