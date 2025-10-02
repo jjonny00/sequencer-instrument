@@ -416,8 +416,7 @@ export default function App() {
   const [songRows, setSongRows] = useState<SongRow[]>([
     createSongRow(),
   ]);
-  const [isSongInstrumentPanelOpen, setIsSongInstrumentPanelOpen] =
-    useState(false);
+  const [isSongOptionsMenuOpen, setIsSongOptionsMenuOpen] = useState(false);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
   const currentLoopDraftRef = useRef<Track[] | null>(null);
@@ -492,12 +491,6 @@ export default function App() {
   useEffect(() => {
     latestTracksRef.current = tracks;
   }, [tracks]);
-
-  useEffect(() => {
-    if (viewMode !== "song") {
-      setIsSongInstrumentPanelOpen(false);
-    }
-  }, [viewMode]);
 
   const loopStateSignature = useMemo(
     () =>
@@ -1717,6 +1710,25 @@ export default function App() {
     setProjectModalError(null);
   };
 
+  const openSongOptionsMenu = () => {
+    setIsSongOptionsMenuOpen(true);
+  };
+
+  const closeSongOptionsMenu = () => {
+    setIsSongOptionsMenuOpen(false);
+  };
+
+  const handleOpenLoadFromSongOptions = () => {
+    closeSongOptionsMenu();
+    openLoadProjectModal();
+  };
+
+  const handleOpenExportFromSongOptions = () => {
+    closeSongOptionsMenu();
+    setAudioExportMessage("Preparing export…");
+    setIsExportModalOpen(true);
+  };
+
   const closeProjectModal = () => {
     setProjectModalMode(null);
     setProjectNameInput("");
@@ -2497,6 +2509,38 @@ export default function App() {
         }
       />
 
+      {isSongOptionsMenuOpen ? (
+        <Modal
+          isOpen={isSongOptionsMenuOpen}
+          onClose={closeSongOptionsMenu}
+          title="Song options"
+          maxWidth={360}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <IconButton
+              icon="folder_open"
+              label="Load song"
+              showLabel
+              tone="accent"
+              onClick={handleOpenLoadFromSongOptions}
+            />
+            <IconButton
+              icon="file_download"
+              label="Export song"
+              showLabel
+              onClick={handleOpenExportFromSongOptions}
+              disabled={isAudioExporting}
+            />
+          </div>
+        </Modal>
+      ) : null}
+
       {projectModalMode && (
         <Modal
           isOpen={projectModalMode !== null}
@@ -2936,31 +2980,6 @@ export default function App() {
               setEditing(null);
               setViewMode("song");
             }}
-            actions={
-              viewMode === "song" && !isSongInstrumentPanelOpen ? (
-                <>
-                  <IconButton
-                    icon="save"
-                    label="Save song"
-                    onClick={openSaveProjectModal}
-                  />
-                  <IconButton
-                    icon="folder_open"
-                    label="Load song"
-                    onClick={openLoadProjectModal}
-                  />
-                  <IconButton
-                    icon="file_download"
-                    label="Open export options"
-                    onClick={() => {
-                      setAudioExportMessage("Preparing export…");
-                      setIsExportModalOpen(true);
-                    }}
-                    disabled={isAudioExporting}
-                  />
-                </>
-              ) : undefined
-            }
           />
           {viewMode === "track" && (
             <LoopStrip
@@ -3324,7 +3343,8 @@ export default function App() {
                 onSelectPerformanceTrack={setActivePerformanceTrackId}
                 onUpdatePerformanceTrack={updatePerformanceTrack}
                 onRemovePerformanceTrack={removePerformanceTrack}
-                onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
+                onSaveSong={openSaveProjectModal}
+                onOpenSongOptions={openSongOptionsMenu}
               />
             )}
           </div>
