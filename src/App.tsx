@@ -111,6 +111,11 @@ type Subdivision = "16n" | "8n" | "4n";
 
 const CONTROL_BUTTON_SIZE = 44;
 
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 const controlButtonBaseStyle: CSSProperties = {
   width: CONTROL_BUTTON_SIZE,
   height: CONTROL_BUTTON_SIZE,
@@ -477,6 +482,7 @@ export default function App() {
     [editing, tracks]
   );
   const restorationRef = useRef(false);
+  const audioUnlockRef = useRef<HTMLAudioElement | null>(null);
   const previousStartedRef = useRef(started);
 
   useEffect(() => {
@@ -597,6 +603,70 @@ export default function App() {
       isIOSPWA: isIOSPWA(),
       restoring,
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    if (!isIOSPWA()) {
+      return;
+    }
+
+    const audio = document.createElement("audio");
+    audio.src =
+      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+    audio.preload = "auto";
+    audio.setAttribute("playsinline", "true");
+    audio.muted = true;
+    audio.volume = 0.001;
+    document.body.appendChild(audio);
+    audio.load();
+    audioUnlockRef.current = audio;
+
+    return () => {
+      if (audioUnlockRef.current === audio) {
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (error) {
+          console.warn("Failed to reset inline audio unlock element:", error);
+        }
+        audioUnlockRef.current = null;
+      }
+      audio.remove();
+    };
+  }, []);
+
+  const playInlineAudioPrimer = useCallback(async (): Promise<boolean> => {
+    const audio = audioUnlockRef.current;
+    if (!audio) {
+      return false;
+    }
+
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      await Promise.race([
+        playPromise,
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("Inline audio unlock timed out")), 500)
+        ),
+      ]);
+      await delay(100);
+      return true;
+    } catch (error) {
+      console.warn("Inline audio unlock failed:", error);
+      throw error;
+    } finally {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (pauseError) {
+        console.warn("Failed to pause inline audio unlock element:", pauseError);
+      }
+    }
   }, []);
   const pendingTransportStateRef = useRef<boolean | null>(null);
 
@@ -2014,8 +2084,56 @@ export default function App() {
       ? "You have unsaved changes. Do you want to save before starting a new song?"
       : "You have unsaved changes. Do you want to save before loading this song?";
 
-  const initAudioGraph = useCallback(() => {
+  const initAudioGraph = useCallback(async () => {
     try {
+      if (isIOSPWA()) {
+        console.log("Initializing audio graph in iOS PWA mode");
+        let context = Tone.getContext();
+        let rawContext = context.rawContext as AudioContext;
+
+        if (rawContext.state === "closed") {
+          console.log("AudioContext closed, creating new Tone context");
+          const freshContext = new Tone.Context();
+          Tone.setContext(freshContext);
+          context = Tone.getContext();
+          rawContext = context.rawContext as AudioContext;
+        }
+
+        if (rawContext.state === "suspended") {
+          try {
+            await rawContext.resume();
+            console.log("Raw AudioContext resumed successfully");
+          } catch (resumeError) {
+            console.warn("Raw AudioContext resume failed:", resumeError);
+          }
+        }
+
+        try {
+          console.log("Calling Tone.start() for iOS PWA");
+          await Tone.start();
+        } catch (toneError) {
+          console.warn("Tone.start() failed in iOS PWA mode:", toneError);
+          throw toneError;
+        }
+
+        const toneContext = Tone.getContext();
+        if (toneContext.state !== "running") {
+          try {
+            await toneContext.resume();
+          } catch (resumeError) {
+            console.warn("Tone context resume failed:", resumeError);
+          }
+          await delay(100);
+          if (Tone.getContext().state !== "running") {
+            throw new Error(
+              `Audio context remained in ${Tone.getContext().state} state after Tone.start()`
+            );
+          }
+        }
+      } else {
+        await Tone.start();
+      }
+
       Tone.Transport.bpm.value = bpm;
       Tone.Transport.start();
       setStarted(true);
@@ -2031,6 +2149,7 @@ export default function App() {
       console.log("Audio graph initialized successfully");
     } catch (error) {
       console.warn("Failed to initialize audio graph:", error);
+      throw error;
     }
   }, [bpm]);
 
@@ -2041,7 +2160,7 @@ export default function App() {
       console.warn("Audio context is not running; continuing to initialize graph.");
     }
     if (!started) {
-      initAudioGraph();
+      await initAudioGraph();
       return unlocked && running;
     }
     return running;
@@ -2114,17 +2233,27 @@ export default function App() {
     };
   }, [ensureAudioReady, handlerVersion, requestProjectAction, started]);
 
-  const unlockAndRun = useCallback((action?: () => void) => {
-    void (async () => {
-      try {
-        await unlockAudio();
-      } catch (error) {
-        console.warn("unlockAudio failed before action:", error);
-      } finally {
-        action?.();
-      }
-    })();
-  }, []);
+  const unlockAndRun = useCallback(
+    (action?: () => void) => {
+      void (async () => {
+        try {
+          if (isIOSPWA()) {
+            try {
+              await playInlineAudioPrimer();
+            } catch (primerError) {
+              console.warn("Inline audio primer failed before unlock:", primerError);
+            }
+          }
+          await unlockAudio();
+        } catch (error) {
+          console.warn("unlockAudio failed before action:", error);
+        } finally {
+          action?.();
+        }
+      })();
+    },
+    [playInlineAudioPrimer]
+  );
 
   useEffect(() => {
     refreshProjectList();
