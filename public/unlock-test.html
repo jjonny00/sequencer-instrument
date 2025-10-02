@@ -396,21 +396,32 @@
         throw new Error("No AudioContext instance");
       }
       log("Priming context with near-silent buffer");
+      const source = raw.createBufferSource();
       try {
         const buffer = raw.createBuffer(1, raw.sampleRate / 10, raw.sampleRate);
-        const source = raw.createBufferSource();
         source.buffer = buffer;
         source.connect(raw.destination);
         source.start(0);
-        await new Promise((resolve) => {
-          source.addEventListener("ended", resolve, { once: true });
-        });
+        await withTimeout(
+          new Promise((resolve) => source.addEventListener("ended", resolve, { once: true })),
+          1200,
+          "Silent buffer playback"
+        );
         log("Silent buffer completed");
         setLastResult("Silent buffer played");
       } catch (error) {
         log(`Silent buffer error -> ${error.message}`, "error");
         setLastResult(`Silent buffer error: ${error.message}`);
         throw error;
+      } finally {
+        try {
+          source.stop();
+        } catch (_) {
+          // ignore stop errors
+        }
+        if (typeof source.disconnect === "function") {
+          source.disconnect();
+        }
       }
     }
 
@@ -483,15 +494,16 @@
         () => runFreshContext(),
         () => runResumeRawContext("AudioContext.resume() after fresh context"),
       ];
+      let hadError = false;
       for (const step of steps) {
         try {
           await step();
         } catch (error) {
-          log("Sequence halted due to error -> " + error.message, "error");
-          break;
+          hadError = true;
+          log("Sequence step error -> " + error.message, "error");
         }
       }
-      log("=== Sequence complete ===");
+      log(hadError ? "=== Sequence complete (with errors) ===" : "=== Sequence complete ===");
       disableAll(false);
     }
 
