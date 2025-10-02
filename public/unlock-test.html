@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Unlock Test</title>
+  <title>iOS PWA Audio Unlock Lab</title>
   <script src="https://cdn.jsdelivr.net/npm/tone@next/build/Tone.js"></script>
   <style>
     :root {
@@ -11,11 +11,11 @@
     }
 
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #101014;
-      color: #f5f5f5;
       margin: 0;
       min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1f2937, #0f172a 60%);
+      color: #f8fafc;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -23,636 +23,560 @@
     }
 
     main {
-      width: min(480px, 100%);
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+      width: min(920px, 100%);
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(18px);
+      border-radius: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+      padding: 30px;
+    }
+
+    header {
+      grid-column: 1 / -1;
     }
 
     h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.6rem, 2vw, 2.2rem);
+      letter-spacing: 0.02em;
+    }
+
+    p.subhead {
       margin: 0;
-      font-size: 1.6rem;
-      text-align: center;
+      color: #cbd5f5;
+      font-size: 0.95rem;
+    }
+
+    section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: rgba(148, 163, 184, 0.08);
+      border-radius: 16px;
+      padding: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    section h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      letter-spacing: 0.01em;
+    }
+
+    #statusPanel {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      display: grid;
+      gap: 6px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.22);
+      color: #bfdbfe;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .status-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .status-line strong {
+      font-weight: 600;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
     }
 
     button {
-      padding: 14px 18px;
-      font-size: 1.1rem;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-      background: linear-gradient(135deg, #4f46e5, #22d3ee);
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      font-size: 0.95rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.85), rgba(56, 189, 248, 0.85));
       color: #fff;
-      transition: transform 120ms ease, opacity 120ms ease;
+      cursor: pointer;
+      transition: transform 140ms ease, box-shadow 140ms ease, opacity 160ms ease;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
     }
 
-    button:active {
-      transform: scale(0.97);
+    button.secondary {
+      background: rgba(148, 163, 184, 0.18);
+      color: #e2e8f0;
+      border-color: rgba(148, 163, 184, 0.24);
     }
 
     button:disabled {
-      opacity: 0.6;
+      opacity: 0.55;
       cursor: wait;
+      transform: none;
+      box-shadow: none;
     }
 
-    #status {
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-      font-size: 0.95rem;
-      padding: 12px;
-      border-radius: 8px;
-      background: rgba(15, 118, 110, 0.15);
-      border: 1px solid rgba(34, 211, 238, 0.35);
-    }
-
-    #error {
-      display: none;
-      padding: 12px;
-      border-radius: 8px;
-      background: rgba(244, 63, 94, 0.18);
-      border: 1px solid rgba(244, 63, 94, 0.55);
-      color: #fecdd3;
-    }
-
-    #error[aria-hidden="false"] {
-      display: block;
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.18);
     }
 
     #log {
       background: rgba(15, 23, 42, 0.65);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 12px;
-      padding: 12px;
-      max-height: 240px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 14px;
+      padding: 16px;
+      height: 260px;
       overflow-y: auto;
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       font-size: 0.85rem;
-      line-height: 1.4;
+      line-height: 1.5;
       white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #log .error {
+      color: #fca5a5;
     }
 
     #log .warn {
       color: #fbbf24;
     }
 
-    #log .error {
-      color: #f87171;
+    #notes {
+      color: #cbd5f5;
+      font-size: 0.88rem;
+      line-height: 1.5;
     }
 
     footer {
-      font-size: 0.8rem;
-      opacity: 0.7;
+      grid-column: 1 / -1;
       text-align: center;
+      color: rgba(203, 213, 225, 0.7);
+      font-size: 0.82rem;
+    }
+
+    code {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.82rem;
     }
   </style>
 </head>
 <body>
   <main>
-    <h1>Tone.js Audio Unlock Tester</h1>
-    <button id="unlock">Unlock Audio</button>
-    <div id="status" role="status" aria-live="polite">State: (not checked yet)</div>
-    <div id="error" role="alert" aria-live="assertive" aria-hidden="true"></div>
-    <div id="log" aria-live="polite"></div>
+    <header>
+      <h1>iOS PWA Audio Unlock Lab</h1>
+      <p class="subhead">
+        Use these steps to probe how Web Audio unlock behaves when this page runs as a home screen
+        app. Run individual actions or the full sequence and share the captured log.
+      </p>
+    </header>
+
+    <section aria-labelledby="statusHeading">
+      <h2 id="statusHeading">Context status</h2>
+      <div id="statusPanel">
+        <div class="status-line"><strong>Tone context:</strong><span id="toneState">(checking...)</span></div>
+        <div class="status-line"><strong>AudioContext:</strong><span id="rawState">(checking...)</span></div>
+        <div class="status-line"><strong>Last unlock result:</strong><span id="lastResult">None yet</span></div>
+        <div class="status-line"><strong>Environment:</strong><span id="envInfo"></span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="actionsHeading">
+      <h2 id="actionsHeading">Guided sequence</h2>
+      <div class="actions">
+        <button id="runSequence">Run full unlock sequence</button>
+        <button id="reset" class="secondary">Reset log &amp; reload page</button>
+      </div>
+      <div id="notes">
+        The full sequence performs the same steps available below in order. If a step hangs or fails,
+        continue with the manual controls to isolate the culprit.
+      </div>
+    </section>
+
+    <section aria-labelledby="manualHeading">
+      <h2 id="manualHeading">Manual controls</h2>
+      <div class="actions">
+        <button data-action="tone">Step 1 · Tone.start()</button>
+        <button data-action="resume">Step 2 · AudioContext.resume()</button>
+        <button data-action="prime">Step 3 · Play silent buffer</button>
+        <button data-action="inline-audio">Step 4 · HTMLAudio probe</button>
+        <button data-action="fresh-context">Step 5 · Adopt fresh AudioContext</button>
+        <button data-action="mic" class="secondary">Request microphone access</button>
+      </div>
+      <div id="notes">
+        Trigger one step at a time right after tapping the shortcut icon. Report which actions succeed
+        or time out so we can compare with Safari.
+      </div>
+    </section>
+
+    <section aria-labelledby="logHeading">
+      <h2 id="logHeading">Log</h2>
+      <div class="actions">
+        <button id="copyLog" class="secondary">Copy log to clipboard</button>
+      </div>
+      <div id="log" role="log" aria-live="polite"></div>
+    </section>
+
     <footer>
-      Runs entirely on the client &middot; Navigate to /unlock-test.html anytime
+      Share the copied log when reporting behaviour. Page available at <code>/unlock-test.html</code>.
     </footer>
   </main>
 
   <script>
-    const button = document.getElementById("unlock");
-    const statusEl = document.getElementById("status");
+    const toneStateEl = document.getElementById("toneState");
+    const rawStateEl = document.getElementById("rawState");
+    const lastResultEl = document.getElementById("lastResult");
+    const envInfoEl = document.getElementById("envInfo");
     const logEl = document.getElementById("log");
-    const errorEl = document.getElementById("error");
+    const runSequenceBtn = document.getElementById("runSequence");
+    const resetBtn = document.getElementById("reset");
+    const copyLogBtn = document.getElementById("copyLog");
+    const manualButtons = Array.from(document.querySelectorAll("button[data-action]"));
 
-    const HTML_AUDIO_DATA_URL = "data:audio/wav;base64," +
-      "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" +
-      "";
+    const HTML_AUDIO_DATA_URL =
+      "data:audio/wav;base64,UklGRmQMAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YYQMAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-    let observedRawContext = null;
-    let autoRecoveryActive = false;
-    let autoRecoveryCount = 0;
-    const MAX_AUTO_RECOVERY = 3;
+    const gestures = new Set();
+    let stopListeningStateChange = null;
 
     function getToneContext() {
-      if (typeof Tone.getContext === "function") {
-        return Tone.getContext();
-      }
-      return Tone.context;
+      return typeof Tone.getContext === "function" ? Tone.getContext() : Tone.context;
     }
 
     function getRawContext() {
       const ctx = getToneContext();
-      if (!ctx) return null;
-      return ctx.rawContext || ctx.context || ctx._context || ctx;
-    }
-
-    function timestamp() {
-      return new Date().toLocaleTimeString();
+      return ctx ? ctx.rawContext || ctx.context || ctx._context || ctx : undefined;
     }
 
     function log(message, level = "info") {
-      const entry = document.createElement("div");
-      entry.textContent = `[${timestamp()}] ${message}`;
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = `[${timestamp}] ${message}`;
+      const div = document.createElement("div");
       if (level !== "info") {
-        entry.classList.add(level);
+        div.classList.add(level);
       }
-      logEl.appendChild(entry);
+      div.textContent = entry;
+      logEl.appendChild(div);
       logEl.scrollTop = logEl.scrollHeight;
-      const consoleMethod = level === "error" ? "error" : level === "warn" ? "warn" : "log";
-      console[consoleMethod](message);
     }
 
-    function describeDisplayMode() {
-      if (typeof window.matchMedia === "function") {
-        const modes = [
-          "fullscreen",
-          "standalone",
-          "minimal-ui",
-          "browser",
-        ];
-        for (const mode of modes) {
-          const media = window.matchMedia(`(display-mode: ${mode})`);
-          if (media.matches) {
-            return mode;
-          }
-        }
+    function updateState() {
+      const toneState = getToneContext()?.state ?? "(unknown)";
+      const rawState = getRawContext()?.state ?? "(no context)";
+      toneStateEl.textContent = toneState;
+      rawStateEl.textContent = rawState;
+    }
+
+    function setLastResult(message) {
+      lastResultEl.textContent = message;
+    }
+
+    function attachStateListener() {
+      if (stopListeningStateChange) {
+        stopListeningStateChange();
+        stopListeningStateChange = null;
       }
-      return "unknown";
-    }
-
-    function setError(message) {
-      if (!message) {
-        errorEl.textContent = "";
-        errorEl.setAttribute("aria-hidden", "true");
-        return;
+      const raw = getRawContext();
+      if (raw && typeof raw.addEventListener === "function") {
+        const handler = () => {
+          updateState();
+          log(`AudioContext statechange -> ${raw.state}`);
+        };
+        raw.addEventListener("statechange", handler);
+        stopListeningStateChange = () => raw.removeEventListener("statechange", handler);
       }
-      errorEl.textContent = message;
-      errorEl.setAttribute("aria-hidden", "false");
     }
 
-    function updateStatus() {
-      const toneCtx = getToneContext();
-      const rawCtx = getRawContext();
-      const toneState = toneCtx?.state ?? "unknown";
-      const audioState = rawCtx?.state ?? "unknown";
-      statusEl.textContent = `Tone: ${toneState} | AudioContext: ${audioState}`;
+    function describeEnvironment() {
+      const standalone = window.navigator.standalone;
+      const displayMode = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
+        ? "standalone"
+        : "browser";
+      const version = Tone?.version ?? "unknown";
+      envInfoEl.textContent = `standalone=${standalone} · display-mode=${displayMode} · Tone ${version}`;
+      log("Environment => " + envInfoEl.textContent);
     }
 
-    function attachStateObservers() {
-      const rawCtx = getRawContext();
-      if (!rawCtx || observedRawContext === rawCtx || typeof rawCtx.addEventListener !== "function") {
-        return;
-      }
-      observedRawContext = rawCtx;
-      rawCtx.addEventListener("statechange", async () => {
-        const state = rawCtx.state;
-        log(`AudioContext statechange -> ${state}`);
-        updateStatus();
-        if ((state === "suspended" || state === "interrupted") && !autoRecoveryActive && autoRecoveryCount < MAX_AUTO_RECOVERY) {
-          await attemptAutoRecovery(`statechange -> ${state}`);
-        }
-      });
-      log("Listening for AudioContext state changes");
-    }
-
-    function raceWithTimeout(promise, timeoutMs, timeoutMessage) {
-      let timerId;
-      const wrapped = Promise.resolve(promise).then(
-        (value) => {
-          clearTimeout(timerId);
-          return value;
-        },
-        (err) => {
-          clearTimeout(timerId);
-          throw err;
-        }
-      );
+    function withTimeout(promise, ms, label) {
+      let timer;
       const timeoutPromise = new Promise((_, reject) => {
-        timerId = setTimeout(() => {
-          reject(new Error(timeoutMessage));
-        }, timeoutMs);
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${ms}ms`));
+        }, ms);
       });
-      return Promise.race([wrapped, timeoutPromise]);
+      return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
     }
 
-    async function startToneWithTimeout(timeoutMs = 500) {
-      log("Attempting Tone.start() with timeout...");
+    async function runToneStart() {
+      log("Running Tone.start()");
       try {
-        await raceWithTimeout(Tone.start(), timeoutMs, `Tone.start() timed out after ${timeoutMs}ms`);
+        await withTimeout(Tone.start(), 1000, "Tone.start()");
         log("Tone.start() resolved successfully");
-        return true;
-      } catch (err) {
-        log(`Tone.start() failed -> ${err.message || err}`, "warn");
-        return false;
+        setLastResult("Tone.start() resolved");
+      } catch (error) {
+        log(`Tone.start() error -> ${error.message}`, "error");
+        setLastResult(`Tone.start() error: ${error.message}`);
+        throw error;
+      } finally {
+        updateState();
       }
     }
 
-    async function resumeContext(ctx, label) {
-      if (!ctx || typeof ctx.resume !== "function") {
-        log(`${label}: resume() not available on context`, "warn");
-        return false;
+    async function runResumeRawContext(label = "AudioContext.resume()") {
+      const raw = getRawContext();
+      if (!raw) {
+        log("No AudioContext instance available", "warn");
+        setLastResult("No AudioContext instance");
+        throw new Error("No AudioContext instance");
       }
+      log(`Running ${label}`);
       try {
-        log(`${label}: calling rawContext.resume()`);
-        await raceWithTimeout(ctx.resume(), 500, `${label}: resume() timed out`);
-        log(`${label}: rawContext.resume() resolved -> ${ctx.state}`);
-        return ctx.state === "running";
-      } catch (err) {
-        log(`${label}: rawContext.resume() error -> ${err.message || err}`, "warn");
-        return false;
+        await withTimeout(raw.resume(), 1200, label);
+        log(`${label} resolved successfully`);
+        setLastResult(`${label} resolved`);
+      } catch (error) {
+        log(`${label} error -> ${error.message}`, "error");
+        setLastResult(`${label} error: ${error.message}`);
+        throw error;
+      } finally {
+        updateState();
       }
     }
 
-    async function primeWithSilentBuffer(ctx) {
-      if (!ctx || typeof ctx.createBuffer !== "function") {
-        log("Prime: AudioContext buffer APIs unavailable", "warn");
-        return false;
+    async function runPrimeBuffer() {
+      const raw = getRawContext();
+      if (!raw) {
+        log("Cannot prime buffer: no AudioContext", "warn");
+        setLastResult("Prime skipped: no AudioContext");
+        throw new Error("No AudioContext instance");
       }
+      log("Priming context with near-silent buffer");
       try {
-        log("Prime: scheduling near-silent bufferSource");
-        const buffer = ctx.createBuffer(1, Math.max(1, ctx.sampleRate / 10), ctx.sampleRate);
-        const source = ctx.createBufferSource();
+        const buffer = raw.createBuffer(1, raw.sampleRate / 10, raw.sampleRate);
+        const source = raw.createBufferSource();
         source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start();
-        source.stop(ctx.currentTime + 0.1);
-        await new Promise((resolve) => setTimeout(resolve, 150));
-        log("Prime: bufferSource played");
-        return ctx.state === "running";
-      } catch (err) {
-        log(`Prime: failed -> ${err.message || err}`, "warn");
-        return false;
+        source.connect(raw.destination);
+        source.start(0);
+        await new Promise((resolve) => {
+          source.addEventListener("ended", resolve, { once: true });
+        });
+        log("Silent buffer completed");
+        setLastResult("Silent buffer played");
+      } catch (error) {
+        log(`Silent buffer error -> ${error.message}`, "error");
+        setLastResult(`Silent buffer error: ${error.message}`);
+        throw error;
       }
     }
 
-    async function playHtmlAudioProbe() {
-      log("HTMLAudio: creating inline probe");
-      const audio = document.createElement("audio");
-      audio.src = HTML_AUDIO_DATA_URL;
+    async function runInlineAudio() {
+      log("Playing inline HTMLAudio probe");
+      const audio = new Audio(HTML_AUDIO_DATA_URL);
+      audio.loop = false;
+      audio.volume = 0.9;
       audio.preload = "auto";
-      audio.volume = 0.3;
-      audio.setAttribute("playsinline", "true");
-      audio.style.display = "none";
+      audio.playsInline = true;
       document.body.appendChild(audio);
       try {
-        await raceWithTimeout(audio.play(), 1200, "HTMLAudioElement.play() timed out");
-        log("HTMLAudio: play() resolved");
-        await raceWithTimeout(
-          new Promise((resolve, reject) => {
-            const cleanup = () => {
-              audio.removeEventListener("ended", handleEnded);
-              audio.removeEventListener("pause", handlePause);
-              audio.removeEventListener("error", handleError);
-            };
-            const handleEnded = () => {
-              cleanup();
-              resolve();
-            };
-            const handlePause = () => {
-              cleanup();
-              resolve();
-            };
-            const handleError = () => {
-              cleanup();
-              reject(new Error("HTMLAudioElement error event"));
-            };
-            audio.addEventListener("ended", handleEnded, { once: true });
-            audio.addEventListener("pause", handlePause, { once: true });
-            audio.addEventListener("error", handleError, { once: true });
-          }),
-          1500,
-          "HTMLAudioElement did not finish playback"
-        );
-        log("HTMLAudio: playback finished");
-        return true;
-      } catch (err) {
-        log(`HTMLAudio: failed -> ${err.message || err}`, "warn");
-        return false;
+        await withTimeout(audio.play(), 2000, "HTMLAudioElement.play()");
+        log("HTMLAudioElement.play() resolved");
+        setLastResult("HTMLAudio playback resolved");
+      } catch (error) {
+        log(`HTMLAudioElement.play() error -> ${error.message}`, "error");
+        setLastResult(`HTMLAudio error: ${error.message}`);
+        throw error;
       } finally {
         audio.pause();
         audio.remove();
       }
     }
 
-    async function requestMicrophoneAccess() {
-      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
-        log("MediaDevices: getUserMedia unavailable", "warn");
-        return false;
+    async function runFreshContext() {
+      log("Creating fresh AudioContext and binding Tone");
+      const RawContext = window.AudioContext || window.webkitAudioContext;
+      if (!RawContext) {
+        log("AudioContext constructor unavailable", "warn");
+        setLastResult("Cannot create AudioContext");
+        throw new Error("AudioContext constructor unavailable");
       }
-      log("MediaDevices: requesting microphone access");
-      let stream;
+      const newRaw = new RawContext();
+      const newToneContext = new Tone.Context({ context: newRaw });
+      Tone.setContext(newToneContext);
+      attachStateListener();
+      updateState();
+      log("Tone now bound to new AudioContext");
+      setLastResult("Fresh AudioContext installed");
+    }
+
+    async function runMicrophoneRequest() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        log("navigator.mediaDevices.getUserMedia unavailable", "warn");
+        setLastResult("getUserMedia unavailable");
+        throw new Error("getUserMedia unavailable");
+      }
+      log("Requesting microphone access");
       try {
-        stream = await raceWithTimeout(
-          navigator.mediaDevices.getUserMedia({ audio: true }),
-          4000,
-          "getUserMedia timed out"
-        );
-        log("MediaDevices: microphone access granted");
-        return true;
-      } catch (err) {
-        log(`MediaDevices: failed -> ${err.message || err}`, "warn");
-        return false;
-      } finally {
-        if (stream) {
-          for (const track of stream.getTracks()) {
-            track.stop();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setLastResult("Microphone access granted");
+        log("Microphone access granted");
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (error) {
+        log(`Microphone access error -> ${error.message}`, "error");
+        setLastResult(`Microphone access error: ${error.message}`);
+        throw error;
+      }
+    }
+
+    async function runFullSequence() {
+      disableAll(true);
+      log("=== Running full unlock sequence ===");
+      const steps = [
+        () => runToneStart(),
+        () => runResumeRawContext(),
+        () => runPrimeBuffer(),
+        () => runInlineAudio(),
+        () => runFreshContext(),
+        () => runResumeRawContext("AudioContext.resume() after fresh context"),
+      ];
+      for (const step of steps) {
+        try {
+          await step();
+        } catch (error) {
+          log("Sequence halted due to error -> " + error.message, "error");
+          break;
+        }
+      }
+      log("=== Sequence complete ===");
+      disableAll(false);
+    }
+
+    function disableAll(disabled) {
+      runSequenceBtn.disabled = disabled;
+      resetBtn.disabled = disabled;
+      copyLogBtn.disabled = disabled;
+      manualButtons.forEach((btn) => {
+        btn.disabled = disabled;
+      });
+    }
+
+    function resetPage() {
+      window.location.reload();
+    }
+
+    async function copyLogToClipboard() {
+      const text = Array.from(logEl.children)
+        .map((child) => child.textContent)
+        .join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        log("Log copied to clipboard");
+      } catch (error) {
+        log(`Clipboard copy failed -> ${error.message}`, "error");
+      }
+    }
+
+    function setupManualButtons() {
+      const handlers = {
+        tone: () => runToneStart(),
+        resume: () => runResumeRawContext(),
+        prime: () => runPrimeBuffer(),
+        "inline-audio": () => runInlineAudio(),
+        "fresh-context": () => runFreshContext(),
+        mic: () => runMicrophoneRequest(),
+      };
+      manualButtons.forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const action = btn.dataset.action;
+          const handler = handlers[action];
+          if (!handler) {
+            return;
           }
-        }
-      }
-    }
-
-    async function adoptFreshContext() {
-      if (typeof Tone.Context !== "function" || typeof Tone.setContext !== "function") {
-        log("Fresh context: Tone.setContext unavailable", "warn");
-        return false;
-      }
-      const NewAudioContext = window.AudioContext || window.webkitAudioContext;
-      if (typeof NewAudioContext !== "function") {
-        log("Fresh context: AudioContext constructor unavailable", "warn");
-        return false;
-      }
-      try {
-        log("Fresh context: creating new AudioContext");
-        const freshRaw = new NewAudioContext();
-        const freshTone = new Tone.Context(freshRaw);
-        Tone.setContext(freshTone);
-        observedRawContext = null;
-        attachStateObservers();
-        updateStatus();
-        log("Fresh context: Tone now bound to new AudioContext");
-        return true;
-      } catch (err) {
-        log(`Fresh context: failed -> ${err.message || err}`, "warn");
-        return false;
-      }
-    }
-
-    async function playVerificationTone() {
-      const ctx = getRawContext();
-      if (!ctx) {
-        log("Verify: no AudioContext to play tone", "warn");
-        return;
-      }
-      try {
-        log("Verify: scheduling short tone");
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        gain.gain.value = 0.05;
-        osc.type = "sine";
-        osc.frequency.value = 880;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        const now = ctx.currentTime;
-        osc.start(now);
-        osc.stop(now + 0.2);
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        log("Verify: tone finished");
-      } catch (err) {
-        log(`Verify: failed -> ${err.message || err}`, "warn");
-      }
-    }
-
-    async function attemptAutoRecovery(trigger) {
-      const rawCtx = getRawContext();
-      if (!rawCtx) {
-        return;
-      }
-      autoRecoveryActive = true;
-      autoRecoveryCount += 1;
-      log(`Auto-recovery #${autoRecoveryCount} triggered by ${trigger}`);
-      try {
-        let recovered = await startToneWithTimeout();
-        updateStatus();
-
-        let currentRaw = getRawContext();
-        if (!recovered && currentRaw?.state !== "running") {
-          recovered = await resumeContext(currentRaw, `${trigger} auto`);
-          updateStatus();
-        }
-
-        currentRaw = getRawContext();
-        if (!recovered && currentRaw?.state !== "running") {
-          recovered = await primeWithSilentBuffer(currentRaw);
-          updateStatus();
-        }
-
-        if (!recovered) {
-          const htmlAudioResult = await playHtmlAudioProbe();
-          recovered = recovered || htmlAudioResult;
-          updateStatus();
-        }
-
-        if (!recovered) {
-          const micResult = await requestMicrophoneAccess();
-          recovered = recovered || micResult;
-          updateStatus();
-        }
-
-        currentRaw = getRawContext();
-        if (!recovered && currentRaw?.state !== "running") {
-          recovered = await resumeContext(currentRaw, `${trigger} post-prime`);
-          updateStatus();
-        }
-
-        currentRaw = getRawContext();
-        if (currentRaw?.state === "running") {
-          log("Auto-recovery succeeded");
-        } else {
-          log(`Auto-recovery finished; AudioContext still ${currentRaw?.state ?? "unknown"}`, "warn");
-        }
-      } finally {
-        autoRecoveryActive = false;
-        updateStatus();
-      }
-    }
-
-    async function runUnlockSequence(trigger) {
-      setError("");
-      updateStatus();
-      attachStateObservers();
-
-      autoRecoveryCount = 0;
-
-      if (trigger) {
-        log(`Unlock triggered by ${trigger}`);
-      }
-
-      const toneCtx = getToneContext();
-      const rawCtx = getRawContext();
-      log(`Before unlock -> Tone: ${toneCtx?.state ?? "unknown"} | AudioContext: ${rawCtx?.state ?? "unknown"}`);
-
-      let unlocked = await startToneWithTimeout();
-      updateStatus();
-
-      let currentRaw = getRawContext();
-      if (!unlocked && currentRaw?.state !== "running") {
-        const resumed = await resumeContext(currentRaw, "initial");
-        unlocked = unlocked || resumed;
-        updateStatus();
-      }
-
-      currentRaw = getRawContext();
-      if (!unlocked && currentRaw?.state !== "running") {
-        const primed = await primeWithSilentBuffer(currentRaw);
-        unlocked = unlocked || primed;
-        updateStatus();
-      }
-
-      if (!unlocked) {
-        const htmlAudioResult = await playHtmlAudioProbe();
-        unlocked = unlocked || htmlAudioResult;
-        updateStatus();
-      }
-
-      if (!unlocked) {
-        const micResult = await requestMicrophoneAccess();
-        unlocked = unlocked || micResult;
-        updateStatus();
-      }
-
-      currentRaw = getRawContext();
-      if (!unlocked || currentRaw?.state !== "running") {
-        const fresh = await adoptFreshContext();
-        if (fresh) {
-          updateStatus();
-          const retryStart = await startToneWithTimeout();
-          unlocked = unlocked || retryStart;
-          const freshRaw = getRawContext();
-          if (freshRaw?.state !== "running") {
-            const resumed = await resumeContext(freshRaw, "fresh");
-            unlocked = unlocked || resumed;
+          disableAll(true);
+          try {
+            await handler();
+          } catch (error) {
+            // already logged
+          } finally {
+            disableAll(false);
           }
-          updateStatus();
-        }
-      }
-
-      currentRaw = getRawContext();
-      if (currentRaw?.state === "running") {
-        log("Success: AudioContext is running");
-        await playVerificationTone();
-      } else {
-        setError("Audio context is still suspended. See log for details, try toggling audio outputs, or grant microphone access if prompted.");
-      }
-      updateStatus();
+        });
+      });
     }
 
-    let unlockInProgress = false;
-    let pointerTriggered = false;
-
-    async function requestUnlock(trigger) {
-      if (unlockInProgress) {
-        log(`Unlock attempt ignored; another attempt (${trigger}) is running`, "warn");
-        return;
-      }
-      unlockInProgress = true;
-      button.disabled = true;
-      try {
-        await runUnlockSequence(trigger);
-      } finally {
-        unlockInProgress = false;
-        button.disabled = false;
-        pointerTriggered = false;
-      }
+    function setupGestureLogging() {
+      const gestureTypes = ["pointerdown", "touchstart", "mousedown", "keydown"];
+      gestureTypes.forEach((type) => {
+        document.addEventListener(type, () => {
+          if (!gestures.has(type)) {
+            gestures.add(type);
+            log(`Gesture observed -> ${type}`);
+          }
+        }, { once: true, passive: true });
+      });
     }
 
-    button.addEventListener("pointerdown", (event) => {
-      pointerTriggered = true;
-      requestUnlock(event.type);
-    });
+    function init() {
+      describeEnvironment();
+      updateState();
+      attachStateListener();
+      setupManualButtons();
+      setupGestureLogging();
+      runSequenceBtn.addEventListener("click", runFullSequence);
+      resetBtn.addEventListener("click", resetPage);
+      copyLogBtn.addEventListener("click", copyLogToClipboard);
+      log("Ready. Launch from the home screen and use the buttons above immediately after open.");
+    }
 
-    button.addEventListener("touchstart", (event) => {
-      pointerTriggered = true;
-      requestUnlock(event.type);
-    });
-
-    button.addEventListener("mousedown", (event) => {
-      pointerTriggered = true;
-      requestUnlock(event.type);
-    });
-
-    button.addEventListener("click", (event) => {
-      if (pointerTriggered) {
-        return;
-      }
-      event.preventDefault();
-      requestUnlock(event.type);
-    });
-
-    button.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        requestUnlock(`keydown:${event.key === " " ? "Space" : event.key}`);
-      }
-    });
-
-    updateStatus();
-    attachStateObservers();
-    log("Ready. Tap Unlock Audio after launching from the homescreen.");
-    log(`navigator.standalone: ${typeof navigator !== "undefined" && "standalone" in navigator ? navigator.standalone : "unsupported"}`);
-    log(`display-mode media query: ${describeDisplayMode()}`);
-    log(`Tone.js version: ${Tone?.version ?? "unknown"}`);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+      init();
+    }
   </script>
 </body>
 </html>
