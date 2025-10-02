@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from "react";
 import * as Tone from "tone";
-import type { Track, TriggerMap } from "./tracks";
+import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import type { Chunk } from "./chunks";
 import {
   distributeHarmoniaPatternDegrees,
@@ -30,8 +30,10 @@ import type { PatternGroup } from "./song";
 import { createPatternGroupId } from "./song";
 import { isUserPresetId, loadInstrumentPreset, stripUserPresetPrefix } from "./presets";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
-import { isIOSPWA } from "./utils/audio";
-import { getInstrumentColor, lightenColor } from "./utils/color";
+import { initAudioContext, isIOSPWA } from "./utils/audio";
+import { getInstrumentColor, lightenColor, withAlpha } from "./utils/color";
+import { formatInstrumentLabel } from "./utils/instrument";
+import { InstrumentSettingsPanel } from "./components/InstrumentSettingsPanel";
 
 const getTrackNumberLabel = (tracks: Track[], trackId: number) => {
   const index = tracks.findIndex((track) => track.id === trackId);
@@ -187,6 +189,7 @@ interface LoopStripProps {
   setEditing: Dispatch<SetStateAction<number | null>>;
   setTracks: Dispatch<SetStateAction<Track[]>>;
   packIndex: number;
+  triggers: TriggerMap;
   patternGroups: PatternGroup[];
   setPatternGroups: Dispatch<SetStateAction<PatternGroup[]>>;
   selectedGroupId: string | null;
@@ -210,6 +213,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       setEditing,
       setTracks,
       packIndex,
+      triggers,
       patternGroups,
       setPatternGroups,
       selectedGroupId,
@@ -357,6 +361,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             steps: Array(16).fill(0),
             velocities: Array(16).fill(1),
             pitches: Array(16).fill(0),
+            velocityFactor: 1,
+            pitchOffset: 0,
+            swing: 0,
           },
         };
       })
@@ -450,6 +457,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               steps: Array(16).fill(0),
               velocities: Array(16).fill(1),
               pitches: Array(16).fill(0),
+              velocityFactor: 1,
+              pitchOffset: 0,
+              swing: 0,
             };
         const instrumentDefinition = activePack.instruments[
           instrumentId
@@ -464,6 +474,15 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           ...basePattern,
           characterId: resolvedCharacterId,
         };
+        if (pattern.velocityFactor === undefined) {
+          pattern.velocityFactor = 1;
+        }
+        if (pattern.pitchOffset === undefined) {
+          pattern.pitchOffset = 0;
+        }
+        if (pattern.swing === undefined) {
+          pattern.swing = 0;
+        }
         if (instrumentId === "harmonia") {
           pattern = initializeHarmoniaPattern(
             pattern,
@@ -563,6 +582,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                 steps: Array(16).fill(0),
                 velocities: Array(16).fill(1),
                 pitches: Array(16).fill(0),
+                velocityFactor: 1,
+                pitchOffset: 0,
+                swing: 0,
               };
           const instrumentDefinition = activePack.instruments[
             instrumentId
@@ -577,6 +599,17 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
+          if (nextPattern) {
+            if (nextPattern.velocityFactor === undefined) {
+              nextPattern.velocityFactor = 1;
+            }
+            if (nextPattern.pitchOffset === undefined) {
+              nextPattern.pitchOffset = 0;
+            }
+            if (nextPattern.swing === undefined) {
+              nextPattern.swing = 0;
+            }
+          }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
             nextPattern = initializeHarmoniaPattern(
               nextPattern,
@@ -811,14 +844,98 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     setGroupEditor(null);
   };
 
+  const previewTrackPattern = useCallback(
+    async (track: Track, patternOverride?: Chunk | null) => {
+      const pattern = patternOverride ?? track.pattern;
+      if (!pattern || !track.instrument) return;
+
+      const packId = track.source?.packId ?? pack.id;
+      const triggerKey = createTriggerKey(packId, track.instrument);
+      const trigger = triggers[triggerKey];
+      if (!trigger) return;
+
+      try {
+        await initAudioContext();
+      } catch {
+        return;
+      }
+
+      const start = Tone.now() + 0.05;
+      const sixteenth = Tone.Time("16n").toSeconds();
+      const velocityFactor = pattern.velocityFactor ?? 1;
+      const pitchOffset = pattern.pitchOffset ?? 0;
+      const swing = Math.max(0, Math.min(1, pattern.swing ?? 0));
+      const sustain = pattern.sustain ?? 0.5;
+      const note = pattern.note;
+      const characterId = pattern.characterId ?? track.source?.characterId ?? null;
+
+      const hasActiveSteps = pattern.steps.some(Boolean);
+      if (!hasActiveSteps) {
+        const velocity = Math.max(0, Math.min(1, velocityFactor));
+        trigger(
+          start,
+          velocity,
+          pitchOffset,
+          note,
+          sustain,
+          pattern,
+          characterId ?? undefined
+        );
+        return;
+      }
+
+      pattern.steps.forEach((stepValue, index) => {
+        if (!stepValue) return;
+        const baseTime = start + index * sixteenth;
+        const swingDelay = swing > 0 && index % 2 === 1 ? swing * (sixteenth / 2) : 0;
+        const time = baseTime + swingDelay;
+        const velocity = Math.max(
+          0,
+          Math.min(1, (pattern.velocities?.[index] ?? 1) * velocityFactor)
+        );
+        const pitch = (pattern.pitches?.[index] ?? 0) + pitchOffset;
+        trigger(
+          time,
+          velocity,
+          pitch,
+          note,
+          sustain,
+          pattern,
+          characterId ?? undefined
+        );
+      });
+    },
+    [pack.id, triggers]
+  );
+
+  const mutatePattern = useCallback(
+    (
+      trackId: number,
+      updater: (pattern: Chunk) => Chunk,
+      options: { preview?: boolean } = {}
+    ) => {
+      let previewTrack: Track | null = null;
+      let previewPattern: Chunk | null = null;
+      setTracks((ts) =>
+        ts.map((t) => {
+          if (t.id !== trackId || !t.pattern) {
+            return t;
+          }
+          const updatedPattern = updater(t.pattern);
+          previewTrack = { ...t, pattern: updatedPattern };
+          previewPattern = updatedPattern;
+          return { ...t, pattern: updatedPattern };
+        })
+      );
+      if (options.preview && previewTrack && previewPattern) {
+        void previewTrackPattern(previewTrack, previewPattern);
+      }
+    },
+    [previewTrackPattern, setTracks]
+  );
+
   const updatePattern = (trackId: number, steps: number[]) => {
-    setTracks((ts) =>
-      ts.map((t) =>
-        t.id === trackId && t.pattern
-          ? { ...t, pattern: { ...t.pattern, steps } }
-          : t
-      )
-    );
+    mutatePattern(trackId, (pattern) => ({ ...pattern, steps }));
   };
 
   const updateStep = (
@@ -826,25 +943,28 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     index: number,
     props: { velocity?: number; pitch?: number }
   ) => {
-    setTracks((ts) =>
-      ts.map((t) => {
-        if (t.id === trackId && t.pattern) {
-          const velocities = t.pattern.velocities
-            ? t.pattern.velocities.slice()
-            : Array(16).fill(1);
-          const pitches = t.pattern.pitches
-            ? t.pattern.pitches.slice()
-            : Array(16).fill(0);
-          if (props.velocity !== undefined) velocities[index] = props.velocity;
-          if (props.pitch !== undefined) pitches[index] = props.pitch;
-          return {
-            ...t,
-            pattern: { ...t.pattern, velocities, pitches },
-          };
-        }
-        return t;
-      })
-    );
+    mutatePattern(trackId, (pattern) => {
+      const velocities = pattern.velocities
+        ? pattern.velocities.slice()
+        : Array(16).fill(1);
+      const pitches = pattern.pitches
+        ? pattern.pitches.slice()
+        : Array(16).fill(0);
+      if (props.velocity !== undefined) velocities[index] = props.velocity;
+      if (props.pitch !== undefined) pitches[index] = props.pitch;
+      return { ...pattern, velocities, pitches };
+    });
+  };
+
+  const handleClearTrackPattern = (trackId: number) => {
+    mutatePattern(trackId, (pattern) => {
+      const clearedSteps = pattern.steps.map(() => 0);
+      const cleared = { ...pattern, steps: clearedSteps };
+      if (pattern.velocities) {
+        cleared.velocities = pattern.velocities.map(() => 0);
+      }
+      return cleared;
+    });
   };
 
   return (
@@ -990,6 +1110,41 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           const isMuted = t.muted;
           const isEditing = editing === t.id;
           const trackLabel = getTrackNumberLabel(tracks, t.id);
+          const trackPattern = t.pattern;
+          const trackPackSource = t.source
+            ? packs.find((candidate) => candidate.id === t.source?.packId) ?? pack
+            : pack;
+          const trackInstrumentId = t.source?.instrumentId ?? t.instrument ?? "";
+          const instrumentDefinition = trackInstrumentId
+            ? (trackPackSource.instruments[
+                trackInstrumentId
+              ] as InstrumentDefinition | undefined)
+            : undefined;
+          const fallbackInstrumentId =
+            trackInstrumentId && trackInstrumentId.length > 0
+              ? trackInstrumentId
+              : t.instrument && t.instrument.length > 0
+                ? t.instrument
+                : "instrument";
+          const instrumentName =
+            instrumentDefinition?.name ??
+            formatInstrumentLabel(fallbackInstrumentId);
+          const characterId =
+            t.source?.characterId ?? trackPattern?.characterId ?? null;
+          const characterName =
+            characterId && instrumentDefinition
+              ? instrumentDefinition.characters?.find(
+                  (candidate) => candidate.id === characterId
+                )?.name ?? null
+              : null;
+          const noteName = trackPattern?.note ?? null;
+          const hoverLabel = noteName ?? characterName ?? instrumentName;
+          const velocityFactor = trackPattern?.velocityFactor ?? 1;
+          const pitchOffset = trackPattern?.pitchOffset ?? 0;
+          const swingValue = trackPattern?.swing ?? 0;
+          const hasActiveSteps = trackPattern
+            ? trackPattern.steps.some(Boolean)
+            : false;
           const handleLabelPointerDown = (
             event: ReactPointerEvent<HTMLDivElement>
           ) => {
@@ -1082,39 +1237,135 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   style={{
                     flex: 1,
                     display: "flex",
-                    alignItems: "center",
-                    padding: "0 8px",
-                    background: "#161d2b",
+                    flexDirection: isEditing ? "column" : "row",
+                    alignItems: isEditing ? "stretch" : "center",
+                    padding: isEditing ? "12px 16px" : "0 8px",
+                    background: isEditing ? withAlpha(color, 0.12) : "#161d2b",
                     position: "relative",
                     overflow: "hidden",
                     opacity: isMuted ? 0.3 : 1,
                     filter: isMuted ? "grayscale(0.7)" : "none",
-                    transition: "opacity 0.2s ease, filter 0.2s ease",
+                    gap: isEditing ? 12 : 0,
+                    transition:
+                      "opacity 0.2s ease, filter 0.2s ease, background 0.2s ease",
                   }}
                 >
                   {t.pattern ? (
                     isEditing ? (
-                      <PatternEditor
-                        steps={t.pattern.steps}
-                        onToggle={(i) => {
-                          const next = t.pattern!.steps.slice();
-                          next[i] = next[i] ? 0 : 1;
-                          updatePattern(t.id, next);
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 12,
+                          width: "100%",
+                          height: "100%",
                         }}
-                        onStepLongPress={(i) =>
-                          setStepEditing({ trackId: t.id, index: i })
-                        }
-                        color={color}
-                        currentStep={step}
-                      />
+                      >
+                        <PatternEditor
+                          label={trackLabel}
+                          steps={t.pattern.steps}
+                          onToggle={(i) => {
+                            const next = t.pattern!.steps.slice();
+                            next[i] = next[i] ? 0 : 1;
+                            updatePattern(t.id, next);
+                          }}
+                          onStepLongPress={(i) =>
+                            setStepEditing({ trackId: t.id, index: i })
+                          }
+                          color={color}
+                          currentStep={step}
+                          instrumentLabel={instrumentName}
+                          noteLabel={hoverLabel}
+                        />
+                        <InstrumentSettingsPanel
+                          instrumentName={instrumentName}
+                          styleName={characterName}
+                          color={color}
+                          velocity={velocityFactor}
+                          pitch={pitchOffset}
+                          swing={swingValue}
+                          onVelocityChange={(value) =>
+                            mutatePattern(
+                              t.id,
+                              (pattern) => ({
+                                ...pattern,
+                                velocityFactor: value,
+                              }),
+                              { preview: true }
+                            )
+                          }
+                          onPitchChange={(value) =>
+                            mutatePattern(
+                              t.id,
+                              (pattern) => ({
+                                ...pattern,
+                                pitchOffset: value,
+                              }),
+                              { preview: true }
+                            )
+                          }
+                          onSwingChange={(value) =>
+                            mutatePattern(
+                              t.id,
+                              (pattern) => ({
+                                ...pattern,
+                                swing: value,
+                              }),
+                              { preview: true }
+                            )
+                          }
+                        />
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              alignItems: "center",
+                            }}
+                          >
+                            <IconButton
+                              icon="check"
+                              label="Apply pattern"
+                              tone="accent"
+                              onClick={() => setEditing(null)}
+                              style={{ minWidth: 40, minHeight: 40 }}
+                            />
+                            <IconButton
+                              icon="backspace"
+                              label="Clear pattern"
+                              onClick={() => handleClearTrackPattern(t.id)}
+                              disabled={!hasActiveSteps}
+                              style={{ minWidth: 40, minHeight: 40 }}
+                            />
+                          </div>
+                          <IconButton
+                            icon="play_arrow"
+                            label="Play pattern"
+                            onClick={() => void previewTrackPattern(t, t.pattern ?? null)}
+                            disabled={!t.pattern || !t.instrument}
+                            style={{ minWidth: 40, minHeight: 40 }}
+                          />
+                        </div>
+                      </div>
                     ) : (
                       <div
                         style={{
                           display: "grid",
                           gridTemplateColumns: "repeat(16, 1fr)",
-                          gap: 2,
+                          gap: 3,
                           width: "100%",
                           height: "100%",
+                          padding: "8px 10px",
+                          background: withAlpha(color, 0.08),
+                          borderRadius: 10,
                         }}
                       >
                         {Array.from({ length: 16 }).map((_, i) => {
@@ -1122,25 +1373,41 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                           const isCurrentColumn = step === i;
                           const playing = isCurrentColumn && active;
                           const accentColor = lightenColor(color, 0.25);
+                          const measureIndex = Math.floor(i / 4);
+                          const isEvenMeasure = measureIndex % 2 === 0;
+                          const baseBackground = isEvenMeasure
+                            ? withAlpha(color, 0.16)
+                            : withAlpha(color, 0.1);
                           const background = active
                             ? isCurrentColumn
                               ? accentColor
-                              : color
-                            : "#1f2532";
+                              : lightenColor(color, 0.05)
+                            : baseBackground;
                           const borderColor = isCurrentColumn
-                            ? lightenColor("#555555", 0.2)
-                            : "#555";
+                            ? lightenColor(color, 0.4)
+                            : withAlpha("#ffffff", 0.06);
                           return (
                             <div
                               key={i}
                               style={{
+                                position: "relative",
                                 border: `1px solid ${borderColor}`,
+                                borderLeft:
+                                  i % 4 === 0
+                                    ? `2px solid ${withAlpha("#ffffff", 0.18)}`
+                                    : undefined,
                                 background,
-                                opacity: active ? 1 : isCurrentColumn ? 0.35 : 0.2,
+                                opacity: active
+                                  ? 1
+                                  : isCurrentColumn
+                                    ? 0.45
+                                    : 0.25,
+                                borderRadius: 6,
                                 boxShadow: playing
                                   ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
                                   : "none",
-                                transition: "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
+                                transition:
+                                  "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
                               }}
                             />
                           );
@@ -1154,7 +1421,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                       style={{
                         width: "100%",
                         height: "100%",
-                        borderRadius: 6,
+                        borderRadius: 10,
                         border: t.instrument
                           ? "1px dashed #3b4252"
                           : "1px dashed #242c3c",
@@ -1523,63 +1790,200 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
 );
 
 function PatternEditor({
+  label,
   steps,
   onToggle,
   onStepLongPress,
   color,
   currentStep,
+  instrumentLabel,
+  noteLabel,
 }: {
+  label: string;
   steps: number[];
   onToggle: (index: number) => void;
   onStepLongPress: (index: number) => void;
   color: string;
   currentStep: number;
+  instrumentLabel: string;
+  noteLabel?: string | null;
 }) {
   const longPressRef = useRef(false);
   const timerRef = useRef<number | null>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+      if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
+    };
+  }, []);
+
+  const hideHoverSoon = () => {
+    if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setHoveredIndex(null);
+    }, 200);
+  };
 
   return (
     <div
       style={{
-        flex: 1,
-        width: "100%",
         display: "grid",
-        gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
-        gap: 2,
-        height: "100%",
+        gridTemplateColumns: "auto 1fr",
+        gap: 12,
+        width: "100%",
+        alignItems: "center",
       }}
     >
-      {steps.map((v, i) => {
-        const playing = currentStep === i && v;
-        return (
-          <div
-            key={i}
-            onPointerDown={() => {
-              timerRef.current = window.setTimeout(() => {
-                longPressRef.current = true;
-                onStepLongPress(i);
-              }, 500);
-            }}
-            onPointerUp={() => {
-              if (timerRef.current) window.clearTimeout(timerRef.current);
-              if (longPressRef.current) {
+      <div
+        style={{
+          minWidth: 48,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "6px 12px",
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          background: withAlpha(color, 0.35),
+          color: "#0b1220",
+          boxShadow: `0 6px 14px ${withAlpha(color, 0.35)}`,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
+          gap: 4,
+          padding: "12px 14px",
+          borderRadius: 14,
+          background: withAlpha(color, 0.1),
+          border: `1px solid ${withAlpha(color, 0.35)}`,
+          boxShadow: "inset 0 0 0 1px rgba(12, 18, 32, 0.4)",
+        }}
+      >
+        {steps.map((value, index) => {
+          const isActive = Boolean(value);
+          const isCurrent = currentStep === index;
+          const playing = isCurrent && isActive;
+          const measureIndex = Math.floor(index / 4);
+          const isEvenMeasure = measureIndex % 2 === 0;
+          const baseBackground = isEvenMeasure
+            ? withAlpha(color, 0.16)
+            : withAlpha(color, 0.1);
+          const activeBackground = isCurrent
+            ? lightenColor(color, 0.2)
+            : lightenColor(color, 0.06);
+          const background = isActive ? activeBackground : baseBackground;
+          const borderColor = isCurrent
+            ? lightenColor(color, 0.4)
+            : withAlpha(color, 0.25);
+          const stepNumber = (index + 1).toString().padStart(2, "0");
+          const hoverVisible = hoveredIndex === index || playing;
+          const tooltip = noteLabel ?? instrumentLabel;
+          return (
+            <div
+              key={index}
+              title={`${tooltip} — Step ${stepNumber}`}
+              onPointerDown={() => {
+                if (hoverTimeoutRef.current)
+                  window.clearTimeout(hoverTimeoutRef.current);
+                setHoveredIndex(index);
                 longPressRef.current = false;
-                return;
-              }
-              onToggle(i);
-            }}
-            onPointerLeave={() => {
-              if (timerRef.current) window.clearTimeout(timerRef.current);
-            }}
-            style={{
-              border: "1px solid #555",
-              background: v ? color : "#1f2532",
-              cursor: "pointer",
-              boxShadow: playing ? `0 0 6px ${color}` : "none",
-            }}
-          />
-        );
-      })}
+                timerRef.current = window.setTimeout(() => {
+                  longPressRef.current = true;
+                  onStepLongPress(index);
+                }, 500);
+              }}
+              onPointerEnter={() => {
+                if (hoverTimeoutRef.current)
+                  window.clearTimeout(hoverTimeoutRef.current);
+                setHoveredIndex(index);
+              }}
+              onPointerUp={() => {
+                if (timerRef.current) window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+                if (longPressRef.current) {
+                  longPressRef.current = false;
+                  hideHoverSoon();
+                  return;
+                }
+                onToggle(index);
+                hideHoverSoon();
+              }}
+              onPointerLeave={() => {
+                if (timerRef.current) window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+                longPressRef.current = false;
+                hideHoverSoon();
+              }}
+              onPointerCancel={() => {
+                if (timerRef.current) window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+                longPressRef.current = false;
+                hideHoverSoon();
+              }}
+              style={{
+                position: "relative",
+                border: `1px solid ${borderColor}`,
+                borderLeft:
+                  index % 4 === 0
+                    ? `2px solid ${withAlpha(color, 0.5)}`
+                    : undefined,
+                background,
+                borderRadius: 8,
+                cursor: "pointer",
+                boxShadow: playing
+                  ? `0 0 12px ${lightenColor(color, 0.25)}`
+                  : "inset 0 0 0 1px rgba(12, 18, 32, 0.35)",
+                minHeight: 44,
+                transition:
+                  "background 0.15s ease, box-shadow 0.15s ease, border 0.15s ease",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 6,
+                  left: 8,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "rgba(148, 163, 184, 0.85)",
+                  letterSpacing: 0.4,
+                }}
+              >
+                {stepNumber}
+              </span>
+              <span
+                style={{
+                  position: "absolute",
+                  bottom: 6,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  padding: "2px 6px",
+                  borderRadius: 6,
+                  background: "rgba(10, 14, 22, 0.82)",
+                  color: "#e2e8f0",
+                  opacity: hoverVisible ? 1 : 0,
+                  pointerEvents: "none",
+                  transition: "opacity 0.15s ease",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {tooltip}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
