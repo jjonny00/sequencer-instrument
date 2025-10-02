@@ -396,6 +396,33 @@
       }
     }
 
+    async function requestMicrophoneAccess() {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+        log("MediaDevices: getUserMedia unavailable", "warn");
+        return false;
+      }
+      log("MediaDevices: requesting microphone access");
+      let stream;
+      try {
+        stream = await raceWithTimeout(
+          navigator.mediaDevices.getUserMedia({ audio: true }),
+          4000,
+          "getUserMedia timed out"
+        );
+        log("MediaDevices: microphone access granted");
+        return true;
+      } catch (err) {
+        log(`MediaDevices: failed -> ${err.message || err}`, "warn");
+        return false;
+      } finally {
+        if (stream) {
+          for (const track of stream.getTracks()) {
+            track.stop();
+          }
+        }
+      }
+    }
+
     async function adoptFreshContext() {
       if (typeof Tone.Context !== "function" || typeof Tone.setContext !== "function") {
         log("Fresh context: Tone.setContext unavailable", "warn");
@@ -477,6 +504,12 @@
           updateStatus();
         }
 
+        if (!recovered) {
+          const micResult = await requestMicrophoneAccess();
+          recovered = recovered || micResult;
+          updateStatus();
+        }
+
         currentRaw = getRawContext();
         if (!recovered && currentRaw?.state !== "running") {
           recovered = await resumeContext(currentRaw, `${trigger} post-prime`);
@@ -533,6 +566,12 @@
         updateStatus();
       }
 
+      if (!unlocked) {
+        const micResult = await requestMicrophoneAccess();
+        unlocked = unlocked || micResult;
+        updateStatus();
+      }
+
       currentRaw = getRawContext();
       if (!unlocked || currentRaw?.state !== "running") {
         const fresh = await adoptFreshContext();
@@ -554,7 +593,7 @@
         log("Success: AudioContext is running");
         await playVerificationTone();
       } else {
-        setError("Audio context is still suspended. See log for details and try toggling audio outputs.");
+        setError("Audio context is still suspended. See log for details, try toggling audio outputs, or grant microphone access if prompted.");
       }
       updateStatus();
     }
