@@ -224,6 +224,24 @@
       console[consoleMethod](message);
     }
 
+    function describeDisplayMode() {
+      if (typeof window.matchMedia === "function") {
+        const modes = [
+          "fullscreen",
+          "standalone",
+          "minimal-ui",
+          "browser",
+        ];
+        for (const mode of modes) {
+          const media = window.matchMedia(`(display-mode: ${mode})`);
+          if (media.matches) {
+            return mode;
+          }
+        }
+      }
+      return "unknown";
+    }
+
     function setError(message) {
       if (!message) {
         errorEl.textContent = "";
@@ -477,12 +495,16 @@
       }
     }
 
-    async function runUnlockSequence() {
+    async function runUnlockSequence(trigger) {
       setError("");
       updateStatus();
       attachStateObservers();
 
       autoRecoveryCount = 0;
+
+      if (trigger) {
+        log(`Unlock triggered by ${trigger}`);
+      }
 
       const toneCtx = getToneContext();
       const rawCtx = getRawContext();
@@ -537,18 +559,61 @@
       updateStatus();
     }
 
-    button.addEventListener("click", async () => {
+    let unlockInProgress = false;
+    let pointerTriggered = false;
+
+    async function requestUnlock(trigger) {
+      if (unlockInProgress) {
+        log(`Unlock attempt ignored; another attempt (${trigger}) is running`, "warn");
+        return;
+      }
+      unlockInProgress = true;
       button.disabled = true;
       try {
-        await runUnlockSequence();
+        await runUnlockSequence(trigger);
       } finally {
+        unlockInProgress = false;
         button.disabled = false;
+        pointerTriggered = false;
+      }
+    }
+
+    button.addEventListener("pointerdown", (event) => {
+      pointerTriggered = true;
+      requestUnlock(event.type);
+    });
+
+    button.addEventListener("touchstart", (event) => {
+      pointerTriggered = true;
+      requestUnlock(event.type);
+    });
+
+    button.addEventListener("mousedown", (event) => {
+      pointerTriggered = true;
+      requestUnlock(event.type);
+    });
+
+    button.addEventListener("click", (event) => {
+      if (pointerTriggered) {
+        return;
+      }
+      event.preventDefault();
+      requestUnlock(event.type);
+    });
+
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        requestUnlock(`keydown:${event.key === " " ? "Space" : event.key}`);
       }
     });
 
     updateStatus();
     attachStateObservers();
     log("Ready. Tap Unlock Audio after launching from the homescreen.");
+    log(`navigator.standalone: ${typeof navigator !== "undefined" && "standalone" in navigator ? navigator.standalone : "unsupported"}`);
+    log(`display-mode media query: ${describeDisplayMode()}`);
+    log(`Tone.js version: ${Tone?.version ?? "unknown"}`);
   </script>
 </body>
 </html>
