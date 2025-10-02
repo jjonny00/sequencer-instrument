@@ -6,51 +6,374 @@
   <title>Unlock Test</title>
   <script src="https://cdn.jsdelivr.net/npm/tone@next/build/Tone.js"></script>
   <style>
+    :root {
+      color-scheme: dark;
+    }
+
     body {
-      font-family: sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101014;
+      color: #f5f5f5;
+      margin: 0;
+      min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      padding: 24px;
+    }
+
+    main {
+      width: min(480px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 {
       margin: 0;
-      background: #111;
-      color: #fff;
+      font-size: 1.6rem;
+      text-align: center;
     }
+
     button {
-      padding: 1em 2em;
-      font-size: 1.2em;
-      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 1.1rem;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, #4f46e5, #22d3ee);
+      color: #fff;
+      transition: transform 120ms ease, opacity 120ms ease;
     }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
     #status {
-      margin-top: 1em;
-      font-size: 1.1em;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.95rem;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(15, 118, 110, 0.15);
+      border: 1px solid rgba(34, 211, 238, 0.35);
+    }
+
+    #error {
+      display: none;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(244, 63, 94, 0.18);
+      border: 1px solid rgba(244, 63, 94, 0.55);
+      color: #fecdd3;
+    }
+
+    #error[aria-hidden="false"] {
+      display: block;
+    }
+
+    #log {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 12px;
+      max-height: 240px;
+      overflow-y: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+
+    #log .warn {
+      color: #fbbf24;
+    }
+
+    #log .error {
+      color: #f87171;
+    }
+
+    footer {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <button id="unlock">Unlock Audio</button>
-  <div id="status">State: (not checked yet)</div>
+  <main>
+    <h1>Tone.js Audio Unlock Tester</h1>
+    <button id="unlock">Unlock Audio</button>
+    <div id="status" role="status" aria-live="polite">State: (not checked yet)</div>
+    <div id="error" role="alert" aria-live="assertive" aria-hidden="true"></div>
+    <div id="log" aria-live="polite"></div>
+    <footer>
+      Runs entirely on the client &middot; Navigate to /unlock-test.html anytime
+    </footer>
+  </main>
 
   <script>
-    const btn = document.getElementById("unlock");
-    const status = document.getElementById("status");
+    const button = document.getElementById("unlock");
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const errorEl = document.getElementById("error");
 
-    function updateState() {
-      status.textContent = "State: " + Tone.context.state;
+    let observedRawContext = null;
+
+    function getToneContext() {
+      if (typeof Tone.getContext === "function") {
+        return Tone.getContext();
+      }
+      return Tone.context;
     }
 
-    btn.addEventListener("click", async () => {
+    function getRawContext() {
+      const ctx = getToneContext();
+      if (!ctx) return null;
+      return ctx.rawContext || ctx.context || ctx._context || ctx;
+    }
+
+    function timestamp() {
+      return new Date().toLocaleTimeString();
+    }
+
+    function log(message, level = "info") {
+      const entry = document.createElement("div");
+      entry.textContent = `[${timestamp()}] ${message}`;
+      if (level !== "info") {
+        entry.classList.add(level);
+      }
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+      const consoleMethod = level === "error" ? "error" : level === "warn" ? "warn" : "log";
+      console[consoleMethod](message);
+    }
+
+    function setError(message) {
+      if (!message) {
+        errorEl.textContent = "";
+        errorEl.setAttribute("aria-hidden", "true");
+        return;
+      }
+      errorEl.textContent = message;
+      errorEl.setAttribute("aria-hidden", "false");
+    }
+
+    function updateStatus() {
+      const toneCtx = getToneContext();
+      const rawCtx = getRawContext();
+      const toneState = toneCtx?.state ?? "unknown";
+      const audioState = rawCtx?.state ?? "unknown";
+      statusEl.textContent = `Tone: ${toneState} | AudioContext: ${audioState}`;
+    }
+
+    function attachStateObservers() {
+      const rawCtx = getRawContext();
+      if (!rawCtx || observedRawContext === rawCtx || typeof rawCtx.addEventListener !== "function") {
+        return;
+      }
+      observedRawContext = rawCtx;
+      rawCtx.addEventListener("statechange", () => {
+        log(`AudioContext statechange -> ${rawCtx.state}`);
+        updateStatus();
+      });
+      log("Listening for AudioContext state changes");
+    }
+
+    function raceWithTimeout(promise, timeoutMs, timeoutMessage) {
+      let timerId;
+      const wrapped = Promise.resolve(promise).then(
+        (value) => {
+          clearTimeout(timerId);
+          return value;
+        },
+        (err) => {
+          clearTimeout(timerId);
+          throw err;
+        }
+      );
+      const timeoutPromise = new Promise((_, reject) => {
+        timerId = setTimeout(() => {
+          reject(new Error(timeoutMessage));
+        }, timeoutMs);
+      });
+      return Promise.race([wrapped, timeoutPromise]);
+    }
+
+    async function startToneWithTimeout(timeoutMs = 500) {
+      log("Attempting Tone.start() with timeout...");
       try {
-        await Tone.start();
-        updateState();
-        console.log("Tone.start() called, state:", Tone.context.state);
+        await raceWithTimeout(Tone.start(), timeoutMs, `Tone.start() timed out after ${timeoutMs}ms`);
+        log("Tone.start() resolved successfully");
+        return true;
       } catch (err) {
-        console.error("Unlock error:", err);
+        log(`Tone.start() failed -> ${err.message || err}`, "warn");
+        return false;
+      }
+    }
+
+    async function resumeContext(ctx, label) {
+      if (!ctx || typeof ctx.resume !== "function") {
+        log(`${label}: resume() not available on context`, "warn");
+        return false;
+      }
+      try {
+        log(`${label}: calling rawContext.resume()`);
+        await raceWithTimeout(ctx.resume(), 500, `${label}: resume() timed out`);
+        log(`${label}: rawContext.resume() resolved -> ${ctx.state}`);
+        return ctx.state === "running";
+      } catch (err) {
+        log(`${label}: rawContext.resume() error -> ${err.message || err}`, "warn");
+        return false;
+      }
+    }
+
+    async function primeWithSilentBuffer(ctx) {
+      if (!ctx || typeof ctx.createBuffer !== "function") {
+        log("Prime: AudioContext buffer APIs unavailable", "warn");
+        return false;
+      }
+      try {
+        log("Prime: scheduling near-silent bufferSource");
+        const buffer = ctx.createBuffer(1, Math.max(1, ctx.sampleRate / 10), ctx.sampleRate);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+        source.stop(ctx.currentTime + 0.1);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        log("Prime: bufferSource played");
+        return ctx.state === "running";
+      } catch (err) {
+        log(`Prime: failed -> ${err.message || err}`, "warn");
+        return false;
+      }
+    }
+
+    async function adoptFreshContext() {
+      if (typeof Tone.Context !== "function" || typeof Tone.setContext !== "function") {
+        log("Fresh context: Tone.setContext unavailable", "warn");
+        return false;
+      }
+      const NewAudioContext = window.AudioContext || window.webkitAudioContext;
+      if (typeof NewAudioContext !== "function") {
+        log("Fresh context: AudioContext constructor unavailable", "warn");
+        return false;
+      }
+      try {
+        log("Fresh context: creating new AudioContext");
+        const freshRaw = new NewAudioContext();
+        const freshTone = new Tone.Context(freshRaw);
+        Tone.setContext(freshTone);
+        observedRawContext = null;
+        attachStateObservers();
+        updateStatus();
+        log("Fresh context: Tone now bound to new AudioContext");
+        return true;
+      } catch (err) {
+        log(`Fresh context: failed -> ${err.message || err}`, "warn");
+        return false;
+      }
+    }
+
+    async function playVerificationTone() {
+      const ctx = getRawContext();
+      if (!ctx) {
+        log("Verify: no AudioContext to play tone", "warn");
+        return;
+      }
+      try {
+        log("Verify: scheduling short tone");
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0.05;
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        const now = ctx.currentTime;
+        osc.start(now);
+        osc.stop(now + 0.2);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        log("Verify: tone finished");
+      } catch (err) {
+        log(`Verify: failed -> ${err.message || err}`, "warn");
+      }
+    }
+
+    async function runUnlockSequence() {
+      setError("");
+      updateStatus();
+      attachStateObservers();
+
+      const toneCtx = getToneContext();
+      const rawCtx = getRawContext();
+      log(`Before unlock -> Tone: ${toneCtx?.state ?? "unknown"} | AudioContext: ${rawCtx?.state ?? "unknown"}`);
+
+      let unlocked = await startToneWithTimeout();
+      updateStatus();
+
+      let currentRaw = getRawContext();
+      if (!unlocked && currentRaw?.state !== "running") {
+        const resumed = await resumeContext(currentRaw, "initial");
+        unlocked = unlocked || resumed;
+        updateStatus();
+      }
+
+      currentRaw = getRawContext();
+      if (!unlocked && currentRaw?.state !== "running") {
+        const primed = await primeWithSilentBuffer(currentRaw);
+        unlocked = unlocked || primed;
+        updateStatus();
+      }
+
+      currentRaw = getRawContext();
+      if (!unlocked || currentRaw?.state !== "running") {
+        const fresh = await adoptFreshContext();
+        if (fresh) {
+          updateStatus();
+          const retryStart = await startToneWithTimeout();
+          unlocked = unlocked || retryStart;
+          const freshRaw = getRawContext();
+          if (freshRaw?.state !== "running") {
+            const resumed = await resumeContext(freshRaw, "fresh");
+            unlocked = unlocked || resumed;
+          }
+          updateStatus();
+        }
+      }
+
+      currentRaw = getRawContext();
+      if (currentRaw?.state === "running") {
+        log("Success: AudioContext is running");
+        await playVerificationTone();
+      } else {
+        setError("Audio context is still suspended. See log for details and try toggling audio outputs.");
+      }
+      updateStatus();
+    }
+
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await runUnlockSequence();
+      } finally {
+        button.disabled = false;
       }
     });
 
-    updateState();
+    updateStatus();
+    attachStateObservers();
+    log("Ready. Tap Unlock Audio after launching from the homescreen.");
   </script>
 </body>
 </html>
