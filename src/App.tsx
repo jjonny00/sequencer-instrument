@@ -35,7 +35,6 @@ import {
   createPerformanceSettingsSnapshot,
   createPerformanceTrackId,
   createSongRow,
-  getNextPatternGroupName,
   getPerformanceTracksSpanMeasures,
 } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
