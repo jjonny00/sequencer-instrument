@@ -416,8 +416,6 @@ export default function App() {
   const [songRows, setSongRows] = useState<SongRow[]>([
     createSongRow(),
   ]);
-  const [isSongInstrumentPanelOpen, setIsSongInstrumentPanelOpen] =
-    useState(false);
   const [isSongOptionsMenuOpen, setIsSongOptionsMenuOpen] = useState(false);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
@@ -493,12 +491,6 @@ export default function App() {
   useEffect(() => {
     latestTracksRef.current = tracks;
   }, [tracks]);
-
-  useEffect(() => {
-    if (viewMode !== "song") {
-      setIsSongInstrumentPanelOpen(false);
-    }
-  }, [viewMode]);
 
   const loopStateSignature = useMemo(
     () =>
@@ -3351,7 +3343,6 @@ export default function App() {
                 onSelectPerformanceTrack={setActivePerformanceTrackId}
                 onUpdatePerformanceTrack={updatePerformanceTrack}
                 onRemovePerformanceTrack={removePerformanceTrack}
-                onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
                 onSaveSong={openSaveProjectModal}
                 onOpenSongOptions={openSongOptionsMenu}
               />

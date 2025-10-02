@@ -50,7 +50,6 @@ interface SongViewProps {
   activePerformanceTrackId: string | null;
   onAddPerformanceTrack?: () => void;
   onSelectPerformanceTrack?: (trackId: string | null) => void;
-  onPlayInstrumentOpenChange?: (open: boolean) => void;
   onUpdatePerformanceTrack?: (
     trackId: string,
     updater: (track: PerformanceTrack) => PerformanceTrack
@@ -547,7 +546,6 @@ export function SongView({
   activePerformanceTrackId,
   onAddPerformanceTrack,
   onSelectPerformanceTrack,
-  onPlayInstrumentOpenChange,
   onUpdatePerformanceTrack,
   onRemovePerformanceTrack,
   onSaveSong,
@@ -591,10 +589,6 @@ export function SongView({
       ),
     [performanceTracks]
   );
-
-  useEffect(() => {
-    onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
-  }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
 
   const applyPerformanceSettings = useCallback(
     (pattern: Chunk) => {
