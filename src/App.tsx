@@ -1614,6 +1614,18 @@ export default function App() {
     clearTrackPattern(selectedTrack.id);
   }, [selectedTrack, canClearSelectedTrack, clearTrackPattern]);
 
+  const handleDeleteSelectedTrack = useCallback(() => {
+    if (!selectedTrack) return;
+    const trackName = selectedTrack.name?.trim();
+    const message = trackName
+      ? `Delete track "${trackName}"? This action cannot be undone.`
+      : "Delete this track? This action cannot be undone.";
+    if (!window.confirm(message)) {
+      return;
+    }
+    loopStripRef.current?.removeTrack(selectedTrack.id);
+  }, [selectedTrack]);
+
   const buildProjectSnapshot = useCallback((): StoredProjectData => ({
     packIndex,
     bpm,
@@ -3032,19 +3044,23 @@ export default function App() {
                         }}
                       >
                         <button
-                          aria-label="Done editing"
-                          onClick={() => setEditing(null)}
+                          aria-label="Delete track"
+                          onClick={handleDeleteSelectedTrack}
+                          disabled={!selectedTrack}
                           style={{
                             ...controlButtonBaseStyle,
-                            background: "#27E0B0",
-                            color: "#1F2532",
+                            background: "#111827",
+                            border: "1px solid #333",
+                            color: selectedTrack ? "#f87171" : "#475569",
+                            cursor: selectedTrack ? "pointer" : "not-allowed",
+                            opacity: selectedTrack ? 1 : 0.6,
                           }}
                         >
                           <span
                             className="material-symbols-outlined"
                             style={controlIconStyle}
                           >
-                            check
+                            delete
                           </span>
                         </button>
                         {selectedTrack && canRecordSelectedTrack ? (
