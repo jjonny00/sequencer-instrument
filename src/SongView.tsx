@@ -39,6 +39,7 @@ interface SongViewProps {
   bpm: number;
   setBpm: Dispatch<SetStateAction<number>>;
   onToggleTransport: () => void;
+  onCreateLoop?: () => void;
   selectedGroupId: string | null;
   onSelectLoop: (groupId: string) => void;
   performanceTracks: PerformanceTrack[];
@@ -492,6 +493,7 @@ export function SongView({
   bpm,
   setBpm,
   onToggleTransport,
+  onCreateLoop,
   selectedGroupId,
   onSelectLoop,
   performanceTracks,
@@ -1260,9 +1262,10 @@ export function SongView({
           >
             <IconButton
               icon="add"
-              label="Add loop column"
-              onClick={handleAddLoopColumn}
-              title="Add loop column"
+              label="Create new loop"
+              onClick={() => onCreateLoop?.()}
+              title="Create new loop"
+              disabled={!onCreateLoop}
               style={{
                 minWidth: 40,
                 minHeight: 40,

@@ -35,6 +35,7 @@ import {
   createPerformanceSettingsSnapshot,
   createPerformanceTrackId,
   createSongRow,
+  getNextPatternGroupName,
   getPerformanceTracksSpanMeasures,
 } from "./song";
 import { AddTrackModal } from "./AddTrackModal";
@@ -2290,6 +2291,36 @@ export default function App() {
     [setSelectedGroupId, setEditing, viewMode, setPendingLoopStripAction]
   );
 
+  const handleCreateLoopFromSongView = useCallback(() => {
+    const newId = createPatternGroupId();
+    setPatternGroups((groups) => {
+      const name = getNextPatternGroupName(groups);
+      return [
+        ...groups,
+        {
+          id: newId,
+          name,
+          tracks: [],
+        },
+      ];
+    });
+    setSelectedGroupId(newId);
+    setTracks([]);
+    latestTracksRef.current = [];
+    currentLoopDraftRef.current = [];
+    setEditing(null);
+    skipLoopDraftRestoreRef.current = true;
+    setViewMode("track");
+    setPendingLoopStripAction(null);
+  }, [
+    setPatternGroups,
+    setSelectedGroupId,
+    setTracks,
+    setEditing,
+    setViewMode,
+    setPendingLoopStripAction,
+  ]);
+
   const handleConfirmAddTrack = useCallback(() => {
     if (!addTrackModalState.instrumentId || !addTrackModalState.packId) {
       closeAddTrackModal();
@@ -3314,6 +3345,7 @@ export default function App() {
                 bpm={bpm}
                 setBpm={setBpm}
                 onToggleTransport={handlePlayStop}
+                onCreateLoop={handleCreateLoopFromSongView}
                 selectedGroupId={selectedGroupId}
                 onSelectLoop={handleSelectLoopFromSongView}
                 performanceTracks={performanceTracks}
