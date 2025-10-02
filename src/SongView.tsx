@@ -56,6 +56,9 @@ interface SongViewProps {
     updater: (track: PerformanceTrack) => PerformanceTrack
   ) => void;
   onRemovePerformanceTrack?: (trackId: string) => void;
+  onSaveSong?: () => void;
+  onOpenLoadSong?: () => void;
+  onOpenExportSong?: () => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -500,6 +503,9 @@ export function SongView({
   onPlayInstrumentOpenChange,
   onUpdatePerformanceTrack,
   onRemovePerformanceTrack,
+  onSaveSong,
+  onOpenLoadSong,
+  onOpenExportSong,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -507,6 +513,7 @@ export function SongView({
   const [rowSettingsIndex, setRowSettingsIndex] = useState<number | null>(null);
   const [isTimelineExpanded, setTimelineExpanded] = useState(false);
   const [isPlayInstrumentOpen, setPlayInstrumentOpen] = useState(false);
+  const [isOverflowMenuOpen, setOverflowMenuOpen] = useState(false);
   const [playInstrument, setPlayInstrument] =
     useState<TrackInstrument>("keyboard");
   const [playInstrumentPattern, setPlayInstrumentPattern] = useState<Chunk>(() =>
@@ -516,7 +523,8 @@ export function SongView({
   const [playInstrumentRowTrackId, setPlayInstrumentRowTrackId] = useState<
     string | null
   >(activePerformanceTrackId);
-  const [isQuantizedRecording, setIsQuantizedRecording] = useState(true);
+  const overflowMenuRef = useRef<HTMLDivElement | null>(null);
+  const isQuantizedRecording = true;
   const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
   const wasRecordingRef = useRef(false);
@@ -543,6 +551,22 @@ export function SongView({
   useEffect(() => {
     onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
   }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
+
+  useEffect(() => {
+    if (!isOverflowMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!overflowMenuRef.current) return;
+      const target = event.target as Node | null;
+      if (target && overflowMenuRef.current.contains(target)) {
+        return;
+      }
+      setOverflowMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isOverflowMenuOpen]);
 
   const applyPerformanceSettings = useCallback(
     (pattern: Chunk) => {
@@ -771,13 +795,12 @@ export function SongView({
 
   useEffect(() => {
     setPlayInstrumentPattern((prev) => {
-      const nextMode = isQuantizedRecording ? "sync" : "free";
-      if (prev.timingMode === nextMode) {
+      if (prev.timingMode === "sync") {
         return prev;
       }
-      return { ...prev, timingMode: nextMode };
+      return { ...prev, timingMode: "sync" };
     });
-  }, [isQuantizedRecording]);
+  }, []);
 
   useEffect(() => {
     if (recordingActive && !wasRecordingRef.current) {
@@ -884,7 +907,7 @@ export function SongView({
     }
   }, [rowSettingsIndex, songRows.length]);
 
-  const handleAddSection = () => {
+  const handleAddLoopColumn = () => {
     setSongRows((rows) => {
       if (rows.length === 0) {
         return [createSongRow(1)];
@@ -1179,6 +1202,10 @@ export function SongView({
       ((activePerformanceTrack?.notes.length ?? 0) > 0 ||
         liveGhostNotes.length > 0)
   );
+  const selectedPerformanceToolbarTrack = playInstrumentRowTrackId
+    ? performanceTrackMap.get(playInstrumentRowTrackId) ?? null
+    : null;
+  const showPerformanceToolbar = Boolean(selectedPerformanceToolbarTrack);
   const hasRowSettings =
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length;
   const rowSettingsRow =
@@ -1220,76 +1247,338 @@ export function SongView({
             display: "flex",
             alignItems: "center",
             gap: 12,
+            flexWrap: "wrap",
           }}
         >
-          <h2
+          <div
             style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <IconButton
+              icon="add"
+              label="Add loop column"
+              onClick={handleAddLoopColumn}
+              title="Add loop column"
+              style={{
+                minWidth: 40,
+                minHeight: 40,
+                borderRadius: 999,
+                background: "#1f2532",
+              }}
+            />
+            <button
+              aria-label={isPlaying ? "Stop" : "Play"}
+              onPointerDown={onToggleTransport}
+              onPointerUp={(event) => event.currentTarget.blur()}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                border: "1px solid #333",
+                background: isPlaying ? "#E02749" : "#27E0B0",
+                color: isPlaying ? "#ffe4e6" : "#1F2532",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 24,
+              }}
+            >
+              <span className="material-symbols-outlined">
+                {isPlaying ? "stop" : "play_arrow"}
+              </span>
+            </button>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                minWidth: 96,
+              }}
+            >
+              <label
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 0.2,
+                  color: "#cbd5f5",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                BPM
+              </label>
+              <select
+                value={bpm}
+                onChange={(event) =>
+                  setBpm(parseInt(event.target.value, 10))
+                }
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  background: "#121827",
+                  color: "#e6f2ff",
+                  border: "1px solid #2a3344",
+                  minWidth: 0,
+                }}
+              >
+                {[90, 100, 110, 120, 130].map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <select
+            aria-label="Current loop"
+            value={selectedGroupId ?? patternGroups[0]?.id ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              onSelectLoop(value || null);
+              setRowSettingsIndex(null);
+              setEditingSlot(null);
+            }}
+            style={{
+              flex: "1 1 160px",
+              minWidth: 0,
+              padding: 10,
+              borderRadius: 12,
+              border: "1px solid #2f384a",
+              background: "#111827",
               color: "#e6f2ff",
             }}
           >
-            Timeline
-          </h2>
-          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+            {patternGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                📼 {group.name}
+              </option>
+            ))}
+          </select>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginLeft: "auto",
+            }}
+          >
             <IconButton
-              icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
-              label={timelineToggleLabel}
-              onClick={() => setTimelineExpanded((previous) => !previous)}
-              style={{ minWidth: 0 }}
+              icon="save"
+              label="Save song"
+              title="Save song"
+              tone="accent"
+              onClick={() => {
+                setOverflowMenuOpen(false);
+                onSaveSong?.();
+              }}
+              disabled={!onSaveSong}
             />
-            <button
-              onClick={handleAddPerformanceTrack}
-              disabled={!onAddPerformanceTrack}
+            <div
+              ref={overflowMenuRef}
               style={{
-                padding: "6px 14px",
-                borderRadius: 20,
-                border: "1px solid #27E0B0",
-                background: onAddPerformanceTrack ? "#27E0B0" : "#273041",
-                color: onAddPerformanceTrack ? "#0b1220" : "#475569",
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                whiteSpace: "nowrap",
-                cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
-                boxShadow: onAddPerformanceTrack
-                  ? "0 2px 8px rgba(39,224,176,0.35)"
-                  : "none",
-                transition: "background 0.2s ease, border 0.2s ease",
+                position: "relative",
+                display: "flex",
               }}
             >
-              + Track
-            </button>
-            <button
-              onClick={handleAddRow}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Row
-            </button>
-            <button
-              onClick={handleAddSection}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Sequence
-            </button>
+              <IconButton
+                icon="more_horiz"
+                label="Song options"
+                title="Song options"
+                onClick={() => setOverflowMenuOpen((previous) => !previous)}
+                style={{ minWidth: 44 }}
+              />
+              {isOverflowMenuOpen ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 8px)",
+                    right: 0,
+                    background: "#0f172a",
+                    border: "1px solid #1f2937",
+                    borderRadius: 12,
+                    padding: 8,
+                    boxShadow: "0 18px 40px rgba(8,15,28,0.6)",
+                    minWidth: 180,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                    zIndex: 50,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOverflowMenuOpen(false);
+                      onOpenLoadSong?.();
+                    }}
+                    disabled={!onOpenLoadSong}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid transparent",
+                      background: "transparent",
+                      color: "#e2e8f0",
+                      textAlign: "left",
+                      fontSize: 13,
+                      cursor: onOpenLoadSong ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    Load song
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOverflowMenuOpen(false);
+                      onOpenExportSong?.();
+                    }}
+                    disabled={!onOpenExportSong}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid transparent",
+                      background: "transparent",
+                      color: "#e2e8f0",
+                      textAlign: "left",
+                      fontSize: 13,
+                      cursor: onOpenExportSong ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    Export audio
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+          }}
+        >
+          {showPerformanceToolbar ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <IconButton
+                icon={isPlaying ? "stop" : "play_arrow"}
+                label={isPlaying ? "Stop playback" : "Play song"}
+                onClick={onToggleTransport}
+                style={{ minWidth: 44 }}
+              />
+              <IconButton
+                icon="cleaning_services"
+                label="Clear performance row"
+                onClick={handleClearRecording}
+                disabled={!canClearRecording}
+                style={{ minWidth: 44 }}
+              />
+              <IconButton
+                icon="tune"
+                label="Open row settings"
+                onClick={() => {
+                  if (liveRowIndex >= 0) {
+                    setRowSettingsIndex(liveRowIndex);
+                  }
+                }}
+                disabled={liveRowIndex < 0}
+                style={{ minWidth: 44 }}
+              />
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                flex: 1,
+              }}
+            >
+              {showEmptyTimeline ? (
+                <span style={{ fontSize: 13, color: "#94a3b8" }}>
+                  Add loops and tracks to build your song timeline.
+                </span>
+              ) : null}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  onClick={handleAddLoopColumn}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 999,
+                    border: "1px solid #2f384a",
+                    background: "#111827",
+                    color: "#e6f2ff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    letterSpacing: 0.3,
+                    cursor: "pointer",
+                  }}
+                >
+                  + Loop
+                </button>
+                <button
+                  onClick={handleAddRow}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 999,
+                    border: "1px solid #2f384a",
+                    background: "#111827",
+                    color: "#e6f2ff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    letterSpacing: 0.3,
+                    cursor: "pointer",
+                  }}
+                >
+                  + Row
+                </button>
+                <button
+                  onClick={handleAddPerformanceTrack}
+                  disabled={!onAddPerformanceTrack}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 999,
+                    border: "1px solid #27E0B0",
+                    background: onAddPerformanceTrack ? "#27E0B0" : "#1f2532",
+                    color: onAddPerformanceTrack ? "#0b1624" : "#475569",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    letterSpacing: 0.3,
+                    cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
+                    boxShadow: onAddPerformanceTrack
+                      ? "0 2px 6px rgba(39,224,176,0.35)"
+                      : "none",
+                  }}
+                >
+                  + Track
+                </button>
+              </div>
+            </div>
+          )}
+          <IconButton
+            icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
+            label={timelineToggleLabel}
+            onClick={() => setTimelineExpanded((previous) => !previous)}
+            style={{ minWidth: 44 }}
+          />
         </div>
         <div
           className="scrollable"
@@ -1342,7 +1631,7 @@ export function SongView({
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
                         delete
                       </span>
-                      <span>Seq {columnIndex + 1}</span>
+                      <span>Loop {columnIndex + 1}</span>
                     </button>
                   ))}
                 </div>
@@ -1370,7 +1659,7 @@ export function SongView({
                   fontSize: 13,
                 }}
               >
-                Add a sequence to start placing loops into the timeline.
+                Add a loop to start placing loops into the timeline.
               </div>
             ) : (
               songRows.map((row, rowIndex) => {
@@ -1801,7 +2090,7 @@ export function SongView({
                                   ? null
                                   : patternGroups.length > 0
                                   ? "Tap to assign"
-                                  : "Save a sequence in Track view";
+                                  : "Save a loop in Track view";
                                 const performanceSlotStatus = isRecordingRow
                                   ? "Recording"
                                   : hasPerformanceContent
@@ -2058,64 +2347,6 @@ export function SongView({
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <label>BPM</label>
-          <select
-            value={bpm}
-            onChange={(e) => setBpm(parseInt(e.target.value, 10))}
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              background: "#121827",
-              color: "white",
-            }}
-          >
-            {[90, 100, 110, 120, 130].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button
-            aria-label={isPlaying ? "Stop" : "Play"}
-            onPointerDown={onToggleTransport}
-            onPointerUp={(e) => e.currentTarget.blur()}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 8,
-              border: "1px solid #333",
-              background: isPlaying ? "#E02749" : "#27E0B0",
-              color: isPlaying ? "#ffe4e6" : "#1F2532",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 24,
-            }}
-          >
-            <span className="material-symbols-outlined">
-              {isPlaying ? "stop" : "play_arrow"}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
           flexDirection: "column",
           gap: 12,
           flex: 1,
@@ -2257,33 +2488,6 @@ export function SongView({
                   {liveRowMessage}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsQuantizedRecording((prev) => !prev)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: `1px solid ${
-                    isQuantizedRecording ? playInstrumentColor : "#2a3344"
-                  }`,
-                  background: isQuantizedRecording
-                    ? withAlpha(playInstrumentColor, 0.18)
-                    : "#0f172a",
-                  color: "#e6f2ff",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: 0.8,
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-                title={
-                  isQuantizedRecording
-                    ? "Quantized recording is on — notes snap to the grid."
-                    : "Quantized recording is off — capture free timing."
-                }
-              >
-                Quantize {isQuantizedRecording ? "On" : "Off"}
-              </button>
             </div>
             <div
               style={{
@@ -2308,142 +2512,7 @@ export function SongView({
               Audition sounds or capture a new take for this performance row.
             </span>
           </div>
-        ) : (
-          <div
-            className="scrollable"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              paddingRight: 4,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "#e6f2ff",
-                }}
-              >
-                Loops Library
-              </h3>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: "#94a3b8",
-                }}
-              >
-                Save and edit loops in Track view, then place them onto the song
-                timeline.
-              </span>
-            </div>
-            {patternGroups.length === 0 ? (
-              <div
-                style={{
-                  padding: 16,
-                  borderRadius: 8,
-                  border: "1px dashed #475569",
-                  color: "#94a3b8",
-                  fontSize: 13,
-                }}
-              >
-                No loops yet. Create loops in Track view to start arranging
-                the song.
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                {patternGroups.map((group) => {
-                  const trackLabels = group.tracks
-                    .map((track) => track.name)
-                    .filter((name): name is string => Boolean(name));
-                  const isActive = selectedGroupId === group.id;
-                  return (
-                    <button
-                      key={group.id}
-                      type="button"
-                      onClick={() => onSelectLoop(group.id)}
-                      style={{
-                        borderRadius: 10,
-                        border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
-                        background: isActive
-                          ? "rgba(39, 224, 176, 0.12)"
-                          : "#121827",
-                        padding: 12,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                        textAlign: "left",
-                        cursor: "pointer",
-                        color: "#e6f2ff",
-                      }}
-                      title={`Open ${group.name} in Track view`}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <span aria-hidden="true" style={{ fontSize: 16 }}>
-                          📼
-                        </span>
-                        <span style={{ fontWeight: 600 }}>{group.name}</span>
-                        <div style={{ marginLeft: "auto" }} />
-                      </div>
-                      {trackLabels.length === 0 ? (
-                        <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                          This loop is empty — add instruments in Tracks view
-                          first.
-                        </span>
-                      ) : (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 6,
-                          }}
-                        >
-                          {trackLabels.map((name) => (
-                            <span
-                              key={`${group.id}-${name}`}
-                              style={{
-                                padding: "4px 8px",
-                                borderRadius: 6,
-                                background: "#1f2532",
-                                border: "1px solid #333",
-                                fontSize: 12,
-                              }}
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        ) : null}
 
       </div>
     </div>

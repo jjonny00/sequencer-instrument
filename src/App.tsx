@@ -3325,6 +3325,16 @@ export default function App() {
                 onUpdatePerformanceTrack={updatePerformanceTrack}
                 onRemovePerformanceTrack={removePerformanceTrack}
                 onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
+                onSaveSong={openSaveProjectModal}
+                onOpenLoadSong={openLoadProjectModal}
+                onOpenExportSong={
+                  isAudioExporting
+                    ? undefined
+                    : () => {
+                        setAudioExportMessage("Preparing export…");
+                        setIsExportModalOpen(true);
+                      }
+                }
               />
             )}
           </div>
