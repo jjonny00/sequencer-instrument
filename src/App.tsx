@@ -3031,22 +3031,6 @@ export default function App() {
                           minWidth: 0,
                         }}
                       >
-                        <button
-                          aria-label="Done editing"
-                          onClick={() => setEditing(null)}
-                          style={{
-                            ...controlButtonBaseStyle,
-                            background: "#27E0B0",
-                            color: "#1F2532",
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={controlIconStyle}
-                          >
-                            check
-                          </span>
-                        </button>
                         {selectedTrack && canRecordSelectedTrack ? (
                           <button
                             aria-label={
@@ -3090,6 +3074,28 @@ export default function App() {
                             style={controlIconStyle}
                           >
                             cleaning_services
+                          </span>
+                        </button>
+                        <button
+                          aria-label="Edit track settings"
+                          onClick={() =>
+                            selectedTrack && handleRequestTrackModal(selectedTrack)
+                          }
+                          disabled={!selectedTrack}
+                          style={{
+                            ...controlButtonBaseStyle,
+                            background: "#111827",
+                            border: "1px solid #333",
+                            color: selectedTrack ? "#38bdf8" : "#475569",
+                            cursor: selectedTrack ? "pointer" : "not-allowed",
+                            opacity: selectedTrack ? 1 : 0.6,
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={controlIconStyle}
+                          >
+                            tune
                           </span>
                         </button>
                       </div>

@@ -951,6 +951,25 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
       <div
         ref={trackAreaRef}
         className="scrollable"
+        onPointerDownCapture={(event) => {
+          if (editing === null) return;
+          const target = event.target as HTMLElement;
+          const trackElement = target.closest("[data-track-id]") as
+            | HTMLElement
+            | null;
+          if (!trackElement) {
+            setEditing(null);
+            return;
+          }
+          const trackId = Number(trackElement.dataset.trackId ?? "");
+          if (!Number.isFinite(trackId)) {
+            setEditing(null);
+            return;
+          }
+          if (trackId !== editing) {
+            setEditing(trackId);
+          }
+        }}
         style={{
           flex: 1,
           position: "relative",
@@ -1026,6 +1045,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
               style={{ display: "flex", flexDirection: "column", gap: 8 }}
             >
               <div
+                data-track-id={t.id}
                 onPointerDown={(event) => {
                   swipeRef.current = event.clientX;
                 }}
@@ -1048,8 +1068,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                   border: isEditing ? "2px solid #27E0B0" : "1px solid #555",
                   background: "#111827",
                   opacity: editing !== null && !isEditing ? 0.4 : 1,
-                  pointerEvents:
-                    editing !== null && !isEditing ? "none" : "auto",
+                  pointerEvents: "auto",
                   transition: "opacity 0.2s ease, border 0.2s ease",
                 }}
               >
