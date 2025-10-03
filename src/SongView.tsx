@@ -76,6 +76,88 @@ const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
 
+const styles = {
+  screen: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    paddingLeft: 16,
+    paddingRight: 16,
+    backgroundColor: "#0F121A",
+  },
+
+  // Timeline
+  timelineHeader: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    paddingLeft: 0,
+    paddingRight: 0,
+  },
+
+  timelineContainer: {
+    marginLeft: -16,
+    marginRight: -16,
+    paddingLeft: 16,
+    paddingRight: 16,
+    flex: 1,
+    overflowY: "auto",
+    backgroundColor: "#0F121A",
+  },
+
+  timelineRow: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  // Bottom Edit Toolbar
+  editToolbar: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 16,
+    paddingRight: 16,
+    minHeight: 64,
+    position: "sticky",
+    bottom: 0,
+    backgroundColor: "#0F121A",
+    gap: 12,
+  },
+
+  // Button sizing
+  playButton: {
+    minWidth: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  bpmInput: {
+    minWidth: 96,
+    height: 48,
+    borderRadius: 24,
+  },
+  loopButton: {
+    minWidth: 88,
+    height: 48,
+    borderRadius: 24,
+  },
+  rowButton: {
+    minWidth: 88,
+    height: 48,
+    borderRadius: 24,
+  },
+  trackButton: {
+    minWidth: 104,
+    height: 48,
+    borderRadius: 24,
+  },
+} as const;
+
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
 const TICKS_PER_MEASURE = TICKS_PER_SIXTEENTH * 16;
@@ -1220,17 +1302,6 @@ export function SongView({
     ? "Collapse timeline height"
     : "Expand timeline height";
 
-  const rootStyle: CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    height: "100%",
-    paddingInline: 16,
-    boxSizing: "border-box",
-    gap: 0,
-  };
-
   const mainColumnStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -1239,74 +1310,9 @@ export function SongView({
     gap: 16,
   };
 
-  const topToolbarStyle: CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    height: 56,
-    width: "100%",
-    background: "transparent",
-    border: 0,
-  };
-
-  const topToolbarButtonStyle: CSSProperties = {
-    width: 40,
-    height: 40,
-    minWidth: 40,
-    minHeight: 40,
-    borderRadius: 999,
-  };
-
-  const topToolbarLabelStyle: CSSProperties = {
-    fontSize: 16,
-    fontWeight: 600,
-    color: "#e6f2ff",
-  };
-
-  const bottomToolbarStyle: CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 12,
-    height: 64,
-    width: "100%",
-    background: "transparent",
-    border: 0,
-    flexShrink: 0,
-    flexWrap: "nowrap",
-  };
-
-  const bottomToolbarPlayButtonStyle: CSSProperties = {
-    width: 48,
+  const bottomToolbarButtonBaseStyle: CSSProperties = {
     height: 48,
-    minWidth: 48,
-    minHeight: 48,
-    borderRadius: 999,
-    flexShrink: 0,
-  };
-
-  const bottomToolbarSelectStyle: CSSProperties = {
-    height: 40,
-    minWidth: 76,
-    borderRadius: 999,
-    border: "1px solid #2f384a",
-    background: "#1f2532",
-    color: "#e6f2ff",
-    fontSize: 14,
-    fontWeight: 600,
-    padding: "0 12px",
-    cursor: "pointer",
-    appearance: "none",
-    WebkitAppearance: "none",
-    MozAppearance: "none",
-    boxSizing: "border-box",
-    flexShrink: 0,
-  };
-
-  const bottomToolbarActionButtonBaseStyle: CSSProperties = {
-    height: 40,
-    borderRadius: 999,
+    borderRadius: 24,
     border: "1px solid #2f384a",
     background: "#1f2532",
     color: "#e6f2ff",
@@ -1323,15 +1329,24 @@ export function SongView({
     flexShrink: 0,
   };
 
+  const bottomToolbarSelectStyle: CSSProperties = {
+    ...styles.bpmInput,
+    border: "1px solid #2f384a",
+    background: "#1f2532",
+    color: "#e6f2ff",
+    fontSize: 14,
+    fontWeight: 600,
+    padding: "0 12px",
+    cursor: "pointer",
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    boxSizing: "border-box",
+    flexShrink: 0,
+  };
+
   const timelineContainerStyle: CSSProperties = {
-    flex: "1 1 auto",
-    minHeight: 0,
-    flexBasis: 0,
-    marginLeft: -16,
-    marginRight: -16,
-    padding: 0,
-    border: 0,
-    background: "transparent",
+    ...styles.timelineContainer,
     display: "flex",
     flexDirection: "column",
   };
@@ -1371,16 +1386,17 @@ export function SongView({
   void onSelectLoop;
 
     return (
-      <div style={rootStyle}>
+      <div style={styles.screen}>
         <div style={{ position: "relative", width: "100%" }}>
-          <div style={topToolbarStyle}>
+          <div style={styles.timelineHeader}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={topToolbarLabelStyle}>Timeline</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: "#e6f2ff" }}>
+                Timeline
+              </span>
               <IconButton
                 icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
                 label={timelineToggleLabel}
                 onClick={() => setTimelineExpanded((previous) => !previous)}
-                style={topToolbarButtonStyle}
               />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1392,14 +1408,12 @@ export function SongView({
                   onSaveSong?.();
                 }}
                 tone="accent"
-                style={topToolbarButtonStyle}
                 disabled={!onSaveSong}
               />
               <IconButton
                 icon="more_horiz"
                 label="Song options"
                 onClick={() => setOverflowMenuOpen((previous) => !previous)}
-                style={topToolbarButtonStyle}
               />
             </div>
           </div>
@@ -1483,7 +1497,6 @@ export function SongView({
                         display: "flex",
                         alignItems: "center",
                         marginBottom: 8,
-                        padding: "0 16px",
                       }}
                     >
                       <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
@@ -1691,7 +1704,6 @@ export function SongView({
                       display: "flex",
                       flexDirection: "column",
                       gap: 6,
-                      padding: "0 16px",
                     }}
                   >
                     <div
@@ -2417,14 +2429,20 @@ export function SongView({
         ) : null}
       </Modal>
 
-      <div style={bottomToolbarStyle}>
+      <div
+        style={{
+          ...styles.editToolbar,
+          paddingLeft: 0,
+          paddingRight: 0,
+        }}
+      >
         <IconButton
           icon={isPlaying ? "stop" : "play_arrow"}
           label={isPlaying ? "Stop playback" : "Start playback"}
           onPointerDown={onToggleTransport}
           onPointerUp={(event) => event.currentTarget.blur()}
           style={{
-            ...bottomToolbarPlayButtonStyle,
+            ...styles.playButton,
             background: isPlaying ? "#E02749" : "#27E0B0",
             border: `1px solid ${isPlaying ? "#E02749" : "#27E0B0"}`,
             color: isPlaying ? "#ffe4e6" : "#0b1624",
@@ -2446,8 +2464,8 @@ export function SongView({
           type="button"
           onClick={handleAddSection}
           style={{
-            ...bottomToolbarActionButtonBaseStyle,
-            minWidth: 56,
+            ...bottomToolbarButtonBaseStyle,
+            ...styles.loopButton,
           }}
         >
           +Loop
@@ -2456,8 +2474,8 @@ export function SongView({
           type="button"
           onClick={handleAddRow}
           style={{
-            ...bottomToolbarActionButtonBaseStyle,
-            minWidth: 56,
+            ...bottomToolbarButtonBaseStyle,
+            ...styles.rowButton,
           }}
         >
           +Row
@@ -2467,8 +2485,8 @@ export function SongView({
           onClick={handleAddPerformanceTrack}
           disabled={!onAddPerformanceTrack}
           style={{
-            ...bottomToolbarActionButtonBaseStyle,
-            minWidth: 74,
+            ...bottomToolbarButtonBaseStyle,
+            ...styles.trackButton,
             border: `1px solid ${onAddPerformanceTrack ? "#27E0B0" : "#2f384a"}`,
             background: onAddPerformanceTrack ? "#27E0B0" : "#1f2532",
             color: onAddPerformanceTrack ? "#0b1624" : "#475569",
