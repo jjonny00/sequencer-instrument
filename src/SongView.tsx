@@ -1228,6 +1228,32 @@ export function SongView({
     gap: 16,
   };
 
+  const topToolbarStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    height: 56,
+    borderRadius: 16,
+    border: "1px solid #2f384a",
+    background: "#111827",
+    padding: "0 12px",
+  };
+
+  const topToolbarButtonStyle: CSSProperties = {
+    width: 40,
+    height: 40,
+    minWidth: 40,
+    minHeight: 40,
+    borderRadius: 999,
+  };
+
+  const topToolbarLabelStyle: CSSProperties = {
+    fontSize: 16,
+    fontWeight: 500,
+    color: "#e6f2ff",
+  };
+
   const timelineContainerStyle: CSSProperties = {
     flexGrow: 1,
     flexShrink: 1,
@@ -1266,44 +1292,17 @@ export function SongView({
           flex: 1,
           gap: 16,
           minHeight: 0,
-          padding: "0 16px",
         }}
       >
         <div style={{ position: "relative" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              padding: "0 16px",
-              height: 56,
-              borderRadius: 16,
-              border: "1px solid #2f384a",
-              background: "#111827",
-            }}
-          >
+          <div style={topToolbarStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span
-                style={{
-                  fontSize: 16,
-                  fontWeight: 500,
-                  color: "#e6f2ff",
-                }}
-              >
-                Timeline
-              </span>
+              <span style={topToolbarLabelStyle}>Timeline</span>
               <IconButton
                 icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
                 label={timelineToggleLabel}
                 onClick={() => setTimelineExpanded((previous) => !previous)}
-                style={{
-                  width: 40,
-                  height: 40,
-                  minWidth: 40,
-                  minHeight: 40,
-                  borderRadius: 999,
-                }}
+                style={topToolbarButtonStyle}
               />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1315,26 +1314,14 @@ export function SongView({
                   onSaveSong?.();
                 }}
                 tone="accent"
-                style={{
-                  width: 40,
-                  height: 40,
-                  minWidth: 40,
-                  minHeight: 40,
-                  borderRadius: 999,
-                }}
+                style={topToolbarButtonStyle}
                 disabled={!onSaveSong}
               />
               <IconButton
                 icon="more_horiz"
                 label="Song options"
                 onClick={() => setOverflowMenuOpen((previous) => !previous)}
-                style={{
-                  width: 40,
-                  height: 40,
-                  minWidth: 40,
-                  minHeight: 40,
-                  borderRadius: 999,
-                }}
+                style={topToolbarButtonStyle}
               />
             </div>
           </div>
