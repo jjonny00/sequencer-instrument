@@ -69,7 +69,7 @@ const PREVIEW_GAP = 1;
 const PREVIEW_HEIGHT = 10;
 const PREVIEW_DOT_SIZE = 4;
 const PERFORMANCE_DOT_SIZE = 5;
-const SLOT_MIN_HEIGHT = 52;
+const SLOT_MIN_HEIGHT = 48;
 const SLOT_CONTENT_GAP = 4;
 const SLOT_PADDING = "4px 10px";
 const APPROXIMATE_ROW_OFFSET = 28;
@@ -1218,6 +1218,41 @@ export function SongView({
     ? "Collapse timeline height"
     : "Expand timeline height";
 
+  const contentStackStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    gap: 16,
+  };
+
+  const timelineContainerStyle: CSSProperties = {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 0,
+    borderRadius: 16,
+    border: "1px solid #2a3344",
+    background: "#111827",
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const instrumentPanelContainerStyle: CSSProperties = {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    width: "100%",
+    padding: 16,
+    borderRadius: 16,
+    border: "1px solid #2a3344",
+    background: "#0f172a",
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    overflowY: "auto",
+  };
+
   void selectedGroupId;
   void onSelectLoop;
 
@@ -1229,6 +1264,7 @@ export function SongView({
           flex: 1,
           gap: 16,
           minHeight: 0,
+          padding: "0 16px",
         }}
       >
         <div style={{ position: "relative" }}>
@@ -1237,19 +1273,19 @@ export function SongView({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 8,
-              padding: "0 12px",
-              height: 48,
+              gap: 12,
+              padding: "0 16px",
+              height: 56,
               borderRadius: 16,
               border: "1px solid #2f384a",
               background: "#111827",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span
                 style={{
                   fontSize: 16,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   color: "#e6f2ff",
                 }}
               >
@@ -1260,13 +1296,15 @@ export function SongView({
                 label={timelineToggleLabel}
                 onClick={() => setTimelineExpanded((previous) => !previous)}
                 style={{
-                  minWidth: 44,
-                  minHeight: 44,
+                  width: 40,
+                  height: 40,
+                  minWidth: 40,
+                  minHeight: 40,
                   borderRadius: 999,
                 }}
               />
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <IconButton
                 icon="save"
                 label="Save song"
@@ -1276,8 +1314,10 @@ export function SongView({
                 }}
                 tone="accent"
                 style={{
-                  minWidth: 44,
-                  minHeight: 44,
+                  width: 40,
+                  height: 40,
+                  minWidth: 40,
+                  minHeight: 40,
                   borderRadius: 999,
                 }}
                 disabled={!onSaveSong}
@@ -1287,8 +1327,10 @@ export function SongView({
                 label="Song options"
                 onClick={() => setOverflowMenuOpen((previous) => !previous)}
                 style={{
-                  minWidth: 44,
-                  minHeight: 44,
+                  width: 40,
+                  height: 40,
+                  minWidth: 40,
+                  minHeight: 40,
                   borderRadius: 999,
                 }}
               />
@@ -1300,7 +1342,7 @@ export function SongView({
               style={{
                 position: "absolute",
                 top: 56,
-                right: 12,
+                right: 0,
                 borderRadius: 12,
                 border: "1px solid #2f384a",
                 background: "#0f172a",
@@ -1359,34 +1401,24 @@ export function SongView({
             </div>
           ) : null}
         </div>
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            borderRadius: 16,
-            border: "1px solid #2a3344",
-            background: "#111827",
-            padding: 16,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
-        <div
-          className="scrollable"
-          style={{
-            overflowX: "auto",
-            paddingBottom: 4,
-            minHeight: `${timelineViewportHeight}px`,
-            maxHeight: `${timelineViewportHeight}px`,
-          }}
-        >
+        <div style={contentStackStyle}>
+          <div style={timelineContainerStyle}>
+            <div
+              className="scrollable"
+              style={{
+                overflowX: "auto",
+                minHeight: `${timelineViewportHeight}px`,
+                maxHeight: `${timelineViewportHeight}px`,
+                flex: 1,
+              }}
+            >
           {sectionCount > 0 ? (
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 marginBottom: 8,
+                padding: "0 16px",
                 paddingRight: shouldEnableVerticalScroll ? 6 : 0,
               }}
             >
@@ -1440,20 +1472,28 @@ export function SongView({
               minWidth: timelineWidthStyle,
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
               {showEmptyTimeline ? (
-              <div
-                style={{
-                  padding: 24,
-                  borderRadius: 8,
-                  border: "1px dashed #475569",
-                  color: "#94a3b8",
-                  fontSize: 13,
-                }}
-              >
-                Add a sequence to start placing loops into the timeline.
-              </div>
-            ) : (
+                <div style={{ padding: "16px" }}>
+                  <div
+                    style={{
+                      padding: 24,
+                      borderRadius: 8,
+                      border: "1px dashed #475569",
+                      color: "#94a3b8",
+                      fontSize: 13,
+                    }}
+                  >
+                    Add a sequence to start placing loops into the timeline.
+                  </div>
+                </div>
+              ) : (
               songRows.map((row, rowIndex) => {
                 const maxColumns = Math.max(
                   effectiveColumnCount,
@@ -1591,7 +1631,12 @@ export function SongView({
                 return (
                   <div
                     key={`row-${rowIndex}`}
-                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      padding: "0 16px",
+                    }}
                   >
                     <div
                       onPointerDown={() => {
@@ -1614,6 +1659,7 @@ export function SongView({
                         background: "#111827",
                         opacity: rowMuted ? 0.55 : 1,
                         transition: "opacity 0.2s ease, border 0.2s ease",
+                        minHeight: 48,
                       }}
                     >
                       <div
@@ -2036,10 +2082,189 @@ export function SongView({
               )}
             </div>
           </div>
-        </div>
-      </div>
+          </div>
 
-      <Modal
+        
+          {isPlayInstrumentOpen ? (
+            <div
+              className="scrollable"
+              style={instrumentPanelContainerStyle}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 999,
+                      background: playInstrumentColor,
+                      boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "#e6f2ff",
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    {formatInstrumentLabel(playInstrument)} Instrument
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <IconButton
+                    icon="close"
+                    label="Close"
+                    showLabel
+                    onClick={handleCloseInstrumentPanel}
+                  />
+                  <IconButton
+                    icon={recordingActive ? "stop" : "fiber_manual_record"}
+                    label={recordingActive ? "Stop" : "Record"}
+                    showLabel
+                    tone={recordingActive ? "danger" : "default"}
+                    onClick={() => setIsRecordEnabled((prev) => !prev)}
+                    disabled={!hasPerformanceTarget}
+                  />
+                  <IconButton
+                    icon="delete"
+                    label="Clear"
+                    showLabel
+                    tone="danger"
+                    onClick={handleClearRecording}
+                    disabled={!canClearRecording}
+                  />
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {isRecordEnabled ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: 0.6,
+                        textTransform: "uppercase",
+                        background: recordingActive
+                          ? "rgba(248, 113, 113, 0.24)"
+                          : "rgba(248, 113, 113, 0.14)",
+                        border: `1px solid ${
+                          recordingActive ? "#f87171" : "#fb7185"
+                        }`,
+                        color: "#fecdd3",
+                        boxShadow: recordingActive
+                          ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
+                          : "none",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: 14 }}
+                        aria-hidden="true"
+                      >
+                        fiber_manual_record
+                      </span>
+                      {recordIndicatorLabel}
+                    </span>
+                  ) : null}
+                  <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                    {liveRowMessage}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsQuantizedRecording((prev) => !prev)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: `1px solid ${
+                      isQuantizedRecording ? playInstrumentColor : "#2a3344"
+                    }`,
+                    background: isQuantizedRecording
+                      ? withAlpha(playInstrumentColor, 0.18)
+                      : "#0f172a",
+                    color: "#e6f2ff",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                  title={
+                    isQuantizedRecording
+                      ? "Quantized recording is on — notes snap to the grid."
+                      : "Quantized recording is off — capture free timing."
+                  }
+                >
+                  Quantize {isQuantizedRecording ? "On" : "Off"}
+                </button>
+              </div>
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #1f2937",
+                  background: "#10192c",
+                  padding: 12,
+                  flex: 1,
+                  minHeight: 0,
+                }}
+              >
+                <InstrumentControlPanel
+                  track={playInstrumentTrackForPanel}
+                  allTracks={[]}
+                  onUpdatePattern={handlePlayInstrumentPatternUpdate}
+                  trigger={playInstrumentTrigger}
+                  isRecording={recordingActive}
+                  onPerformanceNote={handlePerformanceNoteRecorded}
+                />
+              </div>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                Audition sounds or capture a new take for this performance row.
+              </span>
+            </div>
+          ) : null}
+
+</div>
+
+        <Modal
         isOpen={hasRowSettings && Boolean(rowSettingsRow)}
         onClose={() => setRowSettingsIndex(null)}
         title="Row Settings"
@@ -2136,299 +2361,127 @@ export function SongView({
         ) : null}
       </Modal>
 
-        <div
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "0 16px",
+          height: 64,
+          borderRadius: 16,
+          border: "1px solid #2f384a",
+          background: "#111827",
+        }}
+      >
+        <IconButton
+          icon={isPlaying ? "stop" : "play_arrow"}
+          label={isPlaying ? "Stop playback" : "Start playback"}
+          onPointerDown={onToggleTransport}
+          onPointerUp={(event) => event.currentTarget.blur()}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            padding: "0 12px",
+            width: 56,
             height: 56,
-            borderRadius: 16,
+            minWidth: 56,
+            minHeight: 56,
+            borderRadius: 999,
+            background: isPlaying ? "#E02749" : "#27E0B0",
+            border: `1px solid ${isPlaying ? "#E02749" : "#27E0B0"}`,
+            color: isPlaying ? "#ffe4e6" : "#0b1624",
+          }}
+        />
+        <select
+          value={bpm}
+          onChange={(event) => setBpm(parseInt(event.target.value, 10))}
+          aria-label="Song tempo"
+          style={{
+            height: 40,
+            borderRadius: 999,
             border: "1px solid #2f384a",
-            background: "#111827",
+            background: "#1f2532",
+            color: "#e6f2ff",
+            padding: "0 12px",
+            minWidth: 100,
+            fontSize: 14,
+            fontWeight: 600,
+            appearance: "none",
           }}
         >
-          <IconButton
-            icon={isPlaying ? "stop" : "play_arrow"}
-            label={isPlaying ? "Stop playback" : "Start playback"}
-            onPointerDown={onToggleTransport}
-            onPointerUp={(event) => event.currentTarget.blur()}
-            style={{
-              minWidth: 44,
-              minHeight: 44,
-              borderRadius: 999,
-              background: isPlaying ? "#E02749" : "#27E0B0",
-              border: `1px solid ${isPlaying ? "#E02749" : "#27E0B0"}`,
-              color: isPlaying ? "#ffe4e6" : "#0b1624",
-            }}
-          />
-          <select
-            value={bpm}
-            onChange={(event) => setBpm(parseInt(event.target.value, 10))}
-            aria-label="Song tempo"
-            style={{
-              height: 44,
-              borderRadius: 999,
-              border: "1px solid #2f384a",
-              background: "#1f2532",
-              color: "#e6f2ff",
-              padding: "0 16px",
-              minWidth: 120,
-              fontSize: 14,
-              fontWeight: 600,
-              appearance: "none",
-            }}
-          >
-            {[90, 100, 110, 120, 130].map((value) => (
-              <option key={value} value={value}>
-                {value} BPM
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={handleAddSection}
-            style={{
-              minWidth: 88,
-              height: 44,
-              borderRadius: 999,
-              border: "1px solid #2f384a",
-              background: "#1f2532",
-              color: "#e6f2ff",
-              fontSize: 14,
-              fontWeight: 600,
-              letterSpacing: 0.3,
-              cursor: "pointer",
-            }}
-          >
-            +Loop
-          </button>
-          <button
-            type="button"
-            onClick={handleAddRow}
-            style={{
-              minWidth: 88,
-              height: 44,
-              borderRadius: 999,
-              border: "1px solid #2f384a",
-              background: "#1f2532",
-              color: "#e6f2ff",
-              fontSize: 14,
-              fontWeight: 600,
-              letterSpacing: 0.3,
-              cursor: "pointer",
-            }}
-          >
-            +Row
-          </button>
-          <button
-            type="button"
-            onClick={handleAddPerformanceTrack}
-            disabled={!onAddPerformanceTrack}
-            style={{
-              minWidth: 88,
-              height: 44,
-              borderRadius: 999,
-              border: `1px solid ${onAddPerformanceTrack ? "#27E0B0" : "#2f384a"}`,
-              background: onAddPerformanceTrack ? "#27E0B0" : "#1f2532",
-              color: onAddPerformanceTrack ? "#0b1624" : "#475569",
-              fontSize: 14,
-              fontWeight: 600,
-              letterSpacing: 0.3,
-              cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
-              opacity: onAddPerformanceTrack ? 1 : 0.6,
-            }}
+          {[90, 100, 110, 120, 130].map((value) => (
+            <option key={value} value={value}>
+              {value} BPM
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={handleAddSection}
+          style={{
+            minWidth: 80,
+            height: 40,
+            borderRadius: 999,
+            border: "1px solid #2f384a",
+            background: "#1f2532",
+            color: "#e6f2ff",
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 12px",
+          }}
+        >
+          +Loop
+        </button>
+        <button
+          type="button"
+          onClick={handleAddRow}
+          style={{
+            minWidth: 80,
+            height: 40,
+            borderRadius: 999,
+            border: "1px solid #2f384a",
+            background: "#1f2532",
+            color: "#e6f2ff",
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 12px",
+          }}
+        >
+          +Row
+        </button>
+        <button
+          type="button"
+          onClick={handleAddPerformanceTrack}
+          disabled={!onAddPerformanceTrack}
+          style={{
+            minWidth: 100,
+            height: 40,
+            borderRadius: 999,
+            border: `1px solid ${onAddPerformanceTrack ? "#27E0B0" : "#2f384a"}`,
+            background: onAddPerformanceTrack ? "#27E0B0" : "#1f2532",
+            color: onAddPerformanceTrack ? "#0b1624" : "#475569",
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
+            opacity: onAddPerformanceTrack ? 1 : 0.6,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 12px",
+          }}
           >
             +Track
           </button>
-        </div>
-
-        {isPlayInstrumentOpen ? (
-          <div
-            className="scrollable"
-            style={{
-              width: "100%",
-              padding: 16,
-              borderRadius: 16,
-              border: "1px solid #2a3344",
-              background: "#0f172a",
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 999,
-                    background: playInstrumentColor,
-                    boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "#e6f2ff",
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  {formatInstrumentLabel(playInstrument)} Instrument
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexWrap: "wrap",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <IconButton
-                  icon="close"
-                  label="Close"
-                  showLabel
-                  onClick={handleCloseInstrumentPanel}
-                />
-                <IconButton
-                  icon={recordingActive ? "stop" : "fiber_manual_record"}
-                  label={recordingActive ? "Stop" : "Record"}
-                  showLabel
-                  tone={recordingActive ? "danger" : "default"}
-                  onClick={() => setIsRecordEnabled((prev) => !prev)}
-                  disabled={!hasPerformanceTarget}
-                />
-                <IconButton
-                  icon="delete"
-                  label="Clear"
-                  showLabel
-                  tone="danger"
-                  onClick={handleClearRecording}
-                  disabled={!canClearRecording}
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                {isRecordEnabled ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: 0.6,
-                      textTransform: "uppercase",
-                      background: recordingActive
-                        ? "rgba(248, 113, 113, 0.24)"
-                        : "rgba(248, 113, 113, 0.14)",
-                      border: `1px solid ${
-                        recordingActive ? "#f87171" : "#fb7185"
-                      }`,
-                      color: "#fecdd3",
-                      boxShadow: recordingActive
-                        ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
-                        : "none",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                      aria-hidden="true"
-                    >
-                      fiber_manual_record
-                    </span>
-                    {recordIndicatorLabel}
-                  </span>
-                ) : null}
-                <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                  {liveRowMessage}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsQuantizedRecording((prev) => !prev)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: `1px solid ${
-                    isQuantizedRecording ? playInstrumentColor : "#2a3344"
-                  }`,
-                  background: isQuantizedRecording
-                    ? withAlpha(playInstrumentColor, 0.18)
-                    : "#0f172a",
-                  color: "#e6f2ff",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: 0.8,
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-                title={
-                  isQuantizedRecording
-                    ? "Quantized recording is on — notes snap to the grid."
-                    : "Quantized recording is off — capture free timing."
-                }
-              >
-                Quantize {isQuantizedRecording ? "On" : "Off"}
-              </button>
-            </div>
-            <div
-              style={{
-                borderRadius: 12,
-                border: "1px solid #1f2937",
-                background: "#10192c",
-                padding: 12,
-                flex: 1,
-                minHeight: 0,
-              }}
-            >
-              <InstrumentControlPanel
-                track={playInstrumentTrackForPanel}
-                allTracks={[]}
-                onUpdatePattern={handlePlayInstrumentPatternUpdate}
-                trigger={playInstrumentTrigger}
-                isRecording={recordingActive}
-                onPerformanceNote={handlePerformanceNoteRecorded}
-              />
-            </div>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Audition sounds or capture a new take for this performance row.
-            </span>
-          </div>
-        ) : null}
+      </div>
+      </div>
     </div>
   );
 }
