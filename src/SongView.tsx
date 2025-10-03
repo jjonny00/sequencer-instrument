@@ -30,6 +30,7 @@ import {
 import { packs } from "./packs";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
+import { BottomDock } from "./components/layout/BottomDock";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { TimelineGrid } from "./views/song/TimelineGrid";
 interface SongViewProps {
@@ -1927,26 +1928,46 @@ export function SongView({
 
   return (
     <div
+      className="vh flex flex-col"
       style={{
         display: "flex",
         flexDirection: "column",
         flex: 1,
-        gap: 16,
         minHeight: 0,
       }}
     >
       <div
+        className="safe-top flex-1 min-h-0 overflow-hidden"
         style={{
-          border: "1px solid #333",
-          borderRadius: 12,
-          background: "#1b2130",
           padding: 16,
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          gap: 16,
-          minHeight: 0,
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          <div
+            style={{
+              border: "1px solid #333",
+              borderRadius: 12,
+              background: "#1b2130",
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              minHeight: 0,
+            }}
+          >
         <div
           style={{
             display: "flex",
@@ -2115,9 +2136,9 @@ export function SongView({
                 }
               />
             )}
-          </div>
-        </div>
       </div>
+    </div>
+  </div>
 
       <Modal
         isOpen={hasRowSettings && Boolean(rowSettingsRow)}
@@ -2216,6 +2237,157 @@ export function SongView({
         ) : null}
       </Modal>
 
+      {!isPlayInstrumentOpen ? (
+        <div
+          className="scrollable"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            paddingRight: 4,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#e6f2ff",
+              }}
+            >
+              Loops Library
+            </h3>
+            <span
+              style={{
+                fontSize: 12,
+                color: "#94a3b8",
+              }}
+            >
+              Save and edit loops in Track view, then place them onto the song
+              timeline.
+            </span>
+          </div>
+          {patternGroups.length === 0 ? (
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 8,
+                border: "1px dashed #475569",
+                color: "#94a3b8",
+                fontSize: 13,
+              }}
+            >
+              No loops yet. Create loops in Track view to start arranging
+              the song.
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {patternGroups.map((group) => {
+                const trackLabels = group.tracks
+                  .map((track) => track.name)
+                  .filter((name): name is string => Boolean(name));
+                const isActive = selectedGroupId === group.id;
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => onSelectLoop(group.id)}
+                    style={{
+                      borderRadius: 10,
+                      border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
+                      background: isActive
+                        ? "rgba(39, 224, 176, 0.12)"
+                        : "#121827",
+                      padding: 12,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "#e6f2ff",
+                    }}
+                    title={`Open ${group.name} in Track view`}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span aria-hidden="true" style={{ fontSize: 16 }}>
+                        📼
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{group.name}</span>
+                      <div style={{ marginLeft: "auto" }} />
+                    </div>
+                    {trackLabels.length === 0 ? (
+                      <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                        This loop is empty — add instruments in Tracks view
+                        first.
+                      </span>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                        }}
+                      >
+                        {trackLabels.map((name) => (
+                          <span
+                            key={`${group.id}-${name}`}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              background: "#1f2532",
+                              border: "1px solid #333",
+                              fontSize: 12,
+                            }}
+                          >
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  </div>
+
+  <BottomDock>
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "0 16px",
+        borderTop: "1px solid #1f2937",
+        background: "#0b1220",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -2223,390 +2395,258 @@ export function SongView({
           gap: 12,
         }}
       >
+        <label>BPM</label>
+        <select
+          value={bpm}
+          onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+          style={{
+            padding: 8,
+            borderRadius: 8,
+            background: "#121827",
+            color: "white",
+          }}
+        >
+          {[90, 100, 110, 120, 130].map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ flex: 1 }} />
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <button
+          aria-label={isPlaying ? "Stop" : "Play"}
+          onPointerDown={onToggleTransport}
+          onPointerUp={(e) => e.currentTarget.blur()}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 8,
+            border: "1px solid #333",
+            background: isPlaying ? "#E02749" : "#27E0B0",
+            color: isPlaying ? "#ffe4e6" : "#1F2532",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 24,
+          }}
+        >
+          <span className="material-symbols-outlined">
+            {isPlaying ? "stop" : "play_arrow"}
+          </span>
+        </button>
+      </div>
+    </div>
+  </BottomDock>
+
+  <BottomDock
+    heightVar="var(--controls-h)"
+    show={isPlayInstrumentOpen}
+    inertWhenHidden
+  >
+    <div
+      style={{
+        height: "100%",
+        padding: "12px 16px 16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        boxSizing: "border-box",
+        background: "#0b1220",
+        borderTop: "1px solid #1f2937",
+      }}
+    >
+      <div
+        className="scrollable"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          borderRadius: 12,
+          border: "1px solid #2a3344",
+          background: "#111827",
+          padding: 16,
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+          overflowY: "auto",
+          opacity: isPlayInstrumentOpen ? 1 : 0,
+          pointerEvents: isPlayInstrumentOpen ? "auto" : "none",
+          transition: "opacity 180ms ease",
+        }}
+      >
         <div
           style={{
             display: "flex",
             alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
             gap: 12,
           }}
         >
-          <label>BPM</label>
-          <select
-            value={bpm}
-            onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 999,
+                background: playInstrumentColor,
+                boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#e6f2ff",
+                letterSpacing: 0.2,
+              }}
+            >
+              {formatInstrumentLabel(playInstrument)} Instrument
+            </span>
+          </div>
+          <div
             style={{
-              padding: 8,
-              borderRadius: 8,
-              background: "#121827",
-              color: "white",
-            }}
-          >
-            {[90, 100, 110, 120, 130].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button
-            aria-label={isPlaying ? "Stop" : "Play"}
-            onPointerDown={onToggleTransport}
-            onPointerUp={(e) => e.currentTarget.blur()}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 8,
-              border: "1px solid #333",
-              background: isPlaying ? "#E02749" : "#27E0B0",
-              color: isPlaying ? "#ffe4e6" : "#1F2532",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              fontSize: 24,
+              gap: 8,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
             }}
           >
-            <span className="material-symbols-outlined">
-              {isPlaying ? "stop" : "play_arrow"}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {isPlayInstrumentOpen ? (
-          <div
-            className="scrollable"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              borderRadius: 12,
-              border: "1px solid #2a3344",
-              background: "#111827",
-              padding: 16,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 999,
-                    background: playInstrumentColor,
-                    boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "#e6f2ff",
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  {formatInstrumentLabel(playInstrument)} Instrument
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexWrap: "wrap",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <IconButton
-                  icon="close"
-                  label="Close"
-                  showLabel
-                  onClick={handleCloseInstrumentPanel}
-                />
-                <IconButton
-                  icon={recordingActive ? "stop" : "fiber_manual_record"}
-                  label={recordingActive ? "Stop" : "Record"}
-                  showLabel
-                  tone={recordingActive ? "danger" : "default"}
-                  onClick={() => setIsRecordEnabled((prev) => !prev)}
-                  disabled={!hasPerformanceTarget}
-                />
-                <IconButton
-                  icon="delete"
-                  label="Clear"
-                  showLabel
-                  tone="danger"
-                  onClick={handleClearRecording}
-                  disabled={!canClearRecording}
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                {isRecordEnabled ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: 0.6,
-                      textTransform: "uppercase",
-                      background: recordingActive
-                        ? "rgba(248, 113, 113, 0.24)"
-                        : "rgba(248, 113, 113, 0.14)",
-                      border: `1px solid ${
-                        recordingActive ? "#f87171" : "#fb7185"
-                      }`,
-                      color: "#fecdd3",
-                      boxShadow: recordingActive
-                        ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
-                        : "none",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                      aria-hidden="true"
-                    >
-                      fiber_manual_record
-                    </span>
-                    {recordIndicatorLabel}
-                  </span>
-                ) : null}
-                <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                  {liveRowMessage}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsQuantizedRecording((prev) => !prev)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: `1px solid ${
-                    isQuantizedRecording ? playInstrumentColor : "#2a3344"
-                  }`,
-                  background: isQuantizedRecording
-                    ? withAlpha(playInstrumentColor, 0.18)
-                    : "#0f172a",
-                  color: "#e6f2ff",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: 0.8,
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-                title={
-                  isQuantizedRecording
-                    ? "Quantized recording is on — notes snap to the grid."
-                    : "Quantized recording is off — capture free timing."
-                }
-              >
-                Quantize {isQuantizedRecording ? "On" : "Off"}
-              </button>
-            </div>
-            <div
-              style={{
-                borderRadius: 12,
-                border: "1px solid #1f2937",
-                background: "#10192c",
-                padding: 12,
-                flex: 1,
-                minHeight: 0,
-              }}
-            >
-              <InstrumentControlPanel
-                track={playInstrumentTrackForPanel}
-                allTracks={[]}
-                onUpdatePattern={handlePlayInstrumentPatternUpdate}
-                trigger={playInstrumentTrigger}
-                isRecording={recordingActive}
-                onPerformanceNote={handlePerformanceNoteRecorded}
-              />
-            </div>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Audition sounds or capture a new take for this performance row.
-            </span>
+            <IconButton
+              icon="close"
+              label="Close"
+              showLabel
+              onClick={handleCloseInstrumentPanel}
+            />
+            <IconButton
+              icon={recordingActive ? "stop" : "fiber_manual_record"}
+              label={recordingActive ? "Stop" : "Record"}
+              showLabel
+              tone={recordingActive ? "danger" : "default"}
+              onClick={() => setIsRecordEnabled((prev) => !prev)}
+              disabled={!hasPerformanceTarget}
+            />
+            <IconButton
+              icon="delete"
+              label="Clear"
+              showLabel
+              tone="danger"
+              onClick={handleClearRecording}
+              disabled={!canClearRecording}
+            />
           </div>
-        ) : (
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
           <div
-            className="scrollable"
             style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              paddingRight: 4,
               display: "flex",
-              flexDirection: "column",
-              gap: 12,
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "#e6f2ff",
-                }}
-              >
-                Loops Library
-              </h3>
+            {isRecordEnabled ? (
               <span
                 style={{
-                  fontSize: 12,
-                  color: "#94a3b8",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 0.6,
+                  textTransform: "uppercase",
+                  background: recordingActive
+                    ? "rgba(248, 113, 113, 0.24)"
+                    : "rgba(248, 113, 113, 0.14)",
+                  border: `1px solid ${
+                    recordingActive ? "#f87171" : "#fb7185"
+                  }`,
+                  color: "#fecdd3",
+                  boxShadow: recordingActive
+                    ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
+                    : "none",
                 }}
               >
-                Save and edit loops in Track view, then place them onto the song
-                timeline.
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 14 }}
+                  aria-hidden="true"
+                >
+                  fiber_manual_record
+                </span>
+                {recordIndicatorLabel}
               </span>
-            </div>
-            {patternGroups.length === 0 ? (
-              <div
-                style={{
-                  padding: 16,
-                  borderRadius: 8,
-                  border: "1px dashed #475569",
-                  color: "#94a3b8",
-                  fontSize: 13,
-                }}
-              >
-                No loops yet. Create loops in Track view to start arranging
-                the song.
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                {patternGroups.map((group) => {
-                  const trackLabels = group.tracks
-                    .map((track) => track.name)
-                    .filter((name): name is string => Boolean(name));
-                  const isActive = selectedGroupId === group.id;
-                  return (
-                    <button
-                      key={group.id}
-                      type="button"
-                      onClick={() => onSelectLoop(group.id)}
-                      style={{
-                        borderRadius: 10,
-                        border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
-                        background: isActive
-                          ? "rgba(39, 224, 176, 0.12)"
-                          : "#121827",
-                        padding: 12,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                        textAlign: "left",
-                        cursor: "pointer",
-                        color: "#e6f2ff",
-                      }}
-                      title={`Open ${group.name} in Track view`}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <span aria-hidden="true" style={{ fontSize: 16 }}>
-                          📼
-                        </span>
-                        <span style={{ fontWeight: 600 }}>{group.name}</span>
-                        <div style={{ marginLeft: "auto" }} />
-                      </div>
-                      {trackLabels.length === 0 ? (
-                        <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                          This loop is empty — add instruments in Tracks view
-                          first.
-                        </span>
-                      ) : (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 6,
-                          }}
-                        >
-                          {trackLabels.map((name) => (
-                            <span
-                              key={`${group.id}-${name}`}
-                              style={{
-                                padding: "4px 8px",
-                                borderRadius: 6,
-                                background: "#1f2532",
-                                border: "1px solid #333",
-                                fontSize: 12,
-                              }}
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            ) : null}
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              {liveRowMessage}
+            </span>
           </div>
-        )}
-
+          <button
+            type="button"
+            onClick={() => setIsQuantizedRecording((prev) => !prev)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 999,
+              border: `1px solid ${
+                isQuantizedRecording ? playInstrumentColor : "#2a3344"
+              }`,
+              background: isQuantizedRecording
+                ? withAlpha(playInstrumentColor, 0.18)
+                : "#0f172a",
+              color: "#e6f2ff",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: 0.8,
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+            title={
+              isQuantizedRecording
+                ? "Quantized recording is on — notes snap to the grid."
+                : "Quantized recording is off — capture free timing."
+            }
+          >
+            Quantize {isQuantizedRecording ? "On" : "Off"}
+          </button>
+        </div>
+        <div
+          style={{
+            borderRadius: 12,
+            border: "1px solid #1f2937",
+            background: "#10192c",
+            padding: 12,
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          <InstrumentControlPanel
+            track={playInstrumentTrackForPanel}
+            allTracks={[]}
+            onUpdatePattern={handlePlayInstrumentPatternUpdate}
+            trigger={playInstrumentTrigger}
+            isRecording={recordingActive}
+            onPerformanceNote={handlePerformanceNoteRecorded}
+          />
+        </div>
+        <span style={{ fontSize: 12, color: "#94a3b8" }}>
+          Audition sounds or capture a new take for this performance row.
+        </span>
       </div>
     </div>
+  </BottomDock>
+  </div>
   );
 }
