@@ -1226,8 +1226,7 @@ export function SongView({
     flex: 1,
     minHeight: 0,
     height: "100%",
-    paddingLeft: 16,
-    paddingRight: 16,
+    paddingInline: 16,
     boxSizing: "border-box",
     gap: 0,
   };
@@ -1246,7 +1245,6 @@ export function SongView({
     justifyContent: "space-between",
     gap: 8,
     height: 56,
-    paddingBlock: 8,
     width: "100%",
     background: "transparent",
     border: 0,
@@ -1269,10 +1267,9 @@ export function SongView({
   const bottomToolbarStyle: CSSProperties = {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
+    justifyContent: "flex-start",
+    gap: 12,
     height: 64,
-    paddingBlock: 8,
     width: "100%",
     background: "transparent",
     border: 0,
@@ -1291,7 +1288,7 @@ export function SongView({
 
   const bottomToolbarSelectStyle: CSSProperties = {
     height: 40,
-    minWidth: 84,
+    minWidth: 76,
     borderRadius: 999,
     border: "1px solid #2f384a",
     background: "#1f2532",
@@ -1375,7 +1372,7 @@ export function SongView({
 
     return (
       <div style={rootStyle}>
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", width: "100%" }}>
           <div style={topToolbarStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={topToolbarLabelStyle}>Timeline</span>
@@ -2450,7 +2447,7 @@ export function SongView({
           onClick={handleAddSection}
           style={{
             ...bottomToolbarActionButtonBaseStyle,
-            minWidth: 68,
+            minWidth: 56,
           }}
         >
           +Loop
@@ -2460,7 +2457,7 @@ export function SongView({
           onClick={handleAddRow}
           style={{
             ...bottomToolbarActionButtonBaseStyle,
-            minWidth: 68,
+            minWidth: 56,
           }}
         >
           +Row
@@ -2471,7 +2468,7 @@ export function SongView({
           disabled={!onAddPerformanceTrack}
           style={{
             ...bottomToolbarActionButtonBaseStyle,
-            minWidth: 90,
+            minWidth: 74,
             border: `1px solid ${onAddPerformanceTrack ? "#27E0B0" : "#2f384a"}`,
             background: onAddPerformanceTrack ? "#27E0B0" : "#1f2532",
             color: onAddPerformanceTrack ? "#0b1624" : "#475569",
