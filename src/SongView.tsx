@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import * as Tone from "tone";
 import type {
   CSSProperties,
@@ -15,11 +15,7 @@ import type {
   PerformanceTrack,
   SongRow,
 } from "./song";
-import {
-  createPerformanceSettingsSnapshot,
-  createSongRow,
-  getPerformanceTracksSpanMeasures,
-} from "./song";
+import { createSongRow, getPerformanceTracksSpanMeasures } from "./song";
 import { getInstrumentColor, withAlpha } from "./utils/color";
 import {
   createTriggerKey,
@@ -32,6 +28,9 @@ import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { BottomDock } from "./components/layout/BottomDock";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
+import { usePerformanceCapture } from "./hooks/usePerformanceCapture";
+import { useTimelineState } from "./hooks/useTimelineState";
+import { useTransport } from "./hooks/useTransport";
 import { TimelineGrid } from "./views/song/TimelineGrid";
 interface SongViewProps {
   patternGroups: PatternGroup[];
@@ -539,318 +538,57 @@ export function SongView({
   onUpdatePerformanceTrack,
   onRemovePerformanceTrack,
 }: SongViewProps) {
-  const [editingSlot, setEditingSlot] = useState<
-    { rowIndex: number; columnIndex: number } | null
-  >(null);
-  const [rowSettingsIndex, setRowSettingsIndex] = useState<number | null>(null);
-  const [isTimelineExpanded, setTimelineExpanded] = useState(false);
-  const [isPlayInstrumentOpen, setPlayInstrumentOpen] = useState(false);
-  const [playInstrument, setPlayInstrument] =
-    useState<TrackInstrument>("keyboard");
-  const [playInstrumentPattern, setPlayInstrumentPattern] = useState<Chunk>(() =>
-    createPerformancePattern("keyboard")
-  );
-  const latestPlayPatternRef = useRef(playInstrumentPattern);
-  const [playInstrumentRowTrackId, setPlayInstrumentRowTrackId] = useState<
-    string | null
-  >(activePerformanceTrackId);
-  const [isQuantizedRecording, setIsQuantizedRecording] = useState(true);
-  const [isRecordEnabled, setIsRecordEnabled] = useState(false);
-  const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
-  const wasRecordingRef = useRef(false);
-  const hasPerformanceTarget = Boolean(playInstrumentRowTrackId);
-  const recordingActive = Boolean(
-    isRecordEnabled && isPlayInstrumentOpen && hasPerformanceTarget
-  );
-  const isRecordArmed = Boolean(
-    isRecordEnabled && !isPlayInstrumentOpen && hasPerformanceTarget
-  );
+  const {
+    editingSlot,
+    setEditingSlot,
+    rowSettingsIndex,
+    setRowSettingsIndex,
+    isTimelineExpanded,
+    setTimelineExpanded,
+  } = useTimelineState();
+
+  const {
+    performanceTrackMap,
+    isPlayInstrumentOpen,
+    playInstrument,
+    playInstrumentPattern,
+    playInstrumentRowTrackId,
+    isQuantizedRecording,
+    setIsQuantizedRecording,
+    isRecordEnabled,
+    setIsRecordEnabled,
+    liveGhostNotes,
+    hasPerformanceTarget,
+    recordingActive,
+    isRecordArmed,
+    handlePlayInstrumentPatternUpdate,
+    handleCloseInstrumentPanel,
+    handleSelectPerformanceTrackRow,
+    handleClearRecording,
+    handlePerformanceNoteRecorded,
+    activePerformanceTrack,
+  } = usePerformanceCapture({
+    performanceTracks,
+    activePerformanceTrackId,
+    onPlayInstrumentOpenChange,
+    onSelectPerformanceTrack,
+    onUpdatePerformanceTrack,
+    onEnsurePerformanceRow,
+    createPerformancePattern,
+    sortPerformanceNotes,
+    ticksToTransportString,
+    ticksToDurationString,
+    ticksPerSixteenth: TICKS_PER_SIXTEENTH,
+    ticksPerQuarter: TICKS_PER_QUARTER,
+  });
+
+  const { transportIcon, transportLabel, handleToggleTransport, handleBpmChange } =
+    useTransport({ bpm, setBpm, isPlaying, onToggleTransport });
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
     [patternGroups]
   );
-  const performanceTrackMap = useMemo(
-    () =>
-      new Map(
-        performanceTracks.map((track) => [track.id, track] as const)
-      ),
-    [performanceTracks]
-  );
-
-  useEffect(() => {
-    onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
-  }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
-
-  const applyPerformanceSettings = useCallback(
-    (pattern: Chunk) => {
-      if (!onUpdatePerformanceTrack) {
-        return;
-      }
-      if (!playInstrumentRowTrackId) {
-        return;
-      }
-      const snapshot = createPerformanceSettingsSnapshot(pattern);
-      onUpdatePerformanceTrack(playInstrumentRowTrackId, (track) => ({
-        ...track,
-        settings: snapshot,
-      }));
-    },
-    [onUpdatePerformanceTrack, playInstrumentRowTrackId]
-  );
-
-  const handlePlayInstrumentPatternUpdate = useCallback(
-    (updater: (chunk: Chunk) => Chunk) => {
-      setPlayInstrumentPattern((prev) => {
-        const draft: Chunk = {
-          ...prev,
-          steps: prev.steps.slice(),
-          velocities: prev.velocities ? prev.velocities.slice() : undefined,
-          pitches: prev.pitches ? prev.pitches.slice() : undefined,
-          notes: prev.notes ? prev.notes.slice() : undefined,
-          degrees: prev.degrees ? prev.degrees.slice() : undefined,
-          noteEvents: prev.noteEvents
-            ? prev.noteEvents.map((event) => ({ ...event }))
-            : undefined,
-          harmoniaStepDegrees: prev.harmoniaStepDegrees
-            ? prev.harmoniaStepDegrees.slice()
-            : undefined,
-        };
-        const next = updater(draft);
-        const nextPattern = { ...next, instrument: playInstrument };
-        applyPerformanceSettings(nextPattern);
-        return nextPattern;
-      });
-    },
-    [playInstrument, applyPerformanceSettings]
-  );
-
-  const clearLiveRecording = useCallback(() => {
-    setLiveGhostNotes([]);
-  }, []);
-
-  const handleCloseInstrumentPanel = useCallback(() => {
-    setPlayInstrumentOpen(false);
-    setPlayInstrumentRowTrackId(null);
-    setIsRecordEnabled(false);
-    clearLiveRecording();
-    onSelectPerformanceTrack?.(null);
-  }, [clearLiveRecording, onSelectPerformanceTrack]);
-
-  const handleSelectPerformanceTrackRow = useCallback(
-    (trackId: string | null) => {
-      if (!trackId) {
-        handleCloseInstrumentPanel();
-        return;
-      }
-      const track = performanceTrackMap.get(trackId);
-      if (track?.instrument) {
-        setPlayInstrument(track.instrument);
-      }
-      setPlayInstrumentRowTrackId(trackId);
-      setPlayInstrumentOpen(true);
-      setIsRecordEnabled(false);
-      clearLiveRecording();
-      onSelectPerformanceTrack?.(trackId);
-    },
-    [
-      clearLiveRecording,
-      handleCloseInstrumentPanel,
-      onSelectPerformanceTrack,
-      performanceTrackMap,
-    ]
-  );
-
-  const handleClearRecording = useCallback(() => {
-    if (!playInstrumentRowTrackId) return;
-    clearLiveRecording();
-    onUpdatePerformanceTrack?.(playInstrumentRowTrackId, (track) => ({
-      ...track,
-      notes: [],
-    }));
-  }, [clearLiveRecording, onUpdatePerformanceTrack, playInstrumentRowTrackId]);
-
-  const handlePerformanceNoteRecorded = useCallback(
-    ({
-      eventTime,
-      noteName,
-      velocity,
-      durationSeconds,
-      mode,
-    }: {
-      eventTime: number;
-      noteName: string;
-      velocity: number;
-      durationSeconds?: number;
-      mode: "sync" | "free";
-    }) => {
-      if (!recordingActive || !playInstrumentRowTrackId) {
-        return;
-      }
-
-      const resolvedVelocity = Math.max(0, Math.min(1, velocity));
-      const fallbackNote = playInstrumentPattern.note ?? "C4";
-      const resolvedNote = noteName || fallbackNote;
-
-      let startTicks = Tone.Transport.getTicksAtTime(eventTime);
-      if (!Number.isFinite(startTicks) || startTicks < 0) {
-        startTicks = Math.max(0, Tone.Transport.ticks);
-      }
-
-      const shouldQuantize = mode === "sync" || isQuantizedRecording;
-      if (shouldQuantize) {
-        startTicks =
-          Math.round(startTicks / TICKS_PER_SIXTEENTH) * TICKS_PER_SIXTEENTH;
-      }
-
-      let durationTicks =
-        durationSeconds !== undefined
-          ? Tone.Time(Math.max(0.02, durationSeconds)).toTicks()
-          : Tone.Time(playInstrumentPattern.sustain ?? 0.5).toTicks();
-
-      if (!Number.isFinite(durationTicks) || durationTicks <= 0) {
-        durationTicks = TICKS_PER_QUARTER;
-      }
-
-      if (shouldQuantize) {
-        durationTicks = Math.max(
-          TICKS_PER_SIXTEENTH,
-          Math.round(durationTicks / TICKS_PER_SIXTEENTH) *
-            TICKS_PER_SIXTEENTH
-        );
-      }
-
-      const noteEntry: PerformanceNote = {
-        time: ticksToTransportString(startTicks),
-        note: resolvedNote,
-        duration: ticksToDurationString(durationTicks),
-        velocity: resolvedVelocity,
-      };
-
-      setLiveGhostNotes((prev) => [...prev, noteEntry]);
-      if (onUpdatePerformanceTrack) {
-        const settingsSnapshot = createPerformanceSettingsSnapshot(
-          playInstrumentPattern
-        );
-        onUpdatePerformanceTrack(
-          playInstrumentRowTrackId,
-          (track: PerformanceTrack) => {
-            const nextNotes = [...track.notes, noteEntry];
-            nextNotes.sort(sortPerformanceNotes);
-            return {
-              ...track,
-              notes: nextNotes,
-              settings: settingsSnapshot,
-            };
-          }
-        );
-      }
-    },
-    [
-      recordingActive,
-      playInstrumentRowTrackId,
-      playInstrumentPattern.note,
-      playInstrumentPattern.sustain,
-      playInstrumentPattern,
-      onUpdatePerformanceTrack,
-      isQuantizedRecording,
-    ]
-  );
-
-  useEffect(() => {
-    if (!isPlayInstrumentOpen) return;
-    setPlayInstrumentRowTrackId((currentId) => {
-      const ensuredId = onEnsurePerformanceRow(playInstrument, currentId);
-      if (ensuredId) {
-        return ensuredId;
-      }
-      if (currentId && !performanceTrackMap.has(currentId)) {
-        return null;
-      }
-      return currentId;
-    });
-  }, [
-    isPlayInstrumentOpen,
-    playInstrument,
-    onEnsurePerformanceRow,
-    performanceTrackMap,
-  ]);
-
-  useEffect(() => {
-    if (!activePerformanceTrackId) {
-      setPlayInstrumentRowTrackId(null);
-      setPlayInstrumentOpen(false);
-      return;
-    }
-    setPlayInstrumentRowTrackId(activePerformanceTrackId);
-    const track = performanceTrackMap.get(activePerformanceTrackId);
-    if (track?.instrument) {
-      setPlayInstrument((prev) =>
-        prev === track.instrument ? prev : track.instrument
-      );
-    }
-    setPlayInstrumentOpen(true);
-  }, [activePerformanceTrackId, performanceTrackMap]);
-
-  useEffect(() => {
-    const pattern = createPerformancePattern(playInstrument);
-    setPlayInstrumentPattern(pattern);
-    applyPerformanceSettings(pattern);
-  }, [playInstrument, applyPerformanceSettings]);
-
-  useEffect(() => {
-    latestPlayPatternRef.current = playInstrumentPattern;
-  }, [playInstrumentPattern]);
-
-  useEffect(() => {
-    if (!playInstrumentRowTrackId) return;
-    applyPerformanceSettings(latestPlayPatternRef.current);
-  }, [playInstrumentRowTrackId, applyPerformanceSettings]);
-
-  useEffect(() => {
-    setPlayInstrumentPattern((prev) => {
-      const nextMode = isQuantizedRecording ? "sync" : "free";
-      if (prev.timingMode === nextMode) {
-        return prev;
-      }
-      return { ...prev, timingMode: nextMode };
-    });
-  }, [isQuantizedRecording]);
-
-  useEffect(() => {
-    if (recordingActive && !wasRecordingRef.current) {
-      wasRecordingRef.current = true;
-      setLiveGhostNotes([]);
-    } else if (!recordingActive && wasRecordingRef.current) {
-      wasRecordingRef.current = false;
-      clearLiveRecording();
-    }
-  }, [recordingActive, clearLiveRecording]);
-
-  useEffect(() => {
-    return () => {
-      clearLiveRecording();
-    };
-  }, [clearLiveRecording]);
-
-  useEffect(() => {
-    if (wasRecordingRef.current) return;
-    setLiveGhostNotes([]);
-  }, [playInstrument, playInstrumentRowTrackId]);
-
-  const activePerformanceTrack = useMemo(() => {
-    if (playInstrumentRowTrackId) {
-      return performanceTrackMap.get(playInstrumentRowTrackId) ?? null;
-    }
-    if (activePerformanceTrackId) {
-      return performanceTrackMap.get(activePerformanceTrackId) ?? null;
-    }
-    return null;
-  }, [
-    performanceTrackMap,
-    playInstrumentRowTrackId,
-    activePerformanceTrackId,
-  ]);
 
   const sectionCount = useMemo(
     () => songRows.reduce((max, row) => Math.max(max, row.slots.length), 0),
@@ -1337,13 +1075,6 @@ export function SongView({
     playInstrumentCharacterId,
   ]);
 
-  useEffect(() => {
-    const targetInstrument = activePerformanceTrack?.instrument;
-    if (!targetInstrument) {
-      return;
-    }
-    setPlayInstrument((prev) => (prev === targetInstrument ? prev : targetInstrument));
-  }, [activePerformanceTrack?.instrument]);
   const liveRowIndex = useMemo(() => {
     if (!playInstrumentRowTrackId) return -1;
     return songRows.findIndex(
@@ -2398,7 +2129,7 @@ export function SongView({
         <label>BPM</label>
         <select
           value={bpm}
-          onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+          onChange={(e) => handleBpmChange(parseInt(e.target.value, 10))}
           style={{
             padding: 8,
             borderRadius: 8,
@@ -2416,8 +2147,8 @@ export function SongView({
       <div style={{ flex: 1 }} />
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <button
-          aria-label={isPlaying ? "Stop" : "Play"}
-          onPointerDown={onToggleTransport}
+          aria-label={transportLabel}
+          onPointerDown={handleToggleTransport}
           onPointerUp={(e) => e.currentTarget.blur()}
           style={{
             width: 44,
@@ -2433,7 +2164,7 @@ export function SongView({
           }}
         >
           <span className="material-symbols-outlined">
-            {isPlaying ? "stop" : "play_arrow"}
+            {transportIcon}
           </span>
         </button>
       </div>
