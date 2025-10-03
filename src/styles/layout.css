@@ -1,0 +1,10 @@
+:root{
+  --topbar-h: 56px;
+  --transport-h: 76px;
+  --controls-h: clamp(220px, 38dvh, 420px);
+}
+@supports (height: 100dvh){
+  .vh{ height: 100dvh; }
+}
+.safe-top{ padding-top: env(safe-area-inset-top); }
+.safe-bottom{ padding-bottom: env(safe-area-inset-bottom); }
