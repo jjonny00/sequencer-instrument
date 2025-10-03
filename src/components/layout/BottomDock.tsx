@@ -24,7 +24,7 @@ export function BottomDock({
         ...style,
       }}
       aria-hidden={!show}
-      {...(inertWhenHidden && !show ? { inert: "true" as any } : {})}
+      {...(inertWhenHidden && !show ? { inert: true } : {})}
     >
       {children}
     </div>

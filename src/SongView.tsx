@@ -4,6 +4,7 @@ import type {
   CSSProperties,
   Dispatch,
   PointerEvent as ReactPointerEvent,
+  ReactNode,
   SetStateAction,
 } from "react";
 
@@ -30,6 +31,7 @@ import { packs } from "./packs";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
+import { TimelineGrid } from "./views/song/TimelineGrid";
 interface SongViewProps {
   patternGroups: PatternGroup[];
   songRows: SongRow[];
@@ -76,6 +78,41 @@ const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
 const TICKS_PER_MEASURE = TICKS_PER_SIXTEENTH * 16;
+
+interface TimelineColumn {
+  id: string;
+  index: number;
+  hasSection: boolean;
+}
+
+interface TimelineRowItem {
+  id: string;
+  row: SongRow;
+  rowIndex: number;
+  maxColumns: number;
+  safeColumnCount: number;
+  rowMuted: boolean;
+  rowSolo: boolean;
+  rowAccent: string | null;
+  labelBackground: string;
+  rowSelected: boolean;
+  isPerformanceRow: boolean;
+  isRecordingRow: boolean;
+  isArmedRow: boolean;
+  rowGhostDisplayNotes: PerformanceNote[];
+  rowGhostNoteSet?: Set<PerformanceNote>;
+  performanceTrack?: PerformanceTrack;
+  performanceAccent: string | null;
+  performanceStatusLabel: string | null;
+  performanceInstrumentLabel: string | null;
+  performanceDescription: string | null;
+  performanceHasContent: boolean;
+  totalPerformanceNotes: number;
+  performanceTextColor: string;
+  performanceHighlightRange?: { start: number; end: number; color: string };
+  combinedPerformanceNotes: PerformanceNote[];
+  rowLabelTitle: string;
+}
 
 const toTicks = (value: string | number | undefined | null): number => {
   if (value === undefined || value === null) {
@@ -861,6 +898,8 @@ export function SongView({
     return `max(100%, ${timelineContentWidth}px)`;
   }, [timelineContentWidth]);
 
+
+
   useEffect(() => {
     if (!editingSlot) return;
     if (patternGroups.length === 0) {
@@ -1043,6 +1082,159 @@ export function SongView({
     [liveGhostNotes]
   );
 
+  const timelineRows = useMemo<TimelineRowItem[]>(() => {
+    return songRows.map((row, rowIndex) => {
+      const rowMuted = row.muted;
+      const rowSolo = row.solo ?? false;
+      const performanceTrack = row.performanceTrackId
+        ? performanceTrackMap.get(row.performanceTrackId)
+        : undefined;
+      const performanceAccent = performanceTrack
+        ? performanceTrack.color || getInstrumentColor(performanceTrack.instrument)
+        : null;
+      const isPerformanceRow = Boolean(row.performanceTrackId);
+      const isSelectedPerformanceRow =
+        isPerformanceRow && row.performanceTrackId === playInstrumentRowTrackId;
+      const rowSelected = rowSettingsIndex === rowIndex || isSelectedPerformanceRow;
+      const firstAssignedGroupId =
+        row.slots.find((slotId) => slotId !== null) ?? null;
+      const firstGroup = firstAssignedGroupId
+        ? patternGroupMap.get(firstAssignedGroupId)
+        : undefined;
+      const loopAccentInstrument = firstGroup?.tracks.find(
+        (track) => track.instrument
+      )?.instrument;
+      const loopAccent = loopAccentInstrument
+        ? getInstrumentColor(loopAccentInstrument)
+        : null;
+      const rowAccent = performanceAccent ?? loopAccent ?? null;
+      const labelBackground = rowMuted
+        ? "#1b2332"
+        : rowSolo
+        ? "#14241d"
+        : "#111827";
+      const isRecordingRow = recordingActive && isSelectedPerformanceRow;
+      const isArmedRow = !isRecordingRow && isRecordArmed && isSelectedPerformanceRow;
+      const rowGhostNotes = isRecordingRow ? liveGhostNotes : [];
+      const rowGhostNoteSet = isRecordingRow ? liveGhostNoteSet : undefined;
+      const trackNoteSet = performanceTrack
+        ? new Set(performanceTrack.notes)
+        : undefined;
+      const rowGhostDisplayNotes =
+        rowGhostNotes.length && trackNoteSet
+          ? rowGhostNotes.filter((note) => !trackNoteSet.has(note))
+          : rowGhostNotes;
+      const performanceHasContent = isPerformanceRow
+        ? (performanceTrack?.notes.length ?? 0) > 0 ||
+          rowGhostDisplayNotes.length > 0
+        : false;
+      const totalPerformanceNotes = isPerformanceRow
+        ? (performanceTrack?.notes.length ?? 0) +
+          (isRecordingRow ? rowGhostDisplayNotes.length : 0)
+        : 0;
+      const performanceHighlightRange =
+        isPerformanceRow && isPlaying
+          ? {
+              start: currentSectionIndex,
+              end: currentSectionIndex + 1,
+              color: performanceAccent ?? rowAccent ?? "#27E0B0",
+            }
+          : undefined;
+      const performanceStatusLabel = isPerformanceRow
+        ? isRecordingRow
+          ? "Recording"
+          : isArmedRow
+          ? "Armed"
+          : performanceHasContent
+          ? "Live"
+          : null
+        : null;
+      const performanceInstrumentLabel =
+        isPerformanceRow && performanceTrack
+          ? formatInstrumentLabel(performanceTrack.instrument)
+          : null;
+      const performanceDescription = isPerformanceRow
+        ? isRecordingRow
+          ? "Recording…"
+          : totalPerformanceNotes > 0
+          ? `${formatNoteCount(totalPerformanceNotes)} across the song`
+          : "No notes yet"
+        : null;
+      const performanceTextColor =
+        isPerformanceRow && performanceHasContent ? "#e6f2ff" : "#94a3b8";
+      const maxColumns = Math.max(effectiveColumnCount, row.slots.length);
+      const safeColumnCount = Math.max(1, maxColumns);
+      const combinedPerformanceNotes = [
+        ...(performanceTrack?.notes ?? []),
+        ...rowGhostDisplayNotes,
+      ];
+      const rowLabelTitle = rowMuted
+        ? "Tap to unmute. Double tap to solo. Long press for settings."
+        : rowSolo
+        ? "Tap to mute. Double tap to clear solo. Long press for settings."
+        : "Tap to mute. Double tap to solo. Long press for settings.";
+
+      return {
+        id: `timeline-row-${rowIndex}`,
+        row,
+        rowIndex,
+        maxColumns,
+        safeColumnCount,
+        rowMuted,
+        rowSolo,
+        rowAccent,
+        labelBackground,
+        rowSelected,
+        isPerformanceRow,
+        isRecordingRow,
+        isArmedRow,
+        rowGhostDisplayNotes,
+        rowGhostNoteSet,
+        performanceTrack,
+        performanceAccent,
+        performanceStatusLabel,
+        performanceInstrumentLabel,
+        performanceDescription,
+        performanceHasContent,
+        totalPerformanceNotes,
+        performanceTextColor,
+        performanceHighlightRange,
+        combinedPerformanceNotes,
+        rowLabelTitle,
+      } satisfies TimelineRowItem;
+    });
+  }, [
+    songRows,
+    performanceTrackMap,
+    playInstrumentRowTrackId,
+    rowSettingsIndex,
+    patternGroupMap,
+    recordingActive,
+    isRecordArmed,
+    liveGhostNotes,
+    liveGhostNoteSet,
+    isPlaying,
+    currentSectionIndex,
+    effectiveColumnCount,
+  ]);
+
+  const timelineColumnCount = useMemo(() => {
+    return timelineRows.reduce(
+      (max, item) => Math.max(max, item.maxColumns),
+      Math.max(1, sectionCount)
+    );
+  }, [timelineRows, sectionCount]);
+
+  const timelineColumns = useMemo<TimelineColumn[]>(
+    () =>
+      Array.from({ length: timelineColumnCount }, (_, index) => ({
+        id: `timeline-column-${index}`,
+        index,
+        hasSection: index < sectionCount,
+      })),
+    [timelineColumnCount, sectionCount]
+  );
+
   const hasPerformanceRow = songRows.some((row) => Boolean(row.performanceTrackId));
   const showEmptyTimeline = sectionCount === 0 && !hasPerformanceRow;
   const slotMinHeight = SLOT_MIN_HEIGHT;
@@ -1189,6 +1381,546 @@ export function SongView({
     rowSettingsIndex !== null && rowSettingsIndex < songRows.length
       ? `Row ${String(rowSettingsIndex + 1).padStart(2, "0")}`
       : null;
+
+  const renderTimelineCell = useCallback(
+    (timelineRow: TimelineRowItem, column: TimelineColumn) => {
+      const {
+        row,
+        rowIndex,
+        rowMuted,
+        rowAccent,
+        rowGhostDisplayNotes,
+        rowGhostNoteSet,
+        performanceTrack,
+        performanceAccent,
+        combinedPerformanceNotes,
+        isRecordingRow,
+      } = timelineRow;
+      const columnIndex = column.index;
+      const groupId =
+        columnIndex < row.slots.length ? row.slots[columnIndex] : null;
+      const group = groupId ? patternGroupMap.get(groupId) : undefined;
+      const highlight = isPlaying && columnIndex === currentSectionIndex;
+      const isEditing =
+        editingSlot?.rowIndex === rowIndex &&
+        editingSlot.columnIndex === columnIndex;
+      const assigned = Boolean(group);
+      const columnBounds = getColumnTickBounds(columnIndex);
+      const columnNoteCount = countPerformanceNotesInRange(
+        combinedPerformanceNotes,
+        columnBounds.startTicks,
+        columnBounds.endTicks
+      );
+      const hasPerformanceContent = combinedPerformanceNotes.length > 0;
+      const hasContent = assigned || hasPerformanceContent;
+      const textColor = hasContent ? "#e6f2ff" : "#94a3b8";
+      const descriptionColor = hasContent ? "#94a3b8" : "#475569";
+      const description = hasPerformanceContent
+        ? columnNoteCount > 0
+          ? formatNoteCount(columnNoteCount)
+          : isRecordingRow
+          ? "Recording…"
+          : "No notes yet"
+        : assigned
+        ? null
+        : patternGroups.length > 0
+        ? "Tap to assign"
+        : "Save a sequence in Track view";
+      const performanceSlotStatus = isRecordingRow
+        ? "Recording"
+        : hasPerformanceContent
+        ? "Live"
+        : null;
+
+      const showSlotLabel = !isPlayInstrumentOpen;
+      const buttonStyles: CSSProperties = {
+        width: "100%",
+        minHeight: slotMinHeight,
+        borderRadius: 8,
+        border: `1px solid ${
+          highlight
+            ? "#27E0B0"
+            : isRecordingRow
+            ? withAlpha(playInstrumentColor, 0.6)
+            : hasContent
+            ? "#2f384a"
+            : "#1f2937"
+        }`,
+        background: highlight
+          ? "rgba(39, 224, 176, 0.12)"
+          : isRecordingRow
+          ? withAlpha(playInstrumentColor, 0.12)
+          : hasContent
+          ? "#0f1a2a"
+          : "#0b111d",
+        color: textColor,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        justifyContent: "space-between",
+        gap: showSlotLabel ? slotGap : slotGap / 2,
+        padding: slotPadding,
+        fontSize: 13,
+        cursor: patternGroups.length > 0 ? "pointer" : "not-allowed",
+        textAlign: "left",
+        opacity: rowMuted ? 0.85 : 1,
+        transition: "background 0.2s ease, border-color 0.2s ease",
+      };
+
+      return (
+        <div key={`slot-${rowIndex}-${columnIndex}`}>
+          {isEditing ? (
+            <select
+              value={groupId ?? ""}
+              onChange={(event) => {
+                const value = event.target.value;
+                handleAssignSlot(
+                  rowIndex,
+                  columnIndex,
+                  value ? value : null
+                );
+                setEditingSlot(null);
+              }}
+              onBlur={() => setEditingSlot(null)}
+              style={{
+                width: "100%",
+                minHeight: slotMinHeight,
+                borderRadius: 8,
+                border: `1px solid ${highlight ? "#27E0B0" : "#475569"}`,
+                background: "#121827",
+                color: "#e6f2ff",
+                padding: "0 12px",
+              }}
+              autoFocus
+            >
+              <option value="">Empty Slot</option>
+              {patternGroups.map((groupOption) => (
+                <option key={groupOption.id} value={groupOption.id}>
+                  {groupOption.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (patternGroups.length === 0) return;
+                setRowSettingsIndex(null);
+                setEditingSlot({ rowIndex, columnIndex });
+              }}
+              style={buttonStyles}
+              disabled={patternGroups.length === 0}
+            >
+              {showSlotLabel ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    width: "100%",
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>
+                    {group?.name ?? "Empty"}
+                  </span>
+                  {performanceSlotStatus && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: 10,
+                        color: "#cbd5f5",
+                        letterSpacing: 0.4,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {performanceSlotStatus}
+                    </span>
+                  )}
+                </div>
+              ) : null}
+              <div style={{ width: "100%" }}>
+                {hasPerformanceContent
+                  ? renderPerformanceSlotPreview(
+                      performanceTrack,
+                      columnIndex,
+                      columnIndex + 1,
+                      performanceAccent ?? rowAccent,
+                      rowGhostDisplayNotes,
+                      rowGhostNoteSet
+                    )
+                  : renderLoopSlotPreview(group)}
+              </div>
+              {description && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: descriptionColor,
+                  }}
+                >
+                  {description}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      );
+    },
+    [
+      patternGroupMap,
+      isPlaying,
+      currentSectionIndex,
+      editingSlot,
+      patternGroups,
+      isPlayInstrumentOpen,
+      slotMinHeight,
+      slotGap,
+      slotPadding,
+      playInstrumentColor,
+      handleAssignSlot,
+      setEditingSlot,
+      setRowSettingsIndex,
+    ]
+  );
+
+  const renderTimelineRow = useCallback(
+    (
+      timelineRow: TimelineRowItem,
+      columns: TimelineColumn[],
+      renderCell: (row: TimelineRowItem, column: TimelineColumn) => ReactNode
+    ) => {
+      const {
+        row,
+        rowIndex,
+        rowMuted,
+        rowAccent,
+        labelBackground,
+        rowSelected,
+        rowSolo,
+        isPerformanceRow,
+        isRecordingRow,
+        isArmedRow,
+        rowGhostDisplayNotes,
+        rowGhostNoteSet,
+        performanceTrack,
+        performanceAccent,
+        performanceStatusLabel,
+        performanceInstrumentLabel,
+        performanceDescription,
+        performanceHasContent,
+        performanceTextColor,
+        performanceHighlightRange,
+        safeColumnCount,
+        maxColumns,
+        rowLabelTitle,
+      } = timelineRow;
+
+      let labelTimer: number | null = null;
+      let longPressTriggered = false;
+
+      const handleLabelPointerDown = (
+        event: ReactPointerEvent<HTMLDivElement>
+      ) => {
+        event.preventDefault();
+        event.stopPropagation();
+        longPressTriggered = false;
+        if (labelTimer) window.clearTimeout(labelTimer);
+        labelTimer = window.setTimeout(() => {
+          longPressTriggered = true;
+          setEditingSlot(null);
+          setRowSettingsIndex(rowIndex);
+        }, 500);
+      };
+
+      const handleLabelPointerUp = (
+        event: ReactPointerEvent<HTMLDivElement>
+      ) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (labelTimer) window.clearTimeout(labelTimer);
+        labelTimer = null;
+        if (longPressTriggered) {
+          longPressTriggered = false;
+          return;
+        }
+        const detail = event.detail ?? 0;
+        if (detail >= 2) {
+          handleToggleRowSolo(rowIndex);
+        } else {
+          handleToggleRowMute(rowIndex);
+        }
+      };
+
+      const handleLabelPointerLeave = () => {
+        if (labelTimer) window.clearTimeout(labelTimer);
+        labelTimer = null;
+      };
+
+      return (
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}
+        >
+          <div
+            onPointerDown={() => {
+              if (isPerformanceRow) {
+                handleSelectPerformanceTrackRow(
+                  row.performanceTrackId ?? null
+                );
+              } else if (playInstrumentRowTrackId) {
+                handleSelectPerformanceTrackRow(null);
+              }
+            }}
+            style={{
+              display: "flex",
+              alignItems: "stretch",
+              borderRadius: 6,
+              overflow: "hidden",
+              border: rowSelected ? "2px solid #27E0B0" : "1px solid #2a3344",
+              background: "#111827",
+              opacity: rowMuted ? 0.55 : 1,
+              transition: "opacity 0.2s ease, border 0.2s ease",
+            }}
+          >
+            <div
+              onPointerDown={handleLabelPointerDown}
+              onPointerUp={handleLabelPointerUp}
+              onPointerLeave={handleLabelPointerLeave}
+              onPointerCancel={handleLabelPointerLeave}
+              style={{
+                width: ROW_LABEL_WIDTH,
+                flexShrink: 0,
+                borderRight: "1px solid #2a3344",
+                background: labelBackground,
+                color: rowMuted ? "#475569" : "#f8fafc",
+                fontSize: 11,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                cursor: "pointer",
+                userSelect: "none",
+                letterSpacing: 0.6,
+                position: "relative",
+              }}
+              title={rowLabelTitle}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 999,
+                    background: rowAccent ?? "#334155",
+                    boxShadow: rowAccent
+                      ? `0 0 6px ${withAlpha(rowAccent, 0.4)}`
+                      : "none",
+                  }}
+                />
+                <span>{rowIndex + 1}</span>
+                {rowSolo ? (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      color: "#facc15",
+                    }}
+                  >
+                    SOLO
+                  </span>
+                ) : null}
+                {isPerformanceRow && (isRecordingRow || isArmedRow) ? (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      color: "#fecdd3",
+                      background: isRecordingRow
+                        ? "rgba(248, 113, 113, 0.22)"
+                        : "rgba(248, 113, 113, 0.12)",
+                      border: `1px solid ${
+                        isRecordingRow ? "#f87171" : "#fb7185"
+                      }`,
+                      padding: "2px 6px",
+                      borderRadius: 999,
+                    }}
+                  >
+                    {isRecordingRow ? "REC" : "ARM"}
+                  </span>
+                ) : null}
+              </div>
+              {rowSelected && (
+                <span
+                  className="material-symbols-outlined"
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    right: 6,
+                    fontSize: 14,
+                    color: "#27E0B0",
+                  }}
+                  aria-hidden="true"
+                >
+                  tune
+                </span>
+              )}
+            </div>
+            <div
+              style={{
+                flex: 1,
+                background: "#161d2b",
+                padding: slotPadding,
+                display: "flex",
+                alignItems: "stretch",
+              }}
+            >
+              <div
+                style={{
+                  width: timelineWidthStyle,
+                  minWidth: timelineWidthStyle,
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${safeColumnCount}, ${SLOT_WIDTH}px)`,
+                    gap: SLOT_GAP,
+                    width: "100%",
+                  }}
+                >
+                  {isPerformanceRow ? (
+                    <div
+                      key={`performance-span-${rowIndex}`}
+                      style={{ gridColumn: `1 / span ${safeColumnCount}` }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          minHeight: slotMinHeight,
+                          borderRadius: 8,
+                          border: `1px solid ${
+                            isRecordingRow
+                              ? withAlpha(playInstrumentColor, 0.6)
+                              : performanceHasContent
+                              ? "#2f384a"
+                              : "#1f2937"
+                          }`,
+                          background: isRecordingRow
+                            ? withAlpha(playInstrumentColor, 0.12)
+                            : performanceHasContent
+                            ? "#0f1a2a"
+                            : "#0b111d",
+                          color: performanceTextColor,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: slotGap,
+                          padding: slotPadding,
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 2,
+                            }}
+                          >
+                            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                              Live performance
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>
+                              {performanceInstrumentLabel ?? "Performance"}
+                            </span>
+                          </div>
+                          {performanceStatusLabel ? (
+                            <span
+                              style={{
+                                marginLeft: "auto",
+                                fontSize: 11,
+                                color: "#cbd5f5",
+                                letterSpacing: 0.4,
+                                textTransform: "uppercase",
+                                padding: "2px 8px",
+                                borderRadius: 999,
+                                background: isRecordingRow
+                                  ? "rgba(248, 113, 113, 0.2)"
+                                  : "rgba(248, 113, 113, 0.12)",
+                              }}
+                            >
+                              {performanceStatusLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div style={{ width: "100%" }}>
+                          {renderPerformanceSlotPreview(
+                            performanceTrack,
+                            0,
+                            safeColumnCount,
+                            performanceAccent ?? rowAccent,
+                            rowGhostDisplayNotes,
+                            rowGhostNoteSet,
+                            performanceHighlightRange
+                          )}
+                        </div>
+                        {performanceDescription ? (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color:
+                                performanceTextColor === "#e6f2ff"
+                                  ? "#94a3b8"
+                                  : "#475569",
+                            }}
+                          >
+                            {performanceDescription}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : (
+                    columns
+                      .slice(0, maxColumns)
+                      .map((column) => renderCell(timelineRow, column))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    },
+    [
+      setEditingSlot,
+      setRowSettingsIndex,
+      handleToggleRowSolo,
+      handleToggleRowMute,
+      handleSelectPerformanceTrackRow,
+      playInstrumentRowTrackId,
+      slotPadding,
+      timelineWidthStyle,
+      slotMinHeight,
+      slotGap,
+      withAlpha,
+      playInstrumentColor,
+      renderPerformanceSlotPreview,
+    ]
+  );
   const timelineToggleLabel = isTimelineExpanded
     ? "Collapse timeline height"
     : "Expand timeline height";
@@ -1320,31 +2052,33 @@ export function SongView({
                     minWidth: timelineWidthStyle,
                   }}
                 >
-                  {Array.from({ length: sectionCount }, (_, columnIndex) => (
-                    <button
-                      key={`delete-column-${columnIndex}`}
-                      type="button"
-                      onClick={() => handleDeleteColumn(columnIndex)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 16,
-                        border: "1px solid #2a3344",
-                        background: "#111827",
-                        color: "#e2e8f0",
-                        fontSize: 11,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 4,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                        delete
-                      </span>
-                      <span>Seq {columnIndex + 1}</span>
-                    </button>
-                  ))}
+                  {timelineColumns
+                    .filter((column) => column.hasSection)
+                    .map((column) => (
+                      <button
+                        key={`delete-column-${column.index}`}
+                        type="button"
+                        onClick={() => handleDeleteColumn(column.index)}
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: 16,
+                          border: "1px solid #2a3344",
+                          background: "#111827",
+                          color: "#e2e8f0",
+                          fontSize: 11,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                          delete
+                        </span>
+                        <span>Seq {column.index + 1}</span>
+                      </button>
+                    ))}
                 </div>
               </div>
             </div>
@@ -1359,8 +2093,7 @@ export function SongView({
               minWidth: timelineWidthStyle,
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {showEmptyTimeline ? (
+            {showEmptyTimeline ? (
               <div
                 style={{
                   padding: 24,
@@ -1373,587 +2106,15 @@ export function SongView({
                 Add a sequence to start placing loops into the timeline.
               </div>
             ) : (
-              songRows.map((row, rowIndex) => {
-                const maxColumns = Math.max(
-                  effectiveColumnCount,
-                  row.slots.length
-                );
-                let labelTimer: number | null = null;
-                let longPressTriggered = false;
-
-                const handleLabelPointerDown = (
-                  event: ReactPointerEvent<HTMLDivElement>
-                ) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  longPressTriggered = false;
-                  if (labelTimer) window.clearTimeout(labelTimer);
-                  labelTimer = window.setTimeout(() => {
-                    longPressTriggered = true;
-                    setEditingSlot(null);
-                    setRowSettingsIndex(rowIndex);
-                  }, 500);
-                };
-
-                const handleLabelPointerUp = (
-                  event: ReactPointerEvent<HTMLDivElement>
-                ) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (labelTimer) window.clearTimeout(labelTimer);
-                  labelTimer = null;
-                  if (longPressTriggered) {
-                    longPressTriggered = false;
-                    return;
-                  }
-                  const detail = event.detail ?? 0;
-                  if (detail >= 2) {
-                    handleToggleRowSolo(rowIndex);
-                  } else {
-                    handleToggleRowMute(rowIndex);
-                  }
-                };
-
-                const handleLabelPointerLeave = () => {
-                  if (labelTimer) window.clearTimeout(labelTimer);
-                  labelTimer = null;
-                };
-
-                const rowMuted = row.muted;
-                const performanceTrack = row.performanceTrackId
-                  ? performanceTrackMap.get(row.performanceTrackId)
-                  : undefined;
-                const performanceAccent = performanceTrack
-                  ? performanceTrack.color ||
-                    getInstrumentColor(performanceTrack.instrument)
-                  : null;
-                const isPerformanceRow = Boolean(row.performanceTrackId);
-                const isSelectedPerformanceRow =
-                  isPerformanceRow &&
-                  row.performanceTrackId === playInstrumentRowTrackId;
-                const rowSelected =
-                  rowSettingsIndex === rowIndex || isSelectedPerformanceRow;
-                const firstAssignedGroupId =
-                  row.slots.find((slotId) => slotId !== null) ?? null;
-                const firstGroup = firstAssignedGroupId
-                  ? patternGroupMap.get(firstAssignedGroupId)
-                  : undefined;
-                const loopAccentInstrument = firstGroup?.tracks.find(
-                  (track) => track.instrument
-                )?.instrument;
-                const loopAccent = loopAccentInstrument
-                  ? getInstrumentColor(loopAccentInstrument)
-                  : null;
-                const rowAccent = performanceAccent ?? loopAccent ?? null;
-                const rowSolo = row.solo ?? false;
-                const labelBackground = rowMuted
-                  ? "#1b2332"
-                  : rowSolo
-                  ? "#14241d"
-                  : "#111827";
-                const isRecordingRow = recordingActive && isSelectedPerformanceRow;
-                const isArmedRow =
-                  !isRecordingRow && isRecordArmed && isSelectedPerformanceRow;
-                const rowGhostNotes = isRecordingRow ? liveGhostNotes : [];
-                const rowGhostNoteSet = isRecordingRow
-                  ? liveGhostNoteSet
-                  : undefined;
-                const trackNoteSet = performanceTrack
-                  ? new Set(performanceTrack.notes)
-                  : undefined;
-                const rowGhostDisplayNotes =
-                  rowGhostNotes.length && trackNoteSet
-                    ? rowGhostNotes.filter((note) => !trackNoteSet.has(note))
-                    : rowGhostNotes;
-                const performanceHasContent = isPerformanceRow
-                  ? (performanceTrack?.notes.length ?? 0) > 0 ||
-                    rowGhostDisplayNotes.length > 0
-                  : false;
-                const totalPerformanceNotes = isPerformanceRow
-                  ? (performanceTrack?.notes.length ?? 0) +
-                    (isRecordingRow ? rowGhostDisplayNotes.length : 0)
-                  : 0;
-                const performanceHighlightRange =
-                  isPerformanceRow && isPlaying
-                    ? {
-                        start: currentSectionIndex,
-                        end: currentSectionIndex + 1,
-                        color: performanceAccent ?? rowAccent ?? "#27E0B0",
-                      }
-                    : undefined;
-                const performanceStatusLabel = isPerformanceRow
-                  ? isRecordingRow
-                    ? "Recording"
-                    : isArmedRow
-                    ? "Armed"
-                    : performanceHasContent
-                    ? "Live"
-                    : null
-                  : null;
-                const performanceInstrumentLabel =
-                  isPerformanceRow && performanceTrack
-                    ? formatInstrumentLabel(performanceTrack.instrument)
-                    : null;
-                const performanceDescription = isPerformanceRow
-                  ? isRecordingRow
-                    ? "Recording…"
-                    : totalPerformanceNotes > 0
-                    ? `${formatNoteCount(totalPerformanceNotes)} across the song`
-                    : "No notes yet"
-                  : null;
-                const performanceTextColor =
-                  isPerformanceRow && performanceHasContent
-                    ? "#e6f2ff"
-                    : "#94a3b8";
-                const safeColumnCount = Math.max(1, maxColumns);
-                
-                return (
-                  <div
-                    key={`row-${rowIndex}`}
-                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                  >
-                    <div
-                      onPointerDown={() => {
-                        if (isPerformanceRow) {
-                          handleSelectPerformanceTrackRow(
-                            row.performanceTrackId ?? null
-                          );
-                        } else if (playInstrumentRowTrackId) {
-                          handleSelectPerformanceTrackRow(null);
-                        }
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "stretch",
-                        borderRadius: 6,
-                        overflow: "hidden",
-                        border: rowSelected
-                          ? "2px solid #27E0B0"
-                          : "1px solid #2a3344",
-                        background: "#111827",
-                        opacity: rowMuted ? 0.55 : 1,
-                        transition: "opacity 0.2s ease, border 0.2s ease",
-                      }}
-                    >
-                      <div
-                        onPointerDown={handleLabelPointerDown}
-                        onPointerUp={handleLabelPointerUp}
-                        onPointerLeave={handleLabelPointerLeave}
-                        onPointerCancel={handleLabelPointerLeave}
-                        style={{
-                          width: ROW_LABEL_WIDTH,
-                          flexShrink: 0,
-                          borderRight: "1px solid #2a3344",
-                          background: labelBackground,
-                          color: rowMuted ? "#475569" : "#f8fafc",
-                          fontSize: 11,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          cursor: "pointer",
-                          userSelect: "none",
-                          letterSpacing: 0.6,
-                          position: "relative",
-                        }}
-                        title={
-                          rowMuted
-                            ? "Tap to unmute. Double tap to solo. Long press for settings."
-                            : rowSolo
-                            ? "Tap to mute. Double tap to clear solo. Long press for settings."
-                            : "Tap to mute. Double tap to solo. Long press for settings."
-                        }
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              width: 10,
-                              height: 10,
-                              borderRadius: 999,
-                              background: rowAccent ?? "#334155",
-                              boxShadow: rowAccent
-                                ? `0 0 6px ${withAlpha(rowAccent, 0.4)}`
-                                : "none",
-                            }}
-                          />
-                          <span>{rowIndex + 1}</span>
-                          {rowSolo ? (
-                            <span
-                              style={{
-                                fontSize: 9,
-                                fontWeight: 700,
-                                letterSpacing: 0.6,
-                                color: "#facc15",
-                              }}
-                            >
-                              SOLO
-                            </span>
-                          ) : null}
-                          {isPerformanceRow && (isRecordingRow || isArmedRow) ? (
-                            <span
-                              style={{
-                                fontSize: 9,
-                                fontWeight: 700,
-                                letterSpacing: 0.6,
-                                color: "#fecdd3",
-                                background: isRecordingRow
-                                  ? "rgba(248, 113, 113, 0.22)"
-                                  : "rgba(248, 113, 113, 0.12)",
-                                border: `1px solid ${
-                                  isRecordingRow ? "#f87171" : "#fb7185"
-                                }`,
-                                padding: "2px 6px",
-                                borderRadius: 999,
-                              }}
-                            >
-                              {isRecordingRow ? "REC" : "ARM"}
-                            </span>
-                          ) : null}
-                        </div>
-                        {rowSelected && (
-                          <span
-                            className="material-symbols-outlined"
-                            style={{
-                              position: "absolute",
-                              top: 4,
-                              right: 6,
-                              fontSize: 14,
-                              color: "#27E0B0",
-                            }}
-                            aria-hidden="true"
-                          >
-                            tune
-                          </span>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          flex: 1,
-                          background: "#161d2b",
-                          padding: slotPadding,
-                          display: "flex",
-                          alignItems: "stretch",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: timelineWidthStyle,
-                            minWidth: timelineWidthStyle,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: `repeat(${safeColumnCount}, ${SLOT_WIDTH}px)`,
-                              gap: SLOT_GAP,
-                              width: "100%",
-                            }}
-                          >
-                            {isPerformanceRow ? (
-                              <div
-                                key={`performance-span-${rowIndex}`}
-                                style={{ gridColumn: `1 / span ${safeColumnCount}` }}
-                              >
-                                <div
-                                  style={{
-                                    width: "100%",
-                                    minHeight: slotMinHeight,
-                                    borderRadius: 8,
-                                    border: `1px solid ${
-                                      isRecordingRow
-                                        ? withAlpha(playInstrumentColor, 0.6)
-                                        : performanceHasContent
-                                        ? "#2f384a"
-                                        : "#1f2937"
-                                    }`,
-                                    background: isRecordingRow
-                                      ? withAlpha(playInstrumentColor, 0.12)
-                                      : performanceHasContent
-                                      ? "#0f1a2a"
-                                      : "#0b111d",
-                                    color: performanceTextColor,
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: slotGap,
-                                    padding: slotPadding,
-                                    justifyContent: "space-between",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 8,
-                                      width: "100%",
-                                    }}
-                                  >
-                                    <span style={{ fontWeight: 600 }}>
-                                      {performanceInstrumentLabel
-                                        ? `${performanceInstrumentLabel} Performance`
-                                        : "Performance"}
-                                    </span>
-                                    <div
-                                      style={{
-                                        marginLeft: "auto",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                      }}
-                                    >
-                                      {performanceStatusLabel ? (
-                                        <span
-                                          style={{
-                                            fontSize: 10,
-                                            color: "#fce7f3",
-                                            letterSpacing: 0.4,
-                                            textTransform: "uppercase",
-                                            background: isRecordingRow
-                                              ? "rgba(248, 113, 113, 0.2)"
-                                              : "rgba(248, 113, 113, 0.12)",
-                                            border: `1px solid ${
-                                              isRecordingRow ? "#f87171" : "#fb7185"
-                                            }`,
-                                            padding: "2px 8px",
-                                            borderRadius: 999,
-                                          }}
-                                        >
-                                          {performanceStatusLabel}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                  <div style={{ width: "100%" }}>
-                                    {renderPerformanceSlotPreview(
-                                      performanceTrack,
-                                      0,
-                                      safeColumnCount,
-                                      performanceAccent ?? rowAccent,
-                                      rowGhostDisplayNotes,
-                                      rowGhostNoteSet,
-                                      performanceHighlightRange
-                                    )}
-                                  </div>
-                                  {performanceDescription ? (
-                                    <span
-                                      style={{
-                                        fontSize: 11,
-                                        color:
-                                          performanceTextColor === "#e6f2ff"
-                                            ? "#94a3b8"
-                                            : "#475569",
-                                      }}
-                                    >
-                                      {performanceDescription}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ) : (
-                              Array.from({ length: maxColumns }, (_, columnIndex) => {
-                                const groupId =
-                                  columnIndex < row.slots.length
-                                    ? row.slots[columnIndex]
-                                    : null;
-                                const group = groupId
-                                  ? patternGroupMap.get(groupId)
-                                  : undefined;
-                                const highlight =
-                                  isPlaying && columnIndex === currentSectionIndex;
-                                const isEditing =
-                                  editingSlot?.rowIndex === rowIndex &&
-                                  editingSlot.columnIndex === columnIndex;
-                                const assigned = Boolean(group);
-                                const columnStart = columnIndex;
-                                const columnEnd = columnIndex + 1;
-                                const columnBounds = getColumnTickBounds(columnIndex);
-                                const combinedPerformanceNotes = [
-                                  ...(performanceTrack?.notes ?? []),
-                                  ...rowGhostDisplayNotes,
-                                ];
-                                const columnNoteCount = countPerformanceNotesInRange(
-                                  combinedPerformanceNotes,
-                                  columnBounds.startTicks,
-                                  columnBounds.endTicks
-                                );
-                                const hasPerformanceContent =
-                                  combinedPerformanceNotes.length > 0;
-                                const hasContent = assigned || hasPerformanceContent;
-                                const textColor = hasContent ? "#e6f2ff" : "#94a3b8";
-                                const descriptionColor = hasContent
-                                  ? "#94a3b8"
-                                  : "#475569";
-                                const description = hasPerformanceContent
-                                  ? columnNoteCount > 0
-                                    ? formatNoteCount(columnNoteCount)
-                                    : isRecordingRow
-                                    ? "Recording…"
-                                    : "No notes yet"
-                                  : assigned
-                                  ? null
-                                  : patternGroups.length > 0
-                                  ? "Tap to assign"
-                                  : "Save a sequence in Track view";
-                                const performanceSlotStatus = isRecordingRow
-                                  ? "Recording"
-                                  : hasPerformanceContent
-                                  ? "Live"
-                                  : null;
-
-                                const showSlotLabel = !isPlayInstrumentOpen;
-                                const buttonStyles: CSSProperties = {
-                                  width: "100%",
-                                  minHeight: slotMinHeight,
-                                  borderRadius: 8,
-                                  border: `1px solid ${
-                                    highlight
-                                      ? "#27E0B0"
-                                      : isRecordingRow
-                                      ? withAlpha(playInstrumentColor, 0.6)
-                                      : hasContent
-                                      ? "#2f384a"
-                                      : "#1f2937"
-                                  }`,
-                                  background: highlight
-                                    ? "rgba(39, 224, 176, 0.12)"
-                                    : isRecordingRow
-                                    ? withAlpha(playInstrumentColor, 0.12)
-                                    : hasContent
-                                    ? "#0f1a2a"
-                                    : "#0b111d",
-                                  color: textColor,
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "stretch",
-                                  justifyContent: "space-between",
-                                  gap: showSlotLabel ? slotGap : slotGap / 2,
-                                  padding: slotPadding,
-                                  fontSize: 13,
-                                  cursor:
-                                    patternGroups.length > 0 ? "pointer" : "not-allowed",
-                                  textAlign: "left",
-                                  opacity: rowMuted ? 0.85 : 1,
-                                  transition: "background 0.2s ease, border-color 0.2s ease",
-                                };
-
-                                return (
-                                  <div key={`slot-${rowIndex}-${columnIndex}`}>
-                                    {isEditing ? (
-                                      <select
-                                        value={groupId ?? ""}
-                                        onChange={(event) => {
-                                          const value = event.target.value;
-                                          handleAssignSlot(
-                                            rowIndex,
-                                            columnIndex,
-                                            value ? value : null
-                                          );
-                                          setEditingSlot(null);
-                                        }}
-                                        onBlur={() => setEditingSlot(null)}
-                                        style={{
-                                          width: "100%",
-                                          minHeight: slotMinHeight,
-                                          borderRadius: 8,
-                                          border: `1px solid ${
-                                            highlight ? "#27E0B0" : "#475569"
-                                          }`,
-                                          background: "#121827",
-                                          color: "#e6f2ff",
-                                          padding: "0 12px",
-                                        }}
-                                        autoFocus
-                                      >
-                                        <option value="">Empty Slot</option>
-                                        {patternGroups.map((groupOption) => (
-                                          <option key={groupOption.id} value={groupOption.id}>
-                                            {groupOption.name}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (patternGroups.length === 0) return;
-                                          setRowSettingsIndex(null);
-                                          setEditingSlot({ rowIndex, columnIndex });
-                                        }}
-                                        style={buttonStyles}
-                                        disabled={patternGroups.length === 0}
-                                      >
-                                        {showSlotLabel ? (
-                                          <div
-                                            style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: 6,
-                                              width: "100%",
-                                            }}
-                                          >
-                                            <span style={{ fontWeight: 600 }}>
-                                              {group?.name ?? "Empty"}
-                                            </span>
-                                            {performanceSlotStatus && (
-                                              <span
-                                                style={{
-                                                  marginLeft: "auto",
-                                                  fontSize: 10,
-                                                  color: "#cbd5f5",
-                                                  letterSpacing: 0.4,
-                                                  textTransform: "uppercase",
-                                                }}
-                                              >
-                                                {performanceSlotStatus}
-                                              </span>
-                                            )}
-                                          </div>
-                                        ) : null}
-                                        <div style={{ width: "100%" }}>
-                                          {hasPerformanceContent
-                                            ? renderPerformanceSlotPreview(
-                                                performanceTrack,
-                                                columnStart,
-                                                columnEnd,
-                                                performanceAccent ?? rowAccent,
-                                                rowGhostDisplayNotes,
-                                                rowGhostNoteSet
-                                              )
-                                            : renderLoopSlotPreview(group)}
-                                        </div>
-                                        {description && (
-                                          <span
-                                            style={{
-                                              fontSize: 11,
-                                              color: descriptionColor,
-                                            }}
-                                          >
-                                            {description}
-                                          </span>
-                                        )}
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-              )}
-            </div>
+              <TimelineGrid
+                rows={timelineRows}
+                columns={timelineColumns}
+                renderCell={renderTimelineCell}
+                renderRow={(row, cols, cellRenderer) =>
+                  renderTimelineRow(row, cols, cellRenderer)
+                }
+              />
+            )}
           </div>
         </div>
       </div>
