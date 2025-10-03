@@ -56,6 +56,9 @@ interface SongViewProps {
     updater: (track: PerformanceTrack) => PerformanceTrack
   ) => void;
   onRemovePerformanceTrack?: (trackId: string) => void;
+  onSaveSong?: () => void;
+  onLoadSong?: () => void;
+  onOpenExportOptions?: () => void;
 }
 
 const SLOT_WIDTH = 150;
@@ -66,12 +69,59 @@ const PREVIEW_GAP = 1;
 const PREVIEW_HEIGHT = 10;
 const PREVIEW_DOT_SIZE = 4;
 const PERFORMANCE_DOT_SIZE = 5;
-const SLOT_MIN_HEIGHT = 52;
+const SLOT_MIN_HEIGHT = 48;
 const SLOT_CONTENT_GAP = 4;
 const SLOT_PADDING = "4px 10px";
 const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
+
+const styles = {
+  screen: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    paddingLeft: 16,
+    paddingRight: 16,
+    backgroundColor: "#0F121A",
+  },
+  timelineHeader: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    paddingLeft: 0,
+    paddingRight: 0,
+  },
+  timelineContainer: {
+    marginLeft: -16,
+    marginRight: -16,
+    paddingLeft: 16,
+    paddingRight: 16,
+    flex: 1,
+    overflowY: "auto",
+    backgroundColor: "#0F121A",
+  },
+  editToolbar: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 16,
+    paddingRight: 16,
+    minHeight: 64,
+    position: "sticky",
+    bottom: 0,
+    backgroundColor: "#0F121A",
+    gap: 12,
+  },
+  playButton: { minWidth: 48, height: 48, borderRadius: 24 },
+  bpmInput: { minWidth: 96, height: 48, borderRadius: 24 },
+  loopButton: { minWidth: 88, height: 48, borderRadius: 24 },
+  rowButton: { minWidth: 88, height: 48, borderRadius: 24 },
+  trackButton: { minWidth: 104, height: 48, borderRadius: 24 },
+} as const;
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
@@ -500,6 +550,9 @@ export function SongView({
   onPlayInstrumentOpenChange,
   onUpdatePerformanceTrack,
   onRemovePerformanceTrack,
+  onSaveSong,
+  onLoadSong,
+  onOpenExportOptions,
 }: SongViewProps) {
   const [editingSlot, setEditingSlot] = useState<
     { rowIndex: number; columnIndex: number } | null
@@ -520,6 +573,8 @@ export function SongView({
   const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [liveGhostNotes, setLiveGhostNotes] = useState<PerformanceNote[]>([]);
   const wasRecordingRef = useRef(false);
+  const [isOverflowMenuOpen, setOverflowMenuOpen] = useState(false);
+  const overflowMenuRef = useRef<HTMLDivElement | null>(null);
   const hasPerformanceTarget = Boolean(playInstrumentRowTrackId);
   const recordingActive = Boolean(
     isRecordEnabled && isPlayInstrumentOpen && hasPerformanceTarget
@@ -543,6 +598,23 @@ export function SongView({
   useEffect(() => {
     onPlayInstrumentOpenChange?.(isPlayInstrumentOpen);
   }, [isPlayInstrumentOpen, onPlayInstrumentOpenChange]);
+
+  useEffect(() => {
+    if (!isOverflowMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        overflowMenuRef.current &&
+        !overflowMenuRef.current.contains(target)
+      ) {
+        setOverflowMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isOverflowMenuOpen]);
 
   const applyPerformanceSettings = useCallback(
     (pattern: Chunk) => {
@@ -1048,13 +1120,15 @@ export function SongView({
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
-  const visibleRowTarget = isTimelineExpanded
-    ? TIMELINE_VISIBLE_ROWS_EXPANDED
-    : TIMELINE_VISIBLE_ROWS_COLLAPSED;
-  const timelineViewportHeight = Math.round(
-    visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  const collapsedTimelineHeight = Math.round(
+    TIMELINE_VISIBLE_ROWS_COLLAPSED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
   );
-  const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
+  const expandedTimelineHeight = Math.round(
+    TIMELINE_VISIBLE_ROWS_EXPANDED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  );
+  const timelineMinHeight = isTimelineExpanded
+    ? expandedTimelineHeight
+    : collapsedTimelineHeight;
   const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
     () => getInstrumentColor(panelInstrument),
@@ -1193,187 +1267,252 @@ export function SongView({
     ? "Collapse timeline height"
     : "Expand timeline height";
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-        gap: 16,
-        minHeight: 0,
-      }}
-    >
-      <div
-        style={{
-          border: "1px solid #333",
-          borderRadius: 12,
-          background: "#1b2130",
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-          minHeight: 0,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#e6f2ff",
-            }}
-          >
-            Timeline
-          </h2>
-          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-            <IconButton
-              icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
-              label={timelineToggleLabel}
-              onClick={() => setTimelineExpanded((previous) => !previous)}
-              style={{ minWidth: 0 }}
-            />
-            <button
-              onClick={handleAddPerformanceTrack}
-              disabled={!onAddPerformanceTrack}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 20,
-                border: "1px solid #27E0B0",
-                background: onAddPerformanceTrack ? "#27E0B0" : "#273041",
-                color: onAddPerformanceTrack ? "#0b1220" : "#475569",
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                whiteSpace: "nowrap",
-                cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
-                boxShadow: onAddPerformanceTrack
-                  ? "0 2px 8px rgba(39,224,176,0.35)"
-                  : "none",
-                transition: "background 0.2s ease, border 0.2s ease",
-              }}
-            >
-              + Track
-            </button>
-            <button
-              onClick={handleAddRow}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Row
-            </button>
-            <button
-              onClick={handleAddSection}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Sequence
-            </button>
+  const mainColumnStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    gap: 16,
+  };
+
+  const bottomToolbarButtonBaseStyle: CSSProperties = {
+    height: 48,
+    borderRadius: 24,
+    border: "1px solid #2f384a",
+    background: "#1f2532",
+    color: "#e6f2ff",
+    fontSize: 14,
+    fontWeight: 600,
+    letterSpacing: 0.3,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 12px",
+    cursor: "pointer",
+    transition:
+      "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+    flexShrink: 0,
+  };
+
+  const timelineContainerStyle: CSSProperties = {
+    ...styles.timelineContainer,
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const timelineContentWrapperStyle: CSSProperties = {
+    minHeight: timelineMinHeight,
+    display: "flex",
+    flexDirection: "column",
+    gap: 0,
+  };
+
+  const timelineScrollStyle: CSSProperties = {
+    flex: "1 1 auto",
+    minHeight: 0,
+    height: "100%",
+    overflowX: "auto",
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+  };
+
+  const instrumentPanelContainerStyle: CSSProperties = {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    width: "100%",
+    padding: 16,
+    borderRadius: 0,
+    border: "1px solid #2a3344",
+    background: "#0f172a",
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    overflowY: "auto",
+  };
+
+  void selectedGroupId;
+  void onSelectLoop;
+
+    return (
+      <div style={styles.screen}>
+        <div style={{ position: "relative", width: "100%" }}>
+          <div style={styles.timelineHeader}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 16, fontWeight: 600, color: "#e6f2ff" }}>
+                Timeline
+              </span>
+              <IconButton
+                icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
+                label={timelineToggleLabel}
+                onClick={() => setTimelineExpanded((previous) => !previous)}
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <IconButton
+                icon="save"
+                label="Save song"
+                onClick={() => {
+                  setOverflowMenuOpen(false);
+                  onSaveSong?.();
+                }}
+                tone="accent"
+                disabled={!onSaveSong}
+              />
+              <IconButton
+                icon="more_horiz"
+                label="Song options"
+                onClick={() => setOverflowMenuOpen((previous) => !previous)}
+              />
+            </div>
           </div>
-        </div>
-        <div
-          className="scrollable"
-          style={{
-            overflowX: "auto",
-            paddingBottom: 4,
-            minHeight: `${timelineViewportHeight}px`,
-            maxHeight: `${timelineViewportHeight}px`,
-          }}
-        >
-          {sectionCount > 0 ? (
+          {isOverflowMenuOpen ? (
             <div
+              ref={overflowMenuRef}
               style={{
+                position: "absolute",
+                top: 56,
+                right: 0,
+                borderRadius: 12,
+                border: "1px solid #2f384a",
+                background: "#0f172a",
+                boxShadow: "0 16px 32px rgba(15, 23, 42, 0.45)",
+                padding: 8,
                 display: "flex",
-                alignItems: "center",
-                marginBottom: 8,
-                paddingRight: shouldEnableVerticalScroll ? 6 : 0,
+                flexDirection: "column",
+                gap: 4,
+                zIndex: 30,
               }}
             >
-              <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-                    gap: SLOT_GAP,
-                    width: timelineWidthStyle,
-                    minWidth: timelineWidthStyle,
-                  }}
-                >
-                  {Array.from({ length: sectionCount }, (_, columnIndex) => (
-                    <button
-                      key={`delete-column-${columnIndex}`}
-                      type="button"
-                      onClick={() => handleDeleteColumn(columnIndex)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 16,
-                        border: "1px solid #2a3344",
-                        background: "#111827",
-                        color: "#e2e8f0",
-                        fontSize: 11,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 4,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                        delete
-                      </span>
-                      <span>Seq {columnIndex + 1}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOverflowMenuOpen(false);
+                  onLoadSong?.();
+                }}
+                style={{
+                  border: "1px solid transparent",
+                  borderRadius: 10,
+                  background: "#111827",
+                  color: "#e6f2ff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textAlign: "left",
+                  padding: "10px 14px",
+                  cursor: onLoadSong ? "pointer" : "not-allowed",
+                  opacity: onLoadSong ? 1 : 0.5,
+                }}
+                disabled={!onLoadSong}
+              >
+                Load
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOverflowMenuOpen(false);
+                  onOpenExportOptions?.();
+                }}
+                style={{
+                  border: "1px solid transparent",
+                  borderRadius: 10,
+                  background: "#111827",
+                  color: "#e6f2ff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textAlign: "left",
+                  padding: "10px 14px",
+                  cursor: onOpenExportOptions ? "pointer" : "not-allowed",
+                  opacity: onOpenExportOptions ? 1 : 0.5,
+                }}
+                disabled={!onOpenExportOptions}
+              >
+                Export
+              </button>
             </div>
           ) : null}
-          <div
-            style={{
-              maxHeight: `${timelineViewportHeight}px`,
-              minHeight: `${timelineViewportHeight}px`,
-              overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
-              paddingRight: shouldEnableVerticalScroll ? 6 : 0,
-              width: timelineWidthStyle,
-              minWidth: timelineWidthStyle,
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {showEmptyTimeline ? (
+        </div>
+        <div style={mainColumnStyle}>
+          <div style={timelineContainerStyle}>
+            <div className="scrollable" style={timelineScrollStyle}>
               <div
                 style={{
-                  padding: 24,
-                  borderRadius: 8,
-                  border: "1px dashed #475569",
-                  color: "#94a3b8",
-                  fontSize: 13,
+                  ...timelineContentWrapperStyle,
+                  minWidth: timelineWidthStyle,
                 }}
               >
-                Add a sequence to start placing loops into the timeline.
-              </div>
-            ) : (
-              songRows.map((row, rowIndex) => {
+                  {sectionCount > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
+                            gap: SLOT_GAP,
+                            width: timelineWidthStyle,
+                          }}
+                        >
+                          {Array.from({ length: sectionCount }, (_, columnIndex) => (
+                            <button
+                              key={`delete-column-${columnIndex}`}
+                              type="button"
+                              onClick={() => handleDeleteColumn(columnIndex)}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: 16,
+                                border: "1px solid #2a3344",
+                                background: "#111827",
+                                color: "#e2e8f0",
+                                fontSize: 11,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 4,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: 14 }}
+                              >
+                                delete
+                              </span>
+                              <span>Seq {columnIndex + 1}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}
+                  >
+                    {showEmptyTimeline ? (
+                      <div style={{ padding: "16px" }}>
+                        <div
+                          style={{
+                            padding: 24,
+                            borderRadius: 0,
+                            border: "1px dashed #475569",
+                            color: "#94a3b8",
+                            fontSize: 13,
+                          }}
+                        >
+                          Add a sequence to start placing loops into the timeline.
+                        </div>
+                      </div>
+                    ) : (
+                      songRows.map((row, rowIndex) => {
                 const maxColumns = Math.max(
                   effectiveColumnCount,
                   row.slots.length
@@ -1510,7 +1649,11 @@ export function SongView({
                 return (
                   <div
                     key={`row-${rowIndex}`}
-                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
                   >
                     <div
                       onPointerDown={() => {
@@ -1533,6 +1676,7 @@ export function SongView({
                         background: "#111827",
                         opacity: rowMuted ? 0.55 : 1,
                         transition: "opacity 0.2s ease, border 0.2s ease",
+                        minHeight: 48,
                       }}
                     >
                       <div
@@ -1955,10 +2099,189 @@ export function SongView({
               )}
             </div>
           </div>
-        </div>
-      </div>
+          </div>
+          </div>
 
-      <Modal
+          {isPlayInstrumentOpen ? (
+            <div
+              className="scrollable"
+              style={instrumentPanelContainerStyle}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 999,
+                      background: playInstrumentColor,
+                      boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "#e6f2ff",
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    {formatInstrumentLabel(playInstrument)} Instrument
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <IconButton
+                    icon="close"
+                    label="Close"
+                    showLabel
+                    onClick={handleCloseInstrumentPanel}
+                  />
+                  <IconButton
+                    icon={recordingActive ? "stop" : "fiber_manual_record"}
+                    label={recordingActive ? "Stop" : "Record"}
+                    showLabel
+                    tone={recordingActive ? "danger" : "default"}
+                    onClick={() => setIsRecordEnabled((prev) => !prev)}
+                    disabled={!hasPerformanceTarget}
+                  />
+                  <IconButton
+                    icon="delete"
+                    label="Clear"
+                    showLabel
+                    tone="danger"
+                    onClick={handleClearRecording}
+                    disabled={!canClearRecording}
+                  />
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {isRecordEnabled ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: 0.6,
+                        textTransform: "uppercase",
+                        background: recordingActive
+                          ? "rgba(248, 113, 113, 0.24)"
+                          : "rgba(248, 113, 113, 0.14)",
+                        border: `1px solid ${
+                          recordingActive ? "#f87171" : "#fb7185"
+                        }`,
+                        color: "#fecdd3",
+                        boxShadow: recordingActive
+                          ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
+                          : "none",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: 14 }}
+                        aria-hidden="true"
+                      >
+                        fiber_manual_record
+                      </span>
+                      {recordIndicatorLabel}
+                    </span>
+                  ) : null}
+                  <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                    {liveRowMessage}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsQuantizedRecording((prev) => !prev)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: `1px solid ${
+                      isQuantizedRecording ? playInstrumentColor : "#2a3344"
+                    }`,
+                    background: isQuantizedRecording
+                      ? withAlpha(playInstrumentColor, 0.18)
+                      : "#0f172a",
+                    color: "#e6f2ff",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                  title={
+                    isQuantizedRecording
+                      ? "Quantized recording is on — notes snap to the grid."
+                      : "Quantized recording is off — capture free timing."
+                  }
+                >
+                  Quantize {isQuantizedRecording ? "On" : "Off"}
+                </button>
+              </div>
+              <div
+                style={{
+                  borderRadius: 0,
+                  border: "1px solid #1f2937",
+                  background: "#10192c",
+                  padding: 12,
+                  flex: 1,
+                  minHeight: 0,
+                }}
+              >
+                <InstrumentControlPanel
+                  track={playInstrumentTrackForPanel}
+                  allTracks={[]}
+                  onUpdatePattern={handlePlayInstrumentPatternUpdate}
+                  trigger={playInstrumentTrigger}
+                  isRecording={recordingActive}
+                  onPerformanceNote={handlePerformanceNoteRecorded}
+                />
+              </div>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                Audition sounds or capture a new take for this performance row.
+              </span>
+            </div>
+          ) : null}
+
+        </div>
+
+        <Modal
         isOpen={hasRowSettings && Boolean(rowSettingsRow)}
         onClose={() => setRowSettingsIndex(null)}
         title="Row Settings"
@@ -2055,396 +2378,81 @@ export function SongView({
         ) : null}
       </Modal>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <div
+      <div style={{ ...styles.editToolbar, paddingLeft: 0, paddingRight: 0 }}>
+        <IconButton
+          icon={isPlaying ? "stop" : "play_arrow"}
+          label={isPlaying ? "Stop playback" : "Start playback"}
+          onPointerDown={onToggleTransport}
+          onPointerUp={(e) => e.currentTarget.blur()}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
+            ...styles.playButton,
+            background: isPlaying ? "#E02749" : "#27E0B0",
+            border: `1px solid ${isPlaying ? "#E02749" : "#27E0B0"}`,
+            color: isPlaying ? "#ffe4e6" : "#0b1624",
+          }}
+        />
+        <select
+          value={bpm}
+          onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+          aria-label="Song tempo"
+          style={{
+            ...styles.bpmInput,
+            border: "1px solid #2f384a",
+            background: "#1f2532",
+            color: "#e6f2ff",
+            fontSize: 14,
+            fontWeight: 600,
+            padding: "0 12px",
+            cursor: "pointer",
+            appearance: "none",
+            WebkitAppearance: "none",
+            MozAppearance: "none",
+            boxSizing: "border-box",
+            flexShrink: 0,
           }}
         >
-          <label>BPM</label>
-          <select
-            value={bpm}
-            onChange={(e) => setBpm(parseInt(e.target.value, 10))}
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              background: "#121827",
-              color: "white",
-            }}
-          >
-            {[90, 100, 110, 120, 130].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button
-            aria-label={isPlaying ? "Stop" : "Play"}
-            onPointerDown={onToggleTransport}
-            onPointerUp={(e) => e.currentTarget.blur()}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 8,
-              border: "1px solid #333",
-              background: isPlaying ? "#E02749" : "#27E0B0",
-              color: isPlaying ? "#ffe4e6" : "#1F2532",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 24,
-            }}
-          >
-            <span className="material-symbols-outlined">
-              {isPlaying ? "stop" : "play_arrow"}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {isPlayInstrumentOpen ? (
-          <div
-            className="scrollable"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              borderRadius: 12,
-              border: "1px solid #2a3344",
-              background: "#111827",
-              padding: 16,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 999,
-                    background: playInstrumentColor,
-                    boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "#e6f2ff",
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  {formatInstrumentLabel(playInstrument)} Instrument
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexWrap: "wrap",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <IconButton
-                  icon="close"
-                  label="Close"
-                  showLabel
-                  onClick={handleCloseInstrumentPanel}
-                />
-                <IconButton
-                  icon={recordingActive ? "stop" : "fiber_manual_record"}
-                  label={recordingActive ? "Stop" : "Record"}
-                  showLabel
-                  tone={recordingActive ? "danger" : "default"}
-                  onClick={() => setIsRecordEnabled((prev) => !prev)}
-                  disabled={!hasPerformanceTarget}
-                />
-                <IconButton
-                  icon="delete"
-                  label="Clear"
-                  showLabel
-                  tone="danger"
-                  onClick={handleClearRecording}
-                  disabled={!canClearRecording}
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                {isRecordEnabled ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: 0.6,
-                      textTransform: "uppercase",
-                      background: recordingActive
-                        ? "rgba(248, 113, 113, 0.24)"
-                        : "rgba(248, 113, 113, 0.14)",
-                      border: `1px solid ${
-                        recordingActive ? "#f87171" : "#fb7185"
-                      }`,
-                      color: "#fecdd3",
-                      boxShadow: recordingActive
-                        ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
-                        : "none",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                      aria-hidden="true"
-                    >
-                      fiber_manual_record
-                    </span>
-                    {recordIndicatorLabel}
-                  </span>
-                ) : null}
-                <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                  {liveRowMessage}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsQuantizedRecording((prev) => !prev)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: `1px solid ${
-                    isQuantizedRecording ? playInstrumentColor : "#2a3344"
-                  }`,
-                  background: isQuantizedRecording
-                    ? withAlpha(playInstrumentColor, 0.18)
-                    : "#0f172a",
-                  color: "#e6f2ff",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: 0.8,
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-                title={
-                  isQuantizedRecording
-                    ? "Quantized recording is on — notes snap to the grid."
-                    : "Quantized recording is off — capture free timing."
-                }
-              >
-                Quantize {isQuantizedRecording ? "On" : "Off"}
-              </button>
-            </div>
-            <div
-              style={{
-                borderRadius: 12,
-                border: "1px solid #1f2937",
-                background: "#10192c",
-                padding: 12,
-                flex: 1,
-                minHeight: 0,
-              }}
-            >
-              <InstrumentControlPanel
-                track={playInstrumentTrackForPanel}
-                allTracks={[]}
-                onUpdatePattern={handlePlayInstrumentPatternUpdate}
-                trigger={playInstrumentTrigger}
-                isRecording={recordingActive}
-                onPerformanceNote={handlePerformanceNoteRecorded}
-              />
-            </div>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              Audition sounds or capture a new take for this performance row.
-            </span>
-          </div>
-        ) : (
-          <div
-            className="scrollable"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              paddingRight: 4,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "#e6f2ff",
-                }}
-              >
-                Loops Library
-              </h3>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: "#94a3b8",
-                }}
-              >
-                Save and edit loops in Track view, then place them onto the song
-                timeline.
-              </span>
-            </div>
-            {patternGroups.length === 0 ? (
-              <div
-                style={{
-                  padding: 16,
-                  borderRadius: 8,
-                  border: "1px dashed #475569",
-                  color: "#94a3b8",
-                  fontSize: 13,
-                }}
-              >
-                No loops yet. Create loops in Track view to start arranging
-                the song.
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                {patternGroups.map((group) => {
-                  const trackLabels = group.tracks
-                    .map((track) => track.name)
-                    .filter((name): name is string => Boolean(name));
-                  const isActive = selectedGroupId === group.id;
-                  return (
-                    <button
-                      key={group.id}
-                      type="button"
-                      onClick={() => onSelectLoop(group.id)}
-                      style={{
-                        borderRadius: 10,
-                        border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
-                        background: isActive
-                          ? "rgba(39, 224, 176, 0.12)"
-                          : "#121827",
-                        padding: 12,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                        textAlign: "left",
-                        cursor: "pointer",
-                        color: "#e6f2ff",
-                      }}
-                      title={`Open ${group.name} in Track view`}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <span aria-hidden="true" style={{ fontSize: 16 }}>
-                          📼
-                        </span>
-                        <span style={{ fontWeight: 600 }}>{group.name}</span>
-                        <div style={{ marginLeft: "auto" }} />
-                      </div>
-                      {trackLabels.length === 0 ? (
-                        <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                          This loop is empty — add instruments in Tracks view
-                          first.
-                        </span>
-                      ) : (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 6,
-                          }}
-                        >
-                          {trackLabels.map((name) => (
-                            <span
-                              key={`${group.id}-${name}`}
-                              style={{
-                                padding: "4px 8px",
-                                borderRadius: 6,
-                                background: "#1f2532",
-                                border: "1px solid #333",
-                                fontSize: 12,
-                              }}
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
+          {[90, 100, 110, 120, 130].map((value) => (
+            <option key={value} value={value}>
+              {value} BPM
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={handleAddSection}
+          style={{
+            ...bottomToolbarButtonBaseStyle,
+            ...styles.loopButton,
+          }}
+        >
+          +Loop
+        </button>
+        <button
+          type="button"
+          onClick={handleAddRow}
+          style={{
+            ...bottomToolbarButtonBaseStyle,
+            ...styles.rowButton,
+          }}
+        >
+          +Row
+        </button>
+        <button
+          type="button"
+          onClick={handleAddPerformanceTrack}
+          disabled={!onAddPerformanceTrack}
+          style={{
+            ...bottomToolbarButtonBaseStyle,
+            ...styles.trackButton,
+            border: `1px solid ${onAddPerformanceTrack ? "#27E0B0" : "#2f384a"}`,
+            background: onAddPerformanceTrack ? "#27E0B0" : "#1f2532",
+            color: onAddPerformanceTrack ? "#0b1624" : "#475569",
+            cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
+            opacity: onAddPerformanceTrack ? 1 : 0.5,
+          }}
+        >
+          +Track
+        </button>
       </div>
     </div>
   );
