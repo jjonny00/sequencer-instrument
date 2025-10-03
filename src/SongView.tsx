@@ -1073,13 +1073,15 @@ export function SongView({
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
-  const visibleRowTarget = isTimelineExpanded
-    ? TIMELINE_VISIBLE_ROWS_EXPANDED
-    : TIMELINE_VISIBLE_ROWS_COLLAPSED;
-  const timelineViewportHeight = Math.round(
-    visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  const collapsedTimelineHeight = Math.round(
+    TIMELINE_VISIBLE_ROWS_COLLAPSED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
   );
-  const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
+  const expandedTimelineHeight = Math.round(
+    TIMELINE_VISIBLE_ROWS_EXPANDED * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
+  );
+  const timelineMinHeight = isTimelineExpanded
+    ? expandedTimelineHeight
+    : collapsedTimelineHeight;
   const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
     () => getInstrumentColor(panelInstrument),
@@ -1230,7 +1232,7 @@ export function SongView({
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 0,
-    minHeight: 0,
+    minHeight: timelineMinHeight,
     borderRadius: 16,
     border: "1px solid #2a3344",
     background: "#111827",
@@ -1404,97 +1406,101 @@ export function SongView({
         <div style={contentStackStyle}>
           <div style={timelineContainerStyle}>
             <div
-              className="scrollable"
-              style={{
-                overflowX: "auto",
-                minHeight: `${timelineViewportHeight}px`,
-                maxHeight: `${timelineViewportHeight}px`,
-                flex: 1,
-              }}
-            >
-          {sectionCount > 0 ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 8,
-                padding: "0 16px",
-                paddingRight: shouldEnableVerticalScroll ? 6 : 0,
-              }}
-            >
-              <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-                    gap: SLOT_GAP,
-                    width: timelineWidthStyle,
-                    minWidth: timelineWidthStyle,
-                  }}
-                >
-                  {Array.from({ length: sectionCount }, (_, columnIndex) => (
-                    <button
-                      key={`delete-column-${columnIndex}`}
-                      type="button"
-                      onClick={() => handleDeleteColumn(columnIndex)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 16,
-                        border: "1px solid #2a3344",
-                        background: "#111827",
-                        color: "#e2e8f0",
-                        fontSize: 11,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 4,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                        delete
-                      </span>
-                      <span>Seq {columnIndex + 1}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <div
-            style={{
-              maxHeight: `${timelineViewportHeight}px`,
-              minHeight: `${timelineViewportHeight}px`,
-              overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
-              paddingRight: shouldEnableVerticalScroll ? 6 : 0,
-              width: timelineWidthStyle,
-              minWidth: timelineWidthStyle,
-            }}
-          >
-            <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 12,
+                flex: 1,
+                minHeight: 0,
               }}
             >
-              {showEmptyTimeline ? (
-                <div style={{ padding: "16px" }}>
+              <div
+                className="scrollable"
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowX: "auto",
+                  overflowY: "auto",
+                }}
+              >
+                <div
+                  style={{
+                    minWidth: timelineWidthStyle,
+                  }}
+                >
+                  {sectionCount > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        marginBottom: 8,
+                        padding: "0 16px",
+                      }}
+                    >
+                      <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
+                            gap: SLOT_GAP,
+                            width: timelineWidthStyle,
+                          }}
+                        >
+                          {Array.from({ length: sectionCount }, (_, columnIndex) => (
+                            <button
+                              key={`delete-column-${columnIndex}`}
+                              type="button"
+                              onClick={() => handleDeleteColumn(columnIndex)}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: 16,
+                                border: "1px solid #2a3344",
+                                background: "#111827",
+                                color: "#e2e8f0",
+                                fontSize: 11,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 4,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: 14 }}
+                              >
+                                delete
+                              </span>
+                              <span>Seq {columnIndex + 1}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div
                     style={{
-                      padding: 24,
-                      borderRadius: 8,
-                      border: "1px dashed #475569",
-                      color: "#94a3b8",
-                      fontSize: 13,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
                     }}
                   >
-                    Add a sequence to start placing loops into the timeline.
-                  </div>
-                </div>
-              ) : (
-              songRows.map((row, rowIndex) => {
+                    {showEmptyTimeline ? (
+                      <div style={{ padding: "16px" }}>
+                        <div
+                          style={{
+                            padding: 24,
+                            borderRadius: 8,
+                            border: "1px dashed #475569",
+                            color: "#94a3b8",
+                            fontSize: 13,
+                          }}
+                        >
+                          Add a sequence to start placing loops into the timeline.
+                        </div>
+                      </div>
+                    ) : (
+                      songRows.map((row, rowIndex) => {
                 const maxColumns = Math.max(
                   effectiveColumnCount,
                   row.slots.length
@@ -2083,8 +2089,8 @@ export function SongView({
             </div>
           </div>
           </div>
+          </div>
 
-        
           {isPlayInstrumentOpen ? (
             <div
               className="scrollable"
@@ -2262,7 +2268,7 @@ export function SongView({
             </div>
           ) : null}
 
-</div>
+        </div>
 
         <Modal
         isOpen={hasRowSettings && Boolean(rowSettingsRow)}
