@@ -1294,22 +1294,6 @@ export function SongView({
     flexShrink: 0,
   };
 
-  const bottomToolbarSelectStyle: CSSProperties = {
-    ...styles.bpmInput,
-    border: "1px solid #2f384a",
-    background: "#1f2532",
-    color: "#e6f2ff",
-    fontSize: 14,
-    fontWeight: 600,
-    padding: "0 12px",
-    cursor: "pointer",
-    appearance: "none",
-    WebkitAppearance: "none",
-    MozAppearance: "none",
-    boxSizing: "border-box",
-    flexShrink: 0,
-  };
-
   const timelineContainerStyle: CSSProperties = {
     ...styles.timelineContainer,
     display: "flex",
