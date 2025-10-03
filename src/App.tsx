@@ -416,8 +416,7 @@ export default function App() {
   const [songRows, setSongRows] = useState<SongRow[]>([
     createSongRow(),
   ]);
-  const [isSongInstrumentPanelOpen, setIsSongInstrumentPanelOpen] =
-    useState(false);
+  const [, setIsSongInstrumentPanelOpen] = useState(false);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
   const currentLoopDraftRef = useRef<Track[] | null>(null);
@@ -2936,31 +2935,6 @@ export default function App() {
               setEditing(null);
               setViewMode("song");
             }}
-            actions={
-              viewMode === "song" && !isSongInstrumentPanelOpen ? (
-                <>
-                  <IconButton
-                    icon="save"
-                    label="Save song"
-                    onClick={openSaveProjectModal}
-                  />
-                  <IconButton
-                    icon="folder_open"
-                    label="Load song"
-                    onClick={openLoadProjectModal}
-                  />
-                  <IconButton
-                    icon="file_download"
-                    label="Open export options"
-                    onClick={() => {
-                      setAudioExportMessage("Preparing export…");
-                      setIsExportModalOpen(true);
-                    }}
-                    disabled={isAudioExporting}
-                  />
-                </>
-              ) : undefined
-            }
           />
           {viewMode === "track" && (
             <LoopStrip
@@ -3325,6 +3299,16 @@ export default function App() {
                 onUpdatePerformanceTrack={updatePerformanceTrack}
                 onRemovePerformanceTrack={removePerformanceTrack}
                 onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
+                onSaveSong={openSaveProjectModal}
+                onLoadSong={openLoadProjectModal}
+                onOpenExportOptions={
+                  isAudioExporting
+                    ? undefined
+                    : () => {
+                        setAudioExportMessage("Preparing export…");
+                        setIsExportModalOpen(true);
+                      }
+                }
               />
             )}
           </div>
