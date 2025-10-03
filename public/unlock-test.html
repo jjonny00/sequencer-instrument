@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iOS PWA Audio Unlock Lab</title>
+  <script src="https://cdn.jsdelivr.net/npm/tone@next/build/Tone.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1f2937, #0f172a 60%);
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(920px, 100%);
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(18px);
+      border-radius: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+      padding: 30px;
+    }
+
+    header {
+      grid-column: 1 / -1;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.6rem, 2vw, 2.2rem);
+      letter-spacing: 0.02em;
+    }
+
+    p.subhead {
+      margin: 0;
+      color: #cbd5f5;
+      font-size: 0.95rem;
+    }
+
+    section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: rgba(148, 163, 184, 0.08);
+      border-radius: 16px;
+      padding: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    section h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      letter-spacing: 0.01em;
+    }
+
+    #statusPanel {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      display: grid;
+      gap: 6px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.22);
+      color: #bfdbfe;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .status-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .status-line strong {
+      font-weight: 600;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    button {
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      font-size: 0.95rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.85), rgba(56, 189, 248, 0.85));
+      color: #fff;
+      cursor: pointer;
+      transition: transform 140ms ease, box-shadow 140ms ease, opacity 160ms ease;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button.secondary {
+      background: rgba(148, 163, 184, 0.18);
+      color: #e2e8f0;
+      border-color: rgba(148, 163, 184, 0.24);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+      transform: none;
+      box-shadow: none;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.18);
+    }
+
+    #log {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 14px;
+      padding: 16px;
+      height: 260px;
+      overflow-y: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #log .error {
+      color: #fca5a5;
+    }
+
+    #log .warn {
+      color: #fbbf24;
+    }
+
+    #notes {
+      color: #cbd5f5;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    footer {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: rgba(203, 213, 225, 0.7);
+      font-size: 0.82rem;
+    }
+
+    code {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>iOS PWA Audio Unlock Lab</h1>
+      <p class="subhead">
+        Use these steps to probe how Web Audio unlock behaves when this page runs as a home screen
+        app. Run individual actions or the full sequence and share the captured log.
+      </p>
+    </header>
+
+    <section aria-labelledby="statusHeading">
+      <h2 id="statusHeading">Context status</h2>
+      <div id="statusPanel">
+        <div class="status-line"><strong>Tone context:</strong><span id="toneState">(checking...)</span></div>
+        <div class="status-line"><strong>AudioContext:</strong><span id="rawState">(checking...)</span></div>
+        <div class="status-line"><strong>Last unlock result:</strong><span id="lastResult">None yet</span></div>
+        <div class="status-line"><strong>Environment:</strong><span id="envInfo"></span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="actionsHeading">
+      <h2 id="actionsHeading">Guided sequence</h2>
+      <div class="actions">
+        <button id="runSequence">Run full unlock sequence</button>
+        <button id="reset" class="secondary">Reset log &amp; reload page</button>
+      </div>
+      <div id="notes">
+        The full sequence performs the same steps available below in order, including a microphone
+        permission prompt and a final Tone.start()/resume retry. If a step hangs or fails, continue
+        with the manual controls to isolate the culprit.
+      </div>
+    </section>
+
+    <section aria-labelledby="manualHeading">
+      <h2 id="manualHeading">Manual controls</h2>
+      <div class="actions">
+        <button data-action="tone">Step 1 · Tone.start()</button>
+        <button data-action="resume">Step 2 · AudioContext.resume()</button>
+        <button data-action="prime">Step 3 · Play silent buffer</button>
+        <button data-action="inline-audio">Step 4 · HTMLAudio probe</button>
+        <button data-action="fresh-context">Step 5 · Adopt fresh AudioContext</button>
+        <button data-action="mic" class="secondary">Step 6 · Request microphone access</button>
+      </div>
+      <div id="notes">
+        Trigger one step at a time right after tapping the shortcut icon. Repeat Tone.start()/resume
+        after installing the fresh context and grant microphone access if prompted. Report which
+        actions succeed or time out so we can compare with Safari.
+      </div>
+    </section>
+
+    <section aria-labelledby="logHeading">
+      <h2 id="logHeading">Log</h2>
+      <div class="actions">
+        <button id="copyLog" class="secondary">Copy log to clipboard</button>
+      </div>
+      <div id="log" role="log" aria-live="polite"></div>
+    </section>
+
+    <footer>
+      Share the copied log when reporting behaviour. Page available at <code>/unlock-test.html</code>.
+    </footer>
+  </main>
+
+  <script>
+    const toneStateEl = document.getElementById("toneState");
+    const rawStateEl = document.getElementById("rawState");
+    const lastResultEl = document.getElementById("lastResult");
+    const envInfoEl = document.getElementById("envInfo");
+    const logEl = document.getElementById("log");
+    const runSequenceBtn = document.getElementById("runSequence");
+    const resetBtn = document.getElementById("reset");
+    const copyLogBtn = document.getElementById("copyLog");
+    const manualButtons = Array.from(document.querySelectorAll("button[data-action]"));
+
+    const HTML_AUDIO_DATA_URL =
+      "data:audio/wav;base64,UklGRmQMAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YYQMAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    const gestures = new Set();
+    let stopListeningStateChange = null;
+
+    function getToneContext() {
+      return typeof Tone.getContext === "function" ? Tone.getContext() : Tone.context;
+    }
+
+    function getRawContext() {
+      const ctx = getToneContext();
+      return ctx ? ctx.rawContext || ctx.context || ctx._context || ctx : undefined;
+    }
+
+    function log(message, level = "info") {
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = `[${timestamp}] ${message}`;
+      const div = document.createElement("div");
+      if (level !== "info") {
+        div.classList.add(level);
+      }
+      div.textContent = entry;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateState() {
+      const toneState = getToneContext()?.state ?? "(unknown)";
+      const rawState = getRawContext()?.state ?? "(no context)";
+      toneStateEl.textContent = toneState;
+      rawStateEl.textContent = rawState;
+    }
+
+    function setLastResult(message) {
+      lastResultEl.textContent = message;
+    }
+
+    function attachStateListener() {
+      if (stopListeningStateChange) {
+        stopListeningStateChange();
+        stopListeningStateChange = null;
+      }
+      const raw = getRawContext();
+      if (raw && typeof raw.addEventListener === "function") {
+        const handler = () => {
+          updateState();
+          log(`AudioContext statechange -> ${raw.state}`);
+        };
+        raw.addEventListener("statechange", handler);
+        stopListeningStateChange = () => raw.removeEventListener("statechange", handler);
+      }
+    }
+
+    function describeEnvironment() {
+      const standalone = window.navigator.standalone;
+      const displayMode = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
+        ? "standalone"
+        : "browser";
+      const version = Tone?.version ?? "unknown";
+      envInfoEl.textContent = `standalone=${standalone} · display-mode=${displayMode} · Tone ${version}`;
+      log("Environment => " + envInfoEl.textContent);
+    }
+
+    function withTimeout(promise, ms, label) {
+      let timer;
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${ms}ms`));
+        }, ms);
+      });
+      return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+    }
+
+    async function runToneStart() {
+      log("Running Tone.start()");
+      try {
+        await withTimeout(Tone.start(), 1000, "Tone.start()");
+        log("Tone.start() resolved successfully");
+        setLastResult("Tone.start() resolved");
+      } catch (error) {
+        log(`Tone.start() error -> ${error.message}`, "error");
+        setLastResult(`Tone.start() error: ${error.message}`);
+        throw error;
+      } finally {
+        updateState();
+      }
+    }
+
+    async function runResumeRawContext(label = "AudioContext.resume()") {
+      const raw = getRawContext();
+      if (!raw) {
+        log("No AudioContext instance available", "warn");
+        setLastResult("No AudioContext instance");
+        throw new Error("No AudioContext instance");
+      }
+      log(`Running ${label}`);
+      try {
+        await withTimeout(raw.resume(), 1200, label);
+        log(`${label} resolved successfully`);
+        setLastResult(`${label} resolved`);
+      } catch (error) {
+        log(`${label} error -> ${error.message}`, "error");
+        setLastResult(`${label} error: ${error.message}`);
+        throw error;
+      } finally {
+        updateState();
+      }
+    }
+
+    async function runPrimeBuffer() {
+      const raw = getRawContext();
+      if (!raw) {
+        log("Cannot prime buffer: no AudioContext", "warn");
+        setLastResult("Prime skipped: no AudioContext");
+        throw new Error("No AudioContext instance");
+      }
+      log("Priming context with near-silent buffer");
+      const source = raw.createBufferSource();
+      try {
+        const buffer = raw.createBuffer(1, raw.sampleRate / 10, raw.sampleRate);
+        source.buffer = buffer;
+        source.connect(raw.destination);
+        source.start(0);
+        await withTimeout(
+          new Promise((resolve) => source.addEventListener("ended", resolve, { once: true })),
+          1200,
+          "Silent buffer playback"
+        );
+        log("Silent buffer completed");
+        setLastResult("Silent buffer played");
+      } catch (error) {
+        log(`Silent buffer error -> ${error.message}`, "error");
+        setLastResult(`Silent buffer error: ${error.message}`);
+        throw error;
+      } finally {
+        try {
+          source.stop();
+        } catch (_) {
+          // ignore stop errors
+        }
+        if (typeof source.disconnect === "function") {
+          source.disconnect();
+        }
+      }
+    }
+
+    async function runInlineAudio() {
+      log("Playing inline HTMLAudio probe");
+      const audio = new Audio(HTML_AUDIO_DATA_URL);
+      audio.loop = false;
+      audio.volume = 0.9;
+      audio.preload = "auto";
+      audio.playsInline = true;
+      document.body.appendChild(audio);
+      try {
+        await withTimeout(audio.play(), 2000, "HTMLAudioElement.play()");
+        log("HTMLAudioElement.play() resolved");
+        setLastResult("HTMLAudio playback resolved");
+      } catch (error) {
+        log(`HTMLAudioElement.play() error -> ${error.message}`, "error");
+        setLastResult(`HTMLAudio error: ${error.message}`);
+        throw error;
+      } finally {
+        audio.pause();
+        audio.remove();
+      }
+    }
+
+    async function runFreshContext() {
+      log("Creating fresh AudioContext and binding Tone");
+      const RawContext = window.AudioContext || window.webkitAudioContext;
+      if (!RawContext) {
+        log("AudioContext constructor unavailable", "warn");
+        setLastResult("Cannot create AudioContext");
+        throw new Error("AudioContext constructor unavailable");
+      }
+      const newRaw = new RawContext();
+      const newToneContext = new Tone.Context({ context: newRaw });
+      Tone.setContext(newToneContext);
+      attachStateListener();
+      updateState();
+      log("Tone now bound to new AudioContext");
+      setLastResult("Fresh AudioContext installed");
+    }
+
+    async function runMicrophoneRequest() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        log("navigator.mediaDevices.getUserMedia unavailable", "warn");
+        setLastResult("getUserMedia unavailable");
+        throw new Error("getUserMedia unavailable");
+      }
+      log("Requesting microphone access");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setLastResult("Microphone access granted");
+        log("Microphone access granted");
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (error) {
+        log(`Microphone access error -> ${error.message}`, "error");
+        setLastResult(`Microphone access error: ${error.message}`);
+        throw error;
+      }
+    }
+
+    async function runFullSequence() {
+      disableAll(true);
+      log("=== Running full unlock sequence ===");
+      const steps = [
+        () => runToneStart(),
+        () => runResumeRawContext(),
+        () => runPrimeBuffer(),
+        () => runInlineAudio(),
+        () => runFreshContext(),
+        () => runResumeRawContext("AudioContext.resume() after fresh context"),
+        () => runMicrophoneRequest(),
+        () => runToneStart(),
+        () => runResumeRawContext("AudioContext.resume() after microphone"),
+      ];
+      let hadError = false;
+      for (const step of steps) {
+        try {
+          await step();
+        } catch (error) {
+          hadError = true;
+          log("Sequence step error -> " + error.message, "error");
+        }
+      }
+      log(hadError ? "=== Sequence complete (with errors) ===" : "=== Sequence complete ===");
+      disableAll(false);
+    }
+
+    function disableAll(disabled) {
+      runSequenceBtn.disabled = disabled;
+      resetBtn.disabled = disabled;
+      copyLogBtn.disabled = disabled;
+      manualButtons.forEach((btn) => {
+        btn.disabled = disabled;
+      });
+    }
+
+    function resetPage() {
+      window.location.reload();
+    }
+
+    async function copyLogToClipboard() {
+      const text = Array.from(logEl.children)
+        .map((child) => child.textContent)
+        .join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        log("Log copied to clipboard");
+      } catch (error) {
+        log(`Clipboard copy failed -> ${error.message}`, "error");
+      }
+    }
+
+    function setupManualButtons() {
+      const handlers = {
+        tone: () => runToneStart(),
+        resume: () => runResumeRawContext(),
+        prime: () => runPrimeBuffer(),
+        "inline-audio": () => runInlineAudio(),
+        "fresh-context": () => runFreshContext(),
+        mic: () => runMicrophoneRequest(),
+      };
+      manualButtons.forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const action = btn.dataset.action;
+          const handler = handlers[action];
+          if (!handler) {
+            return;
+          }
+          disableAll(true);
+          try {
+            await handler();
+          } catch (error) {
+            // already logged
+          } finally {
+            disableAll(false);
+          }
+        });
+      });
+    }
+
+    function setupGestureLogging() {
+      const gestureTypes = ["pointerdown", "touchstart", "mousedown", "keydown"];
+      gestureTypes.forEach((type) => {
+        document.addEventListener(type, () => {
+          if (!gestures.has(type)) {
+            gestures.add(type);
+            log(`Gesture observed -> ${type}`);
+          }
+        }, { once: true, passive: true });
+      });
+    }
+
+    function init() {
+      describeEnvironment();
+      updateState();
+      attachStateListener();
+      setupManualButtons();
+      setupGestureLogging();
+      runSequenceBtn.addEventListener("click", runFullSequence);
+      resetBtn.addEventListener("click", resetPage);
+      copyLogBtn.addEventListener("click", copyLogToClipboard);
+      log("Ready. Launch from the home screen and use the buttons above immediately after open.");
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
