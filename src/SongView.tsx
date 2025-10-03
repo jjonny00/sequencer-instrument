@@ -85,8 +85,6 @@ const styles = {
     paddingRight: 16,
     backgroundColor: "#0F121A",
   },
-
-  // Timeline
   timelineHeader: {
     display: "flex",
     flexDirection: "row",
@@ -96,7 +94,6 @@ const styles = {
     paddingLeft: 0,
     paddingRight: 0,
   },
-
   timelineContainer: {
     marginLeft: -16,
     marginRight: -16,
@@ -106,16 +103,6 @@ const styles = {
     overflowY: "auto",
     backgroundColor: "#0F121A",
   },
-
-  timelineRow: {
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-
-  // Bottom Edit Toolbar
   editToolbar: {
     display: "flex",
     flexDirection: "row",
@@ -129,33 +116,11 @@ const styles = {
     backgroundColor: "#0F121A",
     gap: 12,
   },
-
-  // Button sizing
-  playButton: {
-    minWidth: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  bpmInput: {
-    minWidth: 96,
-    height: 48,
-    borderRadius: 24,
-  },
-  loopButton: {
-    minWidth: 88,
-    height: 48,
-    borderRadius: 24,
-  },
-  rowButton: {
-    minWidth: 88,
-    height: 48,
-    borderRadius: 24,
-  },
-  trackButton: {
-    minWidth: 104,
-    height: 48,
-    borderRadius: 24,
-  },
+  playButton: { minWidth: 48, height: 48, borderRadius: 24 },
+  bpmInput: { minWidth: 96, height: 48, borderRadius: 24 },
+  loopButton: { minWidth: 88, height: 48, borderRadius: 24 },
+  rowButton: { minWidth: 88, height: 48, borderRadius: 24 },
+  trackButton: { minWidth: 104, height: 48, borderRadius: 24 },
 } as const;
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
@@ -2429,18 +2394,12 @@ export function SongView({
         ) : null}
       </Modal>
 
-      <div
-        style={{
-          ...styles.editToolbar,
-          paddingLeft: 0,
-          paddingRight: 0,
-        }}
-      >
+      <div style={{ ...styles.editToolbar, paddingLeft: 0, paddingRight: 0 }}>
         <IconButton
           icon={isPlaying ? "stop" : "play_arrow"}
           label={isPlaying ? "Stop playback" : "Start playback"}
           onPointerDown={onToggleTransport}
-          onPointerUp={(event) => event.currentTarget.blur()}
+          onPointerUp={(e) => e.currentTarget.blur()}
           style={{
             ...styles.playButton,
             background: isPlaying ? "#E02749" : "#27E0B0",
@@ -2450,9 +2409,23 @@ export function SongView({
         />
         <select
           value={bpm}
-          onChange={(event) => setBpm(parseInt(event.target.value, 10))}
+          onChange={(e) => setBpm(parseInt(e.target.value, 10))}
           aria-label="Song tempo"
-          style={bottomToolbarSelectStyle}
+          style={{
+            ...styles.bpmInput,
+            border: "1px solid #2f384a",
+            background: "#1f2532",
+            color: "#e6f2ff",
+            fontSize: 14,
+            fontWeight: 600,
+            padding: "0 12px",
+            cursor: "pointer",
+            appearance: "none",
+            WebkitAppearance: "none",
+            MozAppearance: "none",
+            boxSizing: "border-box",
+            flexShrink: 0,
+          }}
         >
           {[90, 100, 110, 120, 130].map((value) => (
             <option key={value} value={value}>
