@@ -21,6 +21,8 @@ import {
 import { createKick } from "./instruments/kickInstrument";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
+import { StartScreen } from "./views/StartScreen";
+import { LoopView } from "./views/LoopView";
 import {
   activateAudio,
   initAudioContext,
@@ -2426,6 +2428,454 @@ export default function App() {
     [tracks, addTrackModalState.mode, addTrackModalState.targetTrackId]
   );
 
+  const renderViewHeader = () => (
+    <ViewHeader
+      viewMode={viewMode}
+      onBack={handleReturnToSongSelection}
+      onSelectTrack={() => {
+        skipLoopDraftRestoreRef.current = false;
+        setViewMode("track");
+      }}
+      onSelectSong={() => {
+        setEditing(null);
+        setViewMode("song");
+      }}
+      actions={
+        viewMode === "song" && !isSongInstrumentPanelOpen ? (
+          <>
+            <IconButton
+              icon="save"
+              label="Save song"
+              onClick={openSaveProjectModal}
+            />
+            <IconButton
+              icon="folder_open"
+              label="Load song"
+              onClick={openLoadProjectModal}
+            />
+            <IconButton
+              icon="file_download"
+              label="Open export options"
+              onClick={() => {
+                setAudioExportMessage("Preparing export…");
+                setIsExportModalOpen(true);
+              }}
+              disabled={isAudioExporting}
+            />
+          </>
+        ) : undefined
+      }
+    />
+  );
+
+  const handleNewSongClick = () => {
+    unlockAndRun(createNewProject);
+  };
+
+  const renderStartScreenIntro = () => (
+    <div
+      style={{
+        width: "min(760px, 100%)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        textAlign: "center",
+        alignItems: "center",
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          letterSpacing: 4,
+          textTransform: "uppercase",
+          color: "#38bdf8",
+          fontWeight: 600,
+        }}
+      >
+        Welcome back
+      </span>
+      <h1
+        style={{
+          margin: 0,
+          fontSize: "2.5rem",
+          color: "#e6f2ff",
+          fontWeight: 700,
+          letterSpacing: 0.4,
+        }}
+      >
+        Craft your next groove
+      </h1>
+      <p
+        style={{
+          margin: 0,
+          maxWidth: 520,
+          color: "#94a3b8",
+          fontSize: 15,
+          lineHeight: 1.6,
+        }}
+      >
+        Jump straight into a fresh idea or pick up a saved session. Everything stays
+        synced across your local library.
+      </p>
+    </div>
+  );
+
+  const renderStartScreenSavedSongs = () => (
+    <div
+      style={{
+        width: "100%",
+        display: "flex",
+        justifyContent: "center",
+      }}
+    >
+      <SavedSongsList
+        projects={projectList}
+        sortOrder={projectSortOrder}
+        onChangeSortOrder={handleChangeProjectSortOrder}
+        onSelectProject={(name) => unlockAndRun(() => loadProject(name))}
+        onRenameProject={handleRenameProject}
+        onDeleteProject={handleDeleteProject}
+        onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
+      />
+    </div>
+  );
+
+  const renderStartScreenNewSongButton = (variant: "large" | "compact" = "large") => {
+    const isLarge = variant === "large";
+    return (
+      <button
+        type="button"
+        onClick={handleNewSongClick}
+        style={
+          isLarge
+            ? {
+                padding: "20px 48px",
+                borderRadius: 999,
+                border: "1px solid rgba(39,224,176,0.4)",
+                background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
+                color: "#0b1220",
+                fontSize: 18,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                cursor: "pointer",
+                boxShadow: "0 24px 48px rgba(39,224,176,0.25)",
+                letterSpacing: 0.2,
+              }
+            : {
+                padding: "12px 20px",
+                borderRadius: 999,
+                border: "1px solid rgba(39,224,176,0.4)",
+                background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
+                color: "#0b1220",
+                fontSize: 15,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                cursor: "pointer",
+                boxShadow: "0 12px 24px rgba(39,224,176,0.2)",
+                letterSpacing: 0.2,
+              }
+        }
+      >
+        <span
+          className="material-symbols-outlined"
+          aria-hidden="true"
+          style={{ fontSize: isLarge ? 22 : 18 }}
+        >
+          add
+        </span>
+        New Song
+      </button>
+    );
+  };
+
+  const renderLoopTransportControls = () => (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        marginBottom: 12,
+        gap: 12,
+        flexWrap: "nowrap",
+      }}
+    >
+      <button
+        aria-label={isPlaying ? "Stop" : "Play"}
+        onPointerDown={handlePlayStop}
+        onPointerUp={(e) => e.currentTarget.blur()}
+        style={{
+          ...controlButtonBaseStyle,
+          background: isPlaying ? "#E02749" : "#27E0B0",
+          color: isPlaying ? "#ffe4e6" : "#1F2532",
+          fontSize: 24,
+        }}
+      >
+        <span className="material-symbols-outlined" style={controlIconStyle}>
+          {isPlaying ? "stop" : "play_arrow"}
+        </span>
+      </button>
+      <div style={transportDividerStyle} />
+      {editing !== null ? (
+        <>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {selectedTrack && canRecordSelectedTrack ? (
+              <button
+                aria-label={isRecording ? "Stop recording" : "Start recording"}
+                onClick={handleToggleRecording}
+                style={{
+                  ...controlButtonBaseStyle,
+                  background: isRecording ? "#E02749" : "#111827",
+                  border: `1px solid ${isRecording ? "#E02749" : "#333"}`,
+                  color: isRecording ? "#ffe4e6" : "#f43f5e",
+                }}
+              >
+                <span className="material-symbols-outlined" style={controlIconStyle}>
+                  fiber_manual_record
+                </span>
+              </button>
+            ) : null}
+            <button
+              aria-label="Clear track"
+              onClick={handleClearSelectedTrack}
+              disabled={!canClearSelectedTrack}
+              style={{
+                ...controlButtonBaseStyle,
+                background: canClearSelectedTrack ? "#1f2532" : "#111827",
+                border: `1px solid ${canClearSelectedTrack ? "#333" : "#1f2937"}`,
+                color: canClearSelectedTrack ? "#e6f2ff" : "#475569",
+                cursor: canClearSelectedTrack ? "pointer" : "not-allowed",
+                opacity: canClearSelectedTrack ? 1 : 0.6,
+              }}
+            >
+              <span className="material-symbols-outlined" style={controlIconStyle}>
+                cleaning_services
+              </span>
+            </button>
+            <button
+              aria-label="Edit track settings"
+              onClick={() => selectedTrack && handleRequestTrackModal(selectedTrack)}
+              disabled={!selectedTrack}
+              style={{
+                ...controlButtonBaseStyle,
+                background: "#111827",
+                border: "1px solid #333",
+                color: selectedTrack ? "#38bdf8" : "#475569",
+                cursor: selectedTrack ? "pointer" : "not-allowed",
+                opacity: selectedTrack ? 1 : 0.6,
+              }}
+            >
+              <span className="material-symbols-outlined" style={controlIconStyle}>
+                tune
+              </span>
+            </button>
+          </div>
+          <div style={transportDividerStyle} />
+        </>
+      ) : (
+        <>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: isCompactTransport ? 8 : 12,
+              flex: 1,
+              minWidth: 0,
+              flexWrap: "nowrap",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                flex: "1 1 0",
+                minWidth: 0,
+              }}
+            >
+              <label
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 0.2,
+                  color: "#cbd5f5",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                BPM
+              </label>
+              <select
+                value={bpm}
+                onChange={(e) => setBpm(parseInt(e.target.value, 10))}
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  background: "#121827",
+                  color: "white",
+                  width: "100%",
+                  minWidth: 0,
+                }}
+              >
+                {[90, 100, 110, 120, 130].map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                flex: "1 1 0",
+                minWidth: 0,
+              }}
+            >
+              <label
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 0.2,
+                  color: "#cbd5f5",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Quantize
+              </label>
+              <select
+                value={subdiv}
+                onChange={(e) => setSubdiv(e.target.value as Subdivision)}
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  background: "#121827",
+                  color: "white",
+                  width: "100%",
+                  minWidth: 0,
+                }}
+              >
+                <option value="16n">1/16</option>
+                <option value="8n">1/8</option>
+                <option value="4n">1/4</option>
+              </select>
+            </div>
+          </div>
+          <div style={transportDividerStyle} />
+        </>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          if (!canAddTrack) return;
+          openAddTrackModal();
+        }}
+        disabled={!canAddTrack}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "10px 20px",
+          borderRadius: 999,
+          border: "none",
+          background: canAddTrack ? "#27E0B0" : "#1f2532",
+          color: canAddTrack ? "#1F2532" : "#475569",
+          fontWeight: 700,
+          letterSpacing: 0.3,
+          cursor: canAddTrack ? "pointer" : "not-allowed",
+          boxShadow: canAddTrack
+            ? "0 2px 6px rgba(15, 20, 32, 0.35)"
+            : "none",
+          transition: "transform 0.2s ease, box-shadow 0.2s ease",
+          flexShrink: 0,
+          minHeight: 44,
+        }}
+      >
+        + Track
+      </button>
+    </div>
+  );
+
+  const renderLoopInstrumentPanelContent = () =>
+    selectedTrack ? (
+      <InstrumentControlPanel
+        track={selectedTrack}
+        allTracks={tracks}
+        trigger={(() => {
+          if (!selectedTrack.instrument) return undefined;
+          const packId = selectedTrack.source?.packId;
+          const triggerKey = packId
+            ? createTriggerKey(packId, selectedTrack.instrument)
+            : null;
+          const trigger = triggerKey ? triggers[triggerKey] ?? undefined : undefined;
+          if (!trigger) return undefined;
+          const characterId = selectedTrack.source?.characterId;
+          return (
+            time: number,
+            velocity?: number,
+            pitch?: number,
+            note?: string,
+            sustain?: number,
+            chunk?: Chunk,
+          ) =>
+            trigger(time, velocity, pitch, note, sustain, chunk, characterId);
+        })()}
+        onUpdatePattern={
+          selectedTrack.pattern
+            ? (updater) => updateTrackPattern(selectedTrack.id, updater)
+            : undefined
+        }
+        onHarmoniaRealtimeChange={
+          selectedTrack.instrument === "harmonia"
+            ? (payload) => {
+                handleHarmoniaRealtimeChange(payload);
+              }
+            : undefined
+        }
+        isRecording={isRecording}
+        onRecordingChange={setIsRecording}
+        onPresetApplied={handlePresetApplied}
+      />
+    ) : (
+      <div
+        style={{
+          borderRadius: 12,
+          border: "1px solid #2a3344",
+          padding: 24,
+          textAlign: "center",
+          color: "#94a3b8",
+          fontSize: 13,
+        }}
+      >
+        Select a track above to adjust its instrument settings.
+      </div>
+    );
+
+  const renderLoopInstrumentPanelLegacy = () => (
+    <div
+      className="scrollable"
+      style={{
+        marginTop: 16,
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        overflowY: "auto",
+        minHeight: 0,
+      }}
+    >
+      {renderLoopInstrumentPanelContent()}
+    </div>
+  );
+
   return (
     <div
       style={{
@@ -2820,165 +3270,107 @@ export default function App() {
         </Modal>
       ) : null}
       {!started ? (
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            flexDirection: "column",
-            alignItems: "center",
-            padding: "48px 24px 32px",
-            gap: 32,
-          }}
-        >
-          <div
-            style={{
-              width: "min(760px, 100%)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              textAlign: "center",
-              alignItems: "center",
-            }}
-          >
+        <StartScreen
+          legacy={
+            <div
+              style={{
+                display: "flex",
+                flex: 1,
+                flexDirection: "column",
+                alignItems: "center",
+                padding: "48px 24px 32px",
+                gap: 32,
+              }}
+            >
+              {renderStartScreenIntro()}
+              {renderStartScreenNewSongButton("large")}
+              {renderStartScreenSavedSongs()}
+            </div>
+          }
+          topBarCenter={
             <span
               style={{
-                fontSize: 12,
-                letterSpacing: 4,
-                textTransform: "uppercase",
-                color: "#38bdf8",
+                fontSize: 16,
                 fontWeight: 600,
-              }}
-            >
-              Welcome back
-            </span>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "2.5rem",
-                color: "#e6f2ff",
-                fontWeight: 700,
                 letterSpacing: 0.4,
+                color: "#e6f2ff",
               }}
             >
-              Craft your next groove
-            </h1>
-            <p
-              style={{
-                margin: 0,
-                maxWidth: 520,
-                color: "#94a3b8",
-                fontSize: 15,
-                lineHeight: 1.6,
-              }}
-            >
-              Jump straight into a fresh idea or pick up a saved session. Everything
-              stays synced across your local library.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => unlockAndRun(createNewProject)}
-            style={{
-              padding: "20px 48px",
-              borderRadius: 999,
-              border: "1px solid rgba(39,224,176,0.4)",
-              background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
-              color: "#0b1220",
-              fontSize: 18,
-              fontWeight: 700,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              cursor: "pointer",
-              boxShadow: "0 24px 48px rgba(39,224,176,0.25)",
-              letterSpacing: 0.2,
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              aria-hidden="true"
-              style={{ fontSize: 22 }}
-            >
-              add
+              Song Library
             </span>
-            New Song
-          </button>
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <SavedSongsList
-              projects={projectList}
-              sortOrder={projectSortOrder}
-              onChangeSortOrder={handleChangeProjectSortOrder}
-              onSelectProject={(name) =>
-                unlockAndRun(() => loadProject(name))
-              }
-              onRenameProject={handleRenameProject}
-              onDeleteProject={handleDeleteProject}
-              onTryDemoSong={() => unlockAndRun(handleLoadDemoSong)}
-            />
-          </div>
-        </div>
+          }
+          topBarRight={renderStartScreenNewSongButton("compact")}
+          bottomDock={
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              {renderStartScreenNewSongButton("large")}
+            </div>
+          }
+        >
+          <>
+            {renderStartScreenIntro()}
+            {renderStartScreenSavedSongs()}
+          </>
+        </StartScreen>
+
+      ) : viewMode === "track" ? (
+        <LoopView
+          legacy={
+            <>
+              {renderViewHeader()}
+              <LoopStrip
+                ref={loopStripRef}
+                started={started}
+                isPlaying={isPlaying}
+                tracks={tracks}
+                editing={editing}
+                setEditing={setEditing}
+                setTracks={setTracks}
+                packIndex={packIndex}
+                patternGroups={patternGroups}
+                setPatternGroups={setPatternGroups}
+                selectedGroupId={selectedGroupId}
+                setSelectedGroupId={setSelectedGroupId}
+                onRequestTrackModal={handleRequestTrackModal}
+              />
+              <div
+                style={{
+                  padding: 16,
+                  paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                }}
+              >
+                {renderLoopTransportControls()}
+                {renderLoopInstrumentPanelLegacy()}
+              </div>
+            </>
+          }
+          topBarCenter={renderViewHeader()}
+          transport={renderLoopTransportControls()}
+          controls={renderLoopInstrumentPanelContent()}
+        >
+          <LoopStrip
+            ref={loopStripRef}
+            started={started}
+            isPlaying={isPlaying}
+            tracks={tracks}
+            editing={editing}
+            setEditing={setEditing}
+            setTracks={setTracks}
+            packIndex={packIndex}
+            patternGroups={patternGroups}
+            setPatternGroups={setPatternGroups}
+            selectedGroupId={selectedGroupId}
+            setSelectedGroupId={setSelectedGroupId}
+            onRequestTrackModal={handleRequestTrackModal}
+          />
+        </LoopView>
       ) : (
         <>
-          <ViewHeader
-            viewMode={viewMode}
-            onBack={handleReturnToSongSelection}
-            onSelectTrack={() => {
-              skipLoopDraftRestoreRef.current = false;
-              setViewMode("track");
-            }}
-            onSelectSong={() => {
-              setEditing(null);
-              setViewMode("song");
-            }}
-            actions={
-              viewMode === "song" && !isSongInstrumentPanelOpen ? (
-                <>
-                  <IconButton
-                    icon="save"
-                    label="Save song"
-                    onClick={openSaveProjectModal}
-                  />
-                  <IconButton
-                    icon="folder_open"
-                    label="Load song"
-                    onClick={openLoadProjectModal}
-                  />
-                  <IconButton
-                    icon="file_download"
-                    label="Open export options"
-                    onClick={() => {
-                      setAudioExportMessage("Preparing export…");
-                      setIsExportModalOpen(true);
-                    }}
-                    disabled={isAudioExporting}
-                  />
-                </>
-              ) : undefined
-            }
-          />
-          {viewMode === "track" && (
-            <LoopStrip
-              ref={loopStripRef}
-              started={started}
-              isPlaying={isPlaying}
-              tracks={tracks}
-              editing={editing}
-              setEditing={setEditing}
-              setTracks={setTracks}
-              packIndex={packIndex}
-              patternGroups={patternGroups}
-              setPatternGroups={setPatternGroups}
-              selectedGroupId={selectedGroupId}
-              setSelectedGroupId={setSelectedGroupId}
-              onRequestTrackModal={handleRequestTrackModal}
-            />
-          )}
+          {renderViewHeader()}
           <div
             style={{
               padding: 16,
@@ -2990,356 +3382,40 @@ export default function App() {
               overflow: "hidden",
             }}
           >
-            {viewMode === "track" ? (
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    marginBottom: 12,
-                    gap: 12,
-                    flexWrap: "nowrap",
-                  }}
-                >
-                  <button
-                    aria-label={isPlaying ? "Stop" : "Play"}
-                    onPointerDown={handlePlayStop}
-                    onPointerUp={(e) => e.currentTarget.blur()}
-                    style={{
-                      ...controlButtonBaseStyle,
-                      background: isPlaying ? "#E02749" : "#27E0B0",
-                      color: isPlaying ? "#ffe4e6" : "#1F2532",
-                      fontSize: 24,
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={controlIconStyle}
-                    >
-                      {isPlaying ? "stop" : "play_arrow"}
-                    </span>
-                  </button>
-                  <div style={transportDividerStyle} />
-                  {editing !== null ? (
-                    <>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          flex: 1,
-                          minWidth: 0,
-                        }}
-                      >
-                        {selectedTrack && canRecordSelectedTrack ? (
-                          <button
-                            aria-label={
-                              isRecording ? "Stop recording" : "Start recording"
-                            }
-                            onClick={handleToggleRecording}
-                            style={{
-                              ...controlButtonBaseStyle,
-                              background: isRecording ? "#E02749" : "#111827",
-                              border: `1px solid ${isRecording ? "#E02749" : "#333"}`,
-                              color: isRecording ? "#ffe4e6" : "#f43f5e",
-                            }}
-                          >
-                            <span
-                              className="material-symbols-outlined"
-                              style={controlIconStyle}
-                            >
-                              fiber_manual_record
-                            </span>
-                          </button>
-                        ) : null}
-                        <button
-                          aria-label="Clear track"
-                          onClick={handleClearSelectedTrack}
-                          disabled={!canClearSelectedTrack}
-                          style={{
-                            ...controlButtonBaseStyle,
-                            background: canClearSelectedTrack
-                              ? "#1f2532"
-                              : "#111827",
-                            border: `1px solid ${
-                              canClearSelectedTrack ? "#333" : "#1f2937"
-                            }`,
-                            color: canClearSelectedTrack ? "#e6f2ff" : "#475569",
-                            cursor: canClearSelectedTrack ? "pointer" : "not-allowed",
-                            opacity: canClearSelectedTrack ? 1 : 0.6,
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={controlIconStyle}
-                          >
-                            cleaning_services
-                          </span>
-                        </button>
-                        <button
-                          aria-label="Edit track settings"
-                          onClick={() =>
-                            selectedTrack && handleRequestTrackModal(selectedTrack)
-                          }
-                          disabled={!selectedTrack}
-                          style={{
-                            ...controlButtonBaseStyle,
-                            background: "#111827",
-                            border: "1px solid #333",
-                            color: selectedTrack ? "#38bdf8" : "#475569",
-                            cursor: selectedTrack ? "pointer" : "not-allowed",
-                            opacity: selectedTrack ? 1 : 0.6,
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={controlIconStyle}
-                          >
-                            tune
-                          </span>
-                        </button>
-                      </div>
-                      <div style={transportDividerStyle} />
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: isCompactTransport ? 8 : 12,
-                          flex: 1,
-                          minWidth: 0,
-                          flexWrap: "nowrap",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 4,
-                            flex: "1 1 0",
-                            minWidth: 0,
-                          }}
-                        >
-                          <label
-                            style={{
-                              fontSize: 12,
-                              letterSpacing: 0.2,
-                              color: "#cbd5f5",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            BPM
-                          </label>
-                          <select
-                            value={bpm}
-                            onChange={(e) =>
-                              setBpm(parseInt(e.target.value, 10))
-                            }
-                            style={{
-                              padding: 8,
-                              borderRadius: 8,
-                              background: "#121827",
-                              color: "white",
-                              width: "100%",
-                              minWidth: 0,
-                            }}
-                          >
-                            {[90, 100, 110, 120, 130].map((v) => (
-                              <option key={v} value={v}>
-                                {v}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 4,
-                            flex: "1 1 0",
-                            minWidth: 0,
-                          }}
-                        >
-                          <label
-                            style={{
-                              fontSize: 12,
-                              letterSpacing: 0.2,
-                              color: "#cbd5f5",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            Quantize
-                          </label>
-                          <select
-                            value={subdiv}
-                            onChange={(e) =>
-                              setSubdiv(e.target.value as Subdivision)
-                            }
-                            style={{
-                              padding: 8,
-                              borderRadius: 8,
-                              background: "#121827",
-                              color: "white",
-                              width: "100%",
-                              minWidth: 0,
-                            }}
-                          >
-                            <option value="16n">1/16</option>
-                            <option value="8n">1/8</option>
-                            <option value="4n">1/4</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div style={transportDividerStyle} />
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!canAddTrack) return;
-                      openAddTrackModal();
-                    }}
-                    disabled={!canAddTrack}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "10px 20px",
-                      borderRadius: 999,
-                      border: "none",
-                      background: canAddTrack ? "#27E0B0" : "#1f2532",
-                      color: canAddTrack ? "#1F2532" : "#475569",
-                      fontWeight: 700,
-                      letterSpacing: 0.3,
-                      cursor: canAddTrack ? "pointer" : "not-allowed",
-                      boxShadow: canAddTrack
-                        ? "0 2px 6px rgba(15, 20, 32, 0.35)"
-                        : "none",
-                      transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                      flexShrink: 0,
-                      minHeight: 44,
-                    }}
-                  >
-                    + Track
-                  </button>
-                </div>
-
-                <div
-                  className="scrollable"
-                  style={{
-                    marginTop: 16,
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    overflowY: "auto",
-                    minHeight: 0,
-                  }}
-                >
-                  {selectedTrack ? (
-                    <InstrumentControlPanel
-                      track={selectedTrack}
-                      allTracks={tracks}
-                      trigger={(() => {
-                        if (!selectedTrack.instrument) return undefined;
-                        const packId = selectedTrack.source?.packId;
-                        const triggerKey = packId
-                          ? createTriggerKey(packId, selectedTrack.instrument)
-                          : null;
-                        const trigger = triggerKey
-                          ? triggers[triggerKey] ?? undefined
-                          : undefined;
-                        if (!trigger) return undefined;
-                        const characterId = selectedTrack.source?.characterId;
-                        return (
-                          time: number,
-                          velocity?: number,
-                          pitch?: number,
-                          note?: string,
-                          sustain?: number,
-                          chunk?: Chunk
-                        ) =>
-                          trigger(
-                            time,
-                            velocity,
-                            pitch,
-                            note,
-                            sustain,
-                            chunk,
-                            characterId
-                          );
-                      })()}
-                      onUpdatePattern={
-                        selectedTrack.pattern
-                          ? (updater) =>
-                              updateTrackPattern(selectedTrack.id, updater)
-                          : undefined
-                      }
-                      onHarmoniaRealtimeChange={
-                        selectedTrack.instrument === "harmonia"
-                          ? (payload) => {
-                              handleHarmoniaRealtimeChange(payload);
-                            }
-                          : undefined
-                      }
-                      isRecording={isRecording}
-                      onRecordingChange={setIsRecording}
-                      onPresetApplied={handlePresetApplied}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #2a3344",
-                        padding: 24,
-                        textAlign: "center",
-                        color: "#94a3b8",
-                        fontSize: 13,
-                      }}
-                    >
-                      Select a track above to adjust its instrument settings.
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <SongView
-                patternGroups={patternGroups}
-                songRows={songRows}
-                setSongRows={setSongRows}
-                currentSectionIndex={currentSectionIndex}
-                isPlaying={isPlaying}
-                bpm={bpm}
-                setBpm={setBpm}
-                onToggleTransport={handlePlayStop}
-                selectedGroupId={selectedGroupId}
-                onSelectLoop={handleSelectLoopFromSongView}
-                performanceTracks={performanceTracks}
-                triggers={triggers}
-                onEnsurePerformanceRow={ensurePerformanceRow}
-                activePerformanceTrackId={activePerformanceTrackId}
-                onAddPerformanceTrack={openAddPerformanceTrackModal}
-                onSelectPerformanceTrack={setActivePerformanceTrackId}
-                onUpdatePerformanceTrack={updatePerformanceTrack}
-                onRemovePerformanceTrack={removePerformanceTrack}
-                onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
-              />
-            )}
+            <SongView
+              patternGroups={patternGroups}
+              songRows={songRows}
+              setSongRows={setSongRows}
+              currentSectionIndex={currentSectionIndex}
+              isPlaying={isPlaying}
+              bpm={bpm}
+              setBpm={setBpm}
+              onToggleTransport={handlePlayStop}
+              selectedGroupId={selectedGroupId}
+              onSelectLoop={handleSelectLoopFromSongView}
+              performanceTracks={performanceTracks}
+              triggers={triggers}
+              onEnsurePerformanceRow={ensurePerformanceRow}
+              activePerformanceTrackId={activePerformanceTrackId}
+              onAddPerformanceTrack={openAddPerformanceTrackModal}
+              onSelectPerformanceTrack={setActivePerformanceTrackId}
+              onUpdatePerformanceTrack={updatePerformanceTrack}
+              onRemovePerformanceTrack={removePerformanceTrack}
+              onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
+            />
           </div>
-          <PatternPlaybackManager
-            tracks={tracks}
-            triggers={triggers}
-            started={started}
-            viewMode={viewMode}
-            patternGroups={patternGroups}
-            songRows={songRows}
-            currentSectionIndex={currentSectionIndex}
-            performanceTracks={performanceTracks}
-          />
         </>
       )}
+      <PatternPlaybackManager
+        tracks={tracks}
+        triggers={triggers}
+        started={started}
+        viewMode={viewMode}
+        patternGroups={patternGroups}
+        songRows={songRows}
+        currentSectionIndex={currentSectionIndex}
+        performanceTracks={performanceTracks}
+      />
     </div>
   );
 }
