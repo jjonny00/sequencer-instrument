@@ -69,10 +69,6 @@ const PERFORMANCE_DOT_SIZE = 5;
 const SLOT_MIN_HEIGHT = 52;
 const SLOT_CONTENT_GAP = 4;
 const SLOT_PADDING = "4px 10px";
-const APPROXIMATE_ROW_OFFSET = 28;
-const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
-const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
-
 const TIMELINE_TOOLBAR_GAP = 12;
 const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
@@ -1098,13 +1094,11 @@ export function SongView({
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
-  const visibleRowTarget = isTimelineExpanded
-    ? TIMELINE_VISIBLE_ROWS_EXPANDED
-    : TIMELINE_VISIBLE_ROWS_COLLAPSED;
-  const timelineViewportHeight = Math.round(
-    visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
-  );
-  const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
+  const isTrackSelected = isPlayInstrumentOpen;
+  const timelineFlex =
+    isTrackSelected && !isTimelineExpanded
+      ? "0 0 var(--timeline-collapsed-h)"
+      : "1 1 auto";
   const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
     () => getInstrumentColor(panelInstrument),
@@ -1787,17 +1781,20 @@ export function SongView({
       }}
     >
       <div
-        className="safe-top flex-1 min-h-0 overflow-hidden"
+        className="safe-top min-h-0"
         style={{
-          padding: 16,
           flex: 1,
           minHeight: 0,
-          overflow: "hidden",
           display: "flex",
           flexDirection: "column",
+          paddingTop: "calc(env(safe-area-inset-top) + 16px)",
+          paddingBottom: 16,
+          paddingLeft: "calc(var(--hpad) + env(safe-area-inset-left))",
+          paddingRight: "calc(var(--hpad) + env(safe-area-inset-right))",
         }}
       >
         <div
+          className="min-h-0"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -1811,165 +1808,178 @@ export function SongView({
               border: "1px solid #333",
               borderRadius: 12,
               background: "#1b2130",
-              padding: 16,
+              padding: "16px 0",
               display: "flex",
               flexDirection: "column",
               gap: 16,
               minHeight: 0,
+              flex: 1,
             }}
           >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: TIMELINE_TOOLBAR_GAP,
-          }}
-        >
-          <button
-            type="button"
-            style={TIMELINE_TOGGLE_BUTTON_STYLE}
-            onClick={() => setTimelineExpanded((previous) => !previous)}
-            aria-expanded={isTimelineExpanded}
-            aria-label={timelineToggleLabel}
-          >
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Timeline</span>
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 18, lineHeight: 1 }}
-              aria-hidden="true"
-            >
-              {isTimelineExpanded ? "expand_less" : "expand_more"}
-            </span>
-          </button>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: TIMELINE_TOOLBAR_GAP,
-              marginLeft: "auto",
-            }}
-          >
-            <button
-              type="button"
-              onClick={handleAddPerformanceTrack}
-              disabled={!onAddPerformanceTrack}
-              style={buildAccentButtonStyle(Boolean(onAddPerformanceTrack))}
-            >
-              + Track
-            </button>
-            <button
-              type="button"
-              onClick={handleAddRow}
-              style={buildSecondaryButtonStyle()}
-            >
-              + Row
-            </button>
-            <button
-              type="button"
-              onClick={handleAddSection}
-              style={buildSecondaryButtonStyle()}
-            >
-              + Sequence
-            </button>
-          </div>
-        </div>
-        <div
-          className="scrollable"
-          style={{
-            overflowX: "auto",
-            paddingBottom: 4,
-            minHeight: `${timelineViewportHeight}px`,
-            maxHeight: `${timelineViewportHeight}px`,
-          }}
-        >
-          {sectionCount > 0 ? (
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                marginBottom: 8,
-                paddingRight: shouldEnableVerticalScroll ? 6 : 0,
+                gap: TIMELINE_TOOLBAR_GAP,
+                padding: "0 var(--hpad)",
               }}
             >
-              <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
-              <div style={{ flex: 1, overflow: "hidden" }}>
+              <button
+                type="button"
+                style={TIMELINE_TOGGLE_BUTTON_STYLE}
+                onClick={() => setTimelineExpanded((previous) => !previous)}
+                aria-expanded={isTimelineExpanded}
+                aria-label={timelineToggleLabel}
+              >
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Timeline</span>
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 18, lineHeight: 1 }}
+                  aria-hidden="true"
+                >
+                  {isTimelineExpanded ? "expand_less" : "expand_more"}
+                </span>
+              </button>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: TIMELINE_TOOLBAR_GAP,
+                  marginLeft: "auto",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleAddPerformanceTrack}
+                  disabled={!onAddPerformanceTrack}
+                  style={buildAccentButtonStyle(Boolean(onAddPerformanceTrack))}
+                >
+                  + Track
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddRow}
+                  style={buildSecondaryButtonStyle()}
+                >
+                  + Row
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddSection}
+                  style={buildSecondaryButtonStyle()}
+                >
+                  + Sequence
+                </button>
+              </div>
+            </div>
+            <div
+              className="min-h-0"
+              style={{
+                flex: timelineFlex,
+                padding: "0 var(--hpad)",
+                transition: "flex-basis 180ms ease",
+              }}
+            >
+              <div className="scroll-y min-h-0" style={{ height: "100%" }}>
                 <div
+                  className="scrollable"
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-                    gap: SLOT_GAP,
-                    width: timelineWidthStyle,
-                    minWidth: timelineWidthStyle,
+                    overflowX: "auto",
+                    paddingBottom: 4,
+                    paddingRight: 6,
+                    height: "100%",
+                    minHeight: "100%",
                   }}
                 >
-                  {timelineColumns
-                    .filter((column) => column.hasSection)
-                    .map((column) => (
-                      <button
-                        key={`delete-column-${column.index}`}
-                        type="button"
-                        onClick={() => handleDeleteColumn(column.index)}
+                  {sectionCount > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
+                            gap: SLOT_GAP,
+                            width: timelineWidthStyle,
+                            minWidth: timelineWidthStyle,
+                          }}
+                        >
+                          {timelineColumns
+                            .filter((column) => column.hasSection)
+                            .map((column) => (
+                              <button
+                                key={`delete-column-${column.index}`}
+                                type="button"
+                                onClick={() => handleDeleteColumn(column.index)}
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 16,
+                                  border: "1px solid #2a3344",
+                                  background: "#111827",
+                                  color: "#e2e8f0",
+                                  fontSize: 11,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: 4,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 14 }}
+                                >
+                                  delete
+                                </span>
+                                <span>Seq {column.index + 1}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      width: timelineWidthStyle,
+                      minWidth: timelineWidthStyle,
+                    }}
+                  >
+                    {showEmptyTimeline ? (
+                      <div
                         style={{
-                          padding: "4px 8px",
-                          borderRadius: 16,
-                          border: "1px solid #2a3344",
-                          background: "#111827",
-                          color: "#e2e8f0",
-                          fontSize: 11,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 4,
-                          cursor: "pointer",
+                          padding: 24,
+                          borderRadius: 8,
+                          border: "1px dashed #475569",
+                          color: "#94a3b8",
+                          fontSize: 13,
                         }}
                       >
-                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                          delete
-                        </span>
-                        <span>Seq {column.index + 1}</span>
-                      </button>
-                    ))}
+                        Add a sequence to start placing loops into the timeline.
+                      </div>
+                    ) : (
+                      <TimelineGrid
+                        rows={timelineRows}
+                        columns={timelineColumns}
+                        renderCell={renderTimelineCell}
+                        renderRow={(row, cols, cellRenderer) =>
+                          renderTimelineRow(row, cols, cellRenderer)
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          ) : null}
-          <div
-            style={{
-              maxHeight: `${timelineViewportHeight}px`,
-              minHeight: `${timelineViewportHeight}px`,
-              overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
-              paddingRight: shouldEnableVerticalScroll ? 6 : 0,
-              width: timelineWidthStyle,
-              minWidth: timelineWidthStyle,
-            }}
-          >
-            {showEmptyTimeline ? (
-              <div
-                style={{
-                  padding: 24,
-                  borderRadius: 8,
-                  border: "1px dashed #475569",
-                  color: "#94a3b8",
-                  fontSize: 13,
-                }}
-              >
-                Add a sequence to start placing loops into the timeline.
-              </div>
-            ) : (
-              <TimelineGrid
-                rows={timelineRows}
-                columns={timelineColumns}
-                renderCell={renderTimelineCell}
-                renderRow={(row, cols, cellRenderer) =>
-                  renderTimelineRow(row, cols, cellRenderer)
-                }
-              />
-            )}
-      </div>
-    </div>
-  </div>
+          </div>
+        </div>
 
-      <Modal
+        <Modal
         isOpen={hasRowSettings && Boolean(rowSettingsRow)}
         onClose={() => setRowSettingsIndex(null)}
         title="Row Settings"
@@ -2066,94 +2076,93 @@ export function SongView({
         ) : null}
       </Modal>
 
-    </div>
-  </div>
-
-  <BottomDock>
-    <div style={TRANSPORT_CONTAINER_STYLE}>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <button
-          aria-label={transportLabel}
-          onPointerDown={handleToggleTransport}
-          onPointerUp={(e) => e.currentTarget.blur()}
-          style={buildTransportPlayButtonStyle(isPlaying)}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            {transportIcon}
-          </span>
-        </button>
       </div>
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          justifyContent: "center",
-          minWidth: 0,
-        }}
-      >
-        <div style={BPM_SELECT_WRAPPER_STYLE}>
-          <select
-            value={bpm}
-            onChange={(event) =>
-              handleBpmChange(parseInt(event.target.value, 10))
-            }
-            style={BPM_SELECT_STYLE}
-            aria-label="Tempo (beats per minute)"
+
+      <BottomDock>
+        <div style={TRANSPORT_CONTAINER_STYLE}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <button
+              aria-label={transportLabel}
+              onPointerDown={handleToggleTransport}
+              onPointerUp={(e) => e.currentTarget.blur()}
+              style={buildTransportPlayButtonStyle(isPlaying)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {transportIcon}
+              </span>
+            </button>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              justifyContent: "center",
+              minWidth: 0,
+            }}
           >
-            {[90, 100, 110, 120, 130].map((value) => (
-              <option key={value} value={value}>
-                {`${value} BPM`}
-              </option>
-            ))}
-          </select>
-          <span
-            className="material-symbols-outlined"
-            style={BPM_SELECT_ICON_STYLE}
-            aria-hidden="true"
-          >
-            expand_more
-          </span>
+            <div style={BPM_SELECT_WRAPPER_STYLE}>
+              <select
+                value={bpm}
+                onChange={(event) =>
+                  handleBpmChange(parseInt(event.target.value, 10))
+                }
+                style={BPM_SELECT_STYLE}
+                aria-label="Tempo (beats per minute)"
+              >
+                {[90, 100, 110, 120, 130].map((value) => (
+                  <option key={value} value={value}>
+                    {`${value} BPM`}
+                  </option>
+                ))}
+              </select>
+              <span
+                className="material-symbols-outlined"
+                style={BPM_SELECT_ICON_STYLE}
+                aria-hidden="true"
+              >
+                expand_more
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={handleAddPerformanceTrack}
+              disabled={!onAddPerformanceTrack}
+              style={buildAccentButtonStyle(
+                Boolean(onAddPerformanceTrack),
+                TRANSPORT_CONTROL_HEIGHT
+              )}
+            >
+              + Track
+            </button>
+          </div>
         </div>
-      </div>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          onClick={handleAddPerformanceTrack}
-          disabled={!onAddPerformanceTrack}
-          style={buildAccentButtonStyle(
-            Boolean(onAddPerformanceTrack),
-            TRANSPORT_CONTROL_HEIGHT
-          )}
-        >
-          + Track
-        </button>
-      </div>
-    </div>
-  </BottomDock>
+      </BottomDock>
 
-  <BottomDock
-    heightVar="var(--controls-h)"
-    show={isPlayInstrumentOpen}
-    inertWhenHidden
-  >
-    <div
-      style={{
-        height: "100%",
-        padding: "12px 16px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        boxSizing: "border-box",
-        background: "#0b1220",
-        borderTop: "1px solid #1f2937",
-      }}
-    >
-      <div
-        className="scrollable"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          borderRadius: 12,
+      <BottomDock
+        heightVar="var(--controls-h)"
+        show={isPlayInstrumentOpen}
+        inertWhenHidden
+      >
+        <div
+          style={{
+            height: "100%",
+            padding: "12px 16px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            boxSizing: "border-box",
+            background: "#0b1220",
+            borderTop: "1px solid #1f2937",
+          }}
+        >
+          <div
+            className="scrollable"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              borderRadius: 12,
           border: "1px solid #2a3344",
           background: "#111827",
           padding: 16,
