@@ -1805,15 +1805,12 @@ export function SongView({
         >
           <div
             style={{
-              border: "1px solid #333",
-              borderRadius: 12,
-              background: "#1b2130",
-              padding: "16px 0",
               display: "flex",
               flexDirection: "column",
               gap: 16,
               minHeight: 0,
               flex: 1,
+              padding: "16px 0",
             }}
           >
             <div

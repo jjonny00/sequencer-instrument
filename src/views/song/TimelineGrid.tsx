@@ -41,14 +41,14 @@ export function TimelineGrid<
 }: TimelineGridProps<Row, Column>) {
   return (
     <div
-      className="w-full bg-[color:var(--card-bg,#1a1d25)]"
+      className="w-full"
       style={{
         width: "100%",
         overflowX: "auto",
         WebkitOverflowScrolling: "touch",
-        paddingLeft: "var(--hpad)",
-        paddingRight: "var(--hpad)",
         boxSizing: "border-box",
+        background: "inherit",
+        margin: 0,
       }}
     >
       {(renderColHeader || onAddColumn) && (
