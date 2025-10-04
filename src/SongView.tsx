@@ -1101,6 +1101,7 @@ export function SongView({
       ? "1 1 auto"
       : collapsedTimelineFlex
     : "1 1 auto";
+  const instrumentFlex = isTrackSelected ? "1 1 auto" : "0 0 0";
   const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
     () => getInstrumentColor(panelInstrument),
@@ -1774,10 +1775,8 @@ export function SongView({
 
   return (
     <div
-      className="vh flex flex-col"
+      className="flex flex-col h-full"
       style={{
-        display: "flex",
-        flexDirection: "column",
         flex: 1,
         minHeight: 0,
       }}
@@ -1872,106 +1871,330 @@ export function SongView({
               </div>
             </div>
             <div
-              className="min-h-0 scroll-y"
+              className="min-h-0"
               style={{
-                flex: timelineFlex,
+                flex: 1,
                 minHeight: 0,
-                overflowY: "auto",
-                padding: 0,
-                transition: "flex 180ms ease",
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
               }}
             >
-              <div className="min-h-0" style={{ height: "100%" }}>
+              <div
+                className="min-h-0 scroll-y"
+                style={{
+                  flex: timelineFlex,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  transition: "flex-basis 180ms ease",
+                }}
+              >
+                <div className="min-h-0" style={{ height: "100%" }}>
+                  <div
+                    className="scrollable"
+                    style={{
+                      overflowX: "auto",
+                      paddingBottom: 4,
+                      height: "100%",
+                      minHeight: "100%",
+                    }}
+                  >
+                    {sectionCount > 0 ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+                        <div style={{ flex: 1, overflow: "hidden" }}>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
+                              gap: SLOT_GAP,
+                              width: timelineWidthStyle,
+                              minWidth: timelineWidthStyle,
+                            }}
+                          >
+                            {timelineColumns
+                              .filter((column) => column.hasSection)
+                              .map((column) => (
+                                <button
+                                  key={`delete-column-${column.index}`}
+                                  type="button"
+                                  onClick={() => handleDeleteColumn(column.index)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    borderRadius: 16,
+                                    border: "1px solid #2a3344",
+                                    background: "#111827",
+                                    color: "#e2e8f0",
+                                    fontSize: 11,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 4,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{ fontSize: 14 }}
+                                  >
+                                    delete
+                                  </span>
+                                  <span>Seq {column.index + 1}</span>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    <div
+                      style={{
+                        width: timelineWidthStyle,
+                        minWidth: timelineWidthStyle,
+                      }}
+                    >
+                      {showEmptyTimeline ? (
+                        <div
+                          style={{
+                            padding: 24,
+                            borderRadius: 8,
+                            border: "1px dashed #475569",
+                            color: "#94a3b8",
+                            fontSize: 13,
+                          }}
+                        >
+                          Add a sequence to start placing loops into the timeline.
+                        </div>
+                      ) : (
+                        <TimelineGrid
+                          rows={timelineRows}
+                          columns={timelineColumns}
+                          renderCell={renderTimelineCell}
+                          renderRow={(row, cols, cellRenderer) =>
+                            renderTimelineRow(row, cols, cellRenderer)
+                          }
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                className="min-h-0"
+                style={{
+                  flex: instrumentFlex,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  transition: "flex-basis 180ms ease",
+                  opacity: isTrackSelected ? 1 : 0,
+                  pointerEvents: isTrackSelected ? "auto" : "none",
+                }}
+                aria-hidden={!isTrackSelected}
+              >
                 <div
-                  className="scrollable"
                   style={{
-                    overflowX: "auto",
-                    paddingBottom: 4,
                     height: "100%",
-                    minHeight: "100%",
+                    padding: isTrackSelected ? "12px 16px 16px" : 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    boxSizing: "border-box",
+                    background: "#0b1220",
+                    borderTop: "1px solid #1f2937",
                   }}
                 >
-                  {sectionCount > 0 ? (
+                  <div
+                    className="scrollable"
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      borderRadius: 12,
+                      border: "1px solid #2a3344",
+                      background: "#111827",
+                      padding: 16,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 16,
+                      overflowY: "auto",
+                      opacity: isPlayInstrumentOpen ? 1 : 0,
+                      pointerEvents: isPlayInstrumentOpen ? "auto" : "none",
+                      transition: "opacity 180ms ease",
+                    }}
+                  >
                     <div
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        marginBottom: 8,
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 12,
                       }}
                     >
-                      <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
-                      <div style={{ flex: 1, overflow: "hidden" }}>
-                        <div
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span
+                          aria-hidden="true"
                           style={{
-                            display: "grid",
-                            gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-                            gap: SLOT_GAP,
-                            width: timelineWidthStyle,
-                            minWidth: timelineWidthStyle,
+                            width: 12,
+                            height: 12,
+                            borderRadius: 999,
+                            background: playInstrumentColor,
+                            boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: "#e6f2ff",
+                            letterSpacing: 0.2,
                           }}
                         >
-                          {timelineColumns
-                            .filter((column) => column.hasSection)
-                            .map((column) => (
-                              <button
-                                key={`delete-column-${column.index}`}
-                                type="button"
-                                onClick={() => handleDeleteColumn(column.index)}
-                                style={{
-                                  padding: "4px 8px",
-                                  borderRadius: 16,
-                                  border: "1px solid #2a3344",
-                                  background: "#111827",
-                                  color: "#e2e8f0",
-                                  fontSize: 11,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: 4,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <span
-                                  className="material-symbols-outlined"
-                                  style={{ fontSize: 14 }}
-                                >
-                                  delete
-                                </span>
-                                <span>Seq {column.index + 1}</span>
-                              </button>
-                            ))}
-                        </div>
+                          {formatInstrumentLabel(playInstrument)} Instrument
+                        </span>
                       </div>
-                    </div>
-                  ) : null}
-                  <div
-                    style={{
-                      width: timelineWidthStyle,
-                      minWidth: timelineWidthStyle,
-                    }}
-                  >
-                    {showEmptyTimeline ? (
                       <div
                         style={{
-                          padding: 24,
-                          borderRadius: 8,
-                          border: "1px dashed #475569",
-                          color: "#94a3b8",
-                          fontSize: 13,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flexWrap: "wrap",
+                          justifyContent: "flex-end",
                         }}
                       >
-                        Add a sequence to start placing loops into the timeline.
+                        <IconButton
+                          icon="close"
+                          label="Close"
+                          showLabel
+                          onClick={handleCloseInstrumentPanel}
+                        />
+                        <IconButton
+                          icon={recordingActive ? "stop" : "fiber_manual_record"}
+                          label={recordingActive ? "Stop" : "Record"}
+                          showLabel
+                          tone={recordingActive ? "danger" : "default"}
+                          onClick={() => setIsRecordEnabled((prev) => !prev)}
+                          disabled={!hasPerformanceTarget}
+                        />
+                        <IconButton
+                          icon="delete"
+                          label="Clear"
+                          showLabel
+                          tone="danger"
+                          onClick={handleClearRecording}
+                          disabled={!canClearRecording}
+                        />
                       </div>
-                    ) : (
-                      <TimelineGrid
-                        rows={timelineRows}
-                        columns={timelineColumns}
-                        renderCell={renderTimelineCell}
-                        renderRow={(row, cols, cellRenderer) =>
-                          renderTimelineRow(row, cols, cellRenderer)
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {isRecordEnabled ? (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "4px 10px",
+                              borderRadius: 999,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: 0.6,
+                              textTransform: "uppercase",
+                              background: recordingActive
+                                ? "rgba(248, 113, 113, 0.24)"
+                                : "rgba(248, 113, 113, 0.14)",
+                              border: `1px solid ${
+                                recordingActive ? "#f87171" : "#fb7185"
+                              }`,
+                              color: "#fecdd3",
+                              boxShadow: recordingActive
+                                ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
+                                : "none",
+                            }}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: 14 }}
+                              aria-hidden="true"
+                            >
+                              fiber_manual_record
+                            </span>
+                            {recordIndicatorLabel}
+                          </span>
+                        ) : null}
+                        <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                          {liveRowMessage}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsQuantizedRecording((prev) => !prev)}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 999,
+                          border: `1px solid ${
+                            isQuantizedRecording ? playInstrumentColor : "#2a3344"
+                          }`,
+                          background: isQuantizedRecording
+                            ? withAlpha(playInstrumentColor, 0.18)
+                            : "#0f172a",
+                          color: "#e6f2ff",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          letterSpacing: 0.8,
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                        title={
+                          isQuantizedRecording
+                            ? "Quantized recording is on — notes snap to the grid."
+                            : "Quantized recording is off — capture free timing."
                         }
+                      >
+                        Quantize {isQuantizedRecording ? "On" : "Off"}
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        borderRadius: 12,
+                        border: "1px solid #1f2937",
+                        background: "#10192c",
+                        padding: 12,
+                        flex: 1,
+                        minHeight: 0,
+                      }}
+                    >
+                      <InstrumentControlPanel
+                        track={playInstrumentTrackForPanel}
+                        allTracks={[]}
+                        onUpdatePattern={handlePlayInstrumentPatternUpdate}
+                        trigger={playInstrumentTrigger}
+                        isRecording={recordingActive}
+                        onPerformanceNote={handlePerformanceNoteRecorded}
                       />
-                    )}
+                    </div>
+                    <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                      Audition sounds or capture a new take for this performance row.
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2140,220 +2363,6 @@ export function SongView({
         </div>
       </BottomDock>
 
-      <BottomDock
-        heightVar="var(--controls-h)"
-        show={isPlayInstrumentOpen}
-        inertWhenHidden
-        style={{
-          flex: isTrackSelected ? "1 1 auto" : "0 0 0",
-          height: isTrackSelected ? "auto" : 0,
-          minHeight: 0,
-          overflowY: "auto",
-          transition: "flex 180ms ease",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            padding: "12px 16px 16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            boxSizing: "border-box",
-            background: "#0b1220",
-            borderTop: "1px solid #1f2937",
-          }}
-        >
-          <div
-            className="scrollable"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              borderRadius: 12,
-          border: "1px solid #2a3344",
-          background: "#111827",
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-          overflowY: "auto",
-          opacity: isPlayInstrumentOpen ? 1 : 0,
-          pointerEvents: isPlayInstrumentOpen ? "auto" : "none",
-          transition: "opacity 180ms ease",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span
-              aria-hidden="true"
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: 999,
-                background: playInstrumentColor,
-                boxShadow: `0 0 10px ${withAlpha(playInstrumentColor, 0.45)}`,
-              }}
-            />
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#e6f2ff",
-                letterSpacing: 0.2,
-              }}
-            >
-              {formatInstrumentLabel(playInstrument)} Instrument
-            </span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-              justifyContent: "flex-end",
-            }}
-          >
-            <IconButton
-              icon="close"
-              label="Close"
-              showLabel
-              onClick={handleCloseInstrumentPanel}
-            />
-            <IconButton
-              icon={recordingActive ? "stop" : "fiber_manual_record"}
-              label={recordingActive ? "Stop" : "Record"}
-              showLabel
-              tone={recordingActive ? "danger" : "default"}
-              onClick={() => setIsRecordEnabled((prev) => !prev)}
-              disabled={!hasPerformanceTarget}
-            />
-            <IconButton
-              icon="delete"
-              label="Clear"
-              showLabel
-              tone="danger"
-              onClick={handleClearRecording}
-              disabled={!canClearRecording}
-            />
-          </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            {isRecordEnabled ? (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "4px 10px",
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: 0.6,
-                  textTransform: "uppercase",
-                  background: recordingActive
-                    ? "rgba(248, 113, 113, 0.24)"
-                    : "rgba(248, 113, 113, 0.14)",
-                  border: `1px solid ${
-                    recordingActive ? "#f87171" : "#fb7185"
-                  }`,
-                  color: "#fecdd3",
-                  boxShadow: recordingActive
-                    ? `0 0 12px ${withAlpha("#f87171", 0.35)}`
-                    : "none",
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: 14 }}
-                  aria-hidden="true"
-                >
-                  fiber_manual_record
-                </span>
-                {recordIndicatorLabel}
-              </span>
-            ) : null}
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
-              {liveRowMessage}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsQuantizedRecording((prev) => !prev)}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: `1px solid ${
-                isQuantizedRecording ? playInstrumentColor : "#2a3344"
-              }`,
-              background: isQuantizedRecording
-                ? withAlpha(playInstrumentColor, 0.18)
-                : "#0f172a",
-              color: "#e6f2ff",
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: 0.8,
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}
-            title={
-              isQuantizedRecording
-                ? "Quantized recording is on — notes snap to the grid."
-                : "Quantized recording is off — capture free timing."
-            }
-          >
-            Quantize {isQuantizedRecording ? "On" : "Off"}
-          </button>
-        </div>
-        <div
-          style={{
-            borderRadius: 12,
-            border: "1px solid #1f2937",
-            background: "#10192c",
-            padding: 12,
-            flex: 1,
-            minHeight: 0,
-          }}
-        >
-          <InstrumentControlPanel
-            track={playInstrumentTrackForPanel}
-            allTracks={[]}
-            onUpdatePattern={handlePlayInstrumentPatternUpdate}
-            trigger={playInstrumentTrigger}
-            isRecording={recordingActive}
-            onPerformanceNote={handlePerformanceNoteRecorded}
-          />
-        </div>
-        <span style={{ fontSize: 12, color: "#94a3b8" }}>
-          Audition sounds or capture a new take for this performance row.
-        </span>
-      </div>
-    </div>
-  </BottomDock>
   </div>
   );
 }
