@@ -1876,7 +1876,7 @@ export function SongView({
               className="min-h-0"
               style={{
                 flex: timelineFlex,
-                padding: "0 var(--hpad)",
+                padding: 0,
                 transition: "flex-basis 180ms ease",
               }}
             >
