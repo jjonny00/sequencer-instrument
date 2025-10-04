@@ -1883,7 +1883,6 @@ export function SongView({
                   style={{
                     overflowX: "auto",
                     paddingBottom: 4,
-                    paddingRight: 6,
                     height: "100%",
                     minHeight: "100%",
                   }}
