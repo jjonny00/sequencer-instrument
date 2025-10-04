@@ -1096,11 +1096,8 @@ export function SongView({
   const slotGap = SLOT_CONTENT_GAP;
   const isTrackSelected = isPlayInstrumentOpen;
   const collapsedTimelineFlex = "0 0 45%";
-  const timelineFlex = isTrackSelected
-    ? isTimelineExpanded
-      ? "1 1 auto"
-      : collapsedTimelineFlex
-    : "1 1 auto";
+  const timelineFlex =
+    isTrackSelected && !isTimelineExpanded ? collapsedTimelineFlex : "1 1 auto";
   const instrumentFlex = isTrackSelected ? "1 1 auto" : "0 0 0";
   const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
@@ -2301,7 +2298,12 @@ export function SongView({
 
       </div>
 
-      <BottomDock>
+      <BottomDock
+        style={{
+          flex: "0 0 auto",
+          marginTop: "auto",
+        }}
+      >
         <div style={TRANSPORT_CONTAINER_STYLE}>
           <div style={{ display: "flex", alignItems: "center" }}>
             <button
