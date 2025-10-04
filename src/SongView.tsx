@@ -1795,7 +1795,6 @@ export function SongView({
             display: "flex",
             alignItems: "center",
             gap: TIMELINE_TOOLBAR_GAP,
-            padding: "0 var(--hpad)",
           }}
         >
           <span style={TIMELINE_LABEL_STYLE}>Timeline</span>
