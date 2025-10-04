@@ -45,7 +45,10 @@ export function LoopView({
           flex: 1,
           minHeight: 0,
           overflow: "hidden",
-          padding: "16px 16px 0",
+          paddingTop: 16,
+          paddingBottom: 0,
+          paddingLeft: "calc(var(--hpad) + env(safe-area-inset-left))",
+          paddingRight: "calc(var(--hpad) + env(safe-area-inset-right))",
           boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
@@ -65,7 +68,8 @@ export function LoopView({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              padding: "0 16px",
+              paddingLeft: "calc(var(--hpad) + env(safe-area-inset-left))",
+              paddingRight: "calc(var(--hpad) + env(safe-area-inset-right))",
               boxSizing: "border-box",
             }}
           >
@@ -84,7 +88,10 @@ export function LoopView({
             style={{
               height: "100%",
               overflowY: "auto",
-              padding: "12px 16px 16px",
+              paddingTop: 12,
+              paddingBottom: 16,
+              paddingLeft: "calc(var(--hpad) + env(safe-area-inset-left))",
+              paddingRight: "calc(var(--hpad) + env(safe-area-inset-right))",
               boxSizing: "border-box",
               width: "100%",
               maxWidth: 960,

@@ -26,8 +26,8 @@ export function TopBar({ left, center, right }: TopBarProps) {
           display: "flex",
           alignItems: "center",
           height: "var(--topbar-h)",
-          paddingLeft: "calc(16px + env(safe-area-inset-left))",
-          paddingRight: "calc(16px + env(safe-area-inset-right))",
+          paddingLeft: "calc(var(--hpad) + env(safe-area-inset-left))",
+          paddingRight: "calc(var(--hpad) + env(safe-area-inset-right))",
           gap: 16,
           boxSizing: "border-box",
         }}

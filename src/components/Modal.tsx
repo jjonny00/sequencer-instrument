@@ -202,9 +202,11 @@ export const Modal: FC<ModalProps> = ({
     resolvedModalStyle.gap = 0;
   }
 
-  const horizontalPadding = fullScreen ? 20 : 24;
+  const horizontalPadding = 16;
   const topPadding = fullScreen ? 20 : 24;
   const bottomPadding = footer ? 0 : horizontalPadding;
+  const paddingLeft = "calc(var(--hpad) + env(safe-area-inset-left))";
+  const paddingRight = "calc(var(--hpad) + env(safe-area-inset-right))";
 
   const bodyWrapperStyle: CSSProperties = {
     display: "flex",
@@ -214,7 +216,10 @@ export const Modal: FC<ModalProps> = ({
     flexShrink: 1,
     minHeight: 0,
     flexBasis: "0%",
-    padding: `${topPadding}px ${horizontalPadding}px ${bottomPadding}px`,
+    paddingTop: topPadding,
+    paddingBottom: bottomPadding,
+    paddingLeft,
+    paddingRight,
   };
 
   const contentStyle: CSSProperties = {
@@ -236,7 +241,9 @@ export const Modal: FC<ModalProps> = ({
     justifyContent: "flex-end",
     gap: 16,
     width: "100%",
-    padding: `16px ${horizontalPadding}px`,
+    paddingTop: 16,
+    paddingLeft,
+    paddingRight,
     paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
     borderTop: "1px solid #1f2937",
     background: "#0f172a",
