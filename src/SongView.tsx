@@ -1819,7 +1819,7 @@ export function SongView({
               onClick={handleAddSection}
               style={buildSecondaryButtonStyle()}
             >
-              + Sequence
+              + Loop
             </button>
             {timelineActions ? (
               <div
