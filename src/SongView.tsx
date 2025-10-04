@@ -2316,7 +2316,6 @@ export function SongView({
             flex: controlsRegionFlex,
             minHeight: 0,
             overflowY: "auto",
-            display: controlsRegionFlex === "0 0 0" ? "none" : "block",
             transition: "flex-basis 180ms ease",
           }}
         >
@@ -2324,56 +2323,68 @@ export function SongView({
         </div>
       </div>
 
-      <BottomDock heightVar="var(--transport-h)">
-        <div style={TRANSPORT_CONTAINER_STYLE}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
-              aria-label={transportLabel}
-              onPointerDown={handleToggleTransport}
-              onPointerUp={(event) => event.currentTarget.blur()}
-              style={buildTransportPlayButtonStyle(isPlaying)}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {transportIcon}
-              </span>
-            </button>
-            <div style={BPM_SELECT_WRAPPER_STYLE}>
-              <select
-                value={bpm}
-                onChange={(event) =>
-                  handleBpmChange(parseInt(event.target.value, 10))
-                }
-                style={BPM_SELECT_STYLE}
-                aria-label="Tempo (beats per minute)"
+      <div
+        id="bottom-dock-wrapper"
+        style={{
+          flex: "0 0 auto",
+          position: "sticky",
+          bottom: 0,
+          zIndex: 5,
+          background: "var(--color-bg)",
+          borderTop: "1px solid var(--color-border)",
+        }}
+      >
+        <BottomDock heightVar="var(--transport-h)">
+          <div style={TRANSPORT_CONTAINER_STYLE}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                aria-label={transportLabel}
+                onPointerDown={handleToggleTransport}
+                onPointerUp={(event) => event.currentTarget.blur()}
+                style={buildTransportPlayButtonStyle(isPlaying)}
               >
-                {[90, 100, 110, 120, 130].map((value) => (
-                  <option key={value} value={value}>
-                    {`${value} BPM`}
-                  </option>
-                ))}
-              </select>
-              <span
-                className="material-symbols-outlined"
-                style={BPM_SELECT_ICON_STYLE}
-                aria-hidden="true"
-              >
-                expand_more
-              </span>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {transportIcon}
+                </span>
+              </button>
+              <div style={BPM_SELECT_WRAPPER_STYLE}>
+                <select
+                  value={bpm}
+                  onChange={(event) =>
+                    handleBpmChange(parseInt(event.target.value, 10))
+                  }
+                  style={BPM_SELECT_STYLE}
+                  aria-label="Tempo (beats per minute)"
+                >
+                  {[90, 100, 110, 120, 130].map((value) => (
+                    <option key={value} value={value}>
+                      {`${value} BPM`}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="material-symbols-outlined"
+                  style={BPM_SELECT_ICON_STYLE}
+                  aria-hidden="true"
+                >
+                  expand_more
+                </span>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={handleAddPerformanceTrack}
+              disabled={!onAddPerformanceTrack}
+              style={buildAccentButtonStyle(
+                Boolean(onAddPerformanceTrack),
+                TRANSPORT_CONTROL_HEIGHT
+              )}
+            >
+              + Track
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleAddPerformanceTrack}
-            disabled={!onAddPerformanceTrack}
-            style={buildAccentButtonStyle(
-              Boolean(onAddPerformanceTrack),
-              TRANSPORT_CONTROL_HEIGHT
-            )}
-          >
-            + Track
-          </button>
-        </div>
-      </BottomDock>
+        </BottomDock>
+      </div>
 
       {rowSettingsModal}
     </div>
