@@ -1877,7 +1877,7 @@ export function SongView({
                 minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
-                gap: 16,
+                gap: isTrackSelected ? 16 : 0,
               }}
             >
               <div
