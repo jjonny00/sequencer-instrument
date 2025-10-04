@@ -40,7 +40,17 @@ export function TimelineGrid<
   renderRow,
 }: TimelineGridProps<Row, Column>) {
   return (
-    <div className="w-full h-full">
+    <div
+      className="w-full"
+      style={{
+        width: "100%",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+        boxSizing: "border-box",
+        background: "inherit",
+        margin: 0,
+      }}
+    >
       {(renderColHeader || onAddColumn) && (
         <div className="flex items-center gap-2 mb-2">
           {columns.map((c) => (
