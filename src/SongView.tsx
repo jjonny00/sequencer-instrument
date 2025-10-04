@@ -1095,10 +1095,12 @@ export function SongView({
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
   const isTrackSelected = isPlayInstrumentOpen;
-  const timelineFlex =
-    isTrackSelected && !isTimelineExpanded
-      ? "0 0 var(--timeline-collapsed-h)"
-      : "1 1 auto";
+  const collapsedTimelineFlex = "0 0 45%";
+  const timelineFlex = isTrackSelected
+    ? isTimelineExpanded
+      ? "1 1 auto"
+      : collapsedTimelineFlex
+    : "1 1 auto";
   const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
     () => getInstrumentColor(panelInstrument),
@@ -1870,14 +1872,16 @@ export function SongView({
               </div>
             </div>
             <div
-              className="min-h-0"
+              className="min-h-0 scroll-y"
               style={{
                 flex: timelineFlex,
+                minHeight: 0,
+                overflowY: "auto",
                 padding: 0,
-                transition: "flex-basis 180ms ease",
+                transition: "flex 180ms ease",
               }}
             >
-              <div className="scroll-y min-h-0" style={{ height: "100%" }}>
+              <div className="min-h-0" style={{ height: "100%" }}>
                 <div
                   className="scrollable"
                   style={{
@@ -2140,6 +2144,13 @@ export function SongView({
         heightVar="var(--controls-h)"
         show={isPlayInstrumentOpen}
         inertWhenHidden
+        style={{
+          flex: isTrackSelected ? "1 1 auto" : "0 0 0",
+          height: isTrackSelected ? "auto" : 0,
+          minHeight: 0,
+          overflowY: "auto",
+          transition: "flex 180ms ease",
+        }}
       >
         <div
           style={{
