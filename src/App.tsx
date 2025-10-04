@@ -422,8 +422,7 @@ export default function App() {
   const [songRows, setSongRows] = useState<SongRow[]>([
     createSongRow(),
   ]);
-  const [isSongInstrumentPanelOpen, setIsSongInstrumentPanelOpen] =
-    useState(false);
+  const [, setIsSongInstrumentPanelOpen] = useState(false);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
   const currentLoopDraftRef = useRef<Track[] | null>(null);
@@ -2430,39 +2429,37 @@ export default function App() {
       setEditing(null);
       setViewMode("song");
     },
-    actions:
-      viewMode === "song" && !isSongInstrumentPanelOpen
-        ? (
-            <>
-              <IconButton
-                icon="save"
-                label="Save song"
-                size="compact"
-                onClick={openSaveProjectModal}
-              />
-              <OverflowMenuButton
-                label="More song actions"
-                items={[
-                  {
-                    label: "Load song",
-                    onSelect: openLoadProjectModal,
-                  },
-                  {
-                    label: "Export",
-                    onSelect: () => {
-                      setAudioExportMessage("Preparing export…");
-                      setIsExportModalOpen(true);
-                    },
-                    disabled: isAudioExporting,
-                  },
-                ]}
-              />
-            </>
-          )
-        : undefined,
   };
 
   const viewHeaderSections = getViewHeaderSections(viewHeaderProps);
+
+  const songTimelineActions = (
+    <>
+      <IconButton
+        icon="save"
+        label="Save song"
+        size="compact"
+        onClick={openSaveProjectModal}
+      />
+      <OverflowMenuButton
+        label="More song actions"
+        items={[
+          {
+            label: "Load song",
+            onSelect: openLoadProjectModal,
+          },
+          {
+            label: "Export",
+            onSelect: () => {
+              setAudioExportMessage("Preparing export…");
+              setIsExportModalOpen(true);
+            },
+            disabled: isAudioExporting,
+          },
+        ]}
+      />
+    </>
+  );
 
   const renderViewHeader = (
     variant: ViewHeaderProps["variant"] = "stacked"
@@ -3402,6 +3399,7 @@ export default function App() {
               onUpdatePerformanceTrack={updatePerformanceTrack}
               onRemovePerformanceTrack={removePerformanceTrack}
               onPlayInstrumentOpenChange={setIsSongInstrumentPanelOpen}
+              timelineActions={songTimelineActions}
             />
           </div>
         </>

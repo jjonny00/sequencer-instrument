@@ -60,6 +60,7 @@ interface SongViewProps {
   topBarLeft?: ReactNode;
   topBarCenter?: ReactNode;
   topBarRight?: ReactNode;
+  timelineActions?: ReactNode;
 }
 
 const SLOT_WIDTH = 150;
@@ -650,6 +651,7 @@ export function SongView({
   topBarLeft,
   topBarCenter,
   topBarRight,
+  timelineActions,
 }: SongViewProps) {
   const {
     editingSlot,
@@ -1807,14 +1809,6 @@ export function SongView({
           >
             <button
               type="button"
-              onClick={handleAddPerformanceTrack}
-              disabled={!onAddPerformanceTrack}
-              style={buildAccentButtonStyle(Boolean(onAddPerformanceTrack))}
-            >
-              + Track
-            </button>
-            <button
-              type="button"
               onClick={handleAddRow}
               style={buildSecondaryButtonStyle()}
             >
@@ -1827,6 +1821,17 @@ export function SongView({
             >
               + Sequence
             </button>
+            {timelineActions ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: TIMELINE_TOOLBAR_GAP,
+                }}
+              >
+                {timelineActions}
+              </div>
+            ) : null}
           </div>
         </div>
         <div
