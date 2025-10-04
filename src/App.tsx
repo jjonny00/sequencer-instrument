@@ -2282,19 +2282,6 @@ export default function App() {
     };
   }, []);
 
-  const handleSelectLoopFromSongView = useCallback(
-    (groupId: string) => {
-      setSelectedGroupId(groupId);
-      setEditing(null);
-      if (viewMode !== "track") {
-        skipLoopDraftRestoreRef.current = true;
-        setViewMode("track");
-        setPendingLoopStripAction(null);
-      }
-    },
-    [setSelectedGroupId, setEditing, viewMode, setPendingLoopStripAction]
-  );
-
   const handleConfirmAddTrack = useCallback(() => {
     if (!addTrackModalState.instrumentId || !addTrackModalState.packId) {
       closeAddTrackModal();
@@ -3401,8 +3388,6 @@ export default function App() {
               bpm={bpm}
               setBpm={setBpm}
               onToggleTransport={handlePlayStop}
-              selectedGroupId={selectedGroupId}
-              onSelectLoop={handleSelectLoopFromSongView}
               performanceTracks={performanceTracks}
               triggers={triggers}
               onEnsurePerformanceRow={ensurePerformanceRow}

@@ -41,8 +41,6 @@ interface SongViewProps {
   bpm: number;
   setBpm: Dispatch<SetStateAction<number>>;
   onToggleTransport: () => void;
-  selectedGroupId: string | null;
-  onSelectLoop: (groupId: string) => void;
   performanceTracks: PerformanceTrack[];
   triggers: TriggerMap;
   onEnsurePerformanceRow: (
@@ -649,8 +647,6 @@ export function SongView({
   bpm,
   setBpm,
   onToggleTransport,
-  selectedGroupId,
-  onSelectLoop,
   performanceTracks,
   triggers,
   onEnsurePerformanceRow,
@@ -2070,142 +2066,6 @@ export function SongView({
         ) : null}
       </Modal>
 
-      {!isPlayInstrumentOpen ? (
-        <div
-          className="scrollable"
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            paddingRight: 4,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-            }}
-          >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#e6f2ff",
-              }}
-            >
-              Loops Library
-            </h3>
-            <span
-              style={{
-                fontSize: 12,
-                color: "#94a3b8",
-              }}
-            >
-              Save and edit loops in Track view, then place them onto the song
-              timeline.
-            </span>
-          </div>
-          {patternGroups.length === 0 ? (
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 8,
-                border: "1px dashed #475569",
-                color: "#94a3b8",
-                fontSize: 13,
-              }}
-            >
-              No loops yet. Create loops in Track view to start arranging
-              the song.
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              {patternGroups.map((group) => {
-                const trackLabels = group.tracks
-                  .map((track) => track.name)
-                  .filter((name): name is string => Boolean(name));
-                const isActive = selectedGroupId === group.id;
-                return (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => onSelectLoop(group.id)}
-                    style={{
-                      borderRadius: 10,
-                      border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
-                      background: isActive
-                        ? "rgba(39, 224, 176, 0.12)"
-                        : "#121827",
-                      padding: 12,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      textAlign: "left",
-                      cursor: "pointer",
-                      color: "#e6f2ff",
-                    }}
-                    title={`Open ${group.name} in Track view`}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span aria-hidden="true" style={{ fontSize: 16 }}>
-                        📼
-                      </span>
-                      <span style={{ fontWeight: 600 }}>{group.name}</span>
-                      <div style={{ marginLeft: "auto" }} />
-                    </div>
-                    {trackLabels.length === 0 ? (
-                      <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                        This loop is empty — add instruments in Tracks view
-                        first.
-                      </span>
-                    ) : (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                        }}
-                      >
-                        {trackLabels.map((name) => (
-                          <span
-                            key={`${group.id}-${name}`}
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              background: "#1f2532",
-                              border: "1px solid #333",
-                              fontSize: 12,
-                            }}
-                          >
-                            {name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ) : null}
     </div>
   </div>
 
