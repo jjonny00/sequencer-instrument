@@ -77,6 +77,13 @@ const TIMELINE_TOOLBAR_GAP = 12;
 const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
 
+const TIMELINE_LABEL_STYLE: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  color: "#e2e8f0",
+};
+
 const buildAccentButtonStyle = (
   enabled: boolean,
   height: number = TIMELINE_CONTROL_HEIGHT
@@ -118,23 +125,6 @@ const buildSecondaryButtonStyle = (
   whiteSpace: "nowrap",
   transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
 });
-
-const TIMELINE_TOGGLE_BUTTON_STYLE: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "0 16px",
-  height: TIMELINE_CONTROL_HEIGHT,
-  borderRadius: 999,
-  border: "1px solid #1f2937",
-  background: "#0f172a",
-  color: "#e2e8f0",
-  fontSize: 14,
-  fontWeight: 600,
-  letterSpacing: 0.3,
-  cursor: "pointer",
-  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
-};
 
 const TRANSPORT_CONTAINER_STYLE: CSSProperties = {
   height: "100%",
@@ -667,7 +657,6 @@ export function SongView({
     rowSettingsIndex,
     setRowSettingsIndex,
     isTimelineExpanded,
-    setTimelineExpanded,
   } = useTimelineState();
 
   const {
@@ -1776,10 +1765,6 @@ export function SongView({
       renderPerformanceSlotPreview,
     ]
   );
-  const timelineToggleLabel = isTimelineExpanded
-    ? "Collapse timeline height"
-    : "Expand timeline height";
-
   const timelineSection = (
     <div
       className="safe-top"
@@ -1811,22 +1796,7 @@ export function SongView({
             padding: "0 var(--hpad)",
           }}
         >
-          <button
-            type="button"
-            style={TIMELINE_TOGGLE_BUTTON_STYLE}
-            onClick={() => setTimelineExpanded((previous) => !previous)}
-            aria-expanded={isTimelineExpanded}
-            aria-label={timelineToggleLabel}
-          >
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Timeline</span>
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 18, lineHeight: 1 }}
-              aria-hidden="true"
-            >
-              {isTimelineExpanded ? "expand_less" : "expand_more"}
-            </span>
-          </button>
+          <span style={TIMELINE_LABEL_STYLE}>Timeline</span>
           <div
             style={{
               display: "flex",

@@ -43,7 +43,7 @@ const sizeStyles: Record<IconButtonSize, CSSProperties> = {
     height: 36,
     minWidth: 36,
     minHeight: 36,
-    borderRadius: 8,
+    borderRadius: 18,
   },
 };
 
@@ -53,7 +53,7 @@ const iconPaddingStyles: Record<IconButtonSize, CSSProperties> = {
     gap: 0,
   },
   compact: {
-    padding: 8,
+    padding: 0,
     gap: 0,
   },
 };
