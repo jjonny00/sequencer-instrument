@@ -41,8 +41,6 @@ interface SongViewProps {
   bpm: number;
   setBpm: Dispatch<SetStateAction<number>>;
   onToggleTransport: () => void;
-  selectedGroupId: string | null;
-  onSelectLoop: (groupId: string) => void;
   performanceTracks: PerformanceTrack[];
   triggers: TriggerMap;
   onEnsurePerformanceRow: (
@@ -71,9 +69,128 @@ const PERFORMANCE_DOT_SIZE = 5;
 const SLOT_MIN_HEIGHT = 52;
 const SLOT_CONTENT_GAP = 4;
 const SLOT_PADDING = "4px 10px";
-const APPROXIMATE_ROW_OFFSET = 28;
-const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
-const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
+const TIMELINE_TOOLBAR_GAP = 12;
+const TIMELINE_CONTROL_HEIGHT = 36;
+const TRANSPORT_CONTROL_HEIGHT = 44;
+
+const buildAccentButtonStyle = (
+  enabled: boolean,
+  height: number = TIMELINE_CONTROL_HEIGHT
+): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0 18px",
+  height,
+  borderRadius: 999,
+  border: `1px solid ${enabled ? "#27E0B0" : "#273041"}`,
+  background: enabled ? "#27E0B0" : "#273041",
+  color: enabled ? "#0b1220" : "#475569",
+  fontSize: 13,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  cursor: enabled ? "pointer" : "not-allowed",
+  boxShadow: enabled ? "0 8px 24px rgba(39,224,176,0.35)" : "none",
+  whiteSpace: "nowrap",
+  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
+});
+
+const buildSecondaryButtonStyle = (
+  height: number = TIMELINE_CONTROL_HEIGHT
+): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0 16px",
+  height,
+  borderRadius: 999,
+  border: "1px solid #1f2937",
+  background: "#121a2c",
+  color: "#e2e8f0",
+  fontSize: 13,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
+});
+
+const TIMELINE_TOGGLE_BUTTON_STYLE: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "0 16px",
+  height: TIMELINE_CONTROL_HEIGHT,
+  borderRadius: 999,
+  border: "1px solid #1f2937",
+  background: "#0f172a",
+  color: "#e2e8f0",
+  fontSize: 14,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  cursor: "pointer",
+  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
+};
+
+const TRANSPORT_CONTAINER_STYLE: CSSProperties = {
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+  paddingLeft: "calc(16px + env(safe-area-inset-left))",
+  paddingRight: "calc(16px + env(safe-area-inset-right))",
+  borderTop: "1px solid #1f2937",
+  background: "#0b1220",
+  boxSizing: "border-box",
+};
+
+const buildTransportPlayButtonStyle = (isPlaying: boolean): CSSProperties => ({
+  width: TRANSPORT_CONTROL_HEIGHT,
+  height: TRANSPORT_CONTROL_HEIGHT,
+  borderRadius: TRANSPORT_CONTROL_HEIGHT / 2,
+  border: "none",
+  background: isPlaying ? "#E02749" : "#27E0B0",
+  color: isPlaying ? "#ffe4e6" : "#0b1220",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 26,
+  cursor: "pointer",
+  boxShadow: isPlaying
+    ? "0 8px 24px rgba(224,39,73,0.32)"
+    : "0 8px 24px rgba(39,224,176,0.32)",
+  transition: "background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease",
+});
+
+const BPM_SELECT_WRAPPER_STYLE: CSSProperties = {
+  position: "relative",
+  display: "inline-flex",
+  alignItems: "center",
+};
+
+const BPM_SELECT_STYLE: CSSProperties = {
+  appearance: "none",
+  WebkitAppearance: "none",
+  padding: "0 40px 0 18px",
+  height: TRANSPORT_CONTROL_HEIGHT,
+  borderRadius: 12,
+  border: "1px solid #1f2937",
+  background: "#111827",
+  color: "#e2e8f0",
+  fontSize: 14,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  fontVariantNumeric: "tabular-nums",
+  cursor: "pointer",
+};
+
+const BPM_SELECT_ICON_STYLE: CSSProperties = {
+  position: "absolute",
+  right: 14,
+  pointerEvents: "none",
+  color: "#94a3b8",
+  fontSize: 20,
+};
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
@@ -526,8 +643,6 @@ export function SongView({
   bpm,
   setBpm,
   onToggleTransport,
-  selectedGroupId,
-  onSelectLoop,
   performanceTracks,
   triggers,
   onEnsurePerformanceRow,
@@ -979,13 +1094,13 @@ export function SongView({
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
-  const visibleRowTarget = isTimelineExpanded
-    ? TIMELINE_VISIBLE_ROWS_EXPANDED
-    : TIMELINE_VISIBLE_ROWS_COLLAPSED;
-  const timelineViewportHeight = Math.round(
-    visibleRowTarget * (slotMinHeight + APPROXIMATE_ROW_OFFSET)
-  );
-  const shouldEnableVerticalScroll = songRows.length > visibleRowTarget;
+  const isTrackSelected = isPlayInstrumentOpen;
+  const collapsedTimelineFlex = "0 0 45%";
+  const timelineFlex = isTrackSelected
+    ? isTimelineExpanded
+      ? "1 1 auto"
+      : collapsedTimelineFlex
+    : "1 1 auto";
   const panelInstrument = activePerformanceTrack?.instrument ?? playInstrument;
   const playInstrumentColor = useMemo(
     () => getInstrumentColor(panelInstrument),
@@ -1668,17 +1783,20 @@ export function SongView({
       }}
     >
       <div
-        className="safe-top flex-1 min-h-0 overflow-hidden"
+        className="safe-top min-h-0"
         style={{
-          padding: 16,
           flex: 1,
           minHeight: 0,
-          overflow: "hidden",
           display: "flex",
           flexDirection: "column",
+          paddingTop: "calc(env(safe-area-inset-top) + 16px)",
+          paddingBottom: 16,
+          paddingLeft: "calc(var(--hpad) + env(safe-area-inset-left))",
+          paddingRight: "calc(var(--hpad) + env(safe-area-inset-right))",
         }}
       >
         <div
+          className="min-h-0"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -1689,189 +1807,179 @@ export function SongView({
         >
           <div
             style={{
-              border: "1px solid #333",
-              borderRadius: 12,
-              background: "#1b2130",
-              padding: 16,
               display: "flex",
               flexDirection: "column",
               gap: 16,
               minHeight: 0,
+              flex: 1,
+              padding: "16px 0",
             }}
           >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#e6f2ff",
-            }}
-          >
-            Timeline
-          </h2>
-          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-            <IconButton
-              icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
-              label={timelineToggleLabel}
-              onClick={() => setTimelineExpanded((previous) => !previous)}
-              style={{ minWidth: 0 }}
-            />
-            <button
-              onClick={handleAddPerformanceTrack}
-              disabled={!onAddPerformanceTrack}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 20,
-                border: "1px solid #27E0B0",
-                background: onAddPerformanceTrack ? "#27E0B0" : "#273041",
-                color: onAddPerformanceTrack ? "#0b1220" : "#475569",
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                whiteSpace: "nowrap",
-                cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
-                boxShadow: onAddPerformanceTrack
-                  ? "0 2px 8px rgba(39,224,176,0.35)"
-                  : "none",
-                transition: "background 0.2s ease, border 0.2s ease",
-              }}
-            >
-              + Track
-            </button>
-            <button
-              onClick={handleAddRow}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Row
-            </button>
-            <button
-              onClick={handleAddSection}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Sequence
-            </button>
-          </div>
-        </div>
-        <div
-          className="scrollable"
-          style={{
-            overflowX: "auto",
-            paddingBottom: 4,
-            minHeight: `${timelineViewportHeight}px`,
-            maxHeight: `${timelineViewportHeight}px`,
-          }}
-        >
-          {sectionCount > 0 ? (
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                marginBottom: 8,
-                paddingRight: shouldEnableVerticalScroll ? 6 : 0,
+                gap: TIMELINE_TOOLBAR_GAP,
+                padding: "0 var(--hpad)",
               }}
             >
-              <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
-              <div style={{ flex: 1, overflow: "hidden" }}>
+              <button
+                type="button"
+                style={TIMELINE_TOGGLE_BUTTON_STYLE}
+                onClick={() => setTimelineExpanded((previous) => !previous)}
+                aria-expanded={isTimelineExpanded}
+                aria-label={timelineToggleLabel}
+              >
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Timeline</span>
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 18, lineHeight: 1 }}
+                  aria-hidden="true"
+                >
+                  {isTimelineExpanded ? "expand_less" : "expand_more"}
+                </span>
+              </button>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: TIMELINE_TOOLBAR_GAP,
+                  marginLeft: "auto",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleAddPerformanceTrack}
+                  disabled={!onAddPerformanceTrack}
+                  style={buildAccentButtonStyle(Boolean(onAddPerformanceTrack))}
+                >
+                  + Track
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddRow}
+                  style={buildSecondaryButtonStyle()}
+                >
+                  + Row
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddSection}
+                  style={buildSecondaryButtonStyle()}
+                >
+                  + Sequence
+                </button>
+              </div>
+            </div>
+            <div
+              className="min-h-0 scroll-y"
+              style={{
+                flex: timelineFlex,
+                minHeight: 0,
+                overflowY: "auto",
+                padding: 0,
+                transition: "flex 180ms ease",
+              }}
+            >
+              <div className="min-h-0" style={{ height: "100%" }}>
                 <div
+                  className="scrollable"
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-                    gap: SLOT_GAP,
-                    width: timelineWidthStyle,
-                    minWidth: timelineWidthStyle,
+                    overflowX: "auto",
+                    paddingBottom: 4,
+                    height: "100%",
+                    minHeight: "100%",
                   }}
                 >
-                  {timelineColumns
-                    .filter((column) => column.hasSection)
-                    .map((column) => (
-                      <button
-                        key={`delete-column-${column.index}`}
-                        type="button"
-                        onClick={() => handleDeleteColumn(column.index)}
+                  {sectionCount > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
+                            gap: SLOT_GAP,
+                            width: timelineWidthStyle,
+                            minWidth: timelineWidthStyle,
+                          }}
+                        >
+                          {timelineColumns
+                            .filter((column) => column.hasSection)
+                            .map((column) => (
+                              <button
+                                key={`delete-column-${column.index}`}
+                                type="button"
+                                onClick={() => handleDeleteColumn(column.index)}
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 16,
+                                  border: "1px solid #2a3344",
+                                  background: "#111827",
+                                  color: "#e2e8f0",
+                                  fontSize: 11,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: 4,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 14 }}
+                                >
+                                  delete
+                                </span>
+                                <span>Seq {column.index + 1}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      width: timelineWidthStyle,
+                      minWidth: timelineWidthStyle,
+                    }}
+                  >
+                    {showEmptyTimeline ? (
+                      <div
                         style={{
-                          padding: "4px 8px",
-                          borderRadius: 16,
-                          border: "1px solid #2a3344",
-                          background: "#111827",
-                          color: "#e2e8f0",
-                          fontSize: 11,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 4,
-                          cursor: "pointer",
+                          padding: 24,
+                          borderRadius: 8,
+                          border: "1px dashed #475569",
+                          color: "#94a3b8",
+                          fontSize: 13,
                         }}
                       >
-                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                          delete
-                        </span>
-                        <span>Seq {column.index + 1}</span>
-                      </button>
-                    ))}
+                        Add a sequence to start placing loops into the timeline.
+                      </div>
+                    ) : (
+                      <TimelineGrid
+                        rows={timelineRows}
+                        columns={timelineColumns}
+                        renderCell={renderTimelineCell}
+                        renderRow={(row, cols, cellRenderer) =>
+                          renderTimelineRow(row, cols, cellRenderer)
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          ) : null}
-          <div
-            style={{
-              maxHeight: `${timelineViewportHeight}px`,
-              minHeight: `${timelineViewportHeight}px`,
-              overflowY: shouldEnableVerticalScroll ? "auto" : "visible",
-              paddingRight: shouldEnableVerticalScroll ? 6 : 0,
-              width: timelineWidthStyle,
-              minWidth: timelineWidthStyle,
-            }}
-          >
-            {showEmptyTimeline ? (
-              <div
-                style={{
-                  padding: 24,
-                  borderRadius: 8,
-                  border: "1px dashed #475569",
-                  color: "#94a3b8",
-                  fontSize: 13,
-                }}
-              >
-                Add a sequence to start placing loops into the timeline.
-              </div>
-            ) : (
-              <TimelineGrid
-                rows={timelineRows}
-                columns={timelineColumns}
-                renderCell={renderTimelineCell}
-                renderRow={(row, cols, cellRenderer) =>
-                  renderTimelineRow(row, cols, cellRenderer)
-                }
-              />
-            )}
-      </div>
-    </div>
-  </div>
+          </div>
+        </div>
 
-      <Modal
+        <Modal
         isOpen={hasRowSettings && Boolean(rowSettingsRow)}
         onClose={() => setRowSettingsIndex(null)}
         title="Row Settings"
@@ -1968,232 +2076,100 @@ export function SongView({
         ) : null}
       </Modal>
 
-      {!isPlayInstrumentOpen ? (
+      </div>
+
+      <BottomDock>
+        <div style={TRANSPORT_CONTAINER_STYLE}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <button
+              aria-label={transportLabel}
+              onPointerDown={handleToggleTransport}
+              onPointerUp={(e) => e.currentTarget.blur()}
+              style={buildTransportPlayButtonStyle(isPlaying)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {transportIcon}
+              </span>
+            </button>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              justifyContent: "center",
+              minWidth: 0,
+            }}
+          >
+            <div style={BPM_SELECT_WRAPPER_STYLE}>
+              <select
+                value={bpm}
+                onChange={(event) =>
+                  handleBpmChange(parseInt(event.target.value, 10))
+                }
+                style={BPM_SELECT_STYLE}
+                aria-label="Tempo (beats per minute)"
+              >
+                {[90, 100, 110, 120, 130].map((value) => (
+                  <option key={value} value={value}>
+                    {`${value} BPM`}
+                  </option>
+                ))}
+              </select>
+              <span
+                className="material-symbols-outlined"
+                style={BPM_SELECT_ICON_STYLE}
+                aria-hidden="true"
+              >
+                expand_more
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={handleAddPerformanceTrack}
+              disabled={!onAddPerformanceTrack}
+              style={buildAccentButtonStyle(
+                Boolean(onAddPerformanceTrack),
+                TRANSPORT_CONTROL_HEIGHT
+              )}
+            >
+              + Track
+            </button>
+          </div>
+        </div>
+      </BottomDock>
+
+      <BottomDock
+        heightVar="var(--controls-h)"
+        show={isPlayInstrumentOpen}
+        inertWhenHidden
+        style={{
+          flex: isTrackSelected ? "1 1 auto" : "0 0 0",
+          height: isTrackSelected ? "auto" : 0,
+          minHeight: 0,
+          overflowY: "auto",
+          transition: "flex 180ms ease",
+        }}
+      >
         <div
-          className="scrollable"
           style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            paddingRight: 4,
+            height: "100%",
+            padding: "12px 16px 16px",
             display: "flex",
             flexDirection: "column",
             gap: 12,
+            boxSizing: "border-box",
+            background: "#0b1220",
+            borderTop: "1px solid #1f2937",
           }}
         >
           <div
+            className="scrollable"
             style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-            }}
-          >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#e6f2ff",
-              }}
-            >
-              Loops Library
-            </h3>
-            <span
-              style={{
-                fontSize: 12,
-                color: "#94a3b8",
-              }}
-            >
-              Save and edit loops in Track view, then place them onto the song
-              timeline.
-            </span>
-          </div>
-          {patternGroups.length === 0 ? (
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 8,
-                border: "1px dashed #475569",
-                color: "#94a3b8",
-                fontSize: 13,
-              }}
-            >
-              No loops yet. Create loops in Track view to start arranging
-              the song.
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              {patternGroups.map((group) => {
-                const trackLabels = group.tracks
-                  .map((track) => track.name)
-                  .filter((name): name is string => Boolean(name));
-                const isActive = selectedGroupId === group.id;
-                return (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => onSelectLoop(group.id)}
-                    style={{
-                      borderRadius: 10,
-                      border: `1px solid ${isActive ? "#27E0B0" : "#333"}`,
-                      background: isActive
-                        ? "rgba(39, 224, 176, 0.12)"
-                        : "#121827",
-                      padding: 12,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      textAlign: "left",
-                      cursor: "pointer",
-                      color: "#e6f2ff",
-                    }}
-                    title={`Open ${group.name} in Track view`}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span aria-hidden="true" style={{ fontSize: 16 }}>
-                        📼
-                      </span>
-                      <span style={{ fontWeight: 600 }}>{group.name}</span>
-                      <div style={{ marginLeft: "auto" }} />
-                    </div>
-                    {trackLabels.length === 0 ? (
-                      <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                        This loop is empty — add instruments in Tracks view
-                        first.
-                      </span>
-                    ) : (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                        }}
-                      >
-                        {trackLabels.map((name) => (
-                          <span
-                            key={`${group.id}-${name}`}
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              background: "#1f2532",
-                              border: "1px solid #333",
-                              fontSize: 12,
-                            }}
-                          >
-                            {name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ) : null}
-    </div>
-  </div>
-
-  <BottomDock>
-    <div
-      style={{
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "0 16px",
-        borderTop: "1px solid #1f2937",
-        background: "#0b1220",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <label>BPM</label>
-        <select
-          value={bpm}
-          onChange={(e) => handleBpmChange(parseInt(e.target.value, 10))}
-          style={{
-            padding: 8,
-            borderRadius: 8,
-            background: "#121827",
-            color: "white",
-          }}
-        >
-          {[90, 100, 110, 120, 130].map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div style={{ flex: 1 }} />
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <button
-          aria-label={transportLabel}
-          onPointerDown={handleToggleTransport}
-          onPointerUp={(e) => e.currentTarget.blur()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 8,
-            border: "1px solid #333",
-            background: isPlaying ? "#E02749" : "#27E0B0",
-            color: isPlaying ? "#ffe4e6" : "#1F2532",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 24,
-          }}
-        >
-          <span className="material-symbols-outlined">
-            {transportIcon}
-          </span>
-        </button>
-      </div>
-    </div>
-  </BottomDock>
-
-  <BottomDock
-    heightVar="var(--controls-h)"
-    show={isPlayInstrumentOpen}
-    inertWhenHidden
-  >
-    <div
-      style={{
-        height: "100%",
-        padding: "12px 16px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        boxSizing: "border-box",
-        background: "#0b1220",
-        borderTop: "1px solid #1f2937",
-      }}
-    >
-      <div
-        className="scrollable"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          borderRadius: 12,
+              flex: 1,
+              minHeight: 0,
+              borderRadius: 12,
           border: "1px solid #2a3344",
           background: "#111827",
           padding: 16,

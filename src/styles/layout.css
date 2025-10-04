@@ -2,9 +2,14 @@
   --topbar-h: 56px;
   --transport-h: 76px;
   --controls-h: clamp(220px, 38dvh, 420px);
+  --hpad: 16px;
+  --gap-sm: 8px;
+  --timeline-collapsed-h: clamp(180px, 42dvh, 420px);
 }
 @supports (height: 100dvh){
   .vh{ height: 100dvh; }
 }
 .safe-top{ padding-top: env(safe-area-inset-top); }
 .safe-bottom{ padding-bottom: env(safe-area-inset-bottom); }
+.scroll-y{ overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.min-h-0{ min-height: 0; }
