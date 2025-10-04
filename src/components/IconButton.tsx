@@ -5,6 +5,7 @@ import {
 } from "react";
 
 export type IconButtonTone = "default" | "accent" | "danger" | "ghost";
+export type IconButtonSize = "default" | "compact";
 
 interface IconButtonProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
@@ -14,15 +15,13 @@ interface IconButtonProps
   iconSize?: number;
   showLabel?: boolean;
   description?: string;
+  size?: IconButtonSize;
 }
 
 const baseStyle: CSSProperties = {
-  minWidth: 44,
-  minHeight: 44,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  borderRadius: 12,
   border: "1px solid #2f384a",
   background: "#111827",
   color: "#e2e8f0",
@@ -30,13 +29,33 @@ const baseStyle: CSSProperties = {
   transition: "background 0.2s ease, color 0.2s ease, border 0.2s ease",
   fontSize: 0,
   lineHeight: 0,
-  padding: 0,
   touchAction: "manipulation",
 };
 
-const iconOnlyStyle: CSSProperties = {
-  padding: baseStyle.padding,
-  gap: 0,
+const sizeStyles: Record<IconButtonSize, CSSProperties> = {
+  default: {
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: 12,
+  },
+  compact: {
+    width: 36,
+    height: 36,
+    minWidth: 36,
+    minHeight: 36,
+    borderRadius: 8,
+  },
+};
+
+const iconPaddingStyles: Record<IconButtonSize, CSSProperties> = {
+  default: {
+    padding: 0,
+    gap: 0,
+  },
+  compact: {
+    padding: 8,
+    gap: 0,
+  },
 };
 
 const iconWithLabelStyle: CSSProperties = {
@@ -77,6 +96,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       iconSize = 24,
       showLabel = false,
       description,
+      size = "default",
       style,
       disabled,
       title,
@@ -85,8 +105,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     ref
   ) {
     const hasTextContent = showLabel || Boolean(description);
+    const sizeStyle = sizeStyles[size] ?? sizeStyles.default;
+    const iconOnlyStyle = iconPaddingStyles[size] ?? iconPaddingStyles.default;
+
     const combinedStyle: CSSProperties = {
       ...baseStyle,
+      ...sizeStyle,
       ...(toneStyles[tone] ?? toneStyles.default),
       ...(hasTextContent ? iconWithLabelStyle : iconOnlyStyle),
       ...(style ?? {}),

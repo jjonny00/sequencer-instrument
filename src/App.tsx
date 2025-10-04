@@ -42,6 +42,7 @@ import {
 import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
+import { OverflowMenuButton } from "./components/OverflowMenuButton";
 import { SavedSongsList } from "./components/SavedSongsList";
 import ViewHeader, {
   getViewHeaderSections,
@@ -2436,21 +2437,25 @@ export default function App() {
               <IconButton
                 icon="save"
                 label="Save song"
+                size="compact"
                 onClick={openSaveProjectModal}
               />
-              <IconButton
-                icon="folder_open"
-                label="Load song"
-                onClick={openLoadProjectModal}
-              />
-              <IconButton
-                icon="file_download"
-                label="Open export options"
-                onClick={() => {
-                  setAudioExportMessage("Preparing export…");
-                  setIsExportModalOpen(true);
-                }}
-                disabled={isAudioExporting}
+              <OverflowMenuButton
+                label="More song actions"
+                items={[
+                  {
+                    label: "Load song",
+                    onSelect: openLoadProjectModal,
+                  },
+                  {
+                    label: "Export",
+                    onSelect: () => {
+                      setAudioExportMessage("Preparing export…");
+                      setIsExportModalOpen(true);
+                    },
+                    disabled: isAudioExporting,
+                  },
+                ]}
               />
             </>
           )

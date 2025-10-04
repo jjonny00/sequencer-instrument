@@ -20,7 +20,7 @@ type ViewHeaderContentProps = Omit<ViewHeaderProps, "variant">;
 const SECTION_CONTAINER_STYLE: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 12,
+  gap: 8,
 };
 
 const STACKED_WRAPPER_STYLE: CSSProperties = {
@@ -50,9 +50,9 @@ const BACK_BUTTON_STYLE: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  padding: "0 16px",
-  height: 40,
-  borderRadius: 999,
+  padding: "0 14px",
+  height: 36,
+  borderRadius: 18,
   border: "1px solid #1f2937",
   background: "#0f172a",
   color: "#e2e8f0",
@@ -66,11 +66,13 @@ const BACK_BUTTON_STYLE: CSSProperties = {
 const SEGMENTED_WRAPPER_STYLE: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
-  padding: 4,
-  borderRadius: 999,
+  gap: 8,
+  padding: "0 4px",
+  borderRadius: 20,
   border: "1px solid #1f2937",
-  background: "#0b1220",
+  background: "rgba(11, 18, 32, 0.88)",
+  height: 36,
+  boxSizing: "border-box",
 };
 
 const SEGMENT_BUTTON_STYLE: CSSProperties = {
@@ -79,12 +81,12 @@ const SEGMENT_BUTTON_STYLE: CSSProperties = {
   justifyContent: "center",
   minWidth: 96,
   padding: "0 18px",
-  height: 32,
-  borderRadius: 999,
+  height: "100%",
+  borderRadius: 18,
   border: "1px solid transparent",
   background: "transparent",
   color: "#94a3b8",
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 600,
   letterSpacing: 0.3,
   cursor: "pointer",
@@ -95,7 +97,7 @@ const SEGMENT_BUTTON_STYLE: CSSProperties = {
 const ACTIONS_WRAPPER_STYLE: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 12,
+  gap: 8,
 };
 
 const SECTION_LEFT_STYLE: CSSProperties = {
