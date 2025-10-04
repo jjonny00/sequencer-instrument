@@ -75,6 +75,129 @@ const APPROXIMATE_ROW_OFFSET = 28;
 const TIMELINE_VISIBLE_ROWS_COLLAPSED = 1.5;
 const TIMELINE_VISIBLE_ROWS_EXPANDED = 3;
 
+const TIMELINE_TOOLBAR_GAP = 12;
+const TIMELINE_CONTROL_HEIGHT = 36;
+const TRANSPORT_CONTROL_HEIGHT = 44;
+
+const buildAccentButtonStyle = (
+  enabled: boolean,
+  height: number = TIMELINE_CONTROL_HEIGHT
+): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0 18px",
+  height,
+  borderRadius: 999,
+  border: `1px solid ${enabled ? "#27E0B0" : "#273041"}`,
+  background: enabled ? "#27E0B0" : "#273041",
+  color: enabled ? "#0b1220" : "#475569",
+  fontSize: 13,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  cursor: enabled ? "pointer" : "not-allowed",
+  boxShadow: enabled ? "0 8px 24px rgba(39,224,176,0.35)" : "none",
+  whiteSpace: "nowrap",
+  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
+});
+
+const buildSecondaryButtonStyle = (
+  height: number = TIMELINE_CONTROL_HEIGHT
+): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0 16px",
+  height,
+  borderRadius: 999,
+  border: "1px solid #1f2937",
+  background: "#121a2c",
+  color: "#e2e8f0",
+  fontSize: 13,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
+});
+
+const TIMELINE_TOGGLE_BUTTON_STYLE: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "0 16px",
+  height: TIMELINE_CONTROL_HEIGHT,
+  borderRadius: 999,
+  border: "1px solid #1f2937",
+  background: "#0f172a",
+  color: "#e2e8f0",
+  fontSize: 14,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  cursor: "pointer",
+  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
+};
+
+const TRANSPORT_CONTAINER_STYLE: CSSProperties = {
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+  paddingLeft: "calc(16px + env(safe-area-inset-left))",
+  paddingRight: "calc(16px + env(safe-area-inset-right))",
+  borderTop: "1px solid #1f2937",
+  background: "#0b1220",
+  boxSizing: "border-box",
+};
+
+const buildTransportPlayButtonStyle = (isPlaying: boolean): CSSProperties => ({
+  width: TRANSPORT_CONTROL_HEIGHT,
+  height: TRANSPORT_CONTROL_HEIGHT,
+  borderRadius: TRANSPORT_CONTROL_HEIGHT / 2,
+  border: "none",
+  background: isPlaying ? "#E02749" : "#27E0B0",
+  color: isPlaying ? "#ffe4e6" : "#0b1220",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 26,
+  cursor: "pointer",
+  boxShadow: isPlaying
+    ? "0 8px 24px rgba(224,39,73,0.32)"
+    : "0 8px 24px rgba(39,224,176,0.32)",
+  transition: "background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease",
+});
+
+const BPM_SELECT_WRAPPER_STYLE: CSSProperties = {
+  position: "relative",
+  display: "inline-flex",
+  alignItems: "center",
+};
+
+const BPM_SELECT_STYLE: CSSProperties = {
+  appearance: "none",
+  WebkitAppearance: "none",
+  padding: "0 40px 0 18px",
+  height: TRANSPORT_CONTROL_HEIGHT,
+  borderRadius: 12,
+  border: "1px solid #1f2937",
+  background: "#111827",
+  color: "#e2e8f0",
+  fontSize: 14,
+  fontWeight: 600,
+  letterSpacing: 0.3,
+  fontVariantNumeric: "tabular-nums",
+  cursor: "pointer",
+};
+
+const BPM_SELECT_ICON_STYLE: CSSProperties = {
+  position: "absolute",
+  right: 14,
+  pointerEvents: "none",
+  color: "#94a3b8",
+  fontSize: 20,
+};
+
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
 const TICKS_PER_MEASURE = TICKS_PER_SIXTEENTH * 16;
@@ -1703,73 +1826,52 @@ export function SongView({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            gap: TIMELINE_TOOLBAR_GAP,
           }}
         >
-          <h2
+          <button
+            type="button"
+            style={TIMELINE_TOGGLE_BUTTON_STYLE}
+            onClick={() => setTimelineExpanded((previous) => !previous)}
+            aria-expanded={isTimelineExpanded}
+            aria-label={timelineToggleLabel}
+          >
+            <span style={{ fontSize: 14, fontWeight: 600 }}>Timeline</span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18, lineHeight: 1 }}
+              aria-hidden="true"
+            >
+              {isTimelineExpanded ? "expand_less" : "expand_more"}
+            </span>
+          </button>
+          <div
             style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#e6f2ff",
+              display: "flex",
+              alignItems: "center",
+              gap: TIMELINE_TOOLBAR_GAP,
+              marginLeft: "auto",
             }}
           >
-            Timeline
-          </h2>
-          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-            <IconButton
-              icon={isTimelineExpanded ? "unfold_less" : "unfold_more"}
-              label={timelineToggleLabel}
-              onClick={() => setTimelineExpanded((previous) => !previous)}
-              style={{ minWidth: 0 }}
-            />
             <button
+              type="button"
               onClick={handleAddPerformanceTrack}
               disabled={!onAddPerformanceTrack}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 20,
-                border: "1px solid #27E0B0",
-                background: onAddPerformanceTrack ? "#27E0B0" : "#273041",
-                color: onAddPerformanceTrack ? "#0b1220" : "#475569",
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                whiteSpace: "nowrap",
-                cursor: onAddPerformanceTrack ? "pointer" : "not-allowed",
-                boxShadow: onAddPerformanceTrack
-                  ? "0 2px 8px rgba(39,224,176,0.35)"
-                  : "none",
-                transition: "background 0.2s ease, border 0.2s ease",
-              }}
+              style={buildAccentButtonStyle(Boolean(onAddPerformanceTrack))}
             >
               + Track
             </button>
             <button
+              type="button"
               onClick={handleAddRow}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
+              style={buildSecondaryButtonStyle()}
             >
               + Row
             </button>
             <button
+              type="button"
               onClick={handleAddSection}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                border: "1px solid #333",
-                background: "#273041",
-                color: "#e6f2ff",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
+              style={buildSecondaryButtonStyle()}
             >
               + Sequence
             </button>
@@ -2108,64 +2210,62 @@ export function SongView({
   </div>
 
   <BottomDock>
-    <div
-      style={{
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "0 16px",
-        borderTop: "1px solid #1f2937",
-        background: "#0b1220",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <label>BPM</label>
-        <select
-          value={bpm}
-          onChange={(e) => handleBpmChange(parseInt(e.target.value, 10))}
-          style={{
-            padding: 8,
-            borderRadius: 8,
-            background: "#121827",
-            color: "white",
-          }}
-        >
-          {[90, 100, 110, 120, 130].map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div style={{ flex: 1 }} />
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+    <div style={TRANSPORT_CONTAINER_STYLE}>
+      <div style={{ display: "flex", alignItems: "center" }}>
         <button
           aria-label={transportLabel}
           onPointerDown={handleToggleTransport}
           onPointerUp={(e) => e.currentTarget.blur()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 8,
-            border: "1px solid #333",
-            background: isPlaying ? "#E02749" : "#27E0B0",
-            color: isPlaying ? "#ffe4e6" : "#1F2532",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 24,
-          }}
+          style={buildTransportPlayButtonStyle(isPlaying)}
         >
-          <span className="material-symbols-outlined">
+          <span className="material-symbols-outlined" aria-hidden="true">
             {transportIcon}
           </span>
+        </button>
+      </div>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          justifyContent: "center",
+          minWidth: 0,
+        }}
+      >
+        <div style={BPM_SELECT_WRAPPER_STYLE}>
+          <select
+            value={bpm}
+            onChange={(event) =>
+              handleBpmChange(parseInt(event.target.value, 10))
+            }
+            style={BPM_SELECT_STYLE}
+            aria-label="Tempo (beats per minute)"
+          >
+            {[90, 100, 110, 120, 130].map((value) => (
+              <option key={value} value={value}>
+                {`${value} BPM`}
+              </option>
+            ))}
+          </select>
+          <span
+            className="material-symbols-outlined"
+            style={BPM_SELECT_ICON_STYLE}
+            aria-hidden="true"
+          >
+            expand_more
+          </span>
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          onClick={handleAddPerformanceTrack}
+          disabled={!onAddPerformanceTrack}
+          style={buildAccentButtonStyle(
+            Boolean(onAddPerformanceTrack),
+            TRANSPORT_CONTROL_HEIGHT
+          )}
+        >
+          + Track
         </button>
       </div>
     </div>

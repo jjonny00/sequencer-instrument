@@ -43,7 +43,10 @@ import { AddTrackModal } from "./AddTrackModal";
 import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { SavedSongsList } from "./components/SavedSongsList";
-import { ViewHeader } from "./components/ViewHeader";
+import ViewHeader, {
+  getViewHeaderSections,
+  type ViewHeaderProps,
+} from "./components/ViewHeader";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
@@ -2428,45 +2431,50 @@ export default function App() {
     [tracks, addTrackModalState.mode, addTrackModalState.targetTrackId]
   );
 
-  const renderViewHeader = () => (
-    <ViewHeader
-      viewMode={viewMode}
-      onBack={handleReturnToSongSelection}
-      onSelectTrack={() => {
-        skipLoopDraftRestoreRef.current = false;
-        setViewMode("track");
-      }}
-      onSelectSong={() => {
-        setEditing(null);
-        setViewMode("song");
-      }}
-      actions={
-        viewMode === "song" && !isSongInstrumentPanelOpen ? (
-          <>
-            <IconButton
-              icon="save"
-              label="Save song"
-              onClick={openSaveProjectModal}
-            />
-            <IconButton
-              icon="folder_open"
-              label="Load song"
-              onClick={openLoadProjectModal}
-            />
-            <IconButton
-              icon="file_download"
-              label="Open export options"
-              onClick={() => {
-                setAudioExportMessage("Preparing export…");
-                setIsExportModalOpen(true);
-              }}
-              disabled={isAudioExporting}
-            />
-          </>
-        ) : undefined
-      }
-    />
-  );
+  const viewHeaderProps: ViewHeaderProps = {
+    viewMode,
+    onBack: handleReturnToSongSelection,
+    onSelectTrack: () => {
+      skipLoopDraftRestoreRef.current = false;
+      setViewMode("track");
+    },
+    onSelectSong: () => {
+      setEditing(null);
+      setViewMode("song");
+    },
+    actions:
+      viewMode === "song" && !isSongInstrumentPanelOpen
+        ? (
+            <>
+              <IconButton
+                icon="save"
+                label="Save song"
+                onClick={openSaveProjectModal}
+              />
+              <IconButton
+                icon="folder_open"
+                label="Load song"
+                onClick={openLoadProjectModal}
+              />
+              <IconButton
+                icon="file_download"
+                label="Open export options"
+                onClick={() => {
+                  setAudioExportMessage("Preparing export…");
+                  setIsExportModalOpen(true);
+                }}
+                disabled={isAudioExporting}
+              />
+            </>
+          )
+        : undefined,
+  };
+
+  const viewHeaderSections = getViewHeaderSections(viewHeaderProps);
+
+  const renderViewHeader = (
+    variant: ViewHeaderProps["variant"] = "stacked"
+  ) => <ViewHeader {...viewHeaderProps} variant={variant} />;
 
   const handleNewSongClick = () => {
     unlockAndRun(createNewProject);
@@ -3348,7 +3356,9 @@ export default function App() {
               </div>
             </>
           }
-          topBarCenter={renderViewHeader()}
+          topBarLeft={viewHeaderSections.left}
+          topBarCenter={viewHeaderSections.center}
+          topBarRight={viewHeaderSections.right ?? undefined}
           transport={renderLoopTransportControls()}
           controls={renderLoopInstrumentPanelContent()}
         >
