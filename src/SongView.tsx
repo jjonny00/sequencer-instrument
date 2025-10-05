@@ -1199,7 +1199,7 @@ export function SongView({
     return totalRowHeight + totalRowGap + inlineAddRowGap + inlineAddRowHeight;
   }, [timelineDisplayRows.length, slotMinHeight]);
 
-  const timelineHeightPx = useMemo(() => {
+  const timelineBodyMinHeight = useMemo(() => {
     if (timelineContentHeight <= 0) {
       return undefined;
     }
@@ -2082,7 +2082,6 @@ export function SongView({
                       style={{
                         width: timelineWidthPx ?? "100%",
                         minWidth: timelineWidthPx,
-                        minHeight: timelineHeightPx,
                       }}
                     >
                       <div
@@ -2182,53 +2181,63 @@ export function SongView({
                   minWidth: timelineWidthPx,
                 }}
               >
-                <TimelineGrid
-                  rows={timelineDisplayRows}
-                  columns={timelineColumns}
-                  renderCell={renderTimelineCell}
-                  renderRow={(row, cols, cellRenderer) =>
-                    renderTimelineRow(row, cols, cellRenderer)
-                  }
-                />
-              </div>
-              <div style={{ marginTop: 8 }}>
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "stretch",
+                    flexDirection: "column",
                     gap: SLOT_GAP,
+                    ...(timelineBodyMinHeight
+                      ? { minHeight: timelineBodyMinHeight }
+                      : {}),
                   }}
                 >
+                  <TimelineGrid
+                    rows={timelineDisplayRows}
+                    columns={timelineColumns}
+                    renderCell={renderTimelineCell}
+                    renderRow={(row, cols, cellRenderer) =>
+                      renderTimelineRow(row, cols, cellRenderer)
+                    }
+                  />
                   <div
                     style={{
-                      width: ROW_LABEL_WIDTH,
-                      flexShrink: 0,
                       display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      borderRadius: 6,
-                      border: "1px solid #2a3344",
-                      background: "#111827",
+                      alignItems: "stretch",
+                      gap: SLOT_GAP,
+                      flexShrink: 0,
                     }}
                   >
-                    <IconButton
-                      icon="add"
-                      label="Add row"
-                      onClick={handleAddRow}
-                      size="compact"
-                      style={addRowButtonStyle}
+                    <div
+                      style={{
+                        width: ROW_LABEL_WIDTH,
+                        flexShrink: 0,
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        borderRadius: 6,
+                        border: "1px solid #2a3344",
+                        background: "#111827",
+                      }}
+                    >
+                      <IconButton
+                        icon="add"
+                        label="Add row"
+                        onClick={handleAddRow}
+                        size="compact"
+                        style={addRowButtonStyle}
+                      />
+                    </div>
+                    <div
+                      style={{
+                        width: timelineWidthPx ?? "100%",
+                        minWidth: timelineWidthPx,
+                        borderRadius: 6,
+                        border: "1px solid #2a3344",
+                        background: "#161d2b",
+                        minHeight: slotMinHeight,
+                      }}
                     />
                   </div>
-                  <div
-                    style={{
-                      width: timelineWidthPx ?? "100%",
-                      minWidth: timelineWidthPx,
-                      borderRadius: 6,
-                      border: "1px solid #2a3344",
-                      background: "#161d2b",
-                      minHeight: slotMinHeight,
-                    }}
-                  />
                 </div>
               </div>
             </div>
