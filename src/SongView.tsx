@@ -1098,8 +1098,8 @@ export function SongView({
   const slotGap = SLOT_CONTENT_GAP;
   const isTrackSelected = isPlayInstrumentOpen;
   const addLoopButtonStyle: CSSProperties = {
-    width: SLOT_WIDTH,
-    minWidth: SLOT_WIDTH,
+    width: slotMinHeight,
+    minWidth: slotMinHeight,
     height: slotMinHeight,
     minHeight: slotMinHeight,
     borderRadius: 8,
@@ -1957,7 +1957,7 @@ export function SongView({
                                   letterSpacing: 0.3,
                                 }}
                               >
-                                Loop 1
+                                Seq 1
                               </div>
                             );
                           }
@@ -1973,6 +1973,7 @@ export function SongView({
                       style={{
                         ...addLoopButtonStyle,
                         flexShrink: 0,
+                        marginLeft: SLOT_GAP,
                       }}
                     />
                   </div>
@@ -2008,18 +2009,36 @@ export function SongView({
                           width: ROW_LABEL_WIDTH,
                           flexShrink: 0,
                           borderRight: "1px solid #2a3344",
-                          background: "#0f172a",
-                          color: "#64748b",
+                          background: "#111827",
+                          color: "#f8fafc",
                           fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: 0.6,
-                          textTransform: "uppercase",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.6,
                         }}
                       >
-                        Row 1
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: 999,
+                              background: "#334155",
+                            }}
+                          />
+                          <span>1</span>
+                        </div>
                       </div>
                       <div
                         style={{
@@ -2051,22 +2070,38 @@ export function SongView({
                                 background: "#0b111d",
                                 display: "flex",
                                 flexDirection: "column",
-                                justifyContent: "center",
-                                alignItems: "flex-start",
-                                gap: 4,
+                                alignItems: "stretch",
+                                justifyContent: "space-between",
+                                gap: slotGap,
                                 padding: slotPadding,
                                 color: "#94a3b8",
                               }}
                             >
-                              <span
+                              <div
                                 style={{
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  color: "#cbd5f5",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 6,
                                 }}
                               >
-                                Empty
-                              </span>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: "#cbd5f5",
+                                  }}
+                                >
+                                  Empty
+                                </span>
+                                <div
+                                  style={{
+                                    height: 18,
+                                    borderRadius: 999,
+                                    border: "1px dashed #1f2937",
+                                    background: "#10192c",
+                                  }}
+                                />
+                              </div>
                               <span style={{ fontSize: 11, color: "#64748b" }}>
                                 Tap to assign
                               </span>
@@ -2102,6 +2137,9 @@ export function SongView({
                       display: "flex",
                       justifyContent: "center",
                       alignItems: "center",
+                      borderRadius: 6,
+                      border: "1px solid #2a3344",
+                      background: "#111827",
                     }}
                   >
                     <IconButton
