@@ -77,6 +77,7 @@ const SLOT_PADDING = "4px 10px";
 const TIMELINE_TOOLBAR_GAP = 12;
 const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
+const TIMELINE_ROW_MARGIN = 8;
 
 const TIMELINE_LABEL_STYLE: CSSProperties = {
   fontSize: 14,
@@ -1194,9 +1195,16 @@ export function SongView({
     const rowCount = Math.max(1, timelineDisplayRows.length);
     const totalRowHeight = rowCount * slotMinHeight;
     const totalRowGap = Math.max(0, rowCount - 1) * SLOT_GAP;
+    const totalRowMargin = rowCount * TIMELINE_ROW_MARGIN;
     const inlineAddRowHeight = slotMinHeight;
     const inlineAddRowGap = SLOT_GAP;
-    return totalRowHeight + totalRowGap + inlineAddRowGap + inlineAddRowHeight;
+    return (
+      totalRowHeight +
+      totalRowGap +
+      totalRowMargin +
+      inlineAddRowGap +
+      inlineAddRowHeight
+    );
   }, [timelineDisplayRows.length, slotMinHeight]);
 
   const timelineBodyMinHeight = useMemo(() => {
