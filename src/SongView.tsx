@@ -77,6 +77,10 @@ const SLOT_PADDING = "4px 10px";
 const TIMELINE_TOOLBAR_GAP = 12;
 const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
+const TIMELINE_ROW_MARGIN = 8;
+// Matches --transport-h defined in src/styles/layout.css so the scroll height
+// reserves space for the sticky transport controls.
+const STICKY_BOTTOM_BAR_HEIGHT = 76;
 
 const TIMELINE_LABEL_STYLE: CSSProperties = {
   fontSize: 14,
@@ -196,7 +200,35 @@ interface TimelineColumn {
   id: string;
   index: number;
   hasSection: boolean;
+  isStarter: boolean;
 }
+
+const buildDisplayColumns = (
+  columns: TimelineColumn[],
+  targetCount: number,
+  idPrefix: string
+): TimelineColumn[] => {
+  if (targetCount <= 0) {
+    return [];
+  }
+  if (columns.length >= targetCount) {
+    return columns.slice(0, targetCount);
+  }
+  const baseColumns = columns.slice(0, targetCount);
+  const extraColumns = Array.from(
+    { length: targetCount - columns.length },
+    (_, index) => {
+      const columnIndex = columns.length + index;
+      return {
+        id: `${idPrefix}-${columnIndex}`,
+        index: columnIndex,
+        hasSection: false,
+        isStarter: columns.length === 0 && index === 0,
+      } satisfies TimelineColumn;
+    }
+  );
+  return [...baseColumns, ...extraColumns];
+};
 
 interface TimelineRowItem {
   id: string;
@@ -225,6 +257,7 @@ interface TimelineRowItem {
   performanceHighlightRange?: { start: number; end: number; color: string };
   combinedPerformanceNotes: PerformanceNote[];
   rowLabelTitle: string;
+  isPlaceholder?: boolean;
 }
 
 const toTicks = (value: string | number | undefined | null): number => {
@@ -737,22 +770,6 @@ export function SongView({
     ghostColumnCount
   );
 
-  const timelineContentWidth = useMemo(() => {
-    const columns = Math.max(1, effectiveColumnCount);
-    const totalSlotWidth = columns * SLOT_WIDTH;
-    const totalGapWidth = Math.max(0, columns - 1) * SLOT_GAP;
-    return totalSlotWidth + totalGapWidth;
-  }, [effectiveColumnCount]);
-
-  const timelineWidthStyle = useMemo(() => {
-    if (timelineContentWidth <= 0) {
-      return "100%";
-    }
-    return `max(100%, ${timelineContentWidth}px)`;
-  }, [timelineContentWidth]);
-
-
-
   useEffect(() => {
     if (!editingSlot) return;
     if (patternGroups.length === 0) {
@@ -825,7 +842,7 @@ export function SongView({
     [setSongRows, setEditingSlot]
   );
 
-  const handleAddRow = () => {
+  const handleAddRow = useCallback(() => {
     setSongRows((rows) => {
       const maxColumns = rows.reduce(
         (max, row) => Math.max(max, row.slots.length),
@@ -837,7 +854,18 @@ export function SongView({
       }
       return [...rows, newRow];
     });
-  };
+  }, [setSongRows]);
+
+  const handleEmptyPlaceholderClick = useCallback(() => {
+    if (songRows.length > 0) return;
+    handleAddRow();
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        if (patternGroups.length === 0) return;
+        setEditingSlot({ rowIndex: 0, columnIndex: 0 });
+      }, 0);
+    }
+  }, [handleAddRow, patternGroups.length, setEditingSlot, songRows.length]);
 
   const handleAssignSlot = (
     rowIndex: number,
@@ -1079,21 +1107,141 @@ export function SongView({
   }, [timelineRows, sectionCount]);
 
   const timelineColumns = useMemo<TimelineColumn[]>(
-    () =>
-      Array.from({ length: timelineColumnCount }, (_, index) => ({
+    () => {
+      const hasSections = sectionCount > 0;
+      return Array.from({ length: timelineColumnCount }, (_, index) => ({
         id: `timeline-column-${index}`,
         index,
         hasSection: index < sectionCount,
-      })),
+        isStarter: !hasSections && index === 0,
+      }));
+    },
     [timelineColumnCount, sectionCount]
   );
 
-  const hasPerformanceRow = songRows.some((row) => Boolean(row.performanceTrackId));
-  const showEmptyTimeline = sectionCount === 0 && !hasPerformanceRow;
+  const timelineContentWidth = useMemo(() => {
+    const columnCount = Math.max(1, timelineColumns.length);
+    const totalSlotWidth = columnCount * SLOT_WIDTH;
+    const totalGapWidth = Math.max(0, columnCount - 1) * SLOT_GAP;
+    const addLoopColumnWidth = SLOT_MIN_HEIGHT;
+    const addLoopGapWidth = SLOT_GAP;
+    return (
+      totalSlotWidth + totalGapWidth + addLoopColumnWidth + addLoopGapWidth
+    );
+  }, [timelineColumns.length]);
+
+  const timelineWidthPx = useMemo(() => {
+    if (timelineContentWidth <= 0) {
+      return undefined;
+    }
+    return `${timelineContentWidth}px`;
+  }, [timelineContentWidth]);
+
+  const timelineHeaderScrollableWidth = useMemo(() => {
+    if (timelineContentWidth <= 0) {
+      return undefined;
+    }
+    const labelColumnGap = SLOT_GAP;
+    return ROW_LABEL_WIDTH + labelColumnGap + timelineContentWidth;
+  }, [timelineContentWidth]);
+
+  const timelineHeaderWidthPx = useMemo(() => {
+    if (!timelineHeaderScrollableWidth || timelineHeaderScrollableWidth <= 0) {
+      return undefined;
+    }
+    return `${timelineHeaderScrollableWidth}px`;
+  }, [timelineHeaderScrollableWidth]);
+
+  const showPlaceholderCell = songRows.length === 0 && sectionCount === 0;
+  const placeholderTimelineRow = useMemo(() => {
+    if (!showPlaceholderCell) {
+      return null;
+    }
+    return {
+      id: "timeline-row-placeholder",
+      row: createSongRow(1),
+      rowIndex: 0,
+      maxColumns: 1,
+      safeColumnCount: 1,
+      rowMuted: false,
+      rowSolo: false,
+      rowAccent: null,
+      labelBackground: "#111827",
+      rowSelected: false,
+      isPerformanceRow: false,
+      isRecordingRow: false,
+      isArmedRow: false,
+      rowGhostDisplayNotes: [],
+      rowGhostNoteSet: undefined,
+      performanceTrack: undefined,
+      performanceAccent: null,
+      performanceStatusLabel: null,
+      performanceInstrumentLabel: null,
+      performanceDescription: null,
+      performanceHasContent: false,
+      totalPerformanceNotes: 0,
+      performanceTextColor: "#94a3b8",
+      performanceHighlightRange: undefined,
+      combinedPerformanceNotes: [],
+      rowLabelTitle: "Tap the + button to add a row",
+      isPlaceholder: true,
+    } satisfies TimelineRowItem;
+  }, [showPlaceholderCell]);
+  const timelineDisplayRows = placeholderTimelineRow
+    ? [placeholderTimelineRow]
+    : timelineRows;
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
+
+  const timelineContentHeight = useMemo(() => {
+    const rowCount = Math.max(1, timelineDisplayRows.length);
+    const totalRowHeight = rowCount * slotMinHeight;
+    const totalRowGap = Math.max(0, rowCount - 1) * SLOT_GAP;
+    const totalRowMargin = rowCount * TIMELINE_ROW_MARGIN;
+    const inlineAddRowHeight = slotMinHeight;
+    const inlineAddRowGap = SLOT_GAP;
+    const stickyBottomBarBuffer = STICKY_BOTTOM_BAR_HEIGHT;
+    return (
+      totalRowHeight +
+      totalRowGap +
+      totalRowMargin +
+      inlineAddRowGap +
+      inlineAddRowHeight +
+      stickyBottomBarBuffer
+    );
+  }, [timelineDisplayRows.length, slotMinHeight]);
+
+  const timelineBodyMinHeight = useMemo(() => {
+    if (timelineContentHeight <= 0) {
+      return undefined;
+    }
+    return `${timelineContentHeight}px`;
+  }, [timelineContentHeight]);
+
   const isTrackSelected = isPlayInstrumentOpen;
+  const addLoopButtonStyle: CSSProperties = {
+    width: slotMinHeight,
+    minWidth: slotMinHeight,
+    height: slotMinHeight,
+    minHeight: slotMinHeight,
+    borderRadius: 8,
+    border: "1px solid #273041",
+    background: "#0b111d",
+    color: "#27E0B0",
+    boxShadow: "none",
+  };
+  const addRowButtonStyle: CSSProperties = {
+    width: ROW_LABEL_WIDTH,
+    minWidth: ROW_LABEL_WIDTH,
+    height: slotMinHeight,
+    minHeight: slotMinHeight,
+    borderRadius: 8,
+    border: "1px solid #273041",
+    background: "#0f172a",
+    color: "#27E0B0",
+    boxShadow: "none",
+  };
   const timelineRegionFlex =
     isTrackSelected && !isTimelineExpanded
       ? "0 0 var(--timeline-collapsed-h)"
@@ -1230,9 +1378,60 @@ export function SongView({
 
   const renderTimelineCell = useCallback(
     (timelineRow: TimelineRowItem, column: TimelineColumn) => {
+      const columnIndex = column.index;
+      const rowIndex = timelineRow.rowIndex;
+
+      if (timelineRow.isPlaceholder) {
+        if (columnIndex !== 0) {
+          return <div key={`slot-${rowIndex}-${columnIndex}`} />;
+        }
+
+        return (
+          <div key={`slot-${rowIndex}-${columnIndex}`}>
+            <button
+              type="button"
+              onClick={handleEmptyPlaceholderClick}
+              style={{
+                width: "100%",
+                minHeight: slotMinHeight,
+                borderRadius: 8,
+                border: "1px solid #1f2937",
+                background: "#0b111d",
+                color: "#94a3b8",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "stretch",
+                justifyContent: "space-between",
+                gap: slotGap,
+                padding: slotPadding,
+                textAlign: "left",
+                cursor: "pointer",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "#cbd5f5" }}>
+                  Empty
+                </span>
+              </div>
+              <div style={{ width: "100%" }}>
+                {renderLoopSlotPreview(undefined)}
+              </div>
+              <span style={{ fontSize: 11, color: "#64748b" }}>
+                Tap to assign
+              </span>
+            </button>
+          </div>
+        );
+      }
+
       const {
         row,
-        rowIndex,
         rowMuted,
         rowAccent,
         rowGhostDisplayNotes,
@@ -1242,7 +1441,6 @@ export function SongView({
         combinedPerformanceNotes,
         isRecordingRow,
       } = timelineRow;
-      const columnIndex = column.index;
       const groupId =
         columnIndex < row.slots.length ? row.slots[columnIndex] : null;
       const group = groupId ? patternGroupMap.get(groupId) : undefined;
@@ -1425,6 +1623,7 @@ export function SongView({
       handleAssignSlot,
       setEditingSlot,
       setRowSettingsIndex,
+      handleEmptyPlaceholderClick,
     ]
   );
 
@@ -1456,9 +1655,18 @@ export function SongView({
         performanceTextColor,
         performanceHighlightRange,
         safeColumnCount,
-        maxColumns,
         rowLabelTitle,
+        isPlaceholder,
       } = timelineRow;
+
+      const displayColumnCount = isPlaceholder
+        ? Math.max(1, columns.length)
+        : safeColumnCount;
+      const displayColumns = buildDisplayColumns(
+        columns,
+        displayColumnCount,
+        isPlaceholder ? "timeline-placeholder-column" : "timeline-fallback-column"
+      );
 
       let labelTimer: number | null = null;
       let longPressTriggered = false;
@@ -1506,15 +1714,19 @@ export function SongView({
           style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}
         >
           <div
-            onPointerDown={() => {
-              if (isPerformanceRow) {
-                handleSelectPerformanceTrackRow(
-                  row.performanceTrackId ?? null
-                );
-              } else if (playInstrumentRowTrackId) {
-                handleSelectPerformanceTrackRow(null);
-              }
-            }}
+            onPointerDown={
+              isPlaceholder
+                ? undefined
+                : () => {
+                    if (isPerformanceRow) {
+                      handleSelectPerformanceTrackRow(
+                        row.performanceTrackId ?? null
+                      );
+                    } else if (playInstrumentRowTrackId) {
+                      handleSelectPerformanceTrackRow(null);
+                    }
+                  }
+            }
             style={{
               display: "flex",
               alignItems: "stretch",
@@ -1527,28 +1739,38 @@ export function SongView({
             }}
           >
             <div
-              onPointerDown={handleLabelPointerDown}
-              onPointerUp={handleLabelPointerUp}
-              onPointerLeave={handleLabelPointerLeave}
-              onPointerCancel={handleLabelPointerLeave}
+              onPointerDown={
+                isPlaceholder ? undefined : handleLabelPointerDown
+              }
+              onPointerUp={isPlaceholder ? undefined : handleLabelPointerUp}
+              onPointerLeave={
+                isPlaceholder ? undefined : handleLabelPointerLeave
+              }
+              onPointerCancel={
+                isPlaceholder ? undefined : handleLabelPointerLeave
+              }
               style={{
                 width: ROW_LABEL_WIDTH,
                 flexShrink: 0,
                 borderRight: "1px solid #2a3344",
                 background: labelBackground,
-                color: rowMuted ? "#475569" : "#f8fafc",
+                color: isPlaceholder
+                  ? "#f8fafc"
+                  : rowMuted
+                  ? "#475569"
+                  : "#f8fafc",
                 fontSize: 11,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: 700,
                 textTransform: "uppercase",
-                cursor: "pointer",
+                cursor: isPlaceholder ? "default" : "pointer",
                 userSelect: "none",
                 letterSpacing: 0.6,
                 position: "relative",
               }}
-              title={rowLabelTitle}
+              title={isPlaceholder ? undefined : rowLabelTitle}
             >
               <div
                 style={{
@@ -1571,7 +1793,7 @@ export function SongView({
                   }}
                 />
                 <span>{rowIndex + 1}</span>
-                {rowSolo ? (
+                {rowSolo && !isPlaceholder ? (
                   <span
                     style={{
                       fontSize: 9,
@@ -1583,7 +1805,7 @@ export function SongView({
                     SOLO
                   </span>
                 ) : null}
-                {isPerformanceRow && (isRecordingRow || isArmedRow) ? (
+                {isPerformanceRow && (isRecordingRow || isArmedRow) && !isPlaceholder ? (
                   <span
                     style={{
                       fontSize: 9,
@@ -1604,7 +1826,7 @@ export function SongView({
                   </span>
                 ) : null}
               </div>
-              {rowSelected && (
+              {rowSelected && !isPlaceholder && (
                 <span
                   className="material-symbols-outlined"
                   style={{
@@ -1631,14 +1853,14 @@ export function SongView({
             >
               <div
                 style={{
-                  width: timelineWidthStyle,
-                  minWidth: timelineWidthStyle,
+                  width: "100%",
+                  minWidth: timelineWidthPx,
                 }}
               >
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: `repeat(${safeColumnCount}, ${SLOT_WIDTH}px)`,
+                    gridTemplateColumns: `repeat(${displayColumnCount}, ${SLOT_WIDTH}px)`,
                     gap: SLOT_GAP,
                     width: "100%",
                   }}
@@ -1646,7 +1868,7 @@ export function SongView({
                   {isPerformanceRow ? (
                     <div
                       key={`performance-span-${rowIndex}`}
-                      style={{ gridColumn: `1 / span ${safeColumnCount}` }}
+                      style={{ gridColumn: `1 / span ${displayColumnCount}` }}
                     >
                       <div
                         style={{
@@ -1717,7 +1939,7 @@ export function SongView({
                           {renderPerformanceSlotPreview(
                             performanceTrack,
                             0,
-                            safeColumnCount,
+                            displayColumnCount,
                             performanceAccent ?? rowAccent,
                             rowGhostDisplayNotes,
                             rowGhostNoteSet,
@@ -1740,9 +1962,9 @@ export function SongView({
                       </div>
                     </div>
                   ) : (
-                    columns
-                      .slice(0, maxColumns)
-                      .map((column) => renderCell(timelineRow, column))
+                    displayColumns.map((column) =>
+                      renderCell(timelineRow, column)
+                    )
                   )}
                 </div>
               </div>
@@ -1759,7 +1981,7 @@ export function SongView({
       handleSelectPerformanceTrackRow,
       playInstrumentRowTrackId,
       slotPadding,
-      timelineWidthStyle,
+      timelineWidthPx,
       slotMinHeight,
       slotGap,
       withAlpha,
@@ -1847,92 +2069,180 @@ export function SongView({
               className="scrollable"
               style={{
                 overflowX: "auto",
-                paddingBottom: 4,
                 height: "100%",
-                minHeight: "100%",
               }}
             >
-              {sectionCount > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
-                  <div style={{ flex: 1, overflow: "hidden" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: 8,
+                  minWidth: timelineHeaderWidthPx,
+                }}
+              >
+                <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: SLOT_GAP,
+                      width: "fit-content",
+                      minWidth: timelineWidthPx,
+                    }}
+                  >
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-                        gap: SLOT_GAP,
-                        width: timelineWidthStyle,
-                        minWidth: timelineWidthStyle,
+                        width: timelineWidthPx ?? "100%",
+                        minWidth: timelineWidthPx,
                       }}
                     >
-                      {timelineColumns
-                        .filter((column) => column.hasSection)
-                        .map((column) => (
-                          <button
-                            key={`delete-column-${column.index}`}
-                            type="button"
-                            onClick={() => handleDeleteColumn(column.index)}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "stretch",
+                          width: "100%",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${timelineColumns.length}, ${SLOT_WIDTH}px) ${SLOT_MIN_HEIGHT}px`,
+                            gap: SLOT_GAP,
+                            flex: "0 0 auto",
+                            minWidth: timelineWidthPx,
+                          }}
+                        >
+                          {timelineColumns.map((column) => {
+                            const loopLabel = `Loop ${String(
+                              column.index + 1
+                            ).padStart(2, "0")}`;
+                            if (column.hasSection) {
+                              return (
+                                <button
+                                  key={column.id}
+                                  type="button"
+                                  onClick={() => handleDeleteColumn(column.index)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    borderRadius: 16,
+                                    border: "1px solid #2a3344",
+                                    background: "#111827",
+                                    color: "#e2e8f0",
+                                    fontSize: 11,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 4,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{ fontSize: 14 }}
+                                  >
+                                    delete
+                                  </span>
+                                  <span>{loopLabel}</span>
+                                </button>
+                              );
+                            }
+                            if (column.isStarter) {
+                              return (
+                                <div
+                                  key={column.id}
+                                  style={{
+                                    borderRadius: 8,
+                                    border: "1px solid #273041",
+                                    background: "#0b111d",
+                                    color: "#94a3b8",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    letterSpacing: 0.3,
+                                  }}
+                                >
+                                  Loop 01
+                                </div>
+                              );
+                            }
+                            return <div key={column.id} />;
+                          })}
+                          <IconButton
+                            key="timeline-add-loop"
+                            icon="add"
+                            label="Add loop"
+                            onClick={handleAddSection}
+                            size="compact"
                             style={{
-                              padding: "4px 8px",
-                              borderRadius: 16,
-                              border: "1px solid #2a3344",
-                              background: "#111827",
-                              color: "#e2e8f0",
-                              fontSize: 11,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 4,
-                              cursor: "pointer",
+                              ...addLoopButtonStyle,
+                              justifySelf: "center",
+                              alignSelf: "stretch",
                             }}
-                          >
-                            <span
-                              className="material-symbols-outlined"
-                              style={{ fontSize: 14 }}
-                            >
-                              delete
-                            </span>
-                            <span>Seq {column.index + 1}</span>
-                          </button>
-                        ))}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              ) : null}
+              </div>
               <div
                 style={{
-                  width: timelineWidthStyle,
-                  minWidth: timelineWidthStyle,
+                  width: timelineWidthPx ?? "100%",
+                  minWidth: timelineWidthPx,
                 }}
               >
-                {showEmptyTimeline ? (
-                  <div
-                    style={{
-                      padding: 24,
-                      borderRadius: 8,
-                      border: "1px dashed #475569",
-                      color: "#94a3b8",
-                      fontSize: 13,
-                    }}
-                  >
-                    Add a sequence to start placing loops into the timeline.
-                  </div>
-                ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: SLOT_GAP,
+                    paddingBottom: STICKY_BOTTOM_BAR_HEIGHT,
+                    ...(timelineBodyMinHeight
+                      ? { minHeight: timelineBodyMinHeight }
+                      : {}),
+                  }}
+                >
                   <TimelineGrid
-                    rows={timelineRows}
+                    rows={timelineDisplayRows}
                     columns={timelineColumns}
                     renderCell={renderTimelineCell}
                     renderRow={(row, cols, cellRenderer) =>
                       renderTimelineRow(row, cols, cellRenderer)
                     }
                   />
-                )}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "stretch",
+                      gap: SLOT_GAP,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: ROW_LABEL_WIDTH,
+                        flexShrink: 0,
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        borderRadius: 6,
+                        border: "1px solid #2a3344",
+                        background: "#111827",
+                      }}
+                    >
+                      <IconButton
+                        icon="add"
+                        label="Add row"
+                        onClick={handleAddRow}
+                        size="compact"
+                        style={addRowButtonStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
