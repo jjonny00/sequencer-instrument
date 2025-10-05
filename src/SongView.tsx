@@ -826,7 +826,7 @@ export function SongView({
     [setSongRows, setEditingSlot]
   );
 
-  const handleAddRow = () => {
+  const handleAddRow = useCallback(() => {
     setSongRows((rows) => {
       const maxColumns = rows.reduce(
         (max, row) => Math.max(max, row.slots.length),
@@ -838,7 +838,18 @@ export function SongView({
       }
       return [...rows, newRow];
     });
-  };
+  }, [setSongRows]);
+
+  const handleEmptyPlaceholderClick = useCallback(() => {
+    if (songRows.length > 0) return;
+    handleAddRow();
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        if (patternGroups.length === 0) return;
+        setEditingSlot({ rowIndex: 0, columnIndex: 0 });
+      }, 0);
+    }
+  }, [handleAddRow, patternGroups.length, setEditingSlot, songRows.length]);
 
   const handleAssignSlot = (
     rowIndex: number,
@@ -2061,7 +2072,9 @@ export function SongView({
                               width: "100%",
                             }}
                           >
-                            <div
+                            <button
+                              type="button"
+                              onClick={handleEmptyPlaceholderClick}
                               style={{
                                 width: "100%",
                                 minHeight: slotMinHeight,
@@ -2075,7 +2088,12 @@ export function SongView({
                                 gap: slotGap,
                                 padding: slotPadding,
                                 color: "#94a3b8",
+                                cursor:
+                                  patternGroups.length > 0
+                                    ? "pointer"
+                                    : "not-allowed",
                               }}
+                              disabled={patternGroups.length === 0}
                             >
                               <div
                                 style={{
@@ -2105,7 +2123,7 @@ export function SongView({
                               <span style={{ fontSize: 11, color: "#64748b" }}>
                                 Tap to assign
                               </span>
-                            </div>
+                            </button>
                           </div>
                         </div>
                       </div>
