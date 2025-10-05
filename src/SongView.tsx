@@ -766,26 +766,6 @@ export function SongView({
     ghostColumnCount
   );
 
-  const timelineContentWidth = useMemo(() => {
-    const columns = Math.max(1, effectiveColumnCount);
-    const totalSlotWidth = columns * SLOT_WIDTH;
-    const totalGapWidth = Math.max(0, columns - 1) * SLOT_GAP;
-    const addLoopColumnWidth = SLOT_MIN_HEIGHT;
-    const addLoopGapWidth = SLOT_GAP;
-    return (
-      totalSlotWidth + totalGapWidth + addLoopColumnWidth + addLoopGapWidth
-    );
-  }, [effectiveColumnCount]);
-
-  const timelineWidthPx = useMemo(() => {
-    if (timelineContentWidth <= 0) {
-      return undefined;
-    }
-    return `${timelineContentWidth}px`;
-  }, [timelineContentWidth]);
-
-
-
   useEffect(() => {
     if (!editingSlot) return;
     if (patternGroups.length === 0) {
@@ -1135,6 +1115,39 @@ export function SongView({
     [timelineColumnCount, sectionCount]
   );
 
+  const timelineContentWidth = useMemo(() => {
+    const columnCount = Math.max(1, timelineColumns.length);
+    const totalSlotWidth = columnCount * SLOT_WIDTH;
+    const totalGapWidth = Math.max(0, columnCount - 1) * SLOT_GAP;
+    const addLoopColumnWidth = SLOT_MIN_HEIGHT;
+    const addLoopGapWidth = SLOT_GAP;
+    return (
+      totalSlotWidth + totalGapWidth + addLoopColumnWidth + addLoopGapWidth
+    );
+  }, [timelineColumns.length]);
+
+  const timelineWidthPx = useMemo(() => {
+    if (timelineContentWidth <= 0) {
+      return undefined;
+    }
+    return `${timelineContentWidth}px`;
+  }, [timelineContentWidth]);
+
+  const timelineHeaderScrollableWidth = useMemo(() => {
+    if (timelineContentWidth <= 0) {
+      return undefined;
+    }
+    const labelColumnGap = SLOT_GAP;
+    return ROW_LABEL_WIDTH + labelColumnGap + timelineContentWidth;
+  }, [timelineContentWidth]);
+
+  const timelineHeaderWidthPx = useMemo(() => {
+    if (!timelineHeaderScrollableWidth || timelineHeaderScrollableWidth <= 0) {
+      return undefined;
+    }
+    return `${timelineHeaderScrollableWidth}px`;
+  }, [timelineHeaderScrollableWidth]);
+
   const showPlaceholderCell = songRows.length === 0 && sectionCount === 0;
   const placeholderTimelineRow = useMemo(() => {
     if (!showPlaceholderCell) {
@@ -1176,6 +1189,35 @@ export function SongView({
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
+
+  const timelineContentHeight = useMemo(() => {
+    const rowCount = Math.max(1, timelineDisplayRows.length);
+    const totalRowHeight = rowCount * slotMinHeight;
+    const totalRowGap = Math.max(0, rowCount - 1) * SLOT_GAP;
+    return totalRowHeight + totalRowGap;
+  }, [timelineDisplayRows.length, slotMinHeight]);
+
+  const timelineHeightPx = useMemo(() => {
+    if (timelineContentHeight <= 0) {
+      return undefined;
+    }
+    return `${timelineContentHeight}px`;
+  }, [timelineContentHeight]);
+
+  const timelineScrollableHeight = useMemo(() => {
+    if (timelineContentHeight < 0) {
+      return undefined;
+    }
+    return timelineContentHeight + slotMinHeight + SLOT_GAP;
+  }, [timelineContentHeight, slotMinHeight]);
+
+  const timelineScrollHeightPx = useMemo(() => {
+    if (!timelineScrollableHeight || timelineScrollableHeight <= 0) {
+      return undefined;
+    }
+    return `${timelineScrollableHeight}px`;
+  }, [timelineScrollableHeight]);
+
   const isTrackSelected = isPlayInstrumentOpen;
   const addLoopButtonStyle: CSSProperties = {
     width: slotMinHeight,
@@ -2028,7 +2070,7 @@ export function SongView({
                 overflowX: "auto",
                 paddingBottom: 4,
                 height: "100%",
-                minHeight: "100%",
+                minHeight: timelineScrollHeightPx ?? "100%",
               }}
             >
               <div
@@ -2036,6 +2078,7 @@ export function SongView({
                   display: "flex",
                   alignItems: "center",
                   marginBottom: 8,
+                  minWidth: timelineHeaderWidthPx,
                 }}
               >
                 <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
@@ -2053,6 +2096,7 @@ export function SongView({
                       style={{
                         width: timelineWidthPx ?? "100%",
                         minWidth: timelineWidthPx,
+                        minHeight: timelineHeightPx,
                       }}
                     >
                       <div
