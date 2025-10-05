@@ -1093,22 +1093,27 @@ export function SongView({
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
   const isTrackSelected = isPlayInstrumentOpen;
-  const inlineActionButtonStyle: CSSProperties = {
+  const addLoopButtonStyle: CSSProperties = {
     width: SLOT_WIDTH,
+    minWidth: SLOT_WIDTH,
+    height: slotMinHeight,
     minHeight: slotMinHeight,
     borderRadius: 8,
-    border: "1px solid #1f2937",
+    border: "1px solid #273041",
     background: "#0b111d",
-    color: "#cbd5f5",
-    fontSize: 13,
-    fontWeight: 600,
-    letterSpacing: 0.2,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    padding: slotPadding,
-    cursor: "pointer",
+    color: "#27E0B0",
+    boxShadow: "none",
+  };
+  const addRowButtonStyle: CSSProperties = {
+    width: ROW_LABEL_WIDTH,
+    minWidth: ROW_LABEL_WIDTH,
+    height: slotMinHeight,
+    minHeight: slotMinHeight,
+    borderRadius: 8,
+    border: "1px solid #273041",
+    background: "#0f172a",
+    color: "#27E0B0",
+    boxShadow: "none",
   };
   const timelineRegionFlex =
     isTrackSelected && !isTimelineExpanded
@@ -1935,18 +1940,16 @@ export function SongView({
                           ))}
                       </div>
                     </div>
-                    <button
-                      type="button"
+                    <IconButton
+                      icon="add"
+                      label="Add loop"
                       onClick={handleAddSection}
+                      size="compact"
                       style={{
-                        ...inlineActionButtonStyle,
+                        ...addLoopButtonStyle,
                         flexShrink: 0,
-                        color: "#27E0B0",
-                        border: "1px solid #273041",
                       }}
-                    >
-                      + Loop
-                    </button>
+                    />
                   </div>
                 </div>
               </div>
@@ -2059,46 +2062,41 @@ export function SongView({
                   />
                 )}
               </div>
-              <div
-                style={{
-                  marginTop: 8,
-                  marginLeft: ROW_LABEL_WIDTH,
-                }}
-              >
+              <div style={{ marginTop: 8 }}>
                 <div
                   style={{
-                    width: timelineWidthStyle,
-                    minWidth: timelineWidthStyle,
-                    borderRadius: 6,
-                    border: "1px solid #2a3344",
-                    background: "#161d2b",
-                    padding: slotPadding,
+                    display: "flex",
+                    alignItems: "stretch",
+                    gap: SLOT_GAP,
                   }}
                 >
                   <div
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: `repeat(${Math.max(
-                        1,
-                        effectiveColumnCount
-                      )}, ${SLOT_WIDTH}px)`,
-                      gap: SLOT_GAP,
-                      width: "100%",
+                      width: ROW_LABEL_WIDTH,
+                      flexShrink: 0,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
                     }}
                   >
-                    <button
-                      type="button"
+                    <IconButton
+                      icon="add"
+                      label="Add row"
                       onClick={handleAddRow}
-                      style={{
-                        ...inlineActionButtonStyle,
-                        color: "#27E0B0",
-                        border: "1px solid #273041",
-                        justifySelf: "start",
-                      }}
-                    >
-                      + Row
-                    </button>
+                      size="compact"
+                      style={addRowButtonStyle}
+                    />
                   </div>
+                  <div
+                    style={{
+                      width: timelineWidthStyle,
+                      minWidth: timelineWidthStyle,
+                      borderRadius: 6,
+                      border: "1px solid #2a3344",
+                      background: "#161d2b",
+                      minHeight: slotMinHeight,
+                    }}
+                  />
                 </div>
               </div>
             </div>
