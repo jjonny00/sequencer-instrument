@@ -196,6 +196,7 @@ interface TimelineColumn {
   id: string;
   index: number;
   hasSection: boolean;
+  isStarter: boolean;
 }
 
 interface TimelineRowItem {
@@ -1079,12 +1080,15 @@ export function SongView({
   }, [timelineRows, sectionCount]);
 
   const timelineColumns = useMemo<TimelineColumn[]>(
-    () =>
-      Array.from({ length: timelineColumnCount }, (_, index) => ({
+    () => {
+      const hasSections = sectionCount > 0;
+      return Array.from({ length: timelineColumnCount }, (_, index) => ({
         id: `timeline-column-${index}`,
         index,
         hasSection: index < sectionCount,
-      })),
+        isStarter: !hasSections && index === 0,
+      }));
+    },
     [timelineColumnCount, sectionCount]
   );
 
@@ -1900,44 +1904,65 @@ export function SongView({
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: `repeat(${Math.max(
-                            1,
-                            sectionCount
-                          )}, ${SLOT_WIDTH}px)`,
+                          gridTemplateColumns: `repeat(${timelineColumns.length}, ${SLOT_WIDTH}px)`,
                           gap: SLOT_GAP,
                           width: "100%",
                         }}
                       >
-                        {timelineColumns
-                          .filter((column) => column.hasSection)
-                          .map((column) => (
-                            <button
-                              key={`delete-column-${column.index}`}
-                              type="button"
-                              onClick={() => handleDeleteColumn(column.index)}
-                              style={{
-                                padding: "4px 8px",
-                                borderRadius: 16,
-                                border: "1px solid #2a3344",
-                                background: "#111827",
-                                color: "#e2e8f0",
-                                fontSize: 11,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 4,
-                                cursor: "pointer",
-                              }}
-                            >
-                              <span
-                                className="material-symbols-outlined"
-                                style={{ fontSize: 14 }}
+                        {timelineColumns.map((column) => {
+                          if (column.hasSection) {
+                            return (
+                              <button
+                                key={column.id}
+                                type="button"
+                                onClick={() => handleDeleteColumn(column.index)}
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 16,
+                                  border: "1px solid #2a3344",
+                                  background: "#111827",
+                                  color: "#e2e8f0",
+                                  fontSize: 11,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: 4,
+                                  cursor: "pointer",
+                                }}
                               >
-                                delete
-                              </span>
-                              <span>Seq {column.index + 1}</span>
-                            </button>
-                          ))}
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 14 }}
+                                >
+                                  delete
+                                </span>
+                                <span>Seq {column.index + 1}</span>
+                              </button>
+                            );
+                          }
+                          if (column.isStarter) {
+                            return (
+                              <div
+                                key={column.id}
+                                style={{
+                                  borderRadius: 8,
+                                  border: "1px solid #273041",
+                                  background: "#0b111d",
+                                  color: "#94a3b8",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  letterSpacing: 0.3,
+                                }}
+                              >
+                                Loop 1
+                              </div>
+                            );
+                          }
+                          return <div key={column.id} />;
+                        })}
                       </div>
                     </div>
                     <IconButton
