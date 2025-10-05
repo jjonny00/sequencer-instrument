@@ -770,7 +770,11 @@ export function SongView({
     const columns = Math.max(1, effectiveColumnCount);
     const totalSlotWidth = columns * SLOT_WIDTH;
     const totalGapWidth = Math.max(0, columns - 1) * SLOT_GAP;
-    return totalSlotWidth + totalGapWidth;
+    const addLoopColumnWidth = SLOT_MIN_HEIGHT;
+    const addLoopGapWidth = SLOT_GAP;
+    return (
+      totalSlotWidth + totalGapWidth + addLoopColumnWidth + addLoopGapWidth
+    );
   }, [effectiveColumnCount]);
 
   const timelineWidthStyle = useMemo(() => {
