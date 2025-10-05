@@ -2061,9 +2061,10 @@ export function SongView({
                         <div
                           style={{
                             display: "grid",
-                            gridTemplateColumns: `repeat(${timelineColumns.length}, ${SLOT_WIDTH}px)`,
+                            gridTemplateColumns: `repeat(${timelineColumns.length}, ${SLOT_WIDTH}px) ${SLOT_MIN_HEIGHT}px`,
                             gap: SLOT_GAP,
-                            flex: "1 1 auto",
+                            flex: "0 0 auto",
+                            minWidth: timelineWidthStyle,
                           }}
                         >
                           {timelineColumns.map((column) => {
@@ -2123,18 +2124,19 @@ export function SongView({
                             }
                             return <div key={column.id} />;
                           })}
+                          <IconButton
+                            key="timeline-add-loop"
+                            icon="add"
+                            label="Add loop"
+                            onClick={handleAddSection}
+                            size="compact"
+                            style={{
+                              ...addLoopButtonStyle,
+                              justifySelf: "center",
+                              alignSelf: "stretch",
+                            }}
+                          />
                         </div>
-                        <IconButton
-                          icon="add"
-                          label="Add loop"
-                          onClick={handleAddSection}
-                          size="compact"
-                          style={{
-                            ...addLoopButtonStyle,
-                            flexShrink: 0,
-                            marginLeft: SLOT_GAP,
-                          }}
-                        />
                       </div>
                     </div>
                   </div>
