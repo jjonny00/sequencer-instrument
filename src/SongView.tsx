@@ -1088,12 +1088,28 @@ export function SongView({
     [timelineColumnCount, sectionCount]
   );
 
-  const hasPerformanceRow = songRows.some((row) => Boolean(row.performanceTrackId));
-  const showEmptyTimeline = sectionCount === 0 && !hasPerformanceRow;
+  const showPlaceholderCell = songRows.length === 0 && sectionCount === 0;
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
   const isTrackSelected = isPlayInstrumentOpen;
+  const inlineActionButtonStyle: CSSProperties = {
+    width: SLOT_WIDTH,
+    minHeight: slotMinHeight,
+    borderRadius: 8,
+    border: "1px solid #1f2937",
+    background: "#0b111d",
+    color: "#cbd5f5",
+    fontSize: 13,
+    fontWeight: 600,
+    letterSpacing: 0.2,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: slotPadding,
+    cursor: "pointer",
+  };
   const timelineRegionFlex =
     isTrackSelected && !isTimelineExpanded
       ? "0 0 var(--timeline-collapsed-h)"
@@ -1852,76 +1868,185 @@ export function SongView({
                 minHeight: "100%",
               }}
             >
-              {sectionCount > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
-                  <div style={{ flex: 1, overflow: "hidden" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: SLOT_GAP,
+                      width: "fit-content",
+                      minWidth: timelineWidthStyle,
+                    }}
+                  >
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${sectionCount}, ${SLOT_WIDTH}px)`,
-                        gap: SLOT_GAP,
                         width: timelineWidthStyle,
                         minWidth: timelineWidthStyle,
                       }}
                     >
-                      {timelineColumns
-                        .filter((column) => column.hasSection)
-                        .map((column) => (
-                          <button
-                            key={`delete-column-${column.index}`}
-                            type="button"
-                            onClick={() => handleDeleteColumn(column.index)}
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 16,
-                              border: "1px solid #2a3344",
-                              background: "#111827",
-                              color: "#e2e8f0",
-                              fontSize: 11,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 4,
-                              cursor: "pointer",
-                            }}
-                          >
-                            <span
-                              className="material-symbols-outlined"
-                              style={{ fontSize: 14 }}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: `repeat(${Math.max(
+                            1,
+                            sectionCount
+                          )}, ${SLOT_WIDTH}px)`,
+                          gap: SLOT_GAP,
+                          width: "100%",
+                        }}
+                      >
+                        {timelineColumns
+                          .filter((column) => column.hasSection)
+                          .map((column) => (
+                            <button
+                              key={`delete-column-${column.index}`}
+                              type="button"
+                              onClick={() => handleDeleteColumn(column.index)}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: 16,
+                                border: "1px solid #2a3344",
+                                background: "#111827",
+                                color: "#e2e8f0",
+                                fontSize: 11,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 4,
+                                cursor: "pointer",
+                              }}
                             >
-                              delete
-                            </span>
-                            <span>Seq {column.index + 1}</span>
-                          </button>
-                        ))}
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: 14 }}
+                              >
+                                delete
+                              </span>
+                              <span>Seq {column.index + 1}</span>
+                            </button>
+                          ))}
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleAddSection}
+                      style={{
+                        ...inlineActionButtonStyle,
+                        flexShrink: 0,
+                        color: "#27E0B0",
+                        border: "1px solid #273041",
+                      }}
+                    >
+                      + Loop
+                    </button>
                   </div>
                 </div>
-              ) : null}
+              </div>
               <div
                 style={{
                   width: timelineWidthStyle,
                   minWidth: timelineWidthStyle,
                 }}
               >
-                {showEmptyTimeline ? (
+                {showPlaceholderCell ? (
                   <div
                     style={{
-                      padding: 24,
-                      borderRadius: 8,
-                      border: "1px dashed #475569",
-                      color: "#94a3b8",
-                      fontSize: 13,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      marginBottom: 8,
                     }}
                   >
-                    Add a sequence to start placing loops into the timeline.
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "stretch",
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        border: "1px solid #2a3344",
+                        background: "#111827",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: ROW_LABEL_WIDTH,
+                          flexShrink: 0,
+                          borderRight: "1px solid #2a3344",
+                          background: "#0f172a",
+                          color: "#64748b",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: 0.6,
+                          textTransform: "uppercase",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        Row 1
+                      </div>
+                      <div
+                        style={{
+                          flex: 1,
+                          background: "#161d2b",
+                          padding: slotPadding,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: timelineWidthStyle,
+                            minWidth: timelineWidthStyle,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: `repeat(1, ${SLOT_WIDTH}px)`,
+                              gap: SLOT_GAP,
+                              width: "100%",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "100%",
+                                minHeight: slotMinHeight,
+                                borderRadius: 8,
+                                border: "1px solid #1f2937",
+                                background: "#0b111d",
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "center",
+                                alignItems: "flex-start",
+                                gap: 4,
+                                padding: slotPadding,
+                                color: "#94a3b8",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  color: "#cbd5f5",
+                                }}
+                              >
+                                Empty
+                              </span>
+                              <span style={{ fontSize: 11, color: "#64748b" }}>
+                                Tap to assign
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <TimelineGrid
@@ -1933,6 +2058,48 @@ export function SongView({
                     }
                   />
                 )}
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  marginLeft: ROW_LABEL_WIDTH,
+                }}
+              >
+                <div
+                  style={{
+                    width: timelineWidthStyle,
+                    minWidth: timelineWidthStyle,
+                    borderRadius: 6,
+                    border: "1px solid #2a3344",
+                    background: "#161d2b",
+                    padding: slotPadding,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: `repeat(${Math.max(
+                        1,
+                        effectiveColumnCount
+                      )}, ${SLOT_WIDTH}px)`,
+                      gap: SLOT_GAP,
+                      width: "100%",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={handleAddRow}
+                      style={{
+                        ...inlineActionButtonStyle,
+                        color: "#27E0B0",
+                        border: "1px solid #273041",
+                        justifySelf: "start",
+                      }}
+                    >
+                      + Row
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
