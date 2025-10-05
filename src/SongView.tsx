@@ -2241,16 +2241,6 @@ export function SongView({
                         style={addRowButtonStyle}
                       />
                     </div>
-                    <div
-                      style={{
-                        width: timelineWidthPx ?? "100%",
-                        minWidth: timelineWidthPx,
-                        borderRadius: 6,
-                        border: "1px solid #2a3344",
-                        background: "#161d2b",
-                        minHeight: slotMinHeight,
-                      }}
-                    />
                   </div>
                 </div>
               </div>
