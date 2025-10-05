@@ -2199,6 +2199,7 @@ export function SongView({
                     display: "flex",
                     flexDirection: "column",
                     gap: SLOT_GAP,
+                    paddingBottom: STICKY_BOTTOM_BAR_HEIGHT,
                     ...(timelineBodyMinHeight
                       ? { minHeight: timelineBodyMinHeight }
                       : {}),
