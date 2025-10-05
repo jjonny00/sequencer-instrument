@@ -199,6 +199,33 @@ interface TimelineColumn {
   isStarter: boolean;
 }
 
+const buildDisplayColumns = (
+  columns: TimelineColumn[],
+  targetCount: number,
+  idPrefix: string
+): TimelineColumn[] => {
+  if (targetCount <= 0) {
+    return [];
+  }
+  if (columns.length >= targetCount) {
+    return columns.slice(0, targetCount);
+  }
+  const baseColumns = columns.slice(0, targetCount);
+  const extraColumns = Array.from(
+    { length: targetCount - columns.length },
+    (_, index) => {
+      const columnIndex = columns.length + index;
+      return {
+        id: `${idPrefix}-${columnIndex}`,
+        index: columnIndex,
+        hasSection: false,
+        isStarter: columns.length === 0 && index === 0,
+      } satisfies TimelineColumn;
+    }
+  );
+  return [...baseColumns, ...extraColumns];
+};
+
 interface TimelineRowItem {
   id: string;
   row: SongRow;
@@ -1581,7 +1608,6 @@ export function SongView({
         performanceTextColor,
         performanceHighlightRange,
         safeColumnCount,
-        maxColumns,
         rowLabelTitle,
         isPlaceholder,
       } = timelineRow;
@@ -1589,25 +1615,11 @@ export function SongView({
       const displayColumnCount = isPlaceholder
         ? Math.max(1, columns.length)
         : safeColumnCount;
-      let displayColumns: TimelineColumn[];
-      if (isPlaceholder) {
-        if (columns.length >= displayColumnCount) {
-          displayColumns = columns.slice(0, displayColumnCount);
-        } else {
-          const extraColumns = Array.from(
-            { length: displayColumnCount - columns.length },
-            (_, index) => ({
-              id: `timeline-placeholder-column-${index}`,
-              index: columns.length + index,
-              hasSection: false,
-              isStarter: index === 0,
-            }) satisfies TimelineColumn
-          );
-          displayColumns = [...columns.slice(0, displayColumnCount), ...extraColumns];
-        }
-      } else {
-        displayColumns = columns.slice(0, maxColumns);
-      }
+      const displayColumns = buildDisplayColumns(
+        columns,
+        displayColumnCount,
+        isPlaceholder ? "timeline-placeholder-column" : "timeline-fallback-column"
+      );
 
       let labelTimer: number | null = null;
       let longPressTriggered = false;
