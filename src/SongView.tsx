@@ -1204,19 +1204,9 @@ export function SongView({
     return `${timelineContentHeight}px`;
   }, [timelineContentHeight]);
 
-  const timelineScrollableHeight = useMemo(() => {
-    if (timelineContentHeight < 0) {
-      return undefined;
-    }
-    return timelineContentHeight + slotMinHeight + SLOT_GAP;
-  }, [timelineContentHeight, slotMinHeight]);
-
-  const timelineScrollHeightPx = useMemo(() => {
-    if (!timelineScrollableHeight || timelineScrollableHeight <= 0) {
-      return undefined;
-    }
-    return `${timelineScrollableHeight}px`;
-  }, [timelineScrollableHeight]);
+  const timelineScrollPaddingBottom = useMemo(() => {
+    return slotMinHeight + SLOT_GAP;
+  }, [slotMinHeight]);
 
   const isTrackSelected = isPlayInstrumentOpen;
   const addLoopButtonStyle: CSSProperties = {
@@ -2068,9 +2058,8 @@ export function SongView({
               className="scrollable"
               style={{
                 overflowX: "auto",
-                paddingBottom: 4,
+                paddingBottom: timelineScrollPaddingBottom,
                 height: "100%",
-                minHeight: timelineScrollHeightPx ?? "100%",
               }}
             >
               <div
