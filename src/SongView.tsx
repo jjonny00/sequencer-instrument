@@ -777,11 +777,11 @@ export function SongView({
     );
   }, [effectiveColumnCount]);
 
-  const timelineWidthStyle = useMemo(() => {
+  const timelineWidthPx = useMemo(() => {
     if (timelineContentWidth <= 0) {
-      return "100%";
+      return undefined;
     }
-    return `max(100%, ${timelineContentWidth}px)`;
+    return `${timelineContentWidth}px`;
   }, [timelineContentWidth]);
 
 
@@ -1810,8 +1810,8 @@ export function SongView({
             >
               <div
                 style={{
-                  width: timelineWidthStyle,
-                  minWidth: timelineWidthStyle,
+                  width: "100%",
+                  minWidth: timelineWidthPx,
                 }}
               >
                 <div
@@ -1938,7 +1938,7 @@ export function SongView({
       handleSelectPerformanceTrackRow,
       playInstrumentRowTrackId,
       slotPadding,
-      timelineWidthStyle,
+      timelineWidthPx,
       slotMinHeight,
       slotGap,
       withAlpha,
@@ -2046,13 +2046,13 @@ export function SongView({
                       alignItems: "center",
                       gap: SLOT_GAP,
                       width: "fit-content",
-                      minWidth: timelineWidthStyle,
+                      minWidth: timelineWidthPx,
                     }}
                   >
                     <div
                       style={{
-                        width: timelineWidthStyle,
-                        minWidth: timelineWidthStyle,
+                        width: timelineWidthPx ?? "100%",
+                        minWidth: timelineWidthPx,
                       }}
                     >
                       <div
@@ -2068,7 +2068,7 @@ export function SongView({
                             gridTemplateColumns: `repeat(${timelineColumns.length}, ${SLOT_WIDTH}px) ${SLOT_MIN_HEIGHT}px`,
                             gap: SLOT_GAP,
                             flex: "0 0 auto",
-                            minWidth: timelineWidthStyle,
+                            minWidth: timelineWidthPx,
                           }}
                         >
                           {timelineColumns.map((column) => {
@@ -2148,8 +2148,8 @@ export function SongView({
               </div>
               <div
                 style={{
-                  width: timelineWidthStyle,
-                  minWidth: timelineWidthStyle,
+                  width: timelineWidthPx ?? "100%",
+                  minWidth: timelineWidthPx,
                 }}
               >
                 <TimelineGrid
@@ -2191,8 +2191,8 @@ export function SongView({
                   </div>
                   <div
                     style={{
-                      width: timelineWidthStyle,
-                      minWidth: timelineWidthStyle,
+                      width: timelineWidthPx ?? "100%",
+                      minWidth: timelineWidthPx,
                       borderRadius: 6,
                       border: "1px solid #2a3344",
                       background: "#161d2b",
