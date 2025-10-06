@@ -3270,13 +3270,18 @@ export default function App() {
         <StartScreen
           legacy={
             <div
+              className="scrollable"
               style={{
                 display: "flex",
                 flex: 1,
+                minHeight: 0,
                 flexDirection: "column",
                 alignItems: "center",
                 padding: "48px 24px 32px",
                 gap: 32,
+                overflowY: "auto",
+                width: "100%",
+                boxSizing: "border-box",
               }}
             >
               {renderStartScreenIntro()}
