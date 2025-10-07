@@ -1569,7 +1569,19 @@ function PatternEditor({
       }}
     >
       {steps.map((v, i) => {
-        const playing = currentStep === i && v;
+        const isCurrentColumn = currentStep === i;
+        const active = Boolean(v);
+        const playing = isCurrentColumn && active;
+        const accentColor = lightenColor(color, 0.25);
+        const background = active
+          ? isCurrentColumn
+            ? accentColor
+            : color
+          : "#1f2532";
+        const borderColor = isCurrentColumn
+          ? lightenColor("#555555", 0.2)
+          : "#555";
+        const opacity = active ? 1 : isCurrentColumn ? 0.35 : 0.2;
         return (
           <div
             key={i}
@@ -1591,10 +1603,15 @@ function PatternEditor({
               if (timerRef.current) window.clearTimeout(timerRef.current);
             }}
             style={{
-              border: "1px solid #555",
-              background: v ? color : "#1f2532",
+              border: `1px solid ${borderColor}`,
+              background,
+              opacity,
               cursor: "pointer",
-              boxShadow: playing ? `0 0 6px ${color}` : "none",
+              boxShadow: playing
+                ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
+                : "none",
+              transition:
+                "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
             }}
           />
         );
