@@ -840,7 +840,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     const disabledTextColor = "rgba(148, 163, 184, 0.7)";
 
     return {
-      padding: "6px 12px",
+      padding: "8px 16px",
       borderRadius: 999,
       border: `1px solid ${isActive ? activeBorderColor : baseBorderColor}`,
       background: isActive ? activeBackground : "transparent",
@@ -848,11 +848,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
-      gap: 6,
-      fontSize: 13,
+      gap: 8,
+      fontSize: 14,
       fontWeight: 600,
-      letterSpacing: 0.2,
-      lineHeight: 1.2,
+      letterSpacing: 0.3,
+      lineHeight: 1.3,
       textAlign: "center",
       alignSelf: "flex-start",
       flex: "0 1 auto",
@@ -869,10 +869,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   const chipLabelStyle: CSSProperties = {
     color: "inherit",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 600,
-    letterSpacing: 0.2,
-    lineHeight: 1.2,
+    letterSpacing: 0.3,
+    lineHeight: 1.3,
     display: "inline-block",
     wordBreak: "break-word",
   };
@@ -884,10 +884,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     display: "inline-flex",
     alignItems: "center",
     borderRadius: 999,
-    padding: "2px 6px",
-    fontSize: 10,
+    padding: "4px 10px",
+    fontSize: 12,
     fontWeight: 700,
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textTransform: "uppercase",
     border: `1px solid ${hexToRgba(
       accentColor || FALLBACK_INSTRUMENT_COLOR,
