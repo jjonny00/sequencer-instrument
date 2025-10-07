@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as Tone from "tone";
 import type {
   CSSProperties,
@@ -857,6 +857,17 @@ export function SongView({
     });
   }, [setSongRows]);
 
+  const placeholderSlotFocusTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (placeholderSlotFocusTimer.current !== null) {
+        window.clearTimeout(placeholderSlotFocusTimer.current);
+        placeholderSlotFocusTimer.current = null;
+      }
+    };
+  }, []);
+
   const handleOpenTimelineSlot = useCallback(
     (timelineRow: TimelineRowItem, columnIndex: number) => {
       if (patternGroups.length === 0) {
@@ -864,10 +875,12 @@ export function SongView({
       }
       setRowSettingsIndex(null);
       if (timelineRow.isPlaceholder) {
+        let createdRow = false;
         setSongRows((rows) => {
           if (rows.length > timelineRow.rowIndex) {
             return rows;
           }
+          createdRow = true;
           const baseColumnCount = Math.max(
             columnIndex + 1,
             Math.max(1, effectiveColumnCount)
@@ -882,6 +895,16 @@ export function SongView({
           nextRows.push(createSongRow(baseColumnCount));
           return nextRows;
         });
+        if (createdRow) {
+          if (placeholderSlotFocusTimer.current !== null) {
+            window.clearTimeout(placeholderSlotFocusTimer.current);
+          }
+          placeholderSlotFocusTimer.current = window.setTimeout(() => {
+            setEditingSlot({ rowIndex: timelineRow.rowIndex, columnIndex });
+            placeholderSlotFocusTimer.current = null;
+          }, 0);
+          return;
+        }
       }
       setEditingSlot({ rowIndex: timelineRow.rowIndex, columnIndex });
     },
