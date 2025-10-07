@@ -796,7 +796,8 @@ export function SongView({
   const handleAddSection = () => {
     setSongRows((rows) => {
       if (rows.length === 0) {
-        return [createSongRow(1)];
+        const baseColumnCount = Math.max(1, effectiveColumnCount);
+        return [createSongRow(baseColumnCount + 1)];
       }
       return rows.map((row) => ({
         ...row,
@@ -856,16 +857,42 @@ export function SongView({
     });
   }, [setSongRows]);
 
-  const handleEmptyPlaceholderClick = useCallback(() => {
-    if (songRows.length > 0) return;
-    handleAddRow();
-    if (typeof window !== "undefined") {
-      window.setTimeout(() => {
-        if (patternGroups.length === 0) return;
-        setEditingSlot({ rowIndex: 0, columnIndex: 0 });
-      }, 0);
-    }
-  }, [handleAddRow, patternGroups.length, setEditingSlot, songRows.length]);
+  const handleOpenTimelineSlot = useCallback(
+    (timelineRow: TimelineRowItem, columnIndex: number) => {
+      if (patternGroups.length === 0) {
+        return;
+      }
+      setRowSettingsIndex(null);
+      if (timelineRow.isPlaceholder) {
+        setSongRows((rows) => {
+          if (rows.length > timelineRow.rowIndex) {
+            return rows;
+          }
+          const baseColumnCount = Math.max(
+            columnIndex + 1,
+            Math.max(1, effectiveColumnCount)
+          );
+          if (timelineRow.rowIndex <= 0) {
+            return [createSongRow(baseColumnCount)];
+          }
+          const nextRows = rows.slice();
+          while (nextRows.length < timelineRow.rowIndex) {
+            nextRows.push(createSongRow(baseColumnCount));
+          }
+          nextRows.push(createSongRow(baseColumnCount));
+          return nextRows;
+        });
+      }
+      setEditingSlot({ rowIndex: timelineRow.rowIndex, columnIndex });
+    },
+    [
+      patternGroups.length,
+      setRowSettingsIndex,
+      setSongRows,
+      effectiveColumnCount,
+      setEditingSlot,
+    ]
+  );
 
   const handleAssignSlot = (
     rowIndex: number,
@@ -1381,55 +1408,6 @@ export function SongView({
       const columnIndex = column.index;
       const rowIndex = timelineRow.rowIndex;
 
-      if (timelineRow.isPlaceholder) {
-        if (columnIndex !== 0) {
-          return <div key={`slot-${rowIndex}-${columnIndex}`} />;
-        }
-
-        return (
-          <div key={`slot-${rowIndex}-${columnIndex}`}>
-            <button
-              type="button"
-              onClick={handleEmptyPlaceholderClick}
-              style={{
-                width: "100%",
-                minHeight: slotMinHeight,
-                borderRadius: 8,
-                border: "1px solid #1f2937",
-                background: "#0b111d",
-                color: "#94a3b8",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "stretch",
-                justifyContent: "space-between",
-                gap: slotGap,
-                padding: slotPadding,
-                textAlign: "left",
-                cursor: "pointer",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span style={{ fontWeight: 600, color: "#cbd5f5" }}>
-                  Empty
-                </span>
-              </div>
-              <div style={{ width: "100%" }}>
-                {renderLoopSlotPreview(undefined)}
-              </div>
-              <span style={{ fontSize: 11, color: "#64748b" }}>
-                Tap to assign
-              </span>
-            </button>
-          </div>
-        );
-      }
-
       const {
         row,
         rowMuted,
@@ -1547,11 +1525,7 @@ export function SongView({
           ) : (
             <button
               type="button"
-              onClick={() => {
-                if (patternGroups.length === 0) return;
-                setRowSettingsIndex(null);
-                setEditingSlot({ rowIndex, columnIndex });
-              }}
+              onClick={() => handleOpenTimelineSlot(timelineRow, columnIndex)}
               style={buttonStyles}
               disabled={patternGroups.length === 0}
             >
@@ -1622,8 +1596,7 @@ export function SongView({
       playInstrumentColor,
       handleAssignSlot,
       setEditingSlot,
-      setRowSettingsIndex,
-      handleEmptyPlaceholderClick,
+      handleOpenTimelineSlot,
     ]
   );
 
