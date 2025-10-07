@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
@@ -52,6 +52,7 @@ import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
 import {
+  PROJECT_VERSION,
   deleteLoopDraft,
   deleteProject,
   listProjects,
@@ -62,6 +63,7 @@ import {
   saveProject as saveStoredProject,
   type ProjectSortOrder,
   type StoredProjectData,
+  type StoredProjectPayload,
   type StoredProjectSummary,
 } from "./storage";
 import {
@@ -425,6 +427,7 @@ export default function App() {
   const [, setIsSongInstrumentPanelOpen] = useState(false);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const loopStripRef = useRef<LoopStripHandle | null>(null);
+  const projectFileInputRef = useRef<HTMLInputElement | null>(null);
   const currentLoopDraftRef = useRef<Track[] | null>(null);
   const skipLoopDraftRestoreRef = useRef(false);
   const previousViewModeRef = useRef<"track" | "song">(viewMode);
@@ -2161,6 +2164,85 @@ export default function App() {
     })();
   }, []);
 
+  const handleOpenProjectFilePicker = useCallback(() => {
+    projectFileInputRef.current?.click();
+  }, []);
+
+  const handleProjectFileSelected = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      try {
+        setProjectModalError(null);
+        const text = await file.text();
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(text);
+        } catch (parseError) {
+          throw new Error("Could not parse project file.");
+        }
+
+        if (!parsed || typeof parsed !== "object") {
+          throw new Error("Invalid project file.");
+        }
+
+        const payload = parsed as Partial<StoredProjectPayload>;
+        if (typeof payload.version !== "number") {
+          throw new Error("Invalid project file.");
+        }
+
+        if (payload.version !== PROJECT_VERSION) {
+          if (payload.version > PROJECT_VERSION) {
+            throw new Error(
+              "This project file was created with a newer version of the app."
+            );
+          }
+          throw new Error("Unsupported project version.");
+        }
+
+        if (!payload.data || typeof payload.data !== "object") {
+          throw new Error("Project file is missing data.");
+        }
+
+        const projectData = payload.data as StoredProjectData;
+        const projectName =
+          file.name.replace(/\.json$/i, "").trim() || "Imported Song";
+
+        unlockAndRun(() => {
+          loadProjectIntoSequencer(projectData, projectName);
+        });
+
+        try {
+          saveStoredProject(projectName, projectData);
+          refreshProjectList();
+        } catch (persistError) {
+          console.warn("Failed to persist imported project", persistError);
+        }
+
+        setProjectModalMode(null);
+        setProjectNameInput("");
+        setProjectModalError(null);
+      } catch (error) {
+        console.error("Failed to import project", error);
+        setProjectModalError(
+          error instanceof Error
+            ? error.message
+            : "Failed to import project"
+        );
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [
+      loadProjectIntoSequencer,
+      refreshProjectList,
+      unlockAndRun,
+    ]
+  );
+
   useEffect(() => {
     refreshProjectList();
   }, [refreshProjectList]);
@@ -3056,53 +3138,84 @@ export default function App() {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 10,
-                maxHeight: "50vh",
-                overflowY: "auto",
+                gap: 12,
               }}
             >
-              {projectList.length === 0 ? (
-                <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                  No songs saved yet
-                </div>
-              ) : (
-                projectList.map(({ name }) => (
-                  <div
-                    key={name}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid #1f2937",
-                      background: "#0f172a",
-                    }}
-                  >
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>{name}</span>
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                        Saved locally
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <IconButton
-                        icon="folder_open"
-                        label={`Load song ${name}`}
-                        tone="accent"
-                        onClick={() => unlockAndRun(() => loadProject(name))}
-                      />
-                      <IconButton
-                        icon="delete"
-                        label={`Delete song ${name}`}
-                        tone="danger"
-                        onClick={() => handleDeleteProject(name)}
-                      />
-                    </div>
+              <input
+                ref={projectFileInputRef}
+                type="file"
+                accept="application/json"
+                onChange={handleProjectFileSelected}
+                style={{ display: "none" }}
+              />
+              <div>
+                <IconButton
+                  icon="upload_file"
+                  label="Import project file"
+                  showLabel
+                  tone="accent"
+                  onClick={handleOpenProjectFilePicker}
+                />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  maxHeight: "50vh",
+                  overflowY: "auto",
+                }}
+              >
+                {projectList.length === 0 ? (
+                  <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                    No songs saved yet
                   </div>
-                ))
-              )}
+                ) : (
+                  projectList.map(({ name }) => (
+                    <div
+                      key={name}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        border: "1px solid #1f2937",
+                        background: "#0f172a",
+                      }}
+                    >
+                      <div
+                        style={{
+                          flex: 1,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 2,
+                        }}
+                      >
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{name}</span>
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                          Saved locally
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <IconButton
+                          icon="folder_open"
+                          label={`Load song ${name}`}
+                          tone="accent"
+                          onClick={() => unlockAndRun(() => loadProject(name))}
+                        />
+                        <IconButton
+                          icon="delete"
+                          label={`Delete song ${name}`}
+                          tone="danger"
+                          onClick={() => handleDeleteProject(name)}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
           {projectModalError ? (
