@@ -17,6 +17,7 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick } from "./instruments/kickInstrument";
+import { createPulseInstrument, type PulseNodes } from "./instruments/pulse";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -282,6 +283,7 @@ const createInstrumentInstance = (
   instrument: ToneInstrument;
   keyboardFx?: KeyboardFxNodes;
   harmoniaNodes?: HarmoniaNodes;
+  pulseNodes?: PulseNodes;
 } => {
   if (instrumentId === "kick") {
     const output = new tone.Gain(0).toDestination();
@@ -309,6 +311,12 @@ const createInstrumentInstance = (
 
   if (!character.type) {
     throw new Error(`Unknown instrument type for character ${character.id}`);
+  }
+
+  if (instrumentId === "pulse") {
+    const pulseNodes = createPulseInstrument(tone, character);
+    pulseNodes.output.connect(tone.Destination);
+    return { instrument: pulseNodes.synth as ToneInstrument, pulseNodes };
   }
 
   const ctor = (
@@ -415,6 +423,7 @@ const createOfflineTriggerMap = (
   const instrumentRefs: Record<string, ToneInstrument> = {};
   const keyboardFxRefs: Record<string, KeyboardFxNodes> = {};
   const harmoniaFxRefs: Record<string, HarmoniaNodes> = {};
+  const pulseFxRefs: Record<string, PulseNodes> = {};
 
   const triggerMap: TriggerMap = {};
 
@@ -445,6 +454,9 @@ const createOfflineTriggerMap = (
         }
         if (created.harmoniaNodes) {
           harmoniaFxRefs[key] = created.harmoniaNodes;
+        }
+        if (created.pulseNodes) {
+          pulseFxRefs[key] = created.pulseNodes;
         }
       }
 
@@ -493,6 +505,24 @@ const createOfflineTriggerMap = (
         settable.set?.({
           filter: { frequency: filterValueToFrequency(chunk.filter) },
         });
+      }
+      if (instrumentId === "pulse") {
+        const nodes = pulseFxRefs[key];
+        if (nodes) {
+          if (chunk?.pulseRate !== undefined) {
+            nodes.setRate(chunk.pulseRate as Tone.Unit.Frequency);
+          }
+          if (chunk?.pulseDepth !== undefined) {
+            nodes.setDepth(chunk.pulseDepth);
+          }
+          if (typeof chunk?.pulseShape === "string") {
+            nodes.setShape(chunk.pulseShape as Tone.ToneOscillatorType);
+          }
+          const modeValue = chunk?.pulseMode;
+          if (modeValue === "filter" || modeValue === "amplitude") {
+            nodes.setMode(modeValue);
+          }
+        }
       }
       if (instrumentId === "keyboard") {
         const fx = keyboardFxRefs[key];
@@ -549,6 +579,9 @@ const createOfflineTriggerMap = (
       fx.chorus.dispose();
       fx.tremolo.dispose();
       fx.filter.dispose();
+    });
+    Object.values(pulseFxRefs).forEach((nodes) => {
+      nodes.dispose();
     });
     Object.values(harmoniaFxRefs).forEach((nodes) => {
       disposeHarmoniaNodes(nodes);

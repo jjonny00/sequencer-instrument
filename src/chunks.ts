@@ -24,6 +24,10 @@ export interface Chunk {
   bitcrusher?: number;
   filter?: number;
   chorus?: number;
+  pulseRate?: string | number;
+  pulseDepth?: number;
+  pulseShape?: string;
+  pulseMode?: "amplitude" | "filter";
   timingMode?: "sync" | "free";
   tonalCenter?: string;
   scale?: string;

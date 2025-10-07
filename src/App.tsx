@@ -19,6 +19,7 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick } from "./instruments/kickInstrument";
+import { createPulseInstrument, type PulseNodes } from "./instruments/pulse";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { StartScreen } from "./views/StartScreen";
@@ -404,6 +405,7 @@ export default function App() {
       }
     >
   >({});
+  const pulseNodesRef = useRef<Record<string, PulseNodes>>({});
   const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
 
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -984,6 +986,10 @@ export default function App() {
         fx.filter.dispose();
       });
       keyboardFxRefs.current = {};
+      Object.values(pulseNodesRef.current).forEach((nodes) => {
+        nodes.dispose();
+      });
+      pulseNodesRef.current = {};
       Object.values(harmoniaNodesRef.current).forEach((nodes) => {
         disposeHarmoniaNodes(nodes);
       });
@@ -1002,7 +1008,21 @@ export default function App() {
       packId: string,
       instrumentId: string,
       character: InstrumentCharacter
-    ) => {
+    ): {
+      instrument: ToneInstrument;
+      keyboardFx?: {
+        reverb: Tone.Reverb;
+        delay: Tone.FeedbackDelay;
+        distortion: Tone.Distortion;
+        bitCrusher: Tone.BitCrusher;
+        panner: Tone.Panner;
+        chorus: Tone.Chorus;
+        tremolo: Tone.Tremolo;
+        filter: Tone.Filter;
+      };
+      harmoniaNodes?: HarmoniaNodes;
+      pulseNodes?: PulseNodes;
+    } => {
       if (instrumentId === "kick") {
         const output = new Tone.Gain(0).toDestination();
         const instrument = output as unknown as ToneInstrument;
@@ -1028,6 +1048,14 @@ export default function App() {
       }
       if (!character.type) {
         throw new Error(`Unknown instrument type for character ${character.id}`);
+      }
+      if (instrumentId === "pulse") {
+        const pulseNodes = createPulseInstrument(Tone, character);
+        pulseNodes.output.connect(Tone.Destination);
+        return {
+          instrument: pulseNodes.synth as ToneInstrument,
+          pulseNodes,
+        };
       }
       const ctor = (
         Tone as unknown as Record<
@@ -1147,6 +1175,9 @@ export default function App() {
             if (created.harmoniaNodes) {
               harmoniaNodesRef.current[key] = created.harmoniaNodes;
             }
+            if (created.pulseNodes) {
+              pulseNodesRef.current[key] = created.pulseNodes;
+            }
           }
           const sustainOverride =
             sustainArg ?? (chunk?.sustain !== undefined ? chunk.sustain : undefined);
@@ -1191,6 +1222,24 @@ export default function App() {
           settable.set?.({
             filter: { frequency: filterValueToFrequency(chunk.filter) },
           });
+        }
+        if (instrumentId === "pulse") {
+          const nodes = pulseNodesRef.current[key];
+          if (nodes) {
+            if (chunk?.pulseRate !== undefined) {
+              nodes.setRate(chunk.pulseRate as Tone.Unit.Frequency);
+            }
+            if (chunk?.pulseDepth !== undefined) {
+              nodes.setDepth(chunk.pulseDepth);
+            }
+            if (typeof chunk?.pulseShape === "string") {
+              nodes.setShape(chunk.pulseShape as Tone.ToneOscillatorType);
+            }
+            const modeValue = chunk?.pulseMode;
+            if (modeValue === "filter" || modeValue === "amplitude") {
+              nodes.setMode(modeValue);
+            }
+          }
         }
         if (instrumentId === "keyboard") {
           const fx = keyboardFxRefs.current[key];

@@ -60,6 +60,10 @@ export interface PerformanceTrackSettings {
   bitcrusher?: number;
   filter?: number;
   chorus?: number;
+  pulseRate?: string | number;
+  pulseDepth?: number;
+  pulseShape?: string;
+  pulseMode?: "amplitude" | "filter";
   pitchBend?: number;
   style?: string;
   mode?: string;
@@ -120,6 +124,10 @@ export const createPerformanceSettingsSnapshot = (
   bitcrusher: pattern.bitcrusher,
   filter: pattern.filter,
   chorus: pattern.chorus,
+  pulseRate: pattern.pulseRate,
+  pulseDepth: pattern.pulseDepth,
+  pulseShape: pattern.pulseShape,
+  pulseMode: pattern.pulseMode,
   pitchBend: pattern.pitchBend,
   style: pattern.style,
   mode: pattern.mode,
@@ -188,6 +196,10 @@ export const performanceSettingsToChunk = (
     chunk.bitcrusher = settings.bitcrusher;
   if (settings.filter !== undefined) chunk.filter = settings.filter;
   if (settings.chorus !== undefined) chunk.chorus = settings.chorus;
+  if (settings.pulseRate !== undefined) chunk.pulseRate = settings.pulseRate;
+  if (settings.pulseDepth !== undefined) chunk.pulseDepth = settings.pulseDepth;
+  if (settings.pulseShape !== undefined) chunk.pulseShape = settings.pulseShape;
+  if (settings.pulseMode !== undefined) chunk.pulseMode = settings.pulseMode;
   if (settings.pitchBend !== undefined) chunk.pitchBend = settings.pitchBend;
   if (settings.style !== undefined) chunk.style = settings.style;
   if (settings.mode !== undefined) chunk.mode = settings.mode;
