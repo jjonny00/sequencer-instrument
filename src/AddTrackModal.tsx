@@ -789,96 +789,88 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 12,
   };
 
-  const horizontalScrollAreaStyle: CSSProperties = {
+  const selectionListStyle: CSSProperties = {
     display: "flex",
-    gap: 16,
-    overflowX: "auto",
-    padding: "6px 2px 12px",
-    WebkitOverflowScrolling: "touch",
-    scrollbarWidth: "none",
-    msOverflowStyle: "none",
-    scrollSnapType: "x proximity",
+    flexWrap: "wrap",
+    gap: 10,
+    alignItems: "flex-start",
+    width: "100%",
   };
 
-  const createPadButtonStyle = (
+  const createOptionChipStyle = (
     accentColor: string,
     {
       isActive,
       isDisabled,
-      minWidth = 124,
-      minHeight = 74,
     }: {
       isActive: boolean;
       isDisabled?: boolean;
-      minWidth?: number;
-      minHeight?: number;
     }
   ): CSSProperties => {
     const safeAccentColor = accentColor || FALLBACK_INSTRUMENT_COLOR;
-    const activeBackground = `radial-gradient(circle, ${hexToRgba(
-      lightenColor(safeAccentColor, 0.18),
-      0.85
-    )}, ${hexToRgba(safeAccentColor, 0.85)})`;
+    const baseBorderColor = "rgba(148, 163, 184, 0.35)";
+    const baseTextColor = "#cbd5f5";
     const activeBorderColor = hexToRgba(safeAccentColor, 0.65);
-    const activeGlowColor = hexToRgba(safeAccentColor, 0.55);
+    const activeBackground = hexToRgba(lightenColor(safeAccentColor, 0.18), 0.25);
+    const disabledTextColor = "rgba(148, 163, 184, 0.7)";
 
     return {
-      minWidth,
-      minHeight,
-      padding: "12px 16px 14px",
-      borderRadius: 12,
-      border: isActive ? `1px solid ${activeBorderColor}` : "1px solid #273144",
-      background: isActive
-        ? activeBackground
-        : "radial-gradient(circle at center, #1e293b 0%, #101726 72%)",
-      color: isActive ? "#0e151f" : "#e2e8f0",
-      display: "flex",
-      flexDirection: "column",
+      padding: "6px 12px",
+      borderRadius: 999,
+      border: `1px solid ${isActive ? activeBorderColor : baseBorderColor}`,
+      background: isActive ? activeBackground : "transparent",
+      color: isDisabled ? disabledTextColor : isActive ? "#0e151f" : baseTextColor,
+      display: "inline-flex",
+      alignItems: "center",
       justifyContent: "center",
-      gap: 8,
-      position: "relative",
-      textAlign: "left",
-      flex: "0 0 auto",
-      boxShadow: isActive
-        ? `0 0 12px ${activeGlowColor}, 0 6px 14px rgba(2, 12, 23, 0.45)`
-        : "none",
-      transform: isActive ? "translateY(2px)" : "translateY(0)",
-      transition:
-        "transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+      gap: 6,
+      fontSize: 13,
+      fontWeight: 600,
+      letterSpacing: 0.2,
+      lineHeight: 1.2,
+      textAlign: "center",
+      alignSelf: "flex-start",
+      flex: "0 1 auto",
+      maxWidth: "100%",
       cursor: isDisabled ? "not-allowed" : "pointer",
-      opacity: isDisabled ? 0.55 : 1,
+      opacity: isDisabled ? 0.7 : 1,
       filter: isDisabled ? "saturate(0.6)" : "none",
-      scrollSnapAlign: "start",
+      transition:
+        "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
       touchAction: "manipulation",
       boxSizing: "border-box",
     };
   };
 
-  const createPadTitleStyle = (isActive: boolean): CSSProperties => ({
-    fontSize: 14,
-    fontWeight: 700,
+  const chipLabelStyle: CSSProperties = {
+    color: "inherit",
+    fontSize: 13,
+    fontWeight: 600,
     letterSpacing: 0.2,
-    color: isActive ? "#0e151f" : "#e2e8f0",
-    transition: "color 0.2s ease",
-  });
+    lineHeight: 1.2,
+    display: "inline-block",
+    wordBreak: "break-word",
+  };
 
-  const createPadBadgeStyle = (
+  const createChipBadgeStyle = (
     accentColor: string,
     isActive: boolean
   ): CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
-    alignSelf: "flex-start",
     borderRadius: 999,
-    padding: "2px 10px",
-    fontSize: 11,
+    padding: "2px 6px",
+    fontSize: 10,
     fontWeight: 700,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
     textTransform: "uppercase",
-    border: `1px solid ${hexToRgba(accentColor || FALLBACK_INSTRUMENT_COLOR, isActive ? 0.55 : 0.35)}`,
+    border: `1px solid ${hexToRgba(
+      accentColor || FALLBACK_INSTRUMENT_COLOR,
+      isActive ? 0.55 : 0.35
+    )}`,
     background: isActive
       ? hexToRgba(accentColor || FALLBACK_INSTRUMENT_COLOR, 0.25)
-      : "rgba(148, 163, 184, 0.16)",
+      : "rgba(148, 163, 184, 0.12)",
     color: isActive ? "#0e151f" : "#94a3b8",
     transition: "border-color 0.2s ease, background 0.2s ease, color 0.2s ease",
   });
@@ -994,11 +986,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
           {packs.length > 0 ? (
-            <div style={horizontalScrollAreaStyle}>
+            <div style={selectionListStyle}>
               {packs.map((option) => {
                 const isActive = option.id === selectedPackId;
                 const accentColor = FALLBACK_INSTRUMENT_COLOR;
-                const buttonStyle = createPadButtonStyle(accentColor, {
+                const buttonStyle = createOptionChipStyle(accentColor, {
                   isActive,
                   isDisabled: packSelectDisabled,
                 });
@@ -1011,7 +1003,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handlePackSelect(option.id)}
                     style={buttonStyle}
                   >
-                    <span style={createPadTitleStyle(isActive)}>
+                    <span style={chipLabelStyle}>
                       {option.name}
                     </span>
                   </button>
@@ -1035,11 +1027,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
           {instrumentOptions.length > 0 ? (
-            <div style={horizontalScrollAreaStyle}>
+            <div style={selectionListStyle}>
               {instrumentOptions.map((instrument) => {
                 const isActive = instrument === selectedInstrumentId;
                 const accentColor = getInstrumentColor(instrument);
-                const buttonStyle = createPadButtonStyle(accentColor, {
+                const buttonStyle = createOptionChipStyle(accentColor, {
                   isActive,
                   isDisabled: instrumentSelectDisabled,
                 });
@@ -1052,7 +1044,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handleInstrumentSelect(instrument)}
                     style={buttonStyle}
                   >
-                    <span style={createPadTitleStyle(isActive)}>
+                    <span style={chipLabelStyle}>
                       {formatInstrumentLabel(instrument)}
                     </span>
                   </button>
@@ -1084,11 +1076,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         >
           <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
           {characterOptions.length > 0 ? (
-            <div style={horizontalScrollAreaStyle}>
+            <div style={selectionListStyle}>
               {characterOptions.map((character) => {
                 const isActive = character.id === selectedCharacterId;
                 const accentColor = selectedInstrumentAccent;
-                const buttonStyle = createPadButtonStyle(accentColor, {
+                const buttonStyle = createOptionChipStyle(accentColor, {
                   isActive,
                   isDisabled: styleSelectDisabled,
                 });
@@ -1101,7 +1093,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handleStyleSelect(character.id)}
                     style={buttonStyle}
                   >
-                    <span style={createPadTitleStyle(isActive)}>
+                    <span style={chipLabelStyle}>
                       {character.name}
                     </span>
                   </button>
@@ -1134,7 +1126,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             </p>
           </div>
           <div style={savedLoopsFieldsStyle}>
-            <div style={horizontalScrollAreaStyle}>
+            <div style={selectionListStyle}>
               {presetSelectionItems.map((preset) => {
                 const isNone = preset.id === null;
                 const isActive = isNone
@@ -1142,14 +1134,13 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                   : preset.id === selectedPresetId;
                 const presetKey = preset.id ?? "preset-none";
                 const accentColor = selectedInstrumentAccent;
-                const buttonStyle = createPadButtonStyle(accentColor, {
+                const buttonStyle = createOptionChipStyle(accentColor, {
                   isActive,
                   isDisabled: presetSelectDisabled,
-                  minWidth: 148,
                 });
                 const badgeStyle =
                   preset.source === "user" || preset.source === "pack"
-                    ? createPadBadgeStyle(accentColor, isActive)
+                    ? createChipBadgeStyle(accentColor, isActive)
                     : null;
                 return (
                   <button
@@ -1160,7 +1151,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
                     onClick={() => handlePresetSelect(preset.id)}
                     style={buttonStyle}
                   >
-                    <span style={createPadTitleStyle(isActive)}>
+                    <span style={chipLabelStyle}>
                       {preset.name}
                     </span>
                     {badgeStyle ? (
