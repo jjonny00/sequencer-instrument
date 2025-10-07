@@ -537,7 +537,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       if (!pack || !selectedInstrumentId) return;
       if (!isUserPresetId(presetId)) return;
       const actualId = stripUserPresetPrefix(presetId);
-      const confirmed = window.confirm("Delete this saved loop?");
+      const confirmed = window.confirm("Delete this loop preset?");
       if (!confirmed) return;
       const removed = deleteInstrumentPreset(pack.id, selectedInstrumentId, actualId);
       if (removed) {
@@ -558,7 +558,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     const suggestedName =
       editingTrackName?.trim() || formatInstrumentLabel(selectedInstrumentId);
     const defaultName = `${suggestedName} Pattern`;
-    const name = window.prompt("Name your saved loop", defaultName);
+    const name = window.prompt("Name your loop preset", defaultName);
     if (!name) return;
     const pattern: Chunk = {
       ...editingTrackPattern,
@@ -706,8 +706,8 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const isEditMode = mode === "edit";
   const title = isEditMode ? "Edit Track" : "Add Track";
   const description = isEditMode
-    ? "Adjust the sound pack, instrument, style, and saved loop for this track."
-    : "Choose a sound pack, instrument, style, and optional saved loop to start a new groove.";
+    ? "Adjust the sound pack, instrument, style, and loop preset for this track."
+    : "Choose a sound pack, instrument, style, and optional loop preset to start a new groove.";
   const confirmLabel = isEditMode ? "Update Track" : "Add Track";
   const showSavePresetAction = isEditMode && Boolean(editingTrackPattern);
 
@@ -759,6 +759,22 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     gap: 6,
   };
 
+  const fieldTitleStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#cbd5f5",
+    letterSpacing: 0.2,
+  };
+
+  const fieldTitleIconStyle: CSSProperties = {
+    fontSize: 18,
+    lineHeight: 1,
+    color: "#94a3b8",
+  };
+
   const savedLoopsSectionStyle: CSSProperties = {
     borderRadius: 12,
     border: "1px solid #1d2636",
@@ -774,6 +790,15 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     fontSize: 15,
     fontWeight: 600,
     color: "#e2e8f0",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  };
+
+  const savedLoopsHeaderIconStyle: CSSProperties = {
+    fontSize: 20,
+    lineHeight: 1,
+    color: "#94a3b8",
   };
 
   const savedLoopsSubcopyStyle: CSSProperties = {
@@ -819,7 +844,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       borderRadius: 999,
       border: `1px solid ${isActive ? activeBorderColor : baseBorderColor}`,
       background: isActive ? activeBackground : "transparent",
-      color: isDisabled ? disabledTextColor : isActive ? "#0e151f" : baseTextColor,
+      color: isDisabled ? disabledTextColor : isActive ? "#f8fafc" : baseTextColor,
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
@@ -902,7 +927,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     ? "Select a style first"
     : loadingState.preset
     ? "Loading presets..."
-    : "Saved loops unavailable";
+    : "Loop presets unavailable";
 
   const instrumentHelperText = loadingState.instrument
     ? "Loading instruments..."
@@ -927,7 +952,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     : presetSelectDisabled
     ? presetBlockedLabel
     : userPresetItems.length === 0 && packPresets.length === 0
-    ? "No saved loops available yet."
+    ? "No loop presets available yet."
     : null;
 
   const selectedInstrumentAccent = getInstrumentColor(selectedInstrumentId);
@@ -984,7 +1009,16 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             transition: "opacity 0.2s ease",
           }}
         >
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Sound Pack</span>
+          <span style={fieldTitleStyle}>
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined"
+              style={fieldTitleIconStyle}
+            >
+              library_music
+            </span>
+            <span>Sound Pack</span>
+          </span>
           {packs.length > 0 ? (
             <div style={selectionListStyle}>
               {packs.map((option) => {
@@ -1025,7 +1059,16 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             transition: "opacity 0.2s ease",
           }}
         >
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Instrument</span>
+          <span style={fieldTitleStyle}>
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined"
+              style={fieldTitleIconStyle}
+            >
+              piano
+            </span>
+            <span>Instrument</span>
+          </span>
           {instrumentOptions.length > 0 ? (
             <div style={selectionListStyle}>
               {instrumentOptions.map((instrument) => {
@@ -1074,7 +1117,16 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             transition: "opacity 0.2s ease",
           }}
         >
-          <span style={{ fontSize: 13, color: "#cbd5f5" }}>Style</span>
+          <span style={fieldTitleStyle}>
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined"
+              style={fieldTitleIconStyle}
+            >
+              auto_awesome
+            </span>
+            <span>Style</span>
+          </span>
           {characterOptions.length > 0 ? (
             <div style={selectionListStyle}>
               {characterOptions.map((character) => {
@@ -1112,6 +1164,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         </section>
 
         <section
+          aria-label="Loop preset selection"
           aria-disabled={presetSelectDisabled}
           style={{
             ...savedLoopsSectionStyle,
@@ -1120,9 +1173,18 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <h3 style={savedLoopsHeaderStyle}>Saved Loops</h3>
+            <h3 style={savedLoopsHeaderStyle}>
+              <span
+                aria-hidden="true"
+                className="material-symbols-outlined"
+                style={savedLoopsHeaderIconStyle}
+              >
+                playlist_play
+              </span>
+              <span>Loop Presets</span>
+            </h3>
             <p style={savedLoopsSubcopyStyle}>
-              Save the current loop or load one of your favorites.
+              Save the current loop or load one of your favorite presets.
             </p>
           </div>
           <div style={savedLoopsFieldsStyle}>
@@ -1187,7 +1249,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
             {selectedPresetId && isUserPresetId(selectedPresetId) ? (
               <IconButton
                 icon="delete"
-                label="Delete saved loop"
+                label="Delete loop preset"
                 tone="danger"
                 iconSize={20}
                 style={compactIconButtonStyle}
