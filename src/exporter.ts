@@ -314,7 +314,10 @@ const createInstrumentInstance = (
   }
 
   if (instrumentId === "pulse") {
-    const pulseNodes = createPulseInstrument(tone, character);
+    const pulseNodes = createPulseInstrument(
+      tone as unknown as typeof Tone,
+      character
+    );
     pulseNodes.output.connect(tone.Destination);
     return { instrument: pulseNodes.synth as ToneInstrument, pulseNodes };
   }
