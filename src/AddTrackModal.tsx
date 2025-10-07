@@ -884,10 +884,10 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     display: "inline-flex",
     alignItems: "center",
     borderRadius: 999,
-    padding: "2px 6px",
-    fontSize: 10,
+    padding: "4px 10px",
+    fontSize: 12,
     fontWeight: 700,
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textTransform: "uppercase",
     border: `1px solid ${hexToRgba(
       accentColor || FALLBACK_INSTRUMENT_COLOR,
