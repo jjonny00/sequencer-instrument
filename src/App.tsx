@@ -364,7 +364,7 @@ const createEmptyProjectData = (): StoredProjectData => {
     isPlaying: false,
     tracks: [],
     patternGroups: [group],
-    songRows: [createSongRow()],
+    songRows: [createSongRow(1)],
     performanceTracks: [],
     selectedGroupId: group.id,
     currentSectionIndex: 0,
@@ -420,7 +420,7 @@ export default function App() {
   ]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [songRows, setSongRows] = useState<SongRow[]>([
-    createSongRow(),
+    createSongRow(1),
   ]);
   const [, setIsSongInstrumentPanelOpen] = useState(false);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
@@ -1823,7 +1823,7 @@ export default function App() {
       setSongRows(
         project.songRows.length > 0
           ? project.songRows
-          : [createSongRow()]
+          : [createSongRow(1)]
       );
       setSelectedGroupId(project.selectedGroupId ?? null);
       setCurrentSectionIndex(project.currentSectionIndex ?? 0);

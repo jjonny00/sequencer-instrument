@@ -200,7 +200,6 @@ interface TimelineColumn {
   id: string;
   index: number;
   hasSection: boolean;
-  isStarter: boolean;
 }
 
 const buildDisplayColumns = (
@@ -223,7 +222,6 @@ const buildDisplayColumns = (
         id: `${idPrefix}-${columnIndex}`,
         index: columnIndex,
         hasSection: false,
-        isStarter: columns.length === 0 && index === 0,
       } satisfies TimelineColumn;
     }
   );
@@ -257,7 +255,6 @@ interface TimelineRowItem {
   performanceHighlightRange?: { start: number; end: number; color: string };
   combinedPerformanceNotes: PerformanceNote[];
   rowLabelTitle: string;
-  isPlaceholder?: boolean;
 }
 
 const toTicks = (value: string | number | undefined | null): number => {
@@ -771,6 +768,26 @@ export function SongView({
   );
 
   useEffect(() => {
+    if (sectionCount > 0) {
+      return;
+    }
+    setSongRows((rows) => {
+      if (rows.length === 0) {
+        return [createSongRow(1)];
+      }
+      let updated = false;
+      const nextRows = rows.map((row) => {
+        if (row.slots.length > 0) {
+          return row;
+        }
+        updated = true;
+        return { ...row, slots: [null] };
+      });
+      return updated ? nextRows : rows;
+    });
+  }, [sectionCount, setSongRows]);
+
+  useEffect(() => {
     if (!editingSlot) return;
     if (patternGroups.length === 0) {
       setEditingSlot(null);
@@ -796,7 +813,8 @@ export function SongView({
   const handleAddSection = () => {
     setSongRows((rows) => {
       if (rows.length === 0) {
-        return [createSongRow(1)];
+        const baseColumnCount = Math.max(1, effectiveColumnCount);
+        return [createSongRow(baseColumnCount + 1)];
       }
       return rows.map((row) => ({
         ...row,
@@ -856,16 +874,20 @@ export function SongView({
     });
   }, [setSongRows]);
 
-  const handleEmptyPlaceholderClick = useCallback(() => {
-    if (songRows.length > 0) return;
-    handleAddRow();
-    if (typeof window !== "undefined") {
-      window.setTimeout(() => {
-        if (patternGroups.length === 0) return;
-        setEditingSlot({ rowIndex: 0, columnIndex: 0 });
-      }, 0);
-    }
-  }, [handleAddRow, patternGroups.length, setEditingSlot, songRows.length]);
+  const handleOpenTimelineSlot = useCallback(
+    (timelineRow: TimelineRowItem, columnIndex: number) => {
+      if (patternGroups.length === 0) {
+        return;
+      }
+      setRowSettingsIndex(null);
+      setEditingSlot({ rowIndex: timelineRow.rowIndex, columnIndex });
+    },
+    [
+      patternGroups.length,
+      setRowSettingsIndex,
+      setEditingSlot,
+    ]
+  );
 
   const handleAssignSlot = (
     rowIndex: number,
@@ -1108,12 +1130,10 @@ export function SongView({
 
   const timelineColumns = useMemo<TimelineColumn[]>(
     () => {
-      const hasSections = sectionCount > 0;
       return Array.from({ length: timelineColumnCount }, (_, index) => ({
         id: `timeline-column-${index}`,
         index,
         hasSection: index < sectionCount,
-        isStarter: !hasSections && index === 0,
       }));
     },
     [timelineColumnCount, sectionCount]
@@ -1152,44 +1172,7 @@ export function SongView({
     return `${timelineHeaderScrollableWidth}px`;
   }, [timelineHeaderScrollableWidth]);
 
-  const showPlaceholderCell = songRows.length === 0 && sectionCount === 0;
-  const placeholderTimelineRow = useMemo(() => {
-    if (!showPlaceholderCell) {
-      return null;
-    }
-    return {
-      id: "timeline-row-placeholder",
-      row: createSongRow(1),
-      rowIndex: 0,
-      maxColumns: 1,
-      safeColumnCount: 1,
-      rowMuted: false,
-      rowSolo: false,
-      rowAccent: null,
-      labelBackground: "#111827",
-      rowSelected: false,
-      isPerformanceRow: false,
-      isRecordingRow: false,
-      isArmedRow: false,
-      rowGhostDisplayNotes: [],
-      rowGhostNoteSet: undefined,
-      performanceTrack: undefined,
-      performanceAccent: null,
-      performanceStatusLabel: null,
-      performanceInstrumentLabel: null,
-      performanceDescription: null,
-      performanceHasContent: false,
-      totalPerformanceNotes: 0,
-      performanceTextColor: "#94a3b8",
-      performanceHighlightRange: undefined,
-      combinedPerformanceNotes: [],
-      rowLabelTitle: "Tap the + button to add a row",
-      isPlaceholder: true,
-    } satisfies TimelineRowItem;
-  }, [showPlaceholderCell]);
-  const timelineDisplayRows = placeholderTimelineRow
-    ? [placeholderTimelineRow]
-    : timelineRows;
+  const timelineDisplayRows = timelineRows;
   const slotMinHeight = SLOT_MIN_HEIGHT;
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
@@ -1381,55 +1364,6 @@ export function SongView({
       const columnIndex = column.index;
       const rowIndex = timelineRow.rowIndex;
 
-      if (timelineRow.isPlaceholder) {
-        if (columnIndex !== 0) {
-          return <div key={`slot-${rowIndex}-${columnIndex}`} />;
-        }
-
-        return (
-          <div key={`slot-${rowIndex}-${columnIndex}`}>
-            <button
-              type="button"
-              onClick={handleEmptyPlaceholderClick}
-              style={{
-                width: "100%",
-                minHeight: slotMinHeight,
-                borderRadius: 8,
-                border: "1px solid #1f2937",
-                background: "#0b111d",
-                color: "#94a3b8",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "stretch",
-                justifyContent: "space-between",
-                gap: slotGap,
-                padding: slotPadding,
-                textAlign: "left",
-                cursor: "pointer",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span style={{ fontWeight: 600, color: "#cbd5f5" }}>
-                  Empty
-                </span>
-              </div>
-              <div style={{ width: "100%" }}>
-                {renderLoopSlotPreview(undefined)}
-              </div>
-              <span style={{ fontSize: 11, color: "#64748b" }}>
-                Tap to assign
-              </span>
-            </button>
-          </div>
-        );
-      }
-
       const {
         row,
         rowMuted,
@@ -1547,11 +1481,7 @@ export function SongView({
           ) : (
             <button
               type="button"
-              onClick={() => {
-                if (patternGroups.length === 0) return;
-                setRowSettingsIndex(null);
-                setEditingSlot({ rowIndex, columnIndex });
-              }}
+              onClick={() => handleOpenTimelineSlot(timelineRow, columnIndex)}
               style={buttonStyles}
               disabled={patternGroups.length === 0}
             >
@@ -1622,8 +1552,7 @@ export function SongView({
       playInstrumentColor,
       handleAssignSlot,
       setEditingSlot,
-      setRowSettingsIndex,
-      handleEmptyPlaceholderClick,
+      handleOpenTimelineSlot,
     ]
   );
 
@@ -1656,16 +1585,13 @@ export function SongView({
         performanceHighlightRange,
         safeColumnCount,
         rowLabelTitle,
-        isPlaceholder,
       } = timelineRow;
 
-      const displayColumnCount = isPlaceholder
-        ? Math.max(1, columns.length)
-        : safeColumnCount;
+      const displayColumnCount = Math.max(1, safeColumnCount);
       const displayColumns = buildDisplayColumns(
         columns,
         displayColumnCount,
-        isPlaceholder ? "timeline-placeholder-column" : "timeline-fallback-column"
+        "timeline-fallback-column"
       );
 
       let labelTimer: number | null = null;
@@ -1714,19 +1640,13 @@ export function SongView({
           style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}
         >
           <div
-            onPointerDown={
-              isPlaceholder
-                ? undefined
-                : () => {
-                    if (isPerformanceRow) {
-                      handleSelectPerformanceTrackRow(
-                        row.performanceTrackId ?? null
-                      );
-                    } else if (playInstrumentRowTrackId) {
-                      handleSelectPerformanceTrackRow(null);
-                    }
-                  }
-            }
+            onPointerDown={() => {
+              if (isPerformanceRow) {
+                handleSelectPerformanceTrackRow(row.performanceTrackId ?? null);
+              } else if (playInstrumentRowTrackId) {
+                handleSelectPerformanceTrackRow(null);
+              }
+            }}
             style={{
               display: "flex",
               alignItems: "stretch",
@@ -1739,38 +1659,28 @@ export function SongView({
             }}
           >
             <div
-              onPointerDown={
-                isPlaceholder ? undefined : handleLabelPointerDown
-              }
-              onPointerUp={isPlaceholder ? undefined : handleLabelPointerUp}
-              onPointerLeave={
-                isPlaceholder ? undefined : handleLabelPointerLeave
-              }
-              onPointerCancel={
-                isPlaceholder ? undefined : handleLabelPointerLeave
-              }
+              onPointerDown={handleLabelPointerDown}
+              onPointerUp={handleLabelPointerUp}
+              onPointerLeave={handleLabelPointerLeave}
+              onPointerCancel={handleLabelPointerLeave}
               style={{
                 width: ROW_LABEL_WIDTH,
                 flexShrink: 0,
                 borderRight: "1px solid #2a3344",
                 background: labelBackground,
-                color: isPlaceholder
-                  ? "#f8fafc"
-                  : rowMuted
-                  ? "#475569"
-                  : "#f8fafc",
+                color: rowMuted ? "#475569" : "#f8fafc",
                 fontSize: 11,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: 700,
                 textTransform: "uppercase",
-                cursor: isPlaceholder ? "default" : "pointer",
+                cursor: "pointer",
                 userSelect: "none",
                 letterSpacing: 0.6,
                 position: "relative",
               }}
-              title={isPlaceholder ? undefined : rowLabelTitle}
+              title={rowLabelTitle}
             >
               <div
                 style={{
@@ -1793,7 +1703,7 @@ export function SongView({
                   }}
                 />
                 <span>{rowIndex + 1}</span>
-                {rowSolo && !isPlaceholder ? (
+                {rowSolo ? (
                   <span
                     style={{
                       fontSize: 9,
@@ -1805,7 +1715,7 @@ export function SongView({
                     SOLO
                   </span>
                 ) : null}
-                {isPerformanceRow && (isRecordingRow || isArmedRow) && !isPlaceholder ? (
+                {isPerformanceRow && (isRecordingRow || isArmedRow) ? (
                   <span
                     style={{
                       fontSize: 9,
@@ -1826,7 +1736,7 @@ export function SongView({
                   </span>
                 ) : null}
               </div>
-              {rowSelected && !isPlaceholder && (
+              {rowSelected && (
                 <span
                   className="material-symbols-outlined"
                   style={{
@@ -2145,27 +2055,6 @@ export function SongView({
                                   </span>
                                   <span>{loopLabel}</span>
                                 </button>
-                              );
-                            }
-                            if (column.isStarter) {
-                              return (
-                                <div
-                                  key={column.id}
-                                  style={{
-                                    borderRadius: 8,
-                                    border: "1px solid #273041",
-                                    background: "#0b111d",
-                                    color: "#94a3b8",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    letterSpacing: 0.3,
-                                  }}
-                                >
-                                  Loop 01
-                                </div>
                               );
                             }
                             return <div key={column.id} />;
