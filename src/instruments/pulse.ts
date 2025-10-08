@@ -1,8 +1,15 @@
 import * as Tone from "tone";
 
+import {
+  DEFAULT_PULSE_DEPTH,
+  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_SHAPE,
+  type PulseShape,
+} from "../chunks";
 import type { InstrumentCharacter } from "../packs";
 
-export type PulseShape = "sine" | "square" | "triangle";
+export type { PulseShape };
 
 export interface PulseSettings {
   rate: Tone.Unit.Frequency;
@@ -12,10 +19,10 @@ export interface PulseSettings {
 }
 
 export const DEFAULT_PULSE_SETTINGS: PulseSettings = {
-  rate: "8n",
-  depth: 0.9,
-  shape: "square",
-  filter: false,
+  rate: DEFAULT_PULSE_RATE,
+  depth: DEFAULT_PULSE_DEPTH,
+  shape: DEFAULT_PULSE_SHAPE,
+  filter: DEFAULT_PULSE_FILTER,
 };
 
 type ToneLike = Pick<

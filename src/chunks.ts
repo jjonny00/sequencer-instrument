@@ -1,3 +1,10 @@
+export type PulseShape = "sine" | "square" | "triangle";
+
+export const DEFAULT_PULSE_RATE = "8n";
+export const DEFAULT_PULSE_DEPTH = 0.9;
+export const DEFAULT_PULSE_SHAPE: PulseShape = "square";
+export const DEFAULT_PULSE_FILTER = false;
+
 export interface NoteEvent {
   time: number;
   duration: number;
@@ -46,6 +53,10 @@ export interface Chunk {
   autopilot?: boolean;
   noteEvents?: NoteEvent[];
   noteLoopLength?: number;
+  pulseRate?: string;
+  pulseDepth?: number;
+  pulseShape?: PulseShape;
+  pulseFilter?: boolean;
   harmoniaComplexity?: "simple" | "extended" | "lush";
   harmoniaTone?: number;
   harmoniaDynamics?: number;
@@ -55,4 +66,32 @@ export interface Chunk {
   harmoniaBorrowedLabel?: string;
   harmoniaStepDegrees?: (number | null)[];
 }
+
+export const ensurePulseDefaults = (chunk: Chunk): Chunk => {
+  if (chunk.instrument !== "pulse") {
+    return chunk;
+  }
+
+  let changed = false;
+  const next: Partial<Chunk> = {};
+
+  if (chunk.pulseRate === undefined) {
+    next.pulseRate = DEFAULT_PULSE_RATE;
+    changed = true;
+  }
+  if (chunk.pulseDepth === undefined) {
+    next.pulseDepth = DEFAULT_PULSE_DEPTH;
+    changed = true;
+  }
+  if (chunk.pulseShape === undefined) {
+    next.pulseShape = DEFAULT_PULSE_SHAPE;
+    changed = true;
+  }
+  if (chunk.pulseFilter === undefined) {
+    next.pulseFilter = DEFAULT_PULSE_FILTER;
+    changed = true;
+  }
+
+  return changed ? { ...chunk, ...next } : chunk;
+};
 

@@ -110,6 +110,25 @@
       "minimum": 0,
       "maximum": 1
     },
+    "pulseRate": {
+      "type": "string",
+      "description": "Pulse modulation rate synced to transport"
+    },
+    "pulseDepth": {
+      "type": "number",
+      "description": "Pulse modulation depth",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "pulseShape": {
+      "type": "string",
+      "description": "Pulse modulation waveform",
+      "enum": ["sine", "square", "triangle"]
+    },
+    "pulseFilter": {
+      "type": "boolean",
+      "description": "Whether Pulse uses filter-based gating"
+    },
     "timingMode": {
       "type": "string",
       "description": "Whether the pattern follows BPM sync or free timing",

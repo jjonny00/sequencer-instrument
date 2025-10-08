@@ -10,7 +10,7 @@ import {
 import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
-import type { Chunk } from "./chunks";
+import { ensurePulseDefaults, type Chunk } from "./chunks";
 import {
   distributeHarmoniaPatternDegrees,
   HARMONIA_CHARACTER_PRESETS,
@@ -348,16 +348,17 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         if (!t.instrument) return t;
         const label = getTrackNumberLabel(ts, trackId);
         created = true;
+        const basePattern: Chunk = {
+          id: `track-${trackId}-${Date.now()}`,
+          name: `Track ${label} Pattern`,
+          instrument: t.instrument,
+          steps: Array(16).fill(0),
+          velocities: Array(16).fill(1),
+          pitches: Array(16).fill(0),
+        };
         return {
           ...t,
-          pattern: {
-            id: `track-${trackId}-${Date.now()}`,
-            name: `Track ${label} Pattern`,
-            instrument: t.instrument,
-            steps: Array(16).fill(0),
-            velocities: Array(16).fill(1),
-            pitches: Array(16).fill(0),
-          },
+          pattern: ensurePulseDefaults(basePattern),
         };
       })
     );
@@ -441,16 +442,18 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
         const nextId = ts.length ? Math.max(...ts.map((t) => t.id)) + 1 : 1;
         const label = (ts.length + 1).toString().padStart(2, "0");
         const presetPayload = resolvePreset();
-        const basePattern: Chunk = presetPayload
-          ? presetPayload.pattern
-          : {
-              id: `track-${nextId}-${Date.now()}`,
-              name: `Track ${label} Pattern`,
-              instrument: instrumentId,
-              steps: Array(16).fill(0),
-              velocities: Array(16).fill(1),
-              pitches: Array(16).fill(0),
-            };
+        const basePattern: Chunk = ensurePulseDefaults(
+          presetPayload
+            ? presetPayload.pattern
+            : {
+                id: `track-${nextId}-${Date.now()}`,
+                name: `Track ${label} Pattern`,
+                instrument: instrumentId,
+                steps: Array(16).fill(0),
+                velocities: Array(16).fill(1),
+                pitches: Array(16).fill(0),
+              }
+        );
         const instrumentDefinition = activePack.instruments[
           instrumentId
         ] as InstrumentDefinition | undefined;
@@ -553,17 +556,20 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           if (t.id !== trackId) return t;
           const presetPayload = resolvePreset();
           const basePattern: Chunk | null = presetPayload
-            ? presetPayload.pattern
+            ? ensurePulseDefaults(presetPayload.pattern)
             : t.pattern
-            ? { ...cloneChunk(t.pattern), instrument: instrumentId }
-            : {
+            ? ensurePulseDefaults({
+                ...cloneChunk(t.pattern),
+                instrument: instrumentId,
+              })
+            : ensurePulseDefaults({
                 id: `track-${trackId}-${Date.now()}`,
                 name: t.name,
                 instrument: instrumentId,
                 steps: Array(16).fill(0),
                 velocities: Array(16).fill(1),
                 pitches: Array(16).fill(0),
-              };
+              });
           const instrumentDefinition = activePack.instruments[
             instrumentId
           ] as InstrumentDefinition | undefined;

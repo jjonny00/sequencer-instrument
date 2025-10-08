@@ -8,7 +8,7 @@ import type {
   SetStateAction,
 } from "react";
 
-import type { Chunk } from "./chunks";
+import { ensurePulseDefaults, type Chunk } from "./chunks";
 import type {
   PatternGroup,
   PerformanceNote,
@@ -325,18 +325,19 @@ const getColumnTickBounds = (columnIndex: number) => ({
 const createPerformancePattern = (
   instrument: TrackInstrument,
   timingMode: "sync" | "free" = "sync"
-): Chunk => ({
-  id: `live-${instrument}-${Math.random().toString(36).slice(2, 8)}`,
-  name: `${instrument}-performance`,
-  instrument,
-  steps: Array(16).fill(0),
-  velocities: Array(16).fill(0),
-  note: "C4",
-  sustain: 0.8,
-  velocityFactor: 1,
-  timingMode,
-  noteEvents: [],
-});
+): Chunk =>
+  ensurePulseDefaults({
+    id: `live-${instrument}-${Math.random().toString(36).slice(2, 8)}`,
+    name: `${instrument}-performance`,
+    instrument,
+    steps: Array(16).fill(0),
+    velocities: Array(16).fill(0),
+    note: "C4",
+    sustain: 0.8,
+    velocityFactor: 1,
+    timingMode,
+    noteEvents: [],
+  });
 
 const resolveInstrumentSource = (instrument: TrackInstrument) => {
   if (!instrument) return null;
