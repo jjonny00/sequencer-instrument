@@ -230,6 +230,67 @@
         }
       ]
     },
+    "pulse": {
+      "defaultCharacterId": "phonk-pulse-tape",
+      "characters": [
+        {
+          "id": "phonk-pulse-tape",
+          "name": "Tape Gate",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 5,
+            "voiceOptions": {
+              "oscillator": { "type": "triangle" },
+              "envelope": {
+                "attack": 0.03,
+                "decay": 0.4,
+                "sustain": 0.6,
+                "release": 0.9
+              }
+            }
+          },
+          "effects": [
+            { "type": "BitCrusher", "options": { "bits": 6, "wet": 0.2 } }
+          ],
+          "defaults": {
+            "pulseRate": "16n",
+            "pulseDepth": 0.92,
+            "pulseShape": "square",
+            "pulseFilter": false
+          }
+        },
+        {
+          "id": "phonk-pulse-wah",
+          "name": "Night Wah",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "AMSynth",
+            "maxPolyphony": 4,
+            "voiceOptions": {
+              "envelope": {
+                "attack": 0.05,
+                "decay": 0.35,
+                "sustain": 0.5,
+                "release": 1.1
+              },
+              "oscillator": { "type": "sawtooth" }
+            }
+          },
+          "effects": [
+            { "type": "Chorus", "options": { "frequency": 0.8, "delayTime": 3, "depth": 0.5, "wet": 0.35 } }
+          ],
+          "defaults": {
+            "pulseRate": "8n",
+            "pulseDepth": 0.8,
+            "pulseShape": "sine",
+            "pulseFilter": true
+          }
+        }
+      ]
+    },
     "keyboard": {
       "defaultCharacterId": "dusty-keys",
       "characters": [

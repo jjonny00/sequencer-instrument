@@ -9,7 +9,14 @@ import {
   type TrackInstrument,
   type TriggerMap,
 } from "./tracks";
-import type { Chunk } from "./chunks";
+import {
+  DEFAULT_PULSE_DEPTH,
+  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_SHAPE,
+  type Chunk,
+  type PulseShape,
+} from "./chunks";
 import { packs, type InstrumentCharacter, type Pack } from "./packs";
 import {
   createHarmoniaNodes,
@@ -1203,17 +1210,32 @@ export default function App() {
             });
             return;
           }
-        const settable = inst as unknown as {
-          set?: (values: Record<string, unknown>) => void;
-        };
-          if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
-          const envelope: Record<string, unknown> = {};
-          if (chunk.attack !== undefined) envelope.attack = chunk.attack;
-          if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
-          if (Object.keys(envelope).length > 0) {
-            settable.set?.({ envelope });
+
+          if (instrumentId === "pulse") {
+            const nodes = pulseNodesRef.current[key];
+            if (nodes) {
+              const rate = chunk?.pulseRate ?? DEFAULT_PULSE_RATE;
+              const depth = chunk?.pulseDepth ?? DEFAULT_PULSE_DEPTH;
+              const shape = (chunk?.pulseShape ?? DEFAULT_PULSE_SHAPE) as PulseShape;
+              const filterEnabled = chunk?.pulseFilter ?? DEFAULT_PULSE_FILTER;
+              nodes.setRate(rate);
+              nodes.setDepth(depth);
+              nodes.setShape(shape);
+              nodes.setFilterEnabled(Boolean(filterEnabled));
+            }
           }
-        }
+
+          const settable = inst as unknown as {
+            set?: (values: Record<string, unknown>) => void;
+          };
+          if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+            const envelope: Record<string, unknown> = {};
+            if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+            if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+            if (Object.keys(envelope).length > 0) {
+              settable.set?.({ envelope });
+            }
+          }
         if (chunk?.glide !== undefined) {
           settable.set?.({ portamento: chunk.glide });
         }

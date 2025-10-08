@@ -3,7 +3,14 @@ import { getContext } from "tone";
 import { fromContext } from "tone/build/esm/fromContext";
 import type { TransportClass } from "tone/build/esm/core/clock/Transport";
 
-import type { Chunk } from "./chunks";
+import {
+  DEFAULT_PULSE_DEPTH,
+  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_SHAPE,
+  type Chunk,
+  type PulseShape,
+} from "./chunks";
 import type { InstrumentCharacter, Pack } from "./packs";
 import type { StoredProjectData } from "./storage";
 import { createStoredProjectPayload } from "./storage";
@@ -487,6 +494,20 @@ const createOfflineTriggerMap = (
           characterId: character.id,
         });
         return;
+      }
+
+      if (instrumentId === "pulse") {
+        const nodes = pulseNodesRefs[key];
+        if (nodes) {
+          const rate = chunk?.pulseRate ?? DEFAULT_PULSE_RATE;
+          const depth = chunk?.pulseDepth ?? DEFAULT_PULSE_DEPTH;
+          const shape = (chunk?.pulseShape ?? DEFAULT_PULSE_SHAPE) as PulseShape;
+          const filterEnabled = chunk?.pulseFilter ?? DEFAULT_PULSE_FILTER;
+          nodes.setRate(rate);
+          nodes.setDepth(depth);
+          nodes.setShape(shape);
+          nodes.setFilterEnabled(Boolean(filterEnabled));
+        }
       }
 
       const settable = inst as unknown as {

@@ -5,6 +5,7 @@ const BASE_INSTRUMENT_COLORS: Record<string, string> = {
   bass: "#1abc9c",
   keyboard: "#2ecc71",
   arp: "#9b59b6",
+  pulse: "#ff6bd6",
 };
 
 export const FALLBACK_INSTRUMENT_COLOR = "#27E0B0";

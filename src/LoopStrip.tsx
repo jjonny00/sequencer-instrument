@@ -10,7 +10,7 @@ import {
 import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from "react";
 import * as Tone from "tone";
 import type { Track, TriggerMap } from "./tracks";
-import { ensurePulseDefaults, type Chunk } from "./chunks";
+import { applyPulseCharacterDefaults, ensurePulseDefaults, type Chunk } from "./chunks";
 import {
   distributeHarmoniaPatternDegrees,
   HARMONIA_CHARACTER_PRESETS,
@@ -356,9 +356,26 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           velocities: Array(16).fill(1),
           pitches: Array(16).fill(0),
         };
+        let pattern = ensurePulseDefaults(basePattern);
+        if (t.instrument === "pulse" && t.source?.packId) {
+          const packDefinition = packs.find(
+            (candidate) => candidate.id === t.source?.packId
+          );
+          const instrumentDefinition = packDefinition?.instruments?.pulse as
+            | InstrumentDefinition
+            | undefined;
+          const characterId =
+            t.source.characterId ?? instrumentDefinition?.defaultCharacterId ?? null;
+          const character = characterId
+            ? instrumentDefinition?.characters.find(
+                (candidate) => candidate.id === characterId
+              ) ?? null
+            : null;
+          pattern = applyPulseCharacterDefaults(pattern, character?.defaults ?? null);
+        }
         return {
           ...t,
-          pattern: ensurePulseDefaults(basePattern),
+          pattern,
         };
       })
     );
@@ -467,6 +484,14 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           ...basePattern,
           characterId: resolvedCharacterId,
         };
+        if (instrumentId === "pulse" && !presetPayload) {
+          const character = resolvedCharacterId
+            ? instrumentDefinition?.characters.find(
+                (candidate) => candidate.id === resolvedCharacterId
+              ) ?? null
+            : null;
+          pattern = applyPulseCharacterDefaults(pattern, character?.defaults ?? null);
+        }
         if (instrumentId === "harmonia") {
           pattern = initializeHarmoniaPattern(
             pattern,
@@ -583,6 +608,23 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
           let nextPattern: Chunk | null = basePattern
             ? { ...basePattern, characterId: resolvedCharacterId }
             : null;
+          const isSwitchingInstrument = t.instrument !== instrumentId;
+          if (
+            instrumentId === "pulse" &&
+            nextPattern &&
+            !presetPayload &&
+            (isSwitchingInstrument || !t.pattern)
+          ) {
+            const character = resolvedCharacterId
+              ? instrumentDefinition?.characters.find(
+                  (candidate) => candidate.id === resolvedCharacterId
+                ) ?? null
+              : null;
+            nextPattern = applyPulseCharacterDefaults(
+              nextPattern,
+              character?.defaults ?? null
+            );
+          }
           if (instrumentId === "harmonia" && nextPattern && !presetPayload) {
             nextPattern = initializeHarmoniaPattern(
               nextPattern,
