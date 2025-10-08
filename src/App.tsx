@@ -19,6 +19,10 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick } from "./instruments/kickInstrument";
+import {
+  createPulseInstrument,
+  type PulseInstrumentNodes,
+} from "./instruments/pulse";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { StartScreen } from "./views/StartScreen";
@@ -404,6 +408,7 @@ export default function App() {
       }
     >
   >({});
+  const pulseNodesRef = useRef<Record<string, PulseInstrumentNodes>>({});
   const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
 
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -984,6 +989,10 @@ export default function App() {
         fx.filter.dispose();
       });
       keyboardFxRefs.current = {};
+      Object.values(pulseNodesRef.current).forEach((nodes) => {
+        nodes.dispose();
+      });
+      pulseNodesRef.current = {};
       Object.values(harmoniaNodesRef.current).forEach((nodes) => {
         disposeHarmoniaNodes(nodes);
       });
@@ -1002,7 +1011,21 @@ export default function App() {
       packId: string,
       instrumentId: string,
       character: InstrumentCharacter
-    ) => {
+    ): {
+      instrument: ToneInstrument;
+      keyboardFx?: {
+        reverb: Tone.Reverb;
+        delay: Tone.FeedbackDelay;
+        distortion: Tone.Distortion;
+        bitCrusher: Tone.BitCrusher;
+        panner: Tone.Panner;
+        chorus: Tone.Chorus;
+        tremolo: Tone.Tremolo;
+        filter: Tone.Filter;
+      };
+      pulseNodes?: PulseInstrumentNodes;
+      harmoniaNodes?: HarmoniaNodes;
+    } => {
       if (instrumentId === "kick") {
         const output = new Tone.Gain(0).toDestination();
         const instrument = output as unknown as ToneInstrument;
@@ -1025,6 +1048,10 @@ export default function App() {
         const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
         return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+      }
+      if (instrumentId === "pulse") {
+        const nodes = createPulseInstrument(Tone, undefined, character);
+        return { instrument: nodes.instrument as ToneInstrument, pulseNodes: nodes };
       }
       if (!character.type) {
         throw new Error(`Unknown instrument type for character ${character.id}`);
@@ -1143,6 +1170,9 @@ export default function App() {
             instrumentRefs.current[key] = inst;
             if (created.keyboardFx) {
               keyboardFxRefs.current[key] = created.keyboardFx;
+            }
+            if (created.pulseNodes) {
+              pulseNodesRef.current[key] = created.pulseNodes;
             }
             if (created.harmoniaNodes) {
               harmoniaNodesRef.current[key] = created.harmoniaNodes;

@@ -17,6 +17,10 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick } from "./instruments/kickInstrument";
+import {
+  createPulseInstrument,
+  type PulseInstrumentNodes,
+} from "./instruments/pulse";
 
 interface KeyboardFxNodes {
   reverb: Tone.Reverb;
@@ -281,6 +285,7 @@ const createInstrumentInstance = (
 ): {
   instrument: ToneInstrument;
   keyboardFx?: KeyboardFxNodes;
+  pulseNodes?: PulseInstrumentNodes;
   harmoniaNodes?: HarmoniaNodes;
 } => {
   if (instrumentId === "kick") {
@@ -305,6 +310,11 @@ const createInstrumentInstance = (
     const nodes = createHarmoniaNodes(tone, character);
     nodes.volume.connect(tone.Destination);
     return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+  }
+
+  if (instrumentId === "pulse") {
+    const nodes = createPulseInstrument(tone, undefined, character);
+    return { instrument: nodes.instrument as ToneInstrument, pulseNodes: nodes };
   }
 
   if (!character.type) {
@@ -414,6 +424,7 @@ const createOfflineTriggerMap = (
 ): { triggerMap: TriggerMap; dispose: () => void } => {
   const instrumentRefs: Record<string, ToneInstrument> = {};
   const keyboardFxRefs: Record<string, KeyboardFxNodes> = {};
+  const pulseNodesRefs: Record<string, PulseInstrumentNodes> = {};
   const harmoniaFxRefs: Record<string, HarmoniaNodes> = {};
 
   const triggerMap: TriggerMap = {};
@@ -442,6 +453,9 @@ const createOfflineTriggerMap = (
         instrumentRefs[key] = inst;
         if (created.keyboardFx) {
           keyboardFxRefs[key] = created.keyboardFx;
+        }
+        if (created.pulseNodes) {
+          pulseNodesRefs[key] = created.pulseNodes;
         }
         if (created.harmoniaNodes) {
           harmoniaFxRefs[key] = created.harmoniaNodes;
@@ -549,6 +563,9 @@ const createOfflineTriggerMap = (
       fx.chorus.dispose();
       fx.tremolo.dispose();
       fx.filter.dispose();
+    });
+    Object.values(pulseNodesRefs).forEach((nodes) => {
+      nodes.dispose();
     });
     Object.values(harmoniaFxRefs).forEach((nodes) => {
       disposeHarmoniaNodes(nodes);
