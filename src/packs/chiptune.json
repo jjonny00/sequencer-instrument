@@ -219,10 +219,16 @@
             }
           },
           "defaults": {
+            "pulseMode": "LFO",
             "pulseRate": "8n",
             "pulseDepth": 0.9,
             "pulseShape": "square",
-            "pulseFilter": false
+            "pulseFilterEnabled": false,
+            "pulseFilterType": "lowpass",
+            "pulseResonance": 0.35,
+            "pulsePatternLength": 8,
+            "pulsePattern": [1, 0, 1, 0, 1, 0, 1, 0],
+            "pulseSwing": 0
           }
         },
         {
@@ -244,10 +250,16 @@
             }
           },
           "defaults": {
+            "pulseMode": "LFO",
             "pulseRate": "16n",
             "pulseDepth": 0.8,
             "pulseShape": "triangle",
-            "pulseFilter": true
+            "pulseFilterEnabled": true,
+            "pulseFilterType": "lowpass",
+            "pulseResonance": 0.35,
+            "pulsePatternLength": 8,
+            "pulsePattern": [1, 0, 1, 0, 1, 0, 1, 0],
+            "pulseSwing": 0
           }
         }
       ]

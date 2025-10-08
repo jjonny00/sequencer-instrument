@@ -2,56 +2,110 @@ import * as Tone from "tone";
 
 import {
   DEFAULT_PULSE_DEPTH,
-  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_FILTER_ENABLED,
+  DEFAULT_PULSE_FILTER_TYPE,
+  DEFAULT_PULSE_MODE,
+  DEFAULT_PULSE_PATTERN,
+  DEFAULT_PULSE_PATTERN_LENGTH,
   DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_RESONANCE,
   DEFAULT_PULSE_SHAPE,
+  DEFAULT_PULSE_SWING,
+  type PulseFilterType,
+  type PulseMode,
   type PulseShape,
 } from "../chunks";
 import type { InstrumentCharacter } from "../packs";
 
-export type { PulseShape };
+export type { PulseFilterType, PulseMode, PulseShape };
+
+const FILTER_MIN_FREQUENCY = 180;
+const FILTER_MAX_FREQUENCY = 9500;
+const RESONANCE_MIN_Q = 0.7;
+const RESONANCE_MAX_Q = 14;
+const GATE_RAMP = 0.02;
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const normalizePattern = (pattern: number[] | undefined, length: number) => {
+  if (!Array.isArray(pattern) || pattern.length === 0) {
+    return Array.from({ length }, (_value, index) => (index % 2 === 0 ? 1 : 0));
+  }
+  if (pattern.length === length) {
+    return pattern.map((value) => (value ? 1 : 0));
+  }
+  const normalized: number[] = [];
+  for (let i = 0; i < length; i += 1) {
+    const ratio = pattern.length / length;
+    const sourceIndex = Math.floor(i * ratio);
+    normalized.push(pattern[sourceIndex] ? 1 : 0);
+  }
+  return normalized;
+};
 
 export interface PulseSettings {
-  rate: Tone.Unit.Frequency;
+  mode: PulseMode;
+  rate: string;
   depth: number;
   shape: PulseShape;
-  filter?: boolean;
+  filterEnabled: boolean;
+  filterType: PulseFilterType;
+  resonance: number;
+  pattern?: number[];
+  patternLength?: number;
+  swing?: number;
 }
 
 export const DEFAULT_PULSE_SETTINGS: PulseSettings = {
+  mode: DEFAULT_PULSE_MODE,
   rate: DEFAULT_PULSE_RATE,
   depth: DEFAULT_PULSE_DEPTH,
   shape: DEFAULT_PULSE_SHAPE,
-  filter: DEFAULT_PULSE_FILTER,
+  filterEnabled: DEFAULT_PULSE_FILTER_ENABLED,
+  filterType: DEFAULT_PULSE_FILTER_TYPE,
+  resonance: DEFAULT_PULSE_RESONANCE,
+  pattern: DEFAULT_PULSE_PATTERN,
+  patternLength: DEFAULT_PULSE_PATTERN_LENGTH,
+  swing: DEFAULT_PULSE_SWING,
 };
 
 type ToneLike = Pick<
   typeof Tone,
   | "PolySynth"
   | "Synth"
-  | "Tremolo"
-  | "AutoFilter"
   | "Gain"
   | "Destination"
+  | "Filter"
+  | "LFO"
+  | "Multiply"
+  | "Add"
+  | "Scale"
+  | "Sequence"
+  | "Loop"
   | "Transport"
+  | "Time"
+  | "now"
 > &
   Record<string, unknown>;
 
 export interface PulseInstrumentNodes {
   instrument: Tone.PolySynth;
-  tremolo: Tone.Tremolo;
-  filter: Tone.AutoFilter;
+  filter: Tone.Filter;
+  gate: Tone.Gain;
   output: Tone.Gain;
   effects: Tone.ToneAudioNode[];
   isFilterEnabled: () => boolean;
+  setMode: (mode: PulseMode) => void;
   setRate: (value: Tone.Unit.Frequency) => void;
   setDepth: (value: number) => void;
   setShape: (value: PulseShape) => void;
   setFilterEnabled: (enabled: boolean) => void;
+  setFilterType: (type: PulseFilterType) => void;
+  setResonance: (value: number) => void;
+  setPattern: (pattern: number[], length?: number) => void;
+  setSwing: (value: number) => void;
   dispose: () => void;
 }
-
-const clampDepth = (value: number) => Math.max(0, Math.min(1, value));
 
 const createPolySynth = (
   tone: ToneLike,
@@ -118,27 +172,27 @@ const createEffectNodes = (
 const reconnectChain = (
   params: {
     synth: Tone.PolySynth;
-    tremolo: Tone.Tremolo;
-    filter: Tone.AutoFilter;
+    filter: Tone.Filter;
+    gate: Tone.Gain;
     effects: Tone.ToneAudioNode[];
     output: Tone.Gain;
   },
   useFilter: boolean
 ) => {
-  const { synth, tremolo, filter, effects, output } = params;
+  const { synth, filter, gate, effects, output } = params;
   synth.disconnect();
-  tremolo.disconnect();
   filter.disconnect();
+  gate.disconnect();
   effects.forEach((node) => node.disconnect());
 
-  let current: Tone.ToneAudioNode;
+  let current: Tone.ToneAudioNode = synth;
   if (useFilter) {
     synth.connect(filter);
     current = filter;
-  } else {
-    synth.connect(tremolo);
-    current = tremolo;
   }
+
+  current.connect(gate);
+  current = gate;
 
   effects.forEach((node) => {
     current.connect(node);
@@ -147,6 +201,28 @@ const reconnectChain = (
 
   current.connect(output);
 };
+
+const resonanceToQ = (value: number) =>
+  RESONANCE_MIN_Q + (RESONANCE_MAX_Q - RESONANCE_MIN_Q) * clamp01(value);
+
+const mapGateToAmplitude = (depth: number, value: number) => {
+  const normalized = clamp01(value);
+  const clampedDepth = clamp01(depth);
+  return 1 - clampedDepth + clampedDepth * normalized;
+};
+
+const mapGateToFrequency = (depth: number, value: number) => {
+  const normalized = clamp01(value);
+  const clampedDepth = clamp01(depth);
+  const normalizedValue = 1 - clampedDepth + clampedDepth * normalized;
+  return (
+    FILTER_MIN_FREQUENCY +
+    (FILTER_MAX_FREQUENCY - FILTER_MIN_FREQUENCY) * normalizedValue
+  );
+};
+
+const normalizeLength = (length?: number) =>
+  length === 16 ? 16 : length === 8 ? 8 : DEFAULT_PULSE_PATTERN_LENGTH;
 
 export const createPulseInstrument = (
   tone: ToneLike = Tone as ToneLike,
@@ -159,65 +235,319 @@ export const createPulseInstrument = (
   };
 
   const synth = createPolySynth(tone, character);
-  const tremolo = new tone.Tremolo(resolved.rate, resolved.depth);
-  tremolo.type = resolved.shape;
-  tremolo.start();
-  tremolo.sync();
-
-  const filter = new tone.AutoFilter(resolved.rate);
-  filter.type = resolved.shape;
-  filter.depth.value = clampDepth(resolved.depth);
-  filter.start();
-  filter.sync();
-
+  const filter = new tone.Filter({
+    type: resolved.filterType,
+    frequency: FILTER_MAX_FREQUENCY,
+    Q: resonanceToQ(resolved.resonance),
+  });
+  const gate = new tone.Gain(1);
   const output = new tone.Gain(1);
   output.connect(tone.Destination);
-
   const effects = createEffectNodes(tone, character);
 
-  let useFilter = Boolean(resolved.filter);
-  reconnectChain({ synth, tremolo, filter, effects, output }, useFilter);
+  let currentMode: PulseMode = resolved.mode;
+  let currentRate: Tone.Unit.Frequency = resolved.rate;
+  let currentDepth = clamp01(resolved.depth);
+  let currentShape: PulseShape = resolved.shape;
+  let filterEnabled = Boolean(resolved.filterEnabled);
+  let currentFilterType: PulseFilterType = resolved.filterType;
+  let currentResonance = clamp01(resolved.resonance);
+  let currentSwing = clamp01(resolved.swing ?? DEFAULT_PULSE_SWING);
+
+  const patternLength = normalizeLength(resolved.patternLength);
+  let patternSteps = normalizePattern(resolved.pattern ?? DEFAULT_PULSE_PATTERN, patternLength);
+  let patternStepIndex = 0;
+  let randomStepIndex = 0;
+
+  const lfo = new tone.LFO({
+    frequency: currentRate,
+    type: currentShape,
+    min: 0,
+    max: 1,
+  });
+  lfo.start();
+
+  const amplitudeDepth = new tone.Multiply(currentDepth);
+  const amplitudeOffset = new tone.Add(1 - currentDepth);
+  lfo.connect(amplitudeDepth);
+  amplitudeDepth.connect(amplitudeOffset);
+
+  const filterDepth = new tone.Multiply(currentDepth);
+  const filterOffset = new tone.Add(1 - currentDepth);
+  const filterScale = new tone.Scale(FILTER_MIN_FREQUENCY, FILTER_MAX_FREQUENCY);
+  lfo.connect(filterDepth);
+  filterDepth.connect(filterOffset);
+  filterOffset.connect(filterScale);
+
+  reconnectChain({ synth, filter, gate, effects, output }, filterEnabled);
+
+  const resolveSeconds = (value?: Tone.Unit.Time) => {
+    if (value === undefined) {
+      return tone.now();
+    }
+    if (typeof value === "number") {
+      return value;
+    }
+    try {
+      return tone.Transport.getSecondsAtTime(value);
+    } catch (error) {
+      try {
+        return tone.Time(value).toSeconds();
+      } catch (innerError) {
+        return tone.now();
+      }
+    }
+  };
+
+  const applySwing = (time: number, stepIndex: number) => {
+    if (!currentSwing) {
+      return time;
+    }
+    if (stepIndex % 2 !== 1) {
+      return time;
+    }
+    const interval = tone.Time(currentRate).toSeconds();
+    return time + interval * currentSwing * 0.5;
+  };
+
+  const applyGateValue = (value: number, time: number) => {
+    const when = Math.max(time, tone.now());
+    const amplitude = mapGateToAmplitude(currentDepth, value);
+    const frequency = mapGateToFrequency(currentDepth, value);
+
+    if (filterEnabled) {
+      gate.gain.cancelScheduledValues(when);
+      gate.gain.setValueAtTime(1, when);
+      filter.frequency.cancelScheduledValues(when);
+      filter.frequency.linearRampToValueAtTime(
+        frequency,
+        when + GATE_RAMP
+      );
+    } else {
+      filter.frequency.cancelScheduledValues(when);
+      filter.frequency.linearRampToValueAtTime(
+        FILTER_MAX_FREQUENCY,
+        when + GATE_RAMP
+      );
+      gate.gain.cancelScheduledValues(when);
+      gate.gain.linearRampToValueAtTime(amplitude, when + GATE_RAMP);
+    }
+  };
+
+  const resetGate = (time: number) => {
+    applyGateValue(1, time);
+  };
+
+  const updateLfoRouting = () => {
+    amplitudeOffset.disconnect();
+    filterScale.disconnect();
+    if (currentMode !== "LFO") {
+      resetGate(tone.now());
+      return;
+    }
+    if (filterEnabled) {
+      filterScale.connect(filter.frequency);
+      gate.gain.setValueAtTime(1, tone.now());
+    } else {
+      amplitudeOffset.connect(gate.gain);
+    }
+  };
+
+  const updateDepthNodes = () => {
+    amplitudeDepth.factor.value = currentDepth;
+    amplitudeOffset.addend.value = 1 - currentDepth;
+    filterDepth.factor.value = currentDepth;
+    filterOffset.addend.value = 1 - currentDepth;
+  };
+
+  let patternSequence: Tone.Sequence<number> | null = null;
+  const rebuildPatternSequence = () => {
+    patternSequence?.dispose();
+    patternStepIndex = 0;
+    patternSequence = new tone.Sequence<number>((time, step) => {
+      const stepValue = typeof step === "number" ? step : 0;
+      const index = patternStepIndex;
+      patternStepIndex = (patternStepIndex + 1) % patternSteps.length;
+      const eventTime = applySwing(time, index);
+      if (currentMode === "Pattern" && activeVoices > 0) {
+        applyGateValue(stepValue, eventTime);
+      }
+    }, patternSteps.slice(), currentRate);
+    patternSequence.loop = true;
+    patternSequence.start(0);
+  };
+
+  let randomLoop: Tone.Loop | null = null;
+  const rebuildRandomLoop = () => {
+    randomLoop?.dispose();
+    randomStepIndex = 0;
+    randomLoop = new tone.Loop((time) => {
+      const stepIndex = randomStepIndex;
+      randomStepIndex += 1;
+      if (currentMode !== "Random" || activeVoices === 0) {
+        return;
+      }
+      const probability = 0.3 + currentDepth * 0.6;
+      const active = Math.random() < clamp01(probability);
+      const eventTime = applySwing(time, stepIndex);
+      applyGateValue(active ? 1 : 0, eventTime);
+    }, currentRate);
+    randomLoop.start(0);
+  };
+
+  rebuildPatternSequence();
+  rebuildRandomLoop();
+  updateDepthNodes();
+  updateLfoRouting();
+
+  let activeVoices = 0;
+  let voiceCounter = 0;
+  const scheduledReleases = new Map<number, number>();
+
+  const scheduleRelease = (
+    voiceId: number,
+    startTime?: Tone.Unit.Time,
+    duration?: Tone.Unit.Time
+  ) => {
+    const startSeconds = resolveSeconds(startTime);
+    const durationSeconds = duration
+      ? tone.Time(duration).toSeconds()
+      : tone.Time("8n").toSeconds();
+    const releaseTime = startSeconds + durationSeconds;
+    const eventId = tone.Transport.scheduleOnce(() => {
+      scheduledReleases.delete(voiceId);
+      activeVoices = Math.max(0, activeVoices - 1);
+      if (activeVoices === 0) {
+        resetGate(releaseTime);
+      }
+    }, releaseTime);
+    scheduledReleases.set(voiceId, eventId);
+  };
+
+  const originalTrigger = synth.triggerAttackRelease.bind(synth);
+  (synth as Tone.PolySynth & {
+    triggerAttackRelease: typeof synth.triggerAttackRelease;
+  }).triggerAttackRelease = (
+    notes: Tone.Unit.Frequency | Tone.Unit.Frequency[],
+    duration?: Tone.Unit.Time,
+    time?: Tone.Unit.Time,
+    velocity?: number
+  ) => {
+    const voiceId = ++voiceCounter;
+    activeVoices += 1;
+    const startSeconds = resolveSeconds(time);
+    if (activeVoices === 1 && currentMode !== "LFO") {
+      resetGate(startSeconds);
+    }
+    scheduleRelease(voiceId, time, duration);
+    return originalTrigger(
+      notes,
+      duration as Tone.Unit.Time | Tone.Unit.Time[],
+      time,
+      velocity
+    );
+  };
+
+  const setMode = (mode: PulseMode) => {
+    if (currentMode === mode) return;
+    currentMode = mode;
+    updateLfoRouting();
+  };
 
   const setRate = (value: Tone.Unit.Frequency) => {
-    tremolo.set({ frequency: value });
-    filter.set({ frequency: value });
+    if (currentRate === value) return;
+    currentRate = value;
+    lfo.frequency.value = value;
+    rebuildPatternSequence();
+    if (randomLoop) {
+      randomLoop.interval = value;
+    }
   };
 
   const setDepth = (value: number) => {
-    const depth = clampDepth(value);
-    tremolo.set({ depth });
-    filter.depth.value = depth;
+    const clamped = clamp01(value);
+    if (clamped === currentDepth) return;
+    currentDepth = clamped;
+    updateDepthNodes();
   };
 
   const setShape = (value: PulseShape) => {
-    tremolo.type = value;
-    filter.type = value;
+    if (currentShape === value) return;
+    currentShape = value;
+    lfo.type = value;
   };
 
   const setFilterEnabled = (enabled: boolean) => {
-    if (useFilter === enabled) return;
-    useFilter = enabled;
-    reconnectChain({ synth, tremolo, filter, effects, output }, useFilter);
+    if (filterEnabled === enabled) return;
+    filterEnabled = enabled;
+    reconnectChain({ synth, filter, gate, effects, output }, filterEnabled);
+    updateLfoRouting();
+  };
+
+  const setFilterType = (type: PulseFilterType) => {
+    if (currentFilterType === type) return;
+    currentFilterType = type;
+    filter.type = type;
+  };
+
+  const setResonance = (value: number) => {
+    const clamped = clamp01(value);
+    if (currentResonance === clamped) return;
+    currentResonance = clamped;
+    filter.Q.value = resonanceToQ(clamped);
+  };
+
+  const setPattern = (pattern: number[], length?: number) => {
+    const normalizedLength = normalizeLength(length ?? pattern.length);
+    patternSteps = normalizePattern(pattern, normalizedLength);
+    patternStepIndex = 0;
+    if (patternSequence) {
+      patternSequence.events = patternSteps.slice();
+    } else {
+      rebuildPatternSequence();
+    }
+  };
+
+  const setSwing = (value: number) => {
+    const clamped = clamp01(value);
+    currentSwing = clamped;
   };
 
   const dispose = () => {
-    tremolo.dispose();
-    filter.dispose();
+    scheduledReleases.forEach((eventId) => {
+      tone.Transport.clear(eventId);
+    });
+    scheduledReleases.clear();
+    lfo.dispose();
+    amplitudeDepth.dispose();
+    amplitudeOffset.dispose();
+    filterDepth.dispose();
+    filterOffset.dispose();
+    filterScale.dispose();
+    patternSequence?.dispose();
+    randomLoop?.dispose();
     effects.forEach((node) => node.dispose());
+    gate.dispose();
+    filter.dispose();
     output.dispose();
   };
 
   return {
     instrument: synth,
-    tremolo,
     filter,
+    gate,
     output,
     effects,
-    isFilterEnabled: () => useFilter,
+    isFilterEnabled: () => filterEnabled,
+    setMode,
     setRate,
     setDepth,
     setShape,
     setFilterEnabled,
+    setFilterType,
+    setResonance,
+    setPattern,
+    setSwing,
     dispose,
   };
 };

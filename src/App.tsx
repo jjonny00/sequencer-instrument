@@ -11,10 +11,17 @@ import {
 } from "./tracks";
 import {
   DEFAULT_PULSE_DEPTH,
-  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_FILTER_ENABLED,
+  DEFAULT_PULSE_FILTER_TYPE,
+  DEFAULT_PULSE_MODE,
+  DEFAULT_PULSE_PATTERN,
+  DEFAULT_PULSE_PATTERN_LENGTH,
   DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_RESONANCE,
   DEFAULT_PULSE_SHAPE,
+  DEFAULT_PULSE_SWING,
   type Chunk,
+  type PulseMode,
   type PulseShape,
 } from "./chunks";
 import { packs, type InstrumentCharacter, type Pack } from "./packs";
@@ -1217,11 +1224,30 @@ export default function App() {
               const rate = chunk?.pulseRate ?? DEFAULT_PULSE_RATE;
               const depth = chunk?.pulseDepth ?? DEFAULT_PULSE_DEPTH;
               const shape = (chunk?.pulseShape ?? DEFAULT_PULSE_SHAPE) as PulseShape;
-              const filterEnabled = chunk?.pulseFilter ?? DEFAULT_PULSE_FILTER;
+              const mode = (chunk?.pulseMode ?? DEFAULT_PULSE_MODE) as PulseMode;
+              const filterEnabled =
+                chunk?.pulseFilterEnabled ??
+                chunk?.pulseFilter ??
+                DEFAULT_PULSE_FILTER_ENABLED;
+              const filterType =
+                chunk?.pulseFilterType ?? DEFAULT_PULSE_FILTER_TYPE;
+              const resonance = chunk?.pulseResonance ?? DEFAULT_PULSE_RESONANCE;
+              const patternLength =
+                chunk?.pulsePatternLength ?? DEFAULT_PULSE_PATTERN_LENGTH;
+              const pattern =
+                (chunk?.pulsePattern && chunk.pulsePattern.length > 0
+                  ? chunk.pulsePattern
+                  : DEFAULT_PULSE_PATTERN) ?? DEFAULT_PULSE_PATTERN;
+              const swing = chunk?.pulseSwing ?? DEFAULT_PULSE_SWING;
+              nodes.setMode(mode);
               nodes.setRate(rate);
               nodes.setDepth(depth);
               nodes.setShape(shape);
               nodes.setFilterEnabled(Boolean(filterEnabled));
+              nodes.setFilterType(filterType);
+              nodes.setResonance(resonance);
+              nodes.setPattern(pattern, patternLength);
+              nodes.setSwing(swing);
             }
           }
 
