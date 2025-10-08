@@ -11,11 +11,19 @@ import * as Tone from "tone";
 
 import {
   DEFAULT_PULSE_DEPTH,
-  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_FILTER_ENABLED,
+  DEFAULT_PULSE_FILTER_TYPE,
+  DEFAULT_PULSE_MODE,
+  DEFAULT_PULSE_PATTERN,
+  DEFAULT_PULSE_PATTERN_LENGTH,
   DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_RESONANCE,
   DEFAULT_PULSE_SHAPE,
+  DEFAULT_PULSE_SWING,
   type Chunk,
   type NoteEvent,
+  type PulseFilterType,
+  type PulseMode,
   type PulseShape,
 } from "./chunks";
 import type { Track } from "./tracks";
@@ -267,6 +275,20 @@ const PULSE_SHAPE_OPTIONS: { value: PulseShape; label: string }[] = [
   { value: "triangle", label: "Triangle" },
 ];
 
+const PULSE_MODE_OPTIONS: { value: PulseMode; label: string }[] = [
+  { value: "LFO", label: "LFO" },
+  { value: "Pattern", label: "Pattern" },
+  { value: "Random", label: "Random" },
+];
+
+const PULSE_FILTER_TYPE_OPTIONS: { value: PulseFilterType; label: string }[] = [
+  { value: "lowpass", label: "Low Pass" },
+  { value: "bandpass", label: "Band Pass" },
+  { value: "highpass", label: "High Pass" },
+];
+
+const PULSE_PATTERN_LENGTH_OPTIONS = [8, 16] as const;
+
 const DEFAULT_FREE_RATE = 240;
 
 const normalizeArpRate = (value: string | undefined | null): string => {
@@ -300,6 +322,29 @@ const arraysEqual = <T,>(a?: T[] | null, b?: T[] | null) => {
     if (a[i] !== b[i]) return false;
   }
   return true;
+};
+
+const normalizePulsePattern = (pattern: number[] | undefined, length: number) => {
+  if (!Array.isArray(pattern) || pattern.length === 0) {
+    return Array.from({ length }, (_value, index) => (index % 2 === 0 ? 1 : 0));
+  }
+  if (pattern.length === length) {
+    return pattern.map((value) => (value ? 1 : 0));
+  }
+  const normalized: number[] = [];
+  for (let i = 0; i < length; i += 1) {
+    const ratio = pattern.length / length;
+    const sourceIndex = Math.floor(i * ratio);
+    normalized.push(pattern[sourceIndex] ? 1 : 0);
+  }
+  return normalized;
+};
+
+const resizePulsePattern = (pattern: number[], nextLength: number) => {
+  if (pattern.length === nextLength) {
+    return pattern.slice();
+  }
+  return normalizePulsePattern(pattern, nextLength);
 };
 
 const buildChordForDegree = (
@@ -510,6 +555,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   useEffect(() => {
     if (!isPulse || !pattern || !updatePattern) return;
     const defaults: Partial<Chunk> = {};
+    if (pattern.pulseMode === undefined) {
+      defaults.pulseMode = DEFAULT_PULSE_MODE;
+    }
     if (pattern.pulseRate === undefined) {
       defaults.pulseRate = DEFAULT_PULSE_RATE;
     }
@@ -519,8 +567,26 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     if (pattern.pulseShape === undefined) {
       defaults.pulseShape = DEFAULT_PULSE_SHAPE;
     }
-    if (pattern.pulseFilter === undefined) {
-      defaults.pulseFilter = DEFAULT_PULSE_FILTER;
+    if (pattern.pulseFilterEnabled === undefined) {
+      defaults.pulseFilterEnabled =
+        pattern.pulseFilter !== undefined
+          ? pattern.pulseFilter
+          : DEFAULT_PULSE_FILTER_ENABLED;
+    }
+    if (pattern.pulseFilterType === undefined) {
+      defaults.pulseFilterType = DEFAULT_PULSE_FILTER_TYPE;
+    }
+    if (pattern.pulseResonance === undefined) {
+      defaults.pulseResonance = DEFAULT_PULSE_RESONANCE;
+    }
+    if (!Array.isArray(pattern.pulsePattern) || pattern.pulsePattern.length === 0) {
+      defaults.pulsePattern = DEFAULT_PULSE_PATTERN;
+    }
+    if (pattern.pulsePatternLength === undefined) {
+      defaults.pulsePatternLength = DEFAULT_PULSE_PATTERN_LENGTH;
+    }
+    if (pattern.pulseSwing === undefined) {
+      defaults.pulseSwing = DEFAULT_PULSE_SWING;
     }
     if (Object.keys(defaults).length > 0) {
       updatePattern(defaults);
@@ -899,10 +965,71 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     };
   }, [pattern, tonalCenter, scaleName, selectedDegree, extensionsEnabled]);
 
+  const pulseMode = (pattern?.pulseMode ?? DEFAULT_PULSE_MODE) as PulseMode;
   const pulseRate = pattern?.pulseRate ?? DEFAULT_PULSE_RATE;
   const pulseDepth = pattern?.pulseDepth ?? DEFAULT_PULSE_DEPTH;
   const pulseShape = (pattern?.pulseShape ?? DEFAULT_PULSE_SHAPE) as PulseShape;
-  const pulseFilterEnabled = pattern?.pulseFilter ?? DEFAULT_PULSE_FILTER;
+  const pulseFilterEnabled =
+    pattern?.pulseFilterEnabled ??
+    pattern?.pulseFilter ??
+    DEFAULT_PULSE_FILTER_ENABLED;
+  const pulseFilterType = pattern?.pulseFilterType ?? DEFAULT_PULSE_FILTER_TYPE;
+  const pulseResonance = pattern?.pulseResonance ?? DEFAULT_PULSE_RESONANCE;
+  const pulsePatternLength =
+    pattern?.pulsePatternLength ?? DEFAULT_PULSE_PATTERN_LENGTH;
+  const rawPulsePattern =
+    pattern?.pulsePattern && pattern.pulsePattern.length > 0
+      ? pattern.pulsePattern
+      : DEFAULT_PULSE_PATTERN;
+  const displayedPulsePattern = useMemo(
+    () => normalizePulsePattern(rawPulsePattern, pulsePatternLength),
+    [rawPulsePattern, pulsePatternLength]
+  );
+  const pulseSwing = pattern?.pulseSwing ?? DEFAULT_PULSE_SWING;
+  const pulsePatternRows = useMemo(
+    () =>
+      pulsePatternLength === 16
+        ? [
+            displayedPulsePattern.slice(0, 8),
+            displayedPulsePattern.slice(8),
+          ]
+        : [displayedPulsePattern],
+    [displayedPulsePattern, pulsePatternLength]
+  );
+
+  const handlePulseModeChange = useCallback(
+    (mode: PulseMode) => {
+      if (!updatePattern) return;
+      updatePattern({ pulseMode: mode });
+    },
+    [updatePattern]
+  );
+
+  const handlePulsePatternLengthChange = useCallback(
+    (length: number) => {
+      if (!updatePattern) return;
+      const nextPattern = resizePulsePattern(displayedPulsePattern, length);
+      updatePattern({
+        pulsePatternLength: length,
+        pulsePattern: nextPattern,
+      });
+    },
+    [displayedPulsePattern, updatePattern]
+  );
+
+  const handlePulseStepToggle = useCallback(
+    (index: number) => {
+      if (!updatePattern) return;
+      const next = displayedPulsePattern.map((value, stepIndex) =>
+        stepIndex === index ? (value ? 0 : 1) : value
+      );
+      updatePattern({
+        pulsePattern: next,
+        pulsePatternLength,
+      });
+    },
+    [displayedPulsePattern, pulsePatternLength, updatePattern]
+  );
 
   const timingMode = pattern?.timingMode === "free" ? "free" : "sync";
   const autopilotEnabled = pattern?.autopilot ?? false;
@@ -3718,114 +3845,343 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
       {isPulse ? (
         <Section>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
               <span
                 style={{
                   display: "block",
-                  marginBottom: 4,
+                  marginBottom: 6,
                   color: "#94a3b8",
+                  fontSize: 12,
                   fontWeight: 600,
                 }}
               >
-                Rate
+                Mode
               </span>
-              <select
-                value={pulseRate}
-                onChange={(event) =>
-                  updatePattern?.({ pulseRate: event.target.value })
-                }
-                disabled={!updatePattern}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #273144",
-                  background: updatePattern ? "#111a2c" : "#0b101a",
-                  color: updatePattern ? "#f8fafc" : "#475569",
-                  cursor: updatePattern ? "pointer" : "not-allowed",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 6,
                 }}
               >
-                {SYNC_RATE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
+                {PULSE_MODE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handlePulseModeChange(option.value)}
+                    disabled={!updatePattern}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "1px solid #273144",
+                      background:
+                        pulseMode === option.value ? "#27E0B0" : "#111a2c",
+                      color: pulseMode === option.value ? "#0f172a" : "#e2e8f0",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      textTransform: "uppercase",
+                      cursor: updatePattern ? "pointer" : "not-allowed",
+                      transition: "background 0.15s ease, color 0.15s ease",
+                    }}
+                  >
                     {option.label}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
-            <label style={{ flex: "1 1 140px", fontSize: 12 }}>
-              <span
-                style={{
-                  display: "block",
-                  marginBottom: 4,
-                  color: "#94a3b8",
-                  fontWeight: 600,
-                }}
-              >
-                Shape
-              </span>
-              <select
-                value={pulseShape}
-                onChange={(event) =>
-                  updatePattern?.({
-                    pulseShape: event.target.value as PulseShape,
-                  })
-                }
-                disabled={!updatePattern}
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #273144",
-                  background: updatePattern ? "#111a2c" : "#0b101a",
-                  color: updatePattern ? "#f8fafc" : "#475569",
-                  cursor: updatePattern ? "pointer" : "not-allowed",
-                }}
-              >
-                {PULSE_SHAPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <Slider
-            label="Depth"
-            min={0}
-            max={1}
-            step={0.01}
-            value={pulseDepth}
-            formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={updatePattern ? (value) => updatePattern({ pulseDepth: value }) : undefined}
-          />
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontSize: 12,
-              color: "#e6f2ff",
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>Filter Gate</span>
-            <button
-              onClick={() =>
-                updatePattern?.({ pulseFilter: !pulseFilterEnabled })
+              </div>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: 4,
+                    color: "#94a3b8",
+                    fontWeight: 600,
+                  }}
+                >
+                  Rate
+                </span>
+                <select
+                  value={pulseRate}
+                  onChange={(event) =>
+                    updatePattern?.({ pulseRate: event.target.value })
+                  }
+                  disabled={!updatePattern}
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #273144",
+                    background: updatePattern ? "#111a2c" : "#0b101a",
+                    color: updatePattern ? "#f8fafc" : "#475569",
+                    cursor: updatePattern ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {SYNC_RATE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {pulseMode === "LFO" ? (
+                <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      marginBottom: 4,
+                      color: "#94a3b8",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Shape
+                  </span>
+                  <select
+                    value={pulseShape}
+                    onChange={(event) =>
+                      updatePattern?.({
+                        pulseShape: event.target.value as PulseShape,
+                      })
+                    }
+                    disabled={!updatePattern}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: "1px solid #273144",
+                      background: updatePattern ? "#111a2c" : "#0b101a",
+                      color: updatePattern ? "#f8fafc" : "#475569",
+                      cursor: updatePattern ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    {PULSE_SHAPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+            <Slider
+              label="Depth"
+              min={0}
+              max={1}
+              step={0.01}
+              value={pulseDepth}
+              formatValue={(value) => `${Math.round(value * 100)}%`}
+              onChange={
+                updatePattern
+                  ? (value) => updatePattern({ pulseDepth: value })
+                  : undefined
               }
-              disabled={!updatePattern}
+            />
+            <div
               style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "1px solid #2a3344",
-                background: pulseFilterEnabled ? "#27E0B0" : "#1f2532",
-                color: pulseFilterEnabled ? "#0f172a" : "#e6f2ff",
-                cursor: updatePattern ? "pointer" : "not-allowed",
-                opacity: updatePattern ? 1 : 0.5,
+                padding: "10px 12px",
+                borderRadius: 10,
+                background: "rgba(15, 23, 42, 0.35)",
+                border: "1px solid #1f2a3a",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
               }}
             >
-              {pulseFilterEnabled ? "Filter" : "Volume"}
-            </button>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  color: "#e2e8f0",
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>Filter</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updatePattern?.({
+                      pulseFilterEnabled: !pulseFilterEnabled,
+                    })
+                  }
+                  disabled={!updatePattern}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #2a3344",
+                    background: pulseFilterEnabled ? "#27E0B0" : "#1f2532",
+                    color: pulseFilterEnabled ? "#0f172a" : "#e6f2ff",
+                    cursor: updatePattern ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {pulseFilterEnabled ? "On" : "Off"}
+                </button>
+              </div>
+              <label style={{ fontSize: 12 }}>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: 4,
+                    color: "#94a3b8",
+                    fontWeight: 600,
+                  }}
+                >
+                  Type
+                </span>
+                <select
+                  value={pulseFilterType}
+                  onChange={(event) =>
+                    updatePattern?.({
+                      pulseFilterType: event.target.value as PulseFilterType,
+                    })
+                  }
+                  disabled={!updatePattern}
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #273144",
+                    background: updatePattern ? "#111a2c" : "#0b101a",
+                    color: updatePattern ? "#f8fafc" : "#475569",
+                    cursor: updatePattern ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {PULSE_FILTER_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Slider
+                label="Resonance"
+                min={0}
+                max={1}
+                step={0.01}
+                value={pulseResonance}
+                formatValue={(value) => `${Math.round(value * 100)}%`}
+                onChange={
+                  updatePattern
+                    ? (value) => updatePattern({ pulseResonance: value })
+                    : undefined
+                }
+              />
+            </div>
+            {pulseMode === "Pattern" ? (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  background: "rgba(15, 23, 42, 0.35)",
+                  border: "1px solid #1f2a3a",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    color: "#94a3b8",
+                    fontSize: 12,
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>Pattern Length</span>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      gap: 6,
+                    }}
+                  >
+                    {PULSE_PATTERN_LENGTH_OPTIONS.map((length) => (
+                      <button
+                        key={length}
+                        type="button"
+                        onClick={() => handlePulsePatternLengthChange(length)}
+                        disabled={!updatePattern}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #273144",
+                          background:
+                            pulsePatternLength === length
+                              ? "#27E0B0"
+                              : "#111a2c",
+                          color:
+                            pulsePatternLength === length
+                              ? "#0f172a"
+                              : "#e2e8f0",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: updatePattern ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {length}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {pulsePatternRows.map((row, rowIndex) => {
+                    const baseIndex = rowIndex * (pulsePatternRows[0]?.length ?? row.length);
+                    return (
+                      <div
+                        key={`pulse-row-${rowIndex}`}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
+                          gap: 6,
+                        }}
+                      >
+                        {row.map((value, columnIndex) => {
+                          const stepIndex = baseIndex + columnIndex;
+                          const active = Boolean(value);
+                          return (
+                            <button
+                              key={`pulse-step-${stepIndex}`}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => handlePulseStepToggle(stepIndex)}
+                              disabled={!updatePattern}
+                              style={{
+                                height: 32,
+                                borderRadius: 8,
+                                border: "1px solid #273144",
+                                background: active ? "#27E0B0" : "#101a2b",
+                                color: active ? "#0f172a" : "#94a3b8",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: updatePattern ? "pointer" : "not-allowed",
+                                transition: "background 0.1s ease",
+                              }}
+                            >
+                              {stepIndex + 1}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+                <Slider
+                  label="Swing"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={pulseSwing}
+                  formatValue={(value) => `${Math.round(value * 100)}%`}
+                  onChange={
+                    updatePattern
+                      ? (value) => updatePattern({ pulseSwing: value })
+                      : undefined
+                  }
+                />
+              </div>
+            ) : null}
           </div>
         </Section>
       ) : null}

@@ -221,10 +221,16 @@
             }
           },
           "defaults": {
+            "pulseMode": "LFO",
             "pulseRate": "8n",
             "pulseDepth": 0.9,
             "pulseShape": "square",
-            "pulseFilter": false
+            "pulseFilterEnabled": false,
+            "pulseFilterType": "lowpass",
+            "pulseResonance": 0.35,
+            "pulsePatternLength": 8,
+            "pulsePattern": [1, 0, 1, 0, 1, 0, 1, 0],
+            "pulseSwing": 0
           }
         },
         {
@@ -249,10 +255,16 @@
             { "type": "Phaser", "options": { "frequency": 0.6, "octaves": 1.5, "baseFrequency": 400, "wet": 0.3 } }
           ],
           "defaults": {
+            "pulseMode": "LFO",
             "pulseRate": "8t",
             "pulseDepth": 0.8,
             "pulseShape": "triangle",
-            "pulseFilter": true
+            "pulseFilterEnabled": true,
+            "pulseFilterType": "lowpass",
+            "pulseResonance": 0.35,
+            "pulsePatternLength": 8,
+            "pulsePattern": [1, 0, 1, 0, 1, 0, 1, 0],
+            "pulseSwing": 0
           }
         }
       ]
