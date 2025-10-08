@@ -73,6 +73,7 @@ type ToneLike = Pick<
   typeof Tone,
   | "PolySynth"
   | "Synth"
+  | "AmplitudeEnvelope"
   | "Gain"
   | "Destination"
   | "Filter"
@@ -91,6 +92,7 @@ type ToneLike = Pick<
 export interface PulseInstrumentNodes {
   instrument: Tone.PolySynth;
   filter: Tone.Filter;
+  ampEnv: Tone.AmplitudeEnvelope;
   gate: Tone.Gain;
   output: Tone.Gain;
   effects: Tone.ToneAudioNode[];
@@ -173,15 +175,17 @@ const reconnectChain = (
   params: {
     synth: Tone.PolySynth;
     filter: Tone.Filter;
+    ampEnv: Tone.AmplitudeEnvelope;
     gate: Tone.Gain;
     effects: Tone.ToneAudioNode[];
     output: Tone.Gain;
   },
   useFilter: boolean
 ) => {
-  const { synth, filter, gate, effects, output } = params;
+  const { synth, filter, ampEnv, gate, effects, output } = params;
   synth.disconnect();
   filter.disconnect();
+  ampEnv.disconnect();
   gate.disconnect();
   effects.forEach((node) => node.disconnect());
 
@@ -190,6 +194,9 @@ const reconnectChain = (
     synth.connect(filter);
     current = filter;
   }
+
+  current.connect(ampEnv);
+  current = ampEnv;
 
   current.connect(gate);
   current = gate;
@@ -240,6 +247,12 @@ export const createPulseInstrument = (
     frequency: FILTER_MAX_FREQUENCY,
     Q: resonanceToQ(resolved.resonance),
   });
+  const ampEnv = new tone.AmplitudeEnvelope({
+    attack: 0.005,
+    decay: 0.08,
+    sustain: 0,
+    release: 0.05,
+  });
   const gate = new tone.Gain(1);
   const output = new tone.Gain(1);
   output.connect(tone.Destination);
@@ -279,7 +292,7 @@ export const createPulseInstrument = (
   filterDepth.connect(filterOffset);
   filterOffset.connect(filterScale);
 
-  reconnectChain({ synth, filter, gate, effects, output }, filterEnabled);
+  reconnectChain({ synth, filter, ampEnv, gate, effects, output }, filterEnabled);
 
   const resolveSeconds = (value?: Tone.Unit.Time) => {
     if (value === undefined) {
@@ -310,39 +323,55 @@ export const createPulseInstrument = (
     return time + interval * currentSwing * 0.5;
   };
 
-  const applyGateValue = (value: number, time: number) => {
+  const triggerPulse = (value: number, time: number, velocity = 1) => {
     const when = Math.max(time, tone.now());
-    const amplitude = mapGateToAmplitude(currentDepth, value);
+    const amplitude = clamp01(mapGateToAmplitude(currentDepth, value) * velocity);
     const frequency = mapGateToFrequency(currentDepth, value);
 
-    if (filterEnabled) {
-      gate.gain.cancelScheduledValues(when);
-      gate.gain.setValueAtTime(1, when);
-      filter.frequency.cancelScheduledValues(when);
-      filter.frequency.linearRampToValueAtTime(
-        frequency,
-        when + GATE_RAMP
-      );
-    } else {
-      filter.frequency.cancelScheduledValues(when);
-      filter.frequency.linearRampToValueAtTime(
-        FILTER_MAX_FREQUENCY,
-        when + GATE_RAMP
-      );
-      gate.gain.cancelScheduledValues(when);
-      gate.gain.linearRampToValueAtTime(amplitude, when + GATE_RAMP);
+    if (value > 0) {
+      ampEnv.triggerAttackRelease("16n", when, amplitude);
     }
+
+    const targetFrequency = filterEnabled ? frequency : FILTER_MAX_FREQUENCY;
+    filter.frequency.cancelScheduledValues(when);
+    filter.frequency.linearRampToValueAtTime(targetFrequency, when + GATE_RAMP);
   };
 
-  const resetGate = (time: number) => {
-    applyGateValue(1, time);
+  const resetPulseState = (time: number) => {
+    const when = Math.max(time, tone.now());
+    gate.gain.cancelScheduledValues(when);
+    gate.gain.setValueAtTime(1, when);
+    filter.frequency.cancelScheduledValues(when);
+    filter.frequency.linearRampToValueAtTime(
+      mapGateToFrequency(currentDepth, 1),
+      when + GATE_RAMP
+    );
+    ampEnv.triggerRelease(when);
+  };
+
+  const updateEnvelopeShape = () => {
+    const envelopeValues =
+      currentMode === "LFO"
+        ? {
+            attack: 0.005,
+            decay: 0.08,
+            sustain: 1,
+            release: 0.05,
+          }
+        : {
+            attack: 0.005,
+            decay: 0.08,
+            sustain: 0,
+            release: 0.05,
+          };
+    ampEnv.set(envelopeValues);
   };
 
   const updateLfoRouting = () => {
     amplitudeOffset.disconnect();
     filterScale.disconnect();
     if (currentMode !== "LFO") {
-      resetGate(tone.now());
+      resetPulseState(tone.now());
       return;
     }
     if (filterEnabled) {
@@ -370,7 +399,7 @@ export const createPulseInstrument = (
       patternStepIndex = (patternStepIndex + 1) % patternSteps.length;
       const eventTime = applySwing(time, index);
       if (currentMode === "Pattern" && activeVoices > 0) {
-        applyGateValue(stepValue, eventTime);
+        triggerPulse(stepValue, eventTime);
       }
     }, patternSteps.slice(), currentRate);
     patternSequence.loop = true;
@@ -390,7 +419,7 @@ export const createPulseInstrument = (
       const probability = 0.3 + currentDepth * 0.6;
       const active = Math.random() < clamp01(probability);
       const eventTime = applySwing(time, stepIndex);
-      applyGateValue(active ? 1 : 0, eventTime);
+      triggerPulse(active ? 1 : 0, eventTime);
     }, currentRate);
     randomLoop.start(0);
   };
@@ -398,6 +427,7 @@ export const createPulseInstrument = (
   rebuildPatternSequence();
   rebuildRandomLoop();
   updateDepthNodes();
+  updateEnvelopeShape();
   updateLfoRouting();
 
   let activeVoices = 0;
@@ -418,7 +448,7 @@ export const createPulseInstrument = (
       scheduledReleases.delete(voiceId);
       activeVoices = Math.max(0, activeVoices - 1);
       if (activeVoices === 0) {
-        resetGate(releaseTime);
+        resetPulseState(releaseTime);
       }
     }, releaseTime);
     scheduledReleases.set(voiceId, eventId);
@@ -436,8 +466,20 @@ export const createPulseInstrument = (
     const voiceId = ++voiceCounter;
     activeVoices += 1;
     const startSeconds = resolveSeconds(time);
-    if (activeVoices === 1 && currentMode !== "LFO") {
-      resetGate(startSeconds);
+    if (activeVoices === 1) {
+      if (currentMode === "LFO") {
+        const when = Math.max(startSeconds, tone.now());
+        gate.gain.cancelScheduledValues(when);
+        gate.gain.setValueAtTime(1, when);
+        filter.frequency.cancelScheduledValues(when);
+        filter.frequency.linearRampToValueAtTime(
+          mapGateToFrequency(currentDepth, 1),
+          when + GATE_RAMP
+        );
+        ampEnv.triggerAttack(when, 1);
+      } else {
+        resetPulseState(startSeconds);
+      }
     }
     scheduleRelease(voiceId, time, duration);
     return originalTrigger(
@@ -451,7 +493,12 @@ export const createPulseInstrument = (
   const setMode = (mode: PulseMode) => {
     if (currentMode === mode) return;
     currentMode = mode;
+    updateEnvelopeShape();
     updateLfoRouting();
+    if (currentMode === "LFO" && activeVoices > 0) {
+      const when = tone.now();
+      ampEnv.triggerAttack(when, 1);
+    }
   };
 
   const setRate = (value: Tone.Unit.Frequency) => {
@@ -480,7 +527,7 @@ export const createPulseInstrument = (
   const setFilterEnabled = (enabled: boolean) => {
     if (filterEnabled === enabled) return;
     filterEnabled = enabled;
-    reconnectChain({ synth, filter, gate, effects, output }, filterEnabled);
+    reconnectChain({ synth, filter, ampEnv, gate, effects, output }, filterEnabled);
     updateLfoRouting();
   };
 
@@ -527,6 +574,7 @@ export const createPulseInstrument = (
     patternSequence?.dispose();
     randomLoop?.dispose();
     effects.forEach((node) => node.dispose());
+    ampEnv.dispose();
     gate.dispose();
     filter.dispose();
     output.dispose();
@@ -535,6 +583,7 @@ export const createPulseInstrument = (
   return {
     instrument: synth,
     filter,
+    ampEnv,
     gate,
     output,
     effects,
