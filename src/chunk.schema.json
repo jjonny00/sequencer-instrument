@@ -129,6 +129,21 @@
       "type": "boolean",
       "description": "Whether Pulse uses filter-based gating"
     },
+    "pulseMotionRate": {
+      "type": "string",
+      "description": "Secondary motion LFO rate"
+    },
+    "pulseMotionDepth": {
+      "type": "number",
+      "description": "Secondary motion LFO depth",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "pulseMotionTarget": {
+      "type": "string",
+      "description": "Motion LFO destination",
+      "enum": ["cutoff", "resonance", "amp"]
+    },
     "timingMode": {
       "type": "string",
       "description": "Whether the pattern follows BPM sync or free timing",

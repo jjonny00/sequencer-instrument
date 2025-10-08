@@ -1,6 +1,7 @@
 export type PulseShape = "sine" | "square" | "triangle";
 export type PulseMode = "LFO" | "Pattern" | "Random";
 export type PulseFilterType = "lowpass" | "bandpass" | "highpass";
+export type PulseMotionTarget = "cutoff" | "resonance" | "amp";
 
 export const DEFAULT_PULSE_MODE: PulseMode = "LFO";
 export const DEFAULT_PULSE_RATE = "8n";
@@ -9,6 +10,9 @@ export const DEFAULT_PULSE_SHAPE: PulseShape = "square";
 export const DEFAULT_PULSE_FILTER_ENABLED = false;
 export const DEFAULT_PULSE_FILTER_TYPE: PulseFilterType = "lowpass";
 export const DEFAULT_PULSE_RESONANCE = 0.35;
+export const DEFAULT_PULSE_MOTION_RATE = "2n";
+export const DEFAULT_PULSE_MOTION_DEPTH = 0.3;
+export const DEFAULT_PULSE_MOTION_TARGET: PulseMotionTarget = "cutoff";
 export const DEFAULT_PULSE_PATTERN = [1, 0, 1, 0, 1, 0, 1, 0];
 export const DEFAULT_PULSE_PATTERN_LENGTH = 8;
 export const DEFAULT_PULSE_SWING = 0;
@@ -22,6 +26,9 @@ export interface PulseChunkSettings {
   pulseFilterEnabled?: boolean;
   pulseFilterType?: PulseFilterType;
   pulseResonance?: number;
+  pulseMotionRate?: string;
+  pulseMotionDepth?: number;
+  pulseMotionTarget?: PulseMotionTarget;
   pulsePattern?: number[];
   pulsePatternLength?: number;
   pulseSwing?: number;
@@ -83,6 +90,9 @@ export interface Chunk {
   pulseFilterEnabled?: boolean;
   pulseFilterType?: PulseFilterType;
   pulseResonance?: number;
+  pulseMotionRate?: string;
+  pulseMotionDepth?: number;
+  pulseMotionTarget?: PulseMotionTarget;
   pulsePattern?: number[];
   pulsePatternLength?: number;
   pulseSwing?: number;
@@ -106,6 +116,9 @@ const isPulseMode = (value: unknown): value is PulseMode =>
 
 const isPulseFilterType = (value: unknown): value is PulseFilterType =>
   value === "lowpass" || value === "bandpass" || value === "highpass";
+
+const isPulseMotionTarget = (value: unknown): value is PulseMotionTarget =>
+  value === "cutoff" || value === "resonance" || value === "amp";
 
 const createDefaultPattern = (length: number) =>
   Array.from({ length }, (_value, index) => (index % 2 === 0 ? 1 : 0));
@@ -176,6 +189,28 @@ export const ensurePulseDefaults = (chunk: Chunk): Chunk => {
       next.pulseResonance = clamped;
       changed = true;
     }
+  }
+
+  if (typeof chunk.pulseMotionRate !== "string") {
+    next.pulseMotionRate = DEFAULT_PULSE_MOTION_RATE;
+    changed = true;
+  }
+  if (
+    typeof chunk.pulseMotionDepth !== "number" ||
+    Number.isNaN(chunk.pulseMotionDepth)
+  ) {
+    next.pulseMotionDepth = DEFAULT_PULSE_MOTION_DEPTH;
+    changed = true;
+  } else {
+    const clamped = clamp01(chunk.pulseMotionDepth);
+    if (clamped !== chunk.pulseMotionDepth) {
+      next.pulseMotionDepth = clamped;
+      changed = true;
+    }
+  }
+  if (!isPulseMotionTarget(chunk.pulseMotionTarget)) {
+    next.pulseMotionTarget = DEFAULT_PULSE_MOTION_TARGET;
+    changed = true;
   }
 
   const requestedLength =
@@ -252,6 +287,18 @@ export const applyPulseCharacterDefaults = (
     Number.isFinite(source.pulseResonance)
   ) {
     next.pulseResonance = clamp01(source.pulseResonance);
+  }
+  if (typeof source.pulseMotionRate === "string") {
+    next.pulseMotionRate = source.pulseMotionRate;
+  }
+  if (
+    typeof source.pulseMotionDepth === "number" &&
+    Number.isFinite(source.pulseMotionDepth)
+  ) {
+    next.pulseMotionDepth = clamp01(source.pulseMotionDepth);
+  }
+  if (isPulseMotionTarget(source.pulseMotionTarget)) {
+    next.pulseMotionTarget = source.pulseMotionTarget;
   }
   if (Array.isArray(source.pulsePattern) && source.pulsePattern.length > 0) {
     const length = next.pulsePatternLength ??

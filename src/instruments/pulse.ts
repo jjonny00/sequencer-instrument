@@ -5,6 +5,9 @@ import {
   DEFAULT_PULSE_FILTER_ENABLED,
   DEFAULT_PULSE_FILTER_TYPE,
   DEFAULT_PULSE_MODE,
+  DEFAULT_PULSE_MOTION_DEPTH,
+  DEFAULT_PULSE_MOTION_RATE,
+  DEFAULT_PULSE_MOTION_TARGET,
   DEFAULT_PULSE_PATTERN,
   DEFAULT_PULSE_PATTERN_LENGTH,
   DEFAULT_PULSE_RATE,
@@ -13,17 +16,22 @@ import {
   DEFAULT_PULSE_SWING,
   type PulseFilterType,
   type PulseMode,
+  type PulseMotionTarget,
   type PulseShape,
 } from "../chunks";
 import type { InstrumentCharacter } from "../packs";
 
-export type { PulseFilterType, PulseMode, PulseShape };
+export type { PulseFilterType, PulseMode, PulseShape, PulseMotionTarget };
 
 const FILTER_MIN_FREQUENCY = 180;
 const FILTER_MAX_FREQUENCY = 9500;
 const RESONANCE_MIN_Q = 0.7;
 const RESONANCE_MAX_Q = 14;
 const GATE_RAMP = 0.02;
+const MOTION_CUTOFF_RANGE = FILTER_MAX_FREQUENCY - FILTER_MIN_FREQUENCY;
+const MOTION_CUTOFF_RATIO = 0.4;
+const MOTION_RESONANCE_RATIO = 0.6;
+const MOTION_AMP_SWING = 0.5;
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -51,6 +59,9 @@ export interface PulseSettings {
   filterEnabled: boolean;
   filterType: PulseFilterType;
   resonance: number;
+  motionRate: string;
+  motionDepth: number;
+  motionTarget: PulseMotionTarget;
   pattern?: number[];
   patternLength?: number;
   swing?: number;
@@ -64,6 +75,9 @@ export const DEFAULT_PULSE_SETTINGS: PulseSettings = {
   filterEnabled: DEFAULT_PULSE_FILTER_ENABLED,
   filterType: DEFAULT_PULSE_FILTER_TYPE,
   resonance: DEFAULT_PULSE_RESONANCE,
+  motionRate: DEFAULT_PULSE_MOTION_RATE,
+  motionDepth: DEFAULT_PULSE_MOTION_DEPTH,
+  motionTarget: DEFAULT_PULSE_MOTION_TARGET,
   pattern: DEFAULT_PULSE_PATTERN,
   patternLength: DEFAULT_PULSE_PATTERN_LENGTH,
   swing: DEFAULT_PULSE_SWING,
@@ -104,6 +118,9 @@ export interface PulseInstrumentNodes {
   setFilterEnabled: (enabled: boolean) => void;
   setFilterType: (type: PulseFilterType) => void;
   setResonance: (value: number) => void;
+  setMotionRate: (value: Tone.Unit.Frequency) => void;
+  setMotionDepth: (value: number) => void;
+  setMotionTarget: (value: PulseMotionTarget) => void;
   setPattern: (pattern: number[], length?: number) => void;
   setSwing: (value: number) => void;
   dispose: () => void;
@@ -265,6 +282,9 @@ export const createPulseInstrument = (
   let filterEnabled = Boolean(resolved.filterEnabled);
   let currentFilterType: PulseFilterType = resolved.filterType;
   let currentResonance = clamp01(resolved.resonance);
+  let currentMotionRate: Tone.Unit.Frequency = resolved.motionRate;
+  let currentMotionDepth = clamp01(resolved.motionDepth);
+  let currentMotionTarget: PulseMotionTarget = resolved.motionTarget;
   let currentSwing = clamp01(resolved.swing ?? DEFAULT_PULSE_SWING);
 
   const patternLength = normalizeLength(resolved.patternLength);
@@ -279,6 +299,31 @@ export const createPulseInstrument = (
     max: 1,
   });
   lfo.start();
+
+  const motionLfo = new tone.LFO({
+    frequency: currentMotionRate,
+    min: -1,
+    max: 1,
+  });
+  motionLfo.start();
+
+  const motionDepthNode = new tone.Multiply(currentMotionDepth);
+  motionLfo.connect(motionDepthNode);
+
+  const motionCutoffGain = new tone.Multiply(
+    MOTION_CUTOFF_RANGE * MOTION_CUTOFF_RATIO
+  );
+  motionDepthNode.connect(motionCutoffGain);
+
+  const motionResonanceGain = new tone.Multiply(
+    resonanceToQ(currentResonance) * MOTION_RESONANCE_RATIO
+  );
+  motionDepthNode.connect(motionResonanceGain);
+
+  const motionAmpScale = new tone.Multiply(MOTION_AMP_SWING);
+  motionDepthNode.connect(motionAmpScale);
+  const motionAmpOffset = new tone.Add(1);
+  motionAmpScale.connect(motionAmpOffset);
 
   const amplitudeDepth = new tone.Multiply(currentDepth);
   const amplitudeOffset = new tone.Add(1 - currentDepth);
@@ -389,6 +434,36 @@ export const createPulseInstrument = (
     filterOffset.addend.value = 1 - currentDepth;
   };
 
+  const updateMotionDepthValue = () => {
+    motionDepthNode.factor.value = currentMotionDepth;
+  };
+
+  const updateMotionResonanceGain = () => {
+    motionResonanceGain.factor.value =
+      resonanceToQ(currentResonance) * MOTION_RESONANCE_RATIO;
+  };
+
+  const updateMotionTargetRouting = () => {
+    motionCutoffGain.disconnect();
+    motionResonanceGain.disconnect();
+    motionAmpOffset.disconnect();
+
+    const now = tone.now();
+
+    if (currentMotionTarget === "cutoff") {
+      motionCutoffGain.connect(filter.frequency);
+    } else if (currentMotionTarget === "resonance") {
+      motionResonanceGain.connect(filter.Q);
+    } else if (currentMotionTarget === "amp") {
+      motionAmpOffset.connect(output.gain);
+    }
+
+    if (currentMotionTarget !== "amp") {
+      output.gain.cancelScheduledValues(now);
+      output.gain.setValueAtTime(1, now);
+    }
+  };
+
   let patternSequence: Tone.Sequence<number> | null = null;
   const rebuildPatternSequence = () => {
     patternSequence?.dispose();
@@ -427,8 +502,11 @@ export const createPulseInstrument = (
   rebuildPatternSequence();
   rebuildRandomLoop();
   updateDepthNodes();
+  updateMotionDepthValue();
+  updateMotionResonanceGain();
   updateEnvelopeShape();
   updateLfoRouting();
+  updateMotionTargetRouting();
 
   let activeVoices = 0;
   let voiceCounter = 0;
@@ -542,6 +620,31 @@ export const createPulseInstrument = (
     if (currentResonance === clamped) return;
     currentResonance = clamped;
     filter.Q.value = resonanceToQ(clamped);
+    updateMotionResonanceGain();
+  };
+
+  const setMotionRate = (value: Tone.Unit.Frequency) => {
+    if (currentMotionRate === value) return;
+    currentMotionRate = value;
+    motionLfo.frequency.value = value;
+  };
+
+  const setMotionDepth = (value: number) => {
+    const clamped = clamp01(value);
+    if (currentMotionDepth === clamped) return;
+    currentMotionDepth = clamped;
+    updateMotionDepthValue();
+    if (currentMotionTarget === "amp" && clamped === 0) {
+      const now = tone.now();
+      output.gain.cancelScheduledValues(now);
+      output.gain.setValueAtTime(1, now);
+    }
+  };
+
+  const setMotionTarget = (value: PulseMotionTarget) => {
+    if (currentMotionTarget === value) return;
+    currentMotionTarget = value;
+    updateMotionTargetRouting();
   };
 
   const setPattern = (pattern: number[], length?: number) => {
@@ -566,11 +669,17 @@ export const createPulseInstrument = (
     });
     scheduledReleases.clear();
     lfo.dispose();
+    motionLfo.dispose();
     amplitudeDepth.dispose();
     amplitudeOffset.dispose();
     filterDepth.dispose();
     filterOffset.dispose();
     filterScale.dispose();
+    motionDepthNode.dispose();
+    motionCutoffGain.dispose();
+    motionResonanceGain.dispose();
+    motionAmpScale.dispose();
+    motionAmpOffset.dispose();
     patternSequence?.dispose();
     randomLoop?.dispose();
     effects.forEach((node) => node.dispose());
@@ -595,6 +704,9 @@ export const createPulseInstrument = (
     setFilterEnabled,
     setFilterType,
     setResonance,
+    setMotionRate,
+    setMotionDepth,
+    setMotionTarget,
     setPattern,
     setSwing,
     dispose,
