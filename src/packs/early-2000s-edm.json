@@ -281,6 +281,67 @@
         }
       ]
     },
+    "pulse": {
+      "defaultCharacterId": "edm-pulse-chop",
+      "characters": [
+        {
+          "id": "edm-pulse-chop",
+          "name": "Trance Chop",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 8,
+            "voiceOptions": {
+              "oscillator": { "type": "sawtooth" },
+              "envelope": {
+                "attack": 0.02,
+                "decay": 0.25,
+                "sustain": 0.5,
+                "release": 0.6
+              }
+            }
+          },
+          "effects": [
+            { "type": "FeedbackDelay", "options": { "delayTime": 0.18, "feedback": 0.35, "wet": 0.28 } }
+          ],
+          "defaults": {
+            "pulseRate": "16n",
+            "pulseDepth": 0.95,
+            "pulseShape": "square",
+            "pulseFilter": false
+          }
+        },
+        {
+          "id": "edm-pulse-sweep",
+          "name": "Filter Sweep",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "AMSynth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "envelope": {
+                "attack": 0.05,
+                "decay": 0.3,
+                "sustain": 0.6,
+                "release": 1
+              },
+              "oscillator": { "type": "triangle" }
+            }
+          },
+          "effects": [
+            { "type": "Chorus", "options": { "frequency": 1.8, "delayTime": 2.8, "depth": 0.45, "wet": 0.32 } }
+          ],
+          "defaults": {
+            "pulseRate": "8n",
+            "pulseDepth": 0.85,
+            "pulseShape": "sine",
+            "pulseFilter": true
+          }
+        }
+      ]
+    },
     "keyboard": {
       "defaultCharacterId": "saw-pad",
       "characters": [

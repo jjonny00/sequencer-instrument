@@ -1,3 +1,17 @@
+export type PulseShape = "sine" | "square" | "triangle";
+
+export const DEFAULT_PULSE_RATE = "8n";
+export const DEFAULT_PULSE_DEPTH = 0.9;
+export const DEFAULT_PULSE_SHAPE: PulseShape = "square";
+export const DEFAULT_PULSE_FILTER = false;
+
+export interface PulseChunkSettings {
+  pulseRate?: string;
+  pulseDepth?: number;
+  pulseShape?: PulseShape;
+  pulseFilter?: boolean;
+}
+
 export interface NoteEvent {
   time: number;
   duration: number;
@@ -46,6 +60,10 @@ export interface Chunk {
   autopilot?: boolean;
   noteEvents?: NoteEvent[];
   noteLoopLength?: number;
+  pulseRate?: string;
+  pulseDepth?: number;
+  pulseShape?: PulseShape;
+  pulseFilter?: boolean;
   harmoniaComplexity?: "simple" | "extended" | "lush";
   harmoniaTone?: number;
   harmoniaDynamics?: number;
@@ -55,4 +73,62 @@ export interface Chunk {
   harmoniaBorrowedLabel?: string;
   harmoniaStepDegrees?: (number | null)[];
 }
+
+export const ensurePulseDefaults = (chunk: Chunk): Chunk => {
+  if (chunk.instrument !== "pulse") {
+    return chunk;
+  }
+
+  let changed = false;
+  const next: Partial<Chunk> = {};
+
+  if (chunk.pulseRate === undefined) {
+    next.pulseRate = DEFAULT_PULSE_RATE;
+    changed = true;
+  }
+  if (chunk.pulseDepth === undefined) {
+    next.pulseDepth = DEFAULT_PULSE_DEPTH;
+    changed = true;
+  }
+  if (chunk.pulseShape === undefined) {
+    next.pulseShape = DEFAULT_PULSE_SHAPE;
+    changed = true;
+  }
+  if (chunk.pulseFilter === undefined) {
+    next.pulseFilter = DEFAULT_PULSE_FILTER;
+    changed = true;
+  }
+
+  return changed ? { ...chunk, ...next } : chunk;
+};
+
+const isPulseShape = (value: unknown): value is PulseShape =>
+  value === "sine" || value === "square" || value === "triangle";
+
+export const applyPulseCharacterDefaults = (
+  chunk: Chunk,
+  defaults?: PulseChunkSettings | Record<string, unknown> | null
+): Chunk => {
+  if (chunk.instrument !== "pulse" || !defaults) {
+    return chunk;
+  }
+
+  const source = defaults as PulseChunkSettings;
+  const next: Partial<Chunk> = {};
+
+  if (typeof source.pulseRate === "string") {
+    next.pulseRate = source.pulseRate;
+  }
+  if (typeof source.pulseDepth === "number" && Number.isFinite(source.pulseDepth)) {
+    next.pulseDepth = source.pulseDepth;
+  }
+  if (isPulseShape(source.pulseShape)) {
+    next.pulseShape = source.pulseShape;
+  }
+  if (typeof source.pulseFilter === "boolean") {
+    next.pulseFilter = source.pulseFilter;
+  }
+
+  return Object.keys(next).length > 0 ? { ...chunk, ...next } : chunk;
+};
 

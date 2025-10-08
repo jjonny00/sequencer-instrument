@@ -199,6 +199,64 @@
         }
       ]
     },
+    "pulse": {
+      "defaultCharacterId": "kraft-pulse-grid",
+      "characters": [
+        {
+          "id": "kraft-pulse-grid",
+          "name": "Pulse Grid",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 4,
+            "voiceOptions": {
+              "oscillator": { "type": "square" },
+              "envelope": {
+                "attack": 0.01,
+                "decay": 0.2,
+                "sustain": 0.55,
+                "release": 0.5
+              }
+            }
+          },
+          "defaults": {
+            "pulseRate": "8n",
+            "pulseDepth": 0.9,
+            "pulseShape": "square",
+            "pulseFilter": false
+          }
+        },
+        {
+          "id": "kraft-pulse-scan",
+          "name": "Filter Scanner",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 4,
+            "voiceOptions": {
+              "oscillator": { "type": "sawtooth" },
+              "envelope": {
+                "attack": 0.03,
+                "decay": 0.28,
+                "sustain": 0.6,
+                "release": 0.7
+              }
+            }
+          },
+          "effects": [
+            { "type": "Phaser", "options": { "frequency": 0.6, "octaves": 1.5, "baseFrequency": 400, "wet": 0.3 } }
+          ],
+          "defaults": {
+            "pulseRate": "8t",
+            "pulseDepth": 0.8,
+            "pulseShape": "triangle",
+            "pulseFilter": true
+          }
+        }
+      ]
+    },
     "keyboard": {
       "defaultCharacterId": "organ-pad",
       "characters": [

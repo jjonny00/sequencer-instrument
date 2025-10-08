@@ -197,6 +197,61 @@
         }
       ]
     },
+    "pulse": {
+      "defaultCharacterId": "chip-pulse-chop",
+      "characters": [
+        {
+          "id": "chip-pulse-chop",
+          "name": "Pulse Chop",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "oscillator": { "type": "square" },
+              "envelope": {
+                "attack": 0.01,
+                "decay": 0.2,
+                "sustain": 0.6,
+                "release": 0.4
+              }
+            }
+          },
+          "defaults": {
+            "pulseRate": "8n",
+            "pulseDepth": 0.9,
+            "pulseShape": "square",
+            "pulseFilter": false
+          }
+        },
+        {
+          "id": "chip-pulse-wash",
+          "name": "Pulse Wash",
+          "type": "PolySynth",
+          "note": "C4",
+          "options": {
+            "voice": "Synth",
+            "maxPolyphony": 6,
+            "voiceOptions": {
+              "oscillator": { "type": "triangle" },
+              "envelope": {
+                "attack": 0.02,
+                "decay": 0.25,
+                "sustain": 0.7,
+                "release": 0.8
+              }
+            }
+          },
+          "defaults": {
+            "pulseRate": "16n",
+            "pulseDepth": 0.8,
+            "pulseShape": "triangle",
+            "pulseFilter": true
+          }
+        }
+      ]
+    },
     "keyboard": {
       "defaultCharacterId": "pulse-keys",
       "characters": [

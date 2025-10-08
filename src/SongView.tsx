@@ -8,7 +8,7 @@ import type {
   SetStateAction,
 } from "react";
 
-import type { Chunk } from "./chunks";
+import { applyPulseCharacterDefaults, ensurePulseDefaults, type Chunk } from "./chunks";
 import type {
   PatternGroup,
   PerformanceNote,
@@ -325,20 +325,42 @@ const getColumnTickBounds = (columnIndex: number) => ({
 const createPerformancePattern = (
   instrument: TrackInstrument,
   timingMode: "sync" | "free" = "sync"
-): Chunk => ({
-  id: `live-${instrument}-${Math.random().toString(36).slice(2, 8)}`,
-  name: `${instrument}-performance`,
-  instrument,
-  steps: Array(16).fill(0),
-  velocities: Array(16).fill(0),
-  note: "C4",
-  sustain: 0.8,
-  velocityFactor: 1,
-  timingMode,
-  noteEvents: [],
-});
+): Chunk => {
+  let pattern = ensurePulseDefaults({
+    id: `live-${instrument}-${Math.random().toString(36).slice(2, 8)}`,
+    name: `${instrument}-performance`,
+    instrument,
+    steps: Array(16).fill(0),
+    velocities: Array(16).fill(0),
+    note: "C4",
+    sustain: 0.8,
+    velocityFactor: 1,
+    timingMode,
+    noteEvents: [],
+  });
 
-const resolveInstrumentSource = (instrument: TrackInstrument) => {
+  if (instrument === "pulse") {
+    const source = resolveInstrumentSource(instrument);
+    if (source?.packId) {
+      const pack = packs.find((candidate) => candidate.id === source.packId);
+      const instrumentDefinition = pack?.instruments?.pulse;
+      if (instrumentDefinition) {
+        const character = instrumentDefinition.characters.find(
+          (candidate) => candidate.id === (source.characterId ?? instrumentDefinition.defaultCharacterId)
+        );
+        pattern = {
+          ...pattern,
+          characterId: source.characterId ?? instrumentDefinition.defaultCharacterId ?? pattern.characterId,
+        };
+        pattern = applyPulseCharacterDefaults(pattern, character?.defaults ?? null);
+      }
+    }
+  }
+
+  return pattern;
+};
+
+function resolveInstrumentSource(instrument: TrackInstrument) {
   if (!instrument) return null;
   for (const pack of packs) {
     const definition = pack.instruments?.[instrument];
@@ -352,7 +374,7 @@ const resolveInstrumentSource = (instrument: TrackInstrument) => {
     };
   }
   return null;
-};
+}
 
 const formatInstrumentLabel = (instrument: string | null | undefined) =>
   instrument ? instrument.charAt(0).toUpperCase() + instrument.slice(1) : "";

@@ -9,7 +9,15 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 
-import type { Chunk, NoteEvent } from "./chunks";
+import {
+  DEFAULT_PULSE_DEPTH,
+  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_SHAPE,
+  type Chunk,
+  type NoteEvent,
+  type PulseShape,
+} from "./chunks";
 import type { Track } from "./tracks";
 import { formatInstrumentLabel } from "./utils/instrument";
 import { initAudioContext, filterValueToFrequency } from "./utils/audio";
@@ -253,6 +261,12 @@ const SYNC_RATE_OPTIONS = [
   { value: "8t", label: "Triplet" },
 ] as const;
 
+const PULSE_SHAPE_OPTIONS: { value: PulseShape; label: string }[] = [
+  { value: "square", label: "Square" },
+  { value: "sine", label: "Sine" },
+  { value: "triangle", label: "Triangle" },
+];
+
 const DEFAULT_FREE_RATE = 240;
 
 const normalizeArpRate = (value: string | undefined | null): string => {
@@ -330,6 +344,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const isArp = track.instrument === "arp";
   const isKeyboard = track.instrument === "keyboard";
   const isHarmonia = track.instrument === "harmonia";
+  const isPulse = track.instrument === "pulse";
   const sourceCharacterId = track.source?.characterId ?? null;
   const [activeDegree, setActiveDegree] = useState<number | null>(null);
   const [pressedKeyboardNotes, setPressedKeyboardNotes] = useState<
@@ -491,6 +506,26 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     updatePattern,
     harmoniaCharacterPreset,
   ]);
+
+  useEffect(() => {
+    if (!isPulse || !pattern || !updatePattern) return;
+    const defaults: Partial<Chunk> = {};
+    if (pattern.pulseRate === undefined) {
+      defaults.pulseRate = DEFAULT_PULSE_RATE;
+    }
+    if (pattern.pulseDepth === undefined) {
+      defaults.pulseDepth = DEFAULT_PULSE_DEPTH;
+    }
+    if (pattern.pulseShape === undefined) {
+      defaults.pulseShape = DEFAULT_PULSE_SHAPE;
+    }
+    if (pattern.pulseFilter === undefined) {
+      defaults.pulseFilter = DEFAULT_PULSE_FILTER;
+    }
+    if (Object.keys(defaults).length > 0) {
+      updatePattern(defaults);
+    }
+  }, [isPulse, pattern, updatePattern]);
 
   useEffect(() => {
     if (!pattern || !updatePattern) return;
@@ -863,6 +898,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       filter: pattern.filter,
     };
   }, [pattern, tonalCenter, scaleName, selectedDegree, extensionsEnabled]);
+
+  const pulseRate = pattern?.pulseRate ?? DEFAULT_PULSE_RATE;
+  const pulseDepth = pattern?.pulseDepth ?? DEFAULT_PULSE_DEPTH;
+  const pulseShape = (pattern?.pulseShape ?? DEFAULT_PULSE_SHAPE) as PulseShape;
+  const pulseFilterEnabled = pattern?.pulseFilter ?? DEFAULT_PULSE_FILTER;
 
   const timingMode = pattern?.timingMode === "free" ? "free" : "sync";
   const autopilotEnabled = pattern?.autopilot ?? false;
@@ -3676,7 +3716,121 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         </Section>
       ) : null}
 
-      {!isPercussive && !isBass && !isArp && !isKeyboard ? (
+      {isPulse ? (
+        <Section>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: 4,
+                  color: "#94a3b8",
+                  fontWeight: 600,
+                }}
+              >
+                Rate
+              </span>
+              <select
+                value={pulseRate}
+                onChange={(event) =>
+                  updatePattern?.({ pulseRate: event.target.value })
+                }
+                disabled={!updatePattern}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #273144",
+                  background: updatePattern ? "#111a2c" : "#0b101a",
+                  color: updatePattern ? "#f8fafc" : "#475569",
+                  cursor: updatePattern ? "pointer" : "not-allowed",
+                }}
+              >
+                {SYNC_RATE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: 4,
+                  color: "#94a3b8",
+                  fontWeight: 600,
+                }}
+              >
+                Shape
+              </span>
+              <select
+                value={pulseShape}
+                onChange={(event) =>
+                  updatePattern?.({
+                    pulseShape: event.target.value as PulseShape,
+                  })
+                }
+                disabled={!updatePattern}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #273144",
+                  background: updatePattern ? "#111a2c" : "#0b101a",
+                  color: updatePattern ? "#f8fafc" : "#475569",
+                  cursor: updatePattern ? "pointer" : "not-allowed",
+                }}
+              >
+                {PULSE_SHAPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <Slider
+            label="Depth"
+            min={0}
+            max={1}
+            step={0.01}
+            value={pulseDepth}
+            formatValue={(value) => `${Math.round(value * 100)}%`}
+            onChange={updatePattern ? (value) => updatePattern({ pulseDepth: value }) : undefined}
+          />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: 12,
+              color: "#e6f2ff",
+            }}
+          >
+            <span style={{ fontWeight: 600 }}>Filter Gate</span>
+            <button
+              onClick={() =>
+                updatePattern?.({ pulseFilter: !pulseFilterEnabled })
+              }
+              disabled={!updatePattern}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid #2a3344",
+                background: pulseFilterEnabled ? "#27E0B0" : "#1f2532",
+                color: pulseFilterEnabled ? "#0f172a" : "#e6f2ff",
+                cursor: updatePattern ? "pointer" : "not-allowed",
+                opacity: updatePattern ? 1 : 0.5,
+              }}
+            >
+              {pulseFilterEnabled ? "Filter" : "Volume"}
+            </button>
+          </div>
+        </Section>
+      ) : null}
+
+      {!isPercussive && !isBass && !isArp && !isKeyboard && !isPulse ? (
         <Section>
           <span style={{ color: "#94a3b8", fontSize: 13 }}>
             This instrument does not have dedicated controls yet.

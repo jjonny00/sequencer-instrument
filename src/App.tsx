@@ -9,7 +9,14 @@ import {
   type TrackInstrument,
   type TriggerMap,
 } from "./tracks";
-import type { Chunk } from "./chunks";
+import {
+  DEFAULT_PULSE_DEPTH,
+  DEFAULT_PULSE_FILTER,
+  DEFAULT_PULSE_RATE,
+  DEFAULT_PULSE_SHAPE,
+  type Chunk,
+  type PulseShape,
+} from "./chunks";
 import { packs, type InstrumentCharacter, type Pack } from "./packs";
 import {
   createHarmoniaNodes,
@@ -19,6 +26,10 @@ import {
   type HarmoniaNodes,
 } from "./instruments/harmonia";
 import { createKick } from "./instruments/kickInstrument";
+import {
+  createPulseInstrument,
+  type PulseInstrumentNodes,
+} from "./instruments/pulse";
 import { SongView } from "./SongView";
 import { PatternPlaybackManager } from "./PatternPlaybackManager";
 import { StartScreen } from "./views/StartScreen";
@@ -404,6 +415,7 @@ export default function App() {
       }
     >
   >({});
+  const pulseNodesRef = useRef<Record<string, PulseInstrumentNodes>>({});
   const harmoniaNodesRef = useRef<Record<string, HarmoniaNodes>>({});
 
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -984,6 +996,10 @@ export default function App() {
         fx.filter.dispose();
       });
       keyboardFxRefs.current = {};
+      Object.values(pulseNodesRef.current).forEach((nodes) => {
+        nodes.dispose();
+      });
+      pulseNodesRef.current = {};
       Object.values(harmoniaNodesRef.current).forEach((nodes) => {
         disposeHarmoniaNodes(nodes);
       });
@@ -1002,7 +1018,21 @@ export default function App() {
       packId: string,
       instrumentId: string,
       character: InstrumentCharacter
-    ) => {
+    ): {
+      instrument: ToneInstrument;
+      keyboardFx?: {
+        reverb: Tone.Reverb;
+        delay: Tone.FeedbackDelay;
+        distortion: Tone.Distortion;
+        bitCrusher: Tone.BitCrusher;
+        panner: Tone.Panner;
+        chorus: Tone.Chorus;
+        tremolo: Tone.Tremolo;
+        filter: Tone.Filter;
+      };
+      pulseNodes?: PulseInstrumentNodes;
+      harmoniaNodes?: HarmoniaNodes;
+    } => {
       if (instrumentId === "kick") {
         const output = new Tone.Gain(0).toDestination();
         const instrument = output as unknown as ToneInstrument;
@@ -1025,6 +1055,10 @@ export default function App() {
         const nodes = createHarmoniaNodes(Tone, character);
         nodes.volume.connect(Tone.Destination);
         return { instrument: nodes.synth as ToneInstrument, harmoniaNodes: nodes };
+      }
+      if (instrumentId === "pulse") {
+        const nodes = createPulseInstrument(Tone, undefined, character);
+        return { instrument: nodes.instrument as ToneInstrument, pulseNodes: nodes };
       }
       if (!character.type) {
         throw new Error(`Unknown instrument type for character ${character.id}`);
@@ -1144,6 +1178,9 @@ export default function App() {
             if (created.keyboardFx) {
               keyboardFxRefs.current[key] = created.keyboardFx;
             }
+            if (created.pulseNodes) {
+              pulseNodesRef.current[key] = created.pulseNodes;
+            }
             if (created.harmoniaNodes) {
               harmoniaNodesRef.current[key] = created.harmoniaNodes;
             }
@@ -1173,17 +1210,32 @@ export default function App() {
             });
             return;
           }
-        const settable = inst as unknown as {
-          set?: (values: Record<string, unknown>) => void;
-        };
-          if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
-          const envelope: Record<string, unknown> = {};
-          if (chunk.attack !== undefined) envelope.attack = chunk.attack;
-          if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
-          if (Object.keys(envelope).length > 0) {
-            settable.set?.({ envelope });
+
+          if (instrumentId === "pulse") {
+            const nodes = pulseNodesRef.current[key];
+            if (nodes) {
+              const rate = chunk?.pulseRate ?? DEFAULT_PULSE_RATE;
+              const depth = chunk?.pulseDepth ?? DEFAULT_PULSE_DEPTH;
+              const shape = (chunk?.pulseShape ?? DEFAULT_PULSE_SHAPE) as PulseShape;
+              const filterEnabled = chunk?.pulseFilter ?? DEFAULT_PULSE_FILTER;
+              nodes.setRate(rate);
+              nodes.setDepth(depth);
+              nodes.setShape(shape);
+              nodes.setFilterEnabled(Boolean(filterEnabled));
+            }
           }
-        }
+
+          const settable = inst as unknown as {
+            set?: (values: Record<string, unknown>) => void;
+          };
+          if (chunk?.attack !== undefined || chunk?.sustain !== undefined) {
+            const envelope: Record<string, unknown> = {};
+            if (chunk.attack !== undefined) envelope.attack = chunk.attack;
+            if (chunk.sustain !== undefined) envelope.release = chunk.sustain;
+            if (Object.keys(envelope).length > 0) {
+              settable.set?.({ envelope });
+            }
+          }
         if (chunk?.glide !== undefined) {
           settable.set?.({ portamento: chunk.glide });
         }
