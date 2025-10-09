@@ -1348,10 +1348,13 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         recordingAnchorRef.current = null;
         const ticksPerStep = Tone.Transport.PPQ / 4;
         const ticks = Tone.Transport.getTicksAtTime(eventTime);
-        let performanceDurationSeconds =
-          typeof duration === "number" && duration > 0
-            ? duration
+        const measuredDurationSeconds =
+          typeof duration === "number" &&
+          Number.isFinite(duration) &&
+          duration > 0
+            ? Math.max(0.02, duration)
             : undefined;
+        let performanceDurationSeconds = measuredDurationSeconds;
         if (onUpdatePattern) {
           onUpdatePattern((chunk) => {
             const length = chunk.steps.length || 16;
@@ -1371,6 +1374,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               chunk.harmoniaStepDegrees,
               steps.length,
               null
+            );
+            const stepDurations = ensureArrayLength(
+              chunk.stepDurations,
+              steps.length,
+              0
             );
             const referenceNote =
               chunkOverrides?.note ??
@@ -1419,6 +1427,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               noteEvents: undefined,
               noteLoopLength: undefined,
               harmoniaStepDegrees,
+              stepDurations,
             };
 
             if (includeChordMeta) {
@@ -1445,24 +1454,32 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
               Object.assign(nextChunk, chunkOverrides);
             }
 
-            if (performanceDurationSeconds === undefined) {
+            let resolvedStepDuration = measuredDurationSeconds;
+            if (resolvedStepDuration === undefined) {
               const sustainSource =
                 chunkOverrides?.sustain ??
                 pattern?.sustain ??
                 chunk.sustain ??
                 0.5;
               try {
-                performanceDurationSeconds = Tone.Time(
-                  sustainSource
-                ).toSeconds();
+                resolvedStepDuration = Tone.Time(sustainSource).toSeconds();
               } catch (error) {
                 console.warn(
                   "Failed to resolve sustain duration for performance note",
                   sustainSource,
                   error
                 );
-                performanceDurationSeconds = undefined;
+                resolvedStepDuration = undefined;
               }
+            }
+
+            if (resolvedStepDuration !== undefined) {
+              const clampedDuration = Math.max(0.02, resolvedStepDuration);
+              stepDurations[stepIndex] = clampedDuration;
+              performanceDurationSeconds = clampedDuration;
+            } else {
+              stepDurations[stepIndex] = 0;
+              performanceDurationSeconds = undefined;
             }
 
             return nextChunk;
@@ -1484,7 +1501,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         const resolvedDurationSeconds =
           performanceDurationSeconds !== undefined &&
           Number.isFinite(performanceDurationSeconds)
-            ? Math.max(0.02, performanceDurationSeconds)
+            ? performanceDurationSeconds
             : Tone.Time("4n").toSeconds();
         onPerformanceNote?.({
           eventTime,
@@ -1560,6 +1577,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
             noteEvents: events,
             noteLoopLength: loopLength,
             harmoniaStepDegrees: undefined,
+            stepDurations: undefined,
           };
 
           if (includeChordMeta) {
@@ -1861,6 +1879,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         updatePattern({
           harmoniaPatternId: undefined,
           harmoniaStepDegrees: undefined,
+          stepDurations: undefined,
         });
         if (harmoniaLastChordRef.current) {
           harmoniaLastChordRef.current = {
@@ -1917,6 +1936,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         timingMode: "sync",
         noteEvents: undefined,
         noteLoopLength: undefined,
+        stepDurations: undefined,
       };
 
       if (pattern?.harmoniaDynamics === undefined) {

@@ -49,6 +49,16 @@
       "minItems": 16,
       "maxItems": 16
     },
+    "stepDurations": {
+      "type": "array",
+      "description": "Per-step hold durations in seconds",
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "minItems": 16,
+      "maxItems": 16
+    },
     "note": {
       "type": "string",
       "description": "Pitch or root note"

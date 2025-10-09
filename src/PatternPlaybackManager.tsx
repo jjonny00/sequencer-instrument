@@ -522,17 +522,28 @@ function PatternPlayer({
           }
           const holdDurationSeconds = (holdSteps + 1) * stepDurationSeconds;
           const releaseControl = pattern.sustain;
+          const recordedDuration =
+            pattern.stepDurations && pattern.stepDurations.length > index
+              ? pattern.stepDurations[index]
+              : undefined;
           const isBassPattern = pattern.instrument === "bass";
           const defaultSustainSeconds = isBassPattern
             ? Math.min(holdDurationSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
             : holdDurationSeconds;
-          const sustainSeconds =
-            releaseControl === undefined
-              ? defaultSustainSeconds
-              : Math.min(
-                  Math.max(releaseControl, 0),
-                  holdDurationSeconds
-                );
+          const sustainSeconds = Math.max(0.02, (() => {
+            if (
+              typeof recordedDuration === "number" &&
+              Number.isFinite(recordedDuration) &&
+              recordedDuration > 0
+            ) {
+              return Math.min(recordedDuration, holdDurationSeconds);
+            }
+            if (releaseControl === undefined) {
+              return defaultSustainSeconds;
+            }
+            const clampedRelease = Math.max(releaseControl, 0);
+            return Math.min(clampedRelease, holdDurationSeconds);
+          })());
           let noteArgument = pattern.note;
           let chunkPayload: Chunk = pattern;
           if (
@@ -625,6 +636,7 @@ function PatternPlayer({
     pattern.timingMode,
     pattern.arpFreeRate,
     pattern.harmoniaStepDegrees,
+    pattern.stepDurations,
     pattern.tonalCenter,
     pattern.scale,
     pattern.harmoniaComplexity,
