@@ -105,6 +105,45 @@ type ToneLike = Pick<
 > &
   Record<string, unknown>;
 
+const connectDetuneModulation = (synth: Tone.PolySynth, lfo: Tone.LFO) => {
+  const polyWithDetune = synth as unknown as {
+    detune?: { connect: (input: unknown) => void; disconnect?: (input: unknown) => void };
+  };
+  const polyDetune = polyWithDetune.detune;
+  if (polyDetune && typeof polyDetune.connect === "function") {
+    lfo.connect(polyDetune as unknown as any);
+    return () => {
+      lfo.disconnect(polyDetune as unknown as any);
+    };
+  }
+
+  const polyWithVoices = synth as unknown as {
+    voices?: Array<{
+      detune?: { connect: (input: unknown) => void; disconnect?: (input: unknown) => void };
+    }>;
+  };
+
+  if (Array.isArray(polyWithVoices.voices)) {
+    polyWithVoices.voices.forEach((voice) => {
+      const voiceDetune = voice?.detune;
+      if (voiceDetune && typeof voiceDetune.connect === "function") {
+        lfo.connect(voiceDetune as unknown as any);
+      }
+    });
+
+    return () => {
+      polyWithVoices.voices?.forEach((voice) => {
+        const voiceDetune = voice?.detune;
+        if (voiceDetune && typeof voiceDetune.connect === "function") {
+          lfo.disconnect(voiceDetune as unknown as any);
+        }
+      });
+    };
+  }
+
+  return () => {};
+};
+
 export interface PulseInstrumentNodes {
   instrument: Tone.PolySynth;
   filter: Tone.Filter;
@@ -335,7 +374,7 @@ export const createPulseInstrument = (
     max: 6,
   });
   detuneLfo.start();
-  detuneLfo.connect(synth.detune);
+  const disconnectDetuneModulation = connectDetuneModulation(synth, detuneLfo);
 
   const motionDepthNode = new tone.Multiply(currentMotionDepth);
   motionLfo.connect(motionDepthNode);
@@ -703,6 +742,7 @@ export const createPulseInstrument = (
     scheduledReleases.clear();
     lfo.dispose();
     motionLfo.dispose();
+    disconnectDetuneModulation();
     detuneLfo.dispose();
     amplitudeDepth.dispose();
     amplitudeOffset.dispose();
