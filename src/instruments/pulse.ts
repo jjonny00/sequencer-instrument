@@ -26,6 +26,16 @@ import type { InstrumentCharacter } from "../packs";
 
 export type { PulseFilterType, PulseMode, PulseShape, PulseMotionTarget };
 
+export type PulseActivitySource = "pattern" | "random" | "manual" | "lfo";
+
+export interface PulseActivityEvent {
+  active: boolean;
+  velocity: number;
+  time: number;
+  source: PulseActivitySource;
+  stepIndex?: number;
+}
+
 const FILTER_MIN_FREQUENCY = 180;
 const FILTER_MAX_FREQUENCY = 9500;
 const RESONANCE_MIN_Q = 0.7;
@@ -163,6 +173,7 @@ export interface PulseInstrumentNodes {
   setPattern: (pattern: PulsePatternStep[] | number[], length?: number) => void;
   setSwing: (value: number) => void;
   setHumanize: (value: number) => void;
+  addPulseListener: (listener: (event: PulseActivityEvent) => void) => () => void;
   dispose: () => void;
 }
 
@@ -301,6 +312,14 @@ export const createPulseInstrument = (
   const resolved: PulseSettings = {
     ...DEFAULT_PULSE_SETTINGS,
     ...settings,
+  };
+
+  const pulseListeners = new Set<(event: PulseActivityEvent) => void>();
+
+  const notifyPulseListeners = (event: PulseActivityEvent) => {
+    pulseListeners.forEach((listener) => {
+      listener(event);
+    });
   };
 
   const synth = createPolySynth(tone, character);
@@ -447,7 +466,14 @@ export const createPulseInstrument = (
   const computeHumanizedVelocity = (base: number) =>
     clamp01(base + jitter(0.1 * currentHumanize));
 
-  const triggerPulse = (value: number, time: number, velocity = 1) => {
+  const triggerPulse = (
+    value: number,
+    time: number,
+    velocity = 1,
+    context: { source: PulseActivitySource; stepIndex?: number } = {
+      source: "pattern",
+    }
+  ) => {
     const when = Math.max(time, tone.now());
     const amplitude = clamp01(mapGateToAmplitude(currentDepth, value) * velocity);
     const frequency = mapGateToFrequency(currentDepth, value);
@@ -461,9 +487,20 @@ export const createPulseInstrument = (
     const targetFrequency = filterEnabled ? frequency : FILTER_MAX_FREQUENCY;
     filter.frequency.cancelScheduledValues(when);
     filter.frequency.linearRampToValueAtTime(targetFrequency, when + GATE_RAMP);
+
+    notifyPulseListeners({
+      active: value > 0,
+      velocity: amplitude,
+      time: when,
+      source: context.source,
+      stepIndex: context.stepIndex,
+    });
   };
 
-  const resetPulseState = (time: number) => {
+  const resetPulseState = (
+    time: number,
+    source: PulseActivitySource = "manual"
+  ) => {
     const when = Math.max(time, tone.now());
     gate.gain.cancelScheduledValues(when);
     gate.gain.setValueAtTime(1, when);
@@ -474,6 +511,12 @@ export const createPulseInstrument = (
     );
     ampEnv.triggerRelease(when);
     noiseEnv.triggerRelease(when);
+    notifyPulseListeners({
+      active: false,
+      velocity: 0,
+      time: when,
+      source,
+    });
   };
 
   const updateEnvelopeShape = () => {
@@ -564,13 +607,14 @@ export const createPulseInstrument = (
       if (currentMode !== "Pattern" || activeVoices === 0) {
         return;
       }
+      const context = { source: "pattern" as const, stepIndex: index };
       if (!stepData.active) {
-        triggerPulse(0, eventTime, 0);
+        triggerPulse(0, eventTime, 0, context);
         return;
       }
       const stepProbability = clamp01(stepData.probability ?? 1);
       if (Math.random() > stepProbability) {
-        triggerPulse(0, eventTime, 0);
+        triggerPulse(0, eventTime, 0, context);
         return;
       }
       const baseVelocity =
@@ -578,7 +622,7 @@ export const createPulseInstrument = (
           ? stepData.velocity
           : 1;
       const velocity = computeHumanizedVelocity(baseVelocity);
-      triggerPulse(1, eventTime, velocity);
+      triggerPulse(1, eventTime, velocity, context);
     }, createStepEvents(), currentRate);
     patternSequence.loop = true;
     patternSequence.start(0);
@@ -598,12 +642,13 @@ export const createPulseInstrument = (
     const active = Math.random() < clamp01(probability);
     const swungTime = applySwing(time, stepIndex);
     const eventTime = applyHumanizeTime(swungTime);
+    const context = { source: "random" as const, stepIndex };
     if (!active) {
-      triggerPulse(0, eventTime, 0);
+      triggerPulse(0, eventTime, 0, context);
       return;
     }
     const velocity = computeHumanizedVelocity(0.85);
-    triggerPulse(1, eventTime, velocity);
+    triggerPulse(1, eventTime, velocity, context);
   }, currentRate);
     randomLoop.start(0);
   };
@@ -635,7 +680,9 @@ export const createPulseInstrument = (
       scheduledReleases.delete(voiceId);
       activeVoices = Math.max(0, activeVoices - 1);
       if (activeVoices === 0) {
-        resetPulseState(releaseTime);
+        const releaseSource: PulseActivitySource =
+          currentMode === "LFO" ? "lfo" : "manual";
+        resetPulseState(releaseTime, releaseSource);
       }
     }, releaseTime);
     scheduledReleases.set(voiceId, eventId);
@@ -664,6 +711,13 @@ export const createPulseInstrument = (
           when + GATE_RAMP
         );
         ampEnv.triggerAttack(when, 1);
+        const manualVelocity = clamp01(velocity ?? 1);
+        notifyPulseListeners({
+          active: true,
+          velocity: manualVelocity,
+          time: when,
+          source: "lfo",
+        });
       } else {
         resetPulseState(startSeconds);
       }
@@ -784,6 +838,7 @@ export const createPulseInstrument = (
       tone.Transport.clear(eventId);
     });
     scheduledReleases.clear();
+    pulseListeners.clear();
     lfo.dispose();
     motionLfo.dispose();
     disconnectDetuneModulation();
@@ -833,6 +888,12 @@ export const createPulseInstrument = (
     setPattern,
     setSwing,
     setHumanize,
+    addPulseListener: (listener: (event: PulseActivityEvent) => void) => {
+      pulseListeners.add(listener);
+      return () => {
+        pulseListeners.delete(listener);
+      };
+    },
     dispose,
   };
 };

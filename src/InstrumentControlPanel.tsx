@@ -1,6 +1,7 @@
 import type {
   Dispatch,
   FC,
+  MutableRefObject,
   PointerEvent as ReactPointerEvent,
   PropsWithChildren,
   ReactNode,
@@ -14,6 +15,9 @@ import {
   DEFAULT_PULSE_FILTER_ENABLED,
   DEFAULT_PULSE_FILTER_TYPE,
   DEFAULT_PULSE_MODE,
+  DEFAULT_PULSE_MOTION_DEPTH,
+  DEFAULT_PULSE_MOTION_RATE,
+  DEFAULT_PULSE_MOTION_TARGET,
   DEFAULT_PULSE_PATTERN,
   DEFAULT_PULSE_PATTERN_LENGTH,
   DEFAULT_PULSE_RATE,
@@ -25,6 +29,7 @@ import {
   type NoteEvent,
   type PulseFilterType,
   type PulseMode,
+  type PulseMotionTarget,
   type PulsePatternStep,
   type PulseShape,
   normalizePulsePattern as normalizePulsePatternSteps,
@@ -56,6 +61,7 @@ import type {
   HarmoniaPatternId,
   HarmoniaScaleDegree,
 } from "./instruments/harmonia";
+import type { PulseActivityEvent } from "./instruments/pulse";
 import {
   deleteInstrumentPreset,
   listInstrumentPresets,
@@ -97,6 +103,9 @@ interface InstrumentControlPanelProps {
     durationSeconds?: number;
     mode: "sync" | "free";
   }) => void;
+  subscribePulseActivity?: (
+    listener: (event: PulseActivityEvent) => void
+  ) => () => void;
 }
 
 interface SliderProps {
@@ -272,6 +281,15 @@ const SYNC_RATE_OPTIONS = [
   { value: "8t", label: "Triplet" },
 ] as const;
 
+const PULSE_RATE_BUTTONS = [
+  { value: "4n", label: "1/4" },
+  { value: "8n", label: "1/8" },
+  { value: "16n", label: "1/16" },
+  { value: "32n", label: "1/32" },
+  { value: "8t", label: "1/8T" },
+  { value: "16t", label: "1/16T" },
+] as const;
+
 const PULSE_SHAPE_OPTIONS: { value: PulseShape; label: string }[] = [
   { value: "square", label: "Square" },
   { value: "sine", label: "Sine" },
@@ -291,6 +309,37 @@ const PULSE_FILTER_TYPE_OPTIONS: { value: PulseFilterType; label: string }[] = [
 ];
 
 const PULSE_PATTERN_LENGTH_OPTIONS = [8, 16] as const;
+
+const PULSE_MOTION_RATE_OPTIONS = [
+  { value: "1n", label: "1/1" },
+  { value: "2n", label: "1/2" },
+  { value: "4n", label: "1/4" },
+  { value: "8n", label: "1/8" },
+] as const;
+
+const PULSE_MOTION_TARGET_OPTIONS: {
+  value: PulseMotionTarget;
+  label: string;
+}[] = [
+  { value: "cutoff", label: "Cutoff" },
+  { value: "resonance", label: "Res." },
+  { value: "amp", label: "Amp" },
+];
+
+const buildPulseButtonStyle = (active: boolean, disabled: boolean) => ({
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: `1px solid ${active ? "#27E0B0" : "#273144"}`,
+  background: active ? "#27E0B0" : "#111a2c",
+  color: active ? "#0f172a" : "#e2e8f0",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: 0.6,
+  textTransform: "uppercase" as const,
+  cursor: disabled ? "not-allowed" : "pointer",
+  transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+  opacity: disabled ? 0.45 : 1,
+});
 
 const DEFAULT_FREE_RATE = 240;
 
@@ -375,6 +424,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   onPresetApplied,
   onHarmoniaRealtimeChange,
   onPerformanceNote,
+  subscribePulseActivity,
 }) => {
   const pattern = track.pattern;
   const patternCharacterId = pattern?.characterId ?? null;
@@ -936,6 +986,16 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const [selectedPulseStep, setSelectedPulseStep] = useState<number | null>(
     null
   );
+  const [pulseIndicatorActive, setPulseIndicatorActive] = useState(false);
+  const [pulseHighlightStep, setPulseHighlightStep] = useState<number | null>(
+    null
+  );
+  const pulseFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const pulseHighlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   useEffect(() => {
     if (!pattern || !pattern.note || !pattern.notes || !pattern.degrees) {
@@ -974,6 +1034,11 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     DEFAULT_PULSE_FILTER_ENABLED;
   const pulseFilterType = pattern?.pulseFilterType ?? DEFAULT_PULSE_FILTER_TYPE;
   const pulseResonance = pattern?.pulseResonance ?? DEFAULT_PULSE_RESONANCE;
+  const pulseMotionRate = pattern?.pulseMotionRate ?? DEFAULT_PULSE_MOTION_RATE;
+  const pulseMotionDepth =
+    pattern?.pulseMotionDepth ?? DEFAULT_PULSE_MOTION_DEPTH;
+  const pulseMotionTarget =
+    (pattern?.pulseMotionTarget ?? DEFAULT_PULSE_MOTION_TARGET) as PulseMotionTarget;
   const pulsePatternLength =
     pattern?.pulsePatternLength ?? DEFAULT_PULSE_PATTERN_LENGTH;
   const rawPulsePattern =
@@ -999,6 +1064,65 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       );
     }
   }, [displayedPulsePattern, selectedPulseStep]);
+  useEffect(() => {
+    const clearTimeoutRef = (
+      ref: MutableRefObject<ReturnType<typeof setTimeout> | null>
+    ) => {
+      if (ref.current !== null) {
+        clearTimeout(ref.current);
+        ref.current = null;
+      }
+    };
+
+    if (!subscribePulseActivity) {
+      clearTimeoutRef(pulseFlashTimeoutRef);
+      clearTimeoutRef(pulseHighlightTimeoutRef);
+      setPulseIndicatorActive(false);
+      setPulseHighlightStep(null);
+      return;
+    }
+
+    const unsubscribe = subscribePulseActivity((event) => {
+      if (event.active) {
+        setPulseIndicatorActive(true);
+        clearTimeoutRef(pulseFlashTimeoutRef);
+        pulseFlashTimeoutRef.current = setTimeout(() => {
+          setPulseIndicatorActive(false);
+          pulseFlashTimeoutRef.current = null;
+        }, 150);
+
+        if (event.source === "pattern" && typeof event.stepIndex === "number") {
+          setPulseHighlightStep(event.stepIndex);
+          clearTimeoutRef(pulseHighlightTimeoutRef);
+          pulseHighlightTimeoutRef.current = setTimeout(() => {
+            setPulseHighlightStep((current) =>
+              current === event.stepIndex ? null : current
+            );
+            pulseHighlightTimeoutRef.current = null;
+          }, 200);
+        }
+        return;
+      }
+
+      clearTimeoutRef(pulseFlashTimeoutRef);
+      setPulseIndicatorActive(false);
+      if (event.source === "pattern" && typeof event.stepIndex === "number") {
+        if (pulseHighlightTimeoutRef.current === null) {
+          setPulseHighlightStep((current) =>
+            current === event.stepIndex ? null : current
+          );
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe?.();
+      clearTimeoutRef(pulseFlashTimeoutRef);
+      clearTimeoutRef(pulseHighlightTimeoutRef);
+      setPulseIndicatorActive(false);
+      setPulseHighlightStep(null);
+    };
+  }, [subscribePulseActivity]);
   const pulseSwing = pattern?.pulseSwing ?? DEFAULT_PULSE_SWING;
   const pulseHumanize = pattern?.pulseHumanize ?? DEFAULT_PULSE_HUMANIZE;
   const pulsePatternRows = useMemo(
@@ -3919,6 +4043,41 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       {isPulse ? (
         <Section>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span
+                style={{
+                  color: "#94a3b8",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                }}
+              >
+                Pulse Activity
+              </span>
+              <span
+                role="status"
+                aria-live="off"
+                aria-label={pulseIndicatorActive ? "Pulse active" : "Pulse idle"}
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  background: pulseIndicatorActive ? "#27E0B0" : "#162238",
+                  boxShadow: pulseIndicatorActive
+                    ? "0 0 12px rgba(39, 224, 176, 0.75)"
+                    : "0 0 0 rgba(0, 0, 0, 0)",
+                  border: "1px solid #1f2a3a",
+                  transition: "background 0.12s ease, box-shadow 0.12s ease",
+                }}
+              />
+            </div>
             <div>
               <span
                 style={{
@@ -3964,78 +4123,86 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                 ))}
               </div>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
                 <span
                   style={{
                     display: "block",
-                    marginBottom: 4,
+                    marginBottom: 6,
                     color: "#94a3b8",
+                    fontSize: 12,
                     fontWeight: 600,
                   }}
                 >
                   Rate
                 </span>
-                <select
-                  value={pulseRate}
-                  onChange={(event) =>
-                    updatePattern?.({ pulseRate: event.target.value })
-                  }
-                  disabled={!updatePattern}
+                <div
                   style={{
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid #273144",
-                    background: updatePattern ? "#111a2c" : "#0b101a",
-                    color: updatePattern ? "#f8fafc" : "#475569",
-                    cursor: updatePattern ? "pointer" : "not-allowed",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 6,
                   }}
                 >
-                  {SYNC_RATE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
+                  {PULSE_RATE_BUTTONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => updatePattern?.({ pulseRate: option.value })}
+                      disabled={!updatePattern}
+                      style={{
+                        ...buildPulseButtonStyle(
+                          pulseRate === option.value,
+                          !updatePattern
+                        ),
+                        padding: "6px 8px",
+                      }}
+                    >
                       {option.label}
-                    </option>
+                    </button>
                   ))}
-                </select>
-              </label>
+                </div>
+              </div>
               {pulseMode === "LFO" ? (
-                <label style={{ flex: "1 1 140px", fontSize: 12 }}>
+                <div>
                   <span
                     style={{
                       display: "block",
-                      marginBottom: 4,
+                      marginBottom: 6,
                       color: "#94a3b8",
+                      fontSize: 12,
                       fontWeight: 600,
                     }}
                   >
                     Shape
                   </span>
-                  <select
-                    value={pulseShape}
-                    onChange={(event) =>
-                      updatePattern?.({
-                        pulseShape: event.target.value as PulseShape,
-                      })
-                    }
-                    disabled={!updatePattern}
+                  <div
                     style={{
-                      width: "100%",
-                      padding: "8px 10px",
-                      borderRadius: 8,
-                      border: "1px solid #273144",
-                      background: updatePattern ? "#111a2c" : "#0b101a",
-                      color: updatePattern ? "#f8fafc" : "#475569",
-                      cursor: updatePattern ? "pointer" : "not-allowed",
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                      gap: 6,
                     }}
                   >
                     {PULSE_SHAPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          updatePattern?.({ pulseShape: option.value as PulseShape })
+                        }
+                        disabled={!updatePattern}
+                        style={{
+                          ...buildPulseButtonStyle(
+                            pulseShape === option.value,
+                            !updatePattern
+                          ),
+                          padding: "6px 8px",
+                        }}
+                      >
                         {option.label}
-                      </option>
+                      </button>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </div>
               ) : null}
             </div>
             <Slider
@@ -4051,6 +4218,130 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   : undefined
               }
             />
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: 10,
+                background: "rgba(15, 23, 42, 0.35)",
+                border: "1px solid #1f2a3a",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  color: "#e2e8f0",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                <span>Motion</span>
+                <span style={{ color: "#64748b", fontSize: 11 }}>
+                  Slow tonal movement
+                </span>
+              </div>
+              <div>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: 6,
+                    color: "#94a3b8",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  Rate
+                </span>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                    gap: 6,
+                  }}
+                >
+                  {PULSE_MOTION_RATE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() =>
+                        updatePattern?.({ pulseMotionRate: option.value })
+                      }
+                      disabled={!updatePattern}
+                      style={{
+                        ...buildPulseButtonStyle(
+                          pulseMotionRate === option.value,
+                          !updatePattern
+                        ),
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Slider
+                label="Motion Depth"
+                min={0}
+                max={1}
+                step={0.01}
+                value={pulseMotionDepth}
+                formatValue={(value) => `${Math.round(value * 100)}%`}
+                onChange={
+                  updatePattern
+                    ? (value) => updatePattern({ pulseMotionDepth: value })
+                    : undefined
+                }
+              />
+              <div>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: 6,
+                    color: "#94a3b8",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  Target
+                </span>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 6,
+                  }}
+                >
+                  {PULSE_MOTION_TARGET_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() =>
+                        updatePattern?.({ pulseMotionTarget: option.value })
+                      }
+                      disabled={!updatePattern}
+                      style={{
+                        ...buildPulseButtonStyle(
+                          pulseMotionTarget === option.value,
+                          !updatePattern
+                        ),
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
             <div
               style={{
                 padding: "10px 12px",
@@ -4228,6 +4519,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                             1
                           );
                           const isSelected = selectedPulseStep === stepIndex;
+                          const isHighlighted = pulseHighlightStep === stepIndex;
                           return (
                             <button
                               key={`pulse-step-${stepIndex}`}
@@ -4241,7 +4533,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                                 height: 40,
                                 borderRadius: 10,
                                 border: `1px solid ${
-                                  isSelected ? "#27E0B0" : "#273144"
+                                  isSelected || isHighlighted ? "#27E0B0" : "#273144"
                                 }`,
                                 background: active ? "#27E0B0" : "#101a2b",
                                 color: active ? "#0f172a" : "#94a3b8",
@@ -4249,9 +4541,13 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                                 fontWeight: 700,
                                 cursor: updatePattern ? "pointer" : "not-allowed",
                                 transition:
-                                  "background 0.1s ease, border-color 0.1s ease",
+                                  "background 0.1s ease, border-color 0.1s ease, transform 0.1s ease, box-shadow 0.1s ease",
                                 position: "relative",
                                 overflow: "hidden",
+                                transform: isHighlighted ? "scale(1.05)" : "none",
+                                boxShadow: isHighlighted
+                                  ? "0 0 12px rgba(39, 224, 176, 0.4)"
+                                  : "none",
                               }}
                             >
                               <span style={{ position: "relative", zIndex: 2 }}>

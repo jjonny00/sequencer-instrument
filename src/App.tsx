@@ -37,6 +37,7 @@ import {
 import { createKick } from "./instruments/kickInstrument";
 import {
   createPulseInstrument,
+  type PulseActivityEvent,
   type PulseInstrumentNodes,
 } from "./instruments/pulse";
 import { SongView } from "./SongView";
@@ -3007,6 +3008,43 @@ export default function App() {
         isRecording={isRecording}
         onRecordingChange={setIsRecording}
         onPresetApplied={handlePresetApplied}
+        subscribePulseActivity={(() => {
+          if (selectedTrack.instrument !== "pulse") {
+            return undefined;
+          }
+          const source = selectedTrack.source;
+          if (!source || !source.characterId) {
+            return undefined;
+          }
+          const key = `${source.packId}:${source.instrumentId}:${source.characterId}`;
+          return (listener: (event: PulseActivityEvent) => void) => {
+            if (typeof window === "undefined") {
+              return () => {};
+            }
+            const attemptAttach = () => {
+              const nodes = pulseNodesRef.current[key];
+              return nodes ? nodes.addPulseListener(listener) : null;
+            };
+            let unsubscribe = attemptAttach();
+            if (unsubscribe) {
+              return unsubscribe;
+            }
+            const interval = window.setInterval(() => {
+              if (!unsubscribe) {
+                unsubscribe = attemptAttach();
+                if (unsubscribe) {
+                  window.clearInterval(interval);
+                }
+              }
+            }, 250);
+            return () => {
+              if (unsubscribe) {
+                unsubscribe();
+              }
+              window.clearInterval(interval);
+            };
+          };
+        })()}
       />
     ) : (
       <div
