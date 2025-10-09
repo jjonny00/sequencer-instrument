@@ -91,6 +91,8 @@ type ToneLike = Pick<
   | "Gain"
   | "Destination"
   | "Filter"
+  | "Chorus"
+  | "Noise"
   | "LFO"
   | "Multiply"
   | "Add"
@@ -106,6 +108,7 @@ type ToneLike = Pick<
 export interface PulseInstrumentNodes {
   instrument: Tone.PolySynth;
   filter: Tone.Filter;
+  chorus: Tone.Chorus;
   ampEnv: Tone.AmplitudeEnvelope;
   gate: Tone.Gain;
   output: Tone.Gain;
@@ -192,6 +195,7 @@ const reconnectChain = (
   params: {
     synth: Tone.PolySynth;
     filter: Tone.Filter;
+    chorus: Tone.Chorus;
     ampEnv: Tone.AmplitudeEnvelope;
     gate: Tone.Gain;
     effects: Tone.ToneAudioNode[];
@@ -199,9 +203,10 @@ const reconnectChain = (
   },
   useFilter: boolean
 ) => {
-  const { synth, filter, ampEnv, gate, effects, output } = params;
+  const { synth, filter, chorus, ampEnv, gate, effects, output } = params;
   synth.disconnect();
   filter.disconnect();
+  chorus.disconnect();
   ampEnv.disconnect();
   gate.disconnect();
   effects.forEach((node) => node.disconnect());
@@ -211,6 +216,9 @@ const reconnectChain = (
     synth.connect(filter);
     current = filter;
   }
+
+  current.connect(chorus);
+  current = chorus;
 
   current.connect(ampEnv);
   current = ampEnv;
@@ -264,12 +272,26 @@ export const createPulseInstrument = (
     frequency: FILTER_MAX_FREQUENCY,
     Q: resonanceToQ(resolved.resonance),
   });
+  const chorus = new tone.Chorus(4, 2.5, 0.2);
+  chorus.start();
   const ampEnv = new tone.AmplitudeEnvelope({
     attack: 0.005,
     decay: 0.08,
     sustain: 0,
     release: 0.05,
   });
+  const noise = new tone.Noise("white");
+  noise.start();
+  const noiseEnv = new tone.AmplitudeEnvelope({
+    attack: 0.01,
+    decay: 0.12,
+    sustain: 0,
+    release: 0.08,
+  });
+  const noiseGain = new tone.Gain(0.18);
+  noise.connect(noiseEnv);
+  noiseEnv.connect(noiseGain);
+  noiseGain.connect(ampEnv);
   const gate = new tone.Gain(1);
   const output = new tone.Gain(1);
   output.connect(tone.Destination);
@@ -307,6 +329,14 @@ export const createPulseInstrument = (
   });
   motionLfo.start();
 
+  const detuneLfo = new tone.LFO({
+    frequency: "8m",
+    min: -6,
+    max: 6,
+  });
+  detuneLfo.start();
+  detuneLfo.connect(synth.detune);
+
   const motionDepthNode = new tone.Multiply(currentMotionDepth);
   motionLfo.connect(motionDepthNode);
 
@@ -337,7 +367,7 @@ export const createPulseInstrument = (
   filterDepth.connect(filterOffset);
   filterOffset.connect(filterScale);
 
-  reconnectChain({ synth, filter, ampEnv, gate, effects, output }, filterEnabled);
+  reconnectChain({ synth, filter, chorus, ampEnv, gate, effects, output }, filterEnabled);
 
   const resolveSeconds = (value?: Tone.Unit.Time) => {
     if (value === undefined) {
@@ -375,6 +405,8 @@ export const createPulseInstrument = (
 
     if (value > 0) {
       ampEnv.triggerAttackRelease("16n", when, amplitude);
+      const noiseVelocity = clamp01(amplitude * 0.6);
+      noiseEnv.triggerAttackRelease("16n", when, noiseVelocity);
     }
 
     const targetFrequency = filterEnabled ? frequency : FILTER_MAX_FREQUENCY;
@@ -392,6 +424,7 @@ export const createPulseInstrument = (
       when + GATE_RAMP
     );
     ampEnv.triggerRelease(when);
+    noiseEnv.triggerRelease(when);
   };
 
   const updateEnvelopeShape = () => {
@@ -605,7 +638,7 @@ export const createPulseInstrument = (
   const setFilterEnabled = (enabled: boolean) => {
     if (filterEnabled === enabled) return;
     filterEnabled = enabled;
-    reconnectChain({ synth, filter, ampEnv, gate, effects, output }, filterEnabled);
+    reconnectChain({ synth, filter, chorus, ampEnv, gate, effects, output }, filterEnabled);
     updateLfoRouting();
   };
 
@@ -670,6 +703,7 @@ export const createPulseInstrument = (
     scheduledReleases.clear();
     lfo.dispose();
     motionLfo.dispose();
+    detuneLfo.dispose();
     amplitudeDepth.dispose();
     amplitudeOffset.dispose();
     filterDepth.dispose();
@@ -683,6 +717,10 @@ export const createPulseInstrument = (
     patternSequence?.dispose();
     randomLoop?.dispose();
     effects.forEach((node) => node.dispose());
+    noiseEnv.dispose();
+    noiseGain.dispose();
+    noise.dispose();
+    chorus.dispose();
     ampEnv.dispose();
     gate.dispose();
     filter.dispose();
@@ -692,6 +730,7 @@ export const createPulseInstrument = (
   return {
     instrument: synth,
     filter,
+    chorus,
     ampEnv,
     gate,
     output,
