@@ -244,7 +244,18 @@ const prepareHarmoniaChord = ({
   nodes.filter.frequency.rampTo(targetFrequency, 0.05);
 
   const level = clamp(velocity, 0, 1);
-  const hold = Math.max(sustain ?? chunk?.sustain ?? 1.6, 0.1);
+
+  const isValidDuration = (value: number | undefined): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0;
+
+  let hold: number;
+  if (isValidDuration(sustain)) {
+    hold = Math.max(sustain, 0.02);
+  } else if (chunk && isValidDuration(chunk.sustain)) {
+    hold = Math.max(chunk.sustain, 0.1);
+  } else {
+    hold = 1.6;
+  }
 
   return { controls, chordNotes, level, hold };
 };
