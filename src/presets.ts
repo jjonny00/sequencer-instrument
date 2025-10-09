@@ -26,6 +26,7 @@ const cloneChunk = (chunk: Chunk): Chunk => ({
   steps: chunk.steps.slice(),
   velocities: chunk.velocities ? chunk.velocities.slice() : undefined,
   pitches: chunk.pitches ? chunk.pitches.slice() : undefined,
+  stepDurations: chunk.stepDurations ? chunk.stepDurations.slice() : undefined,
   notes: chunk.notes ? chunk.notes.slice() : undefined,
   degrees: chunk.degrees ? chunk.degrees.slice() : undefined,
   noteEvents: chunk.noteEvents ? chunk.noteEvents.map((event) => ({ ...event })) : undefined,

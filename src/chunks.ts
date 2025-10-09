@@ -79,6 +79,7 @@ export interface Chunk {
   steps: number[];
   velocities?: number[];
   pitches?: number[];
+  stepDurations?: number[];
   note?: string;
   sustain?: number;
   attack?: number;
