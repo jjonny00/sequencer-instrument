@@ -144,6 +144,53 @@
       "description": "Motion LFO destination",
       "enum": ["cutoff", "resonance", "amp"]
     },
+    "pulsePattern": {
+      "type": "array",
+      "description": "Pulse gate pattern",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["active", "velocity", "probability"],
+            "properties": {
+              "active": { "type": "boolean" },
+              "velocity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "probability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          },
+          {
+            "type": "integer",
+            "enum": [0, 1]
+          }
+        ]
+      }
+    },
+    "pulsePatternLength": {
+      "type": "number",
+      "description": "Pulse pattern length",
+      "enum": [8, 16]
+    },
+    "pulseSwing": {
+      "type": "number",
+      "description": "Pulse swing amount",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "pulseHumanize": {
+      "type": "number",
+      "description": "Pulse timing and velocity humanize depth",
+      "minimum": 0,
+      "maximum": 1
+    },
     "timingMode": {
       "type": "string",
       "description": "Whether the pattern follows BPM sync or free timing",

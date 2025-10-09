@@ -5,6 +5,7 @@ import {
   DEFAULT_PULSE_FILTER_ENABLED,
   DEFAULT_PULSE_FILTER_TYPE,
   DEFAULT_PULSE_MODE,
+  DEFAULT_PULSE_HUMANIZE,
   DEFAULT_PULSE_MOTION_DEPTH,
   DEFAULT_PULSE_MOTION_RATE,
   DEFAULT_PULSE_MOTION_TARGET,
@@ -14,9 +15,11 @@ import {
   DEFAULT_PULSE_RESONANCE,
   DEFAULT_PULSE_SHAPE,
   DEFAULT_PULSE_SWING,
+  normalizePulsePattern,
   type PulseFilterType,
   type PulseMode,
   type PulseMotionTarget,
+  type PulsePatternStep,
   type PulseShape,
 } from "../chunks";
 import type { InstrumentCharacter } from "../packs";
@@ -35,21 +38,13 @@ const MOTION_AMP_SWING = 0.5;
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
-const normalizePattern = (pattern: number[] | undefined, length: number) => {
-  if (!Array.isArray(pattern) || pattern.length === 0) {
-    return Array.from({ length }, (_value, index) => (index % 2 === 0 ? 1 : 0));
-  }
-  if (pattern.length === length) {
-    return pattern.map((value) => (value ? 1 : 0));
-  }
-  const normalized: number[] = [];
-  for (let i = 0; i < length; i += 1) {
-    const ratio = pattern.length / length;
-    const sourceIndex = Math.floor(i * ratio);
-    normalized.push(pattern[sourceIndex] ? 1 : 0);
-  }
-  return normalized;
-};
+const clonePatternSteps = (pattern: PulsePatternStep[]): PulsePatternStep[] =>
+  pattern.map((step) => ({ ...step }));
+
+const normalizePattern = (
+  pattern: PulsePatternStep[] | number[] | undefined,
+  length: number
+) => clonePatternSteps(normalizePulsePattern(pattern, length));
 
 export interface PulseSettings {
   mode: PulseMode;
@@ -62,9 +57,10 @@ export interface PulseSettings {
   motionRate: string;
   motionDepth: number;
   motionTarget: PulseMotionTarget;
-  pattern?: number[];
+  pattern?: PulsePatternStep[];
   patternLength?: number;
   swing?: number;
+  humanize?: number;
 }
 
 export const DEFAULT_PULSE_SETTINGS: PulseSettings = {
@@ -78,9 +74,10 @@ export const DEFAULT_PULSE_SETTINGS: PulseSettings = {
   motionRate: DEFAULT_PULSE_MOTION_RATE,
   motionDepth: DEFAULT_PULSE_MOTION_DEPTH,
   motionTarget: DEFAULT_PULSE_MOTION_TARGET,
-  pattern: DEFAULT_PULSE_PATTERN,
+  pattern: clonePatternSteps(DEFAULT_PULSE_PATTERN),
   patternLength: DEFAULT_PULSE_PATTERN_LENGTH,
   swing: DEFAULT_PULSE_SWING,
+  humanize: DEFAULT_PULSE_HUMANIZE,
 };
 
 type ToneLike = Pick<
@@ -163,8 +160,9 @@ export interface PulseInstrumentNodes {
   setMotionRate: (value: Tone.Unit.Frequency) => void;
   setMotionDepth: (value: number) => void;
   setMotionTarget: (value: PulseMotionTarget) => void;
-  setPattern: (pattern: number[], length?: number) => void;
+  setPattern: (pattern: PulsePatternStep[] | number[], length?: number) => void;
   setSwing: (value: number) => void;
+  setHumanize: (value: number) => void;
   dispose: () => void;
 }
 
@@ -347,9 +345,13 @@ export const createPulseInstrument = (
   let currentMotionDepth = clamp01(resolved.motionDepth);
   let currentMotionTarget: PulseMotionTarget = resolved.motionTarget;
   let currentSwing = clamp01(resolved.swing ?? DEFAULT_PULSE_SWING);
+  let currentHumanize = clamp01(resolved.humanize ?? DEFAULT_PULSE_HUMANIZE);
 
   const patternLength = normalizeLength(resolved.patternLength);
-  let patternSteps = normalizePattern(resolved.pattern ?? DEFAULT_PULSE_PATTERN, patternLength);
+  let patternSteps = normalizePattern(
+    resolved.pattern ?? DEFAULT_PULSE_PATTERN,
+    patternLength
+  );
   let patternStepIndex = 0;
   let randomStepIndex = 0;
 
@@ -436,6 +438,14 @@ export const createPulseInstrument = (
     const interval = tone.Time(currentRate).toSeconds();
     return time + interval * currentSwing * 0.5;
   };
+
+  const jitter = (amount: number) => (Math.random() * 2 - 1) * amount;
+
+  const applyHumanizeTime = (time: number) =>
+    time + jitter(0.02 * currentHumanize);
+
+  const computeHumanizedVelocity = (base: number) =>
+    clamp01(base + jitter(0.1 * currentHumanize));
 
   const triggerPulse = (value: number, time: number, velocity = 1) => {
     const when = Math.max(time, tone.now());
@@ -536,19 +546,40 @@ export const createPulseInstrument = (
     }
   };
 
+  const createStepEvents = () => patternSteps.map((step) => (step.active ? 1 : 0));
+
   let patternSequence: Tone.Sequence<number> | null = null;
   const rebuildPatternSequence = () => {
     patternSequence?.dispose();
     patternStepIndex = 0;
-    patternSequence = new tone.Sequence<number>((time, step) => {
-      const stepValue = typeof step === "number" ? step : 0;
+    patternSequence = new tone.Sequence<number>((time, _step) => {
+      if (!patternSteps.length) {
+        return;
+      }
       const index = patternStepIndex;
       patternStepIndex = (patternStepIndex + 1) % patternSteps.length;
-      const eventTime = applySwing(time, index);
-      if (currentMode === "Pattern" && activeVoices > 0) {
-        triggerPulse(stepValue, eventTime);
+      const stepData = patternSteps[index] ?? { active: false, velocity: 1, probability: 1 };
+      const swungTime = applySwing(time, index);
+      const eventTime = applyHumanizeTime(swungTime);
+      if (currentMode !== "Pattern" || activeVoices === 0) {
+        return;
       }
-    }, patternSteps.slice(), currentRate);
+      if (!stepData.active) {
+        triggerPulse(0, eventTime, 0);
+        return;
+      }
+      const stepProbability = clamp01(stepData.probability ?? 1);
+      if (Math.random() > stepProbability) {
+        triggerPulse(0, eventTime, 0);
+        return;
+      }
+      const baseVelocity =
+        typeof stepData.velocity === "number" && Number.isFinite(stepData.velocity)
+          ? stepData.velocity
+          : 1;
+      const velocity = computeHumanizedVelocity(baseVelocity);
+      triggerPulse(1, eventTime, velocity);
+    }, createStepEvents(), currentRate);
     patternSequence.loop = true;
     patternSequence.start(0);
   };
@@ -563,11 +594,17 @@ export const createPulseInstrument = (
       if (currentMode !== "Random" || activeVoices === 0) {
         return;
       }
-      const probability = 0.3 + currentDepth * 0.6;
-      const active = Math.random() < clamp01(probability);
-      const eventTime = applySwing(time, stepIndex);
-      triggerPulse(active ? 1 : 0, eventTime);
-    }, currentRate);
+    const probability = 0.3 + currentDepth * 0.6;
+    const active = Math.random() < clamp01(probability);
+    const swungTime = applySwing(time, stepIndex);
+    const eventTime = applyHumanizeTime(swungTime);
+    if (!active) {
+      triggerPulse(0, eventTime, 0);
+      return;
+    }
+    const velocity = computeHumanizedVelocity(0.85);
+    triggerPulse(1, eventTime, velocity);
+  }, currentRate);
     randomLoop.start(0);
   };
 
@@ -719,12 +756,15 @@ export const createPulseInstrument = (
     updateMotionTargetRouting();
   };
 
-  const setPattern = (pattern: number[], length?: number) => {
+  const setPattern = (
+    pattern: PulsePatternStep[] | number[],
+    length?: number
+  ) => {
     const normalizedLength = normalizeLength(length ?? pattern.length);
     patternSteps = normalizePattern(pattern, normalizedLength);
     patternStepIndex = 0;
     if (patternSequence) {
-      patternSequence.events = patternSteps.slice();
+      patternSequence.events = createStepEvents();
     } else {
       rebuildPatternSequence();
     }
@@ -733,6 +773,10 @@ export const createPulseInstrument = (
   const setSwing = (value: number) => {
     const clamped = clamp01(value);
     currentSwing = clamped;
+  };
+
+  const setHumanize = (value: number) => {
+    currentHumanize = clamp01(value);
   };
 
   const dispose = () => {
@@ -788,6 +832,7 @@ export const createPulseInstrument = (
     setMotionTarget,
     setPattern,
     setSwing,
+    setHumanize,
     dispose,
   };
 };

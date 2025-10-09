@@ -20,11 +20,14 @@ import {
   DEFAULT_PULSE_RESONANCE,
   DEFAULT_PULSE_SHAPE,
   DEFAULT_PULSE_SWING,
+  DEFAULT_PULSE_HUMANIZE,
   type Chunk,
   type NoteEvent,
   type PulseFilterType,
   type PulseMode,
+  type PulsePatternStep,
   type PulseShape,
+  normalizePulsePattern as normalizePulsePatternSteps,
 } from "./chunks";
 import type { Track } from "./tracks";
 import { formatInstrumentLabel } from "./utils/instrument";
@@ -324,25 +327,17 @@ const arraysEqual = <T,>(a?: T[] | null, b?: T[] | null) => {
   return true;
 };
 
-const normalizePulsePattern = (pattern: number[] | undefined, length: number) => {
-  if (!Array.isArray(pattern) || pattern.length === 0) {
-    return Array.from({ length }, (_value, index) => (index % 2 === 0 ? 1 : 0));
-  }
-  if (pattern.length === length) {
-    return pattern.map((value) => (value ? 1 : 0));
-  }
-  const normalized: number[] = [];
-  for (let i = 0; i < length; i += 1) {
-    const ratio = pattern.length / length;
-    const sourceIndex = Math.floor(i * ratio);
-    normalized.push(pattern[sourceIndex] ? 1 : 0);
-  }
-  return normalized;
-};
+const normalizePulsePattern = (
+  pattern: PulsePatternStep[] | number[] | undefined,
+  length: number
+) => normalizePulsePatternSteps(pattern, length).map((step) => ({ ...step }));
 
-const resizePulsePattern = (pattern: number[], nextLength: number) => {
+const resizePulsePattern = (
+  pattern: PulsePatternStep[],
+  nextLength: number
+) => {
   if (pattern.length === nextLength) {
-    return pattern.slice();
+    return pattern.map((step) => ({ ...step }));
   }
   return normalizePulsePattern(pattern, nextLength);
 };
@@ -938,6 +933,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const selectedDegree = Math.min(6, Math.max(0, pattern?.degree ?? 0));
   const extensionsEnabled = pattern?.useExtensions ?? false;
 
+  const [selectedPulseStep, setSelectedPulseStep] = useState<number | null>(
+    null
+  );
+
   useEffect(() => {
     if (!pattern || !pattern.note || !pattern.notes || !pattern.degrees) {
       return;
@@ -985,7 +984,23 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     () => normalizePulsePattern(rawPulsePattern, pulsePatternLength),
     [rawPulsePattern, pulsePatternLength]
   );
+  useEffect(() => {
+    if (selectedPulseStep === null) {
+      return;
+    }
+    if (
+      selectedPulseStep < 0 ||
+      selectedPulseStep >= displayedPulsePattern.length
+    ) {
+      setSelectedPulseStep(
+        displayedPulsePattern.length > 0
+          ? displayedPulsePattern.length - 1
+          : null
+      );
+    }
+  }, [displayedPulsePattern, selectedPulseStep]);
   const pulseSwing = pattern?.pulseSwing ?? DEFAULT_PULSE_SWING;
+  const pulseHumanize = pattern?.pulseHumanize ?? DEFAULT_PULSE_HUMANIZE;
   const pulsePatternRows = useMemo(
     () =>
       pulsePatternLength === 16
@@ -996,6 +1011,10 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         : [displayedPulsePattern],
     [displayedPulsePattern, pulsePatternLength]
   );
+  const selectedPulseStepData =
+    selectedPulseStep !== null
+      ? displayedPulsePattern[selectedPulseStep] ?? null
+      : null;
 
   const handlePulseModeChange = useCallback(
     (mode: PulseMode) => {
@@ -1020,8 +1039,62 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   const handlePulseStepToggle = useCallback(
     (index: number) => {
       if (!updatePattern) return;
-      const next = displayedPulsePattern.map((value, stepIndex) =>
-        stepIndex === index ? (value ? 0 : 1) : value
+      setSelectedPulseStep(index);
+      const next = displayedPulsePattern.map((step, stepIndex) => {
+        if (stepIndex !== index) {
+          return { ...step };
+        }
+        const toggledActive = !step.active;
+        const ensuredVelocity = clamp(
+          typeof step.velocity === "number" && step.velocity > 0
+            ? step.velocity
+            : 1,
+          0,
+          1
+        );
+        const ensuredProbability = clamp(
+          typeof step.probability === "number" && step.probability > 0
+            ? step.probability
+            : 1,
+          0,
+          1
+        );
+        return {
+          ...step,
+          active: toggledActive,
+          velocity: toggledActive ? ensuredVelocity : step.velocity,
+          probability: toggledActive ? ensuredProbability : step.probability,
+        };
+      });
+      updatePattern({
+        pulsePattern: next,
+        pulsePatternLength,
+      });
+    },
+    [displayedPulsePattern, pulsePatternLength, updatePattern]
+  );
+
+  const handlePulseVelocityChange = useCallback(
+    (index: number, value: number) => {
+      if (!updatePattern) return;
+      const clamped = clamp(value, 0, 1);
+      const next = displayedPulsePattern.map((step, stepIndex) =>
+        stepIndex === index ? { ...step, velocity: clamped } : { ...step }
+      );
+      updatePattern({
+        pulsePattern: next,
+        pulsePatternLength,
+      });
+    },
+    [displayedPulsePattern, pulsePatternLength, updatePattern]
+  );
+
+  const handlePulseProbabilityChange = useCallback(
+    (index: number, value: number) => {
+      if (!updatePattern) return;
+      const clamped = clamp(value, 0, 1);
+      const next = displayedPulsePattern.map((step, stepIndex) =>
+        stepIndex === index ? { ...step, probability: clamped } : { ...step }
       );
       updatePattern({
         pulsePattern: next,
@@ -4137,29 +4210,82 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                           gap: 6,
                         }}
                       >
-                        {row.map((value, columnIndex) => {
+                        {row.map((step, columnIndex) => {
                           const stepIndex = baseIndex + columnIndex;
-                          const active = Boolean(value);
+                          const active = Boolean(step?.active);
+                          const velocity = clamp(
+                            typeof step?.velocity === "number"
+                              ? step.velocity
+                              : 0,
+                            0,
+                            1
+                          );
+                          const probability = clamp(
+                            typeof step?.probability === "number"
+                              ? step.probability
+                              : 1,
+                            0,
+                            1
+                          );
+                          const isSelected = selectedPulseStep === stepIndex;
                           return (
                             <button
                               key={`pulse-step-${stepIndex}`}
                               type="button"
                               aria-pressed={active}
                               onClick={() => handlePulseStepToggle(stepIndex)}
+                              onMouseDown={() => setSelectedPulseStep(stepIndex)}
+                              onFocus={() => setSelectedPulseStep(stepIndex)}
                               disabled={!updatePattern}
                               style={{
-                                height: 32,
-                                borderRadius: 8,
-                                border: "1px solid #273144",
+                                height: 40,
+                                borderRadius: 10,
+                                border: `1px solid ${
+                                  isSelected ? "#27E0B0" : "#273144"
+                                }`,
                                 background: active ? "#27E0B0" : "#101a2b",
                                 color: active ? "#0f172a" : "#94a3b8",
                                 fontSize: 12,
                                 fontWeight: 700,
                                 cursor: updatePattern ? "pointer" : "not-allowed",
-                                transition: "background 0.1s ease",
+                                transition:
+                                  "background 0.1s ease, border-color 0.1s ease",
+                                position: "relative",
+                                overflow: "hidden",
                               }}
                             >
-                              {stepIndex + 1}
+                              <span style={{ position: "relative", zIndex: 2 }}>
+                                {stepIndex + 1}
+                              </span>
+                              <span
+                                aria-hidden
+                                style={{
+                                  position: "absolute",
+                                  bottom: 6,
+                                  left: "50%",
+                                  transform: "translateX(-50%)",
+                                  width: 6,
+                                  borderRadius: 3,
+                                  height: `${Math.round(velocity * 100)}%`,
+                                  background: active ? "#0f172a" : "#334155",
+                                  opacity: active ? 1 : 0.4,
+                                  transition: "height 0.1s ease",
+                                  zIndex: 1,
+                                }}
+                              />
+                              {probability < 1 ? (
+                                <span
+                                  aria-hidden
+                                  style={{
+                                    position: "absolute",
+                                    inset: 0,
+                                    background: "#0f172a",
+                                    opacity: 1 - probability,
+                                    pointerEvents: "none",
+                                    zIndex: 1,
+                                  }}
+                                />
+                              ) : null}
                             </button>
                           );
                         })}
@@ -4167,6 +4293,57 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                     );
                   })}
                 </div>
+                {selectedPulseStepData && selectedPulseStep !== null ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 12,
+                    }}
+                  >
+                    <Slider
+                      label={`Velocity • Step ${selectedPulseStep + 1}`}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={selectedPulseStepData.velocity}
+                      formatValue={(value) => `${Math.round(value * 100)}%`}
+                      onChange={
+                        updatePattern
+                          ? (value) =>
+                              handlePulseVelocityChange(selectedPulseStep, value)
+                          : undefined
+                      }
+                    />
+                    <Slider
+                      label="Probability"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={selectedPulseStepData.probability}
+                      formatValue={(value) => `${Math.round(value * 100)}%`}
+                      onChange={
+                        updatePattern
+                          ? (value) =>
+                              handlePulseProbabilityChange(
+                                selectedPulseStep,
+                                value
+                              )
+                          : undefined
+                      }
+                    />
+                  </div>
+                ) : (
+                  <span
+                    style={{
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Select a step to fine-tune velocity and probability.
+                  </span>
+                )}
                 <Slider
                   label="Swing"
                   min={0}
@@ -4177,6 +4354,19 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                   onChange={
                     updatePattern
                       ? (value) => updatePattern({ pulseSwing: value })
+                      : undefined
+                  }
+                />
+                <Slider
+                  label="Humanize"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={pulseHumanize}
+                  formatValue={(value) => `${Math.round(value * 100)}%`}
+                  onChange={
+                    updatePattern
+                      ? (value) => updatePattern({ pulseHumanize: value })
                       : undefined
                   }
                 />
