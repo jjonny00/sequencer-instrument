@@ -1473,22 +1473,35 @@ export default function App() {
     if (maxColumns === 0) return;
 
     const ticksPerSection = Tone.Time("1m").toTicks();
-    if (ticksPerSection === 0) return;
+    if (!Number.isFinite(ticksPerSection) || ticksPerSection <= 0) return;
 
-    const applySectionFromTicks = (ticks: number) => {
-      const nextSection =
-        Math.floor(ticks / ticksPerSection) % Math.max(maxColumns, 1);
-      setCurrentSectionIndex((prev) =>
-        prev === nextSection ? prev : nextSection
-      );
+    const safeColumnCount = Math.max(maxColumns, 1);
+    const getSectionFromTicks = (ticks: number) => {
+      if (!Number.isFinite(ticks) || ticks <= 0) {
+        return 0;
+      }
+      const normalizedTicks = Math.max(0, ticks);
+      const rawSection = Math.floor(normalizedTicks / ticksPerSection);
+      return rawSection % safeColumnCount;
     };
 
-    applySectionFromTicks(Tone.Transport.ticks);
+    let lastSection = getSectionFromTicks(Tone.Transport.ticks);
+
+    setCurrentSectionIndex((prev) => (prev === lastSection ? prev : lastSection));
 
     const id = Tone.Transport.scheduleRepeat((time) => {
-      const ticks = Tone.Transport.getTicksAtTime(time);
+      const ticksAtEvent = Tone.Transport.getTicksAtTime(time);
+      const measuredSection = getSectionFromTicks(ticksAtEvent);
+      const expectedSection = (lastSection + 1) % safeColumnCount;
+      const nextSection =
+        measuredSection === lastSection ? expectedSection : measuredSection;
+
+      lastSection = nextSection;
+
       Tone.Draw.schedule(() => {
-        applySectionFromTicks(ticks);
+        setCurrentSectionIndex((prev) =>
+          prev === nextSection ? prev : nextSection
+        );
       }, time);
     }, "1m");
 
