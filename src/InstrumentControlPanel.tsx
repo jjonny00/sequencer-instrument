@@ -60,6 +60,7 @@ import type {
   HarmoniaComplexity,
   HarmoniaPatternId,
   HarmoniaScaleDegree,
+  HarmoniaManualChord,
 } from "./instruments/harmonia";
 import type { PulseActivityEvent } from "./instruments/pulse";
 import {
@@ -96,6 +97,7 @@ interface InstrumentControlPanelProps {
     characterId?: string | null;
     packId?: string | null;
   }) => void;
+  harmoniaManualControls?: HarmoniaManualControls;
   onPerformanceNote?: (payload: {
     eventTime: number;
     noteName: string;
@@ -135,6 +137,16 @@ interface HarmoniaRecordingMeta {
   harmoniaPatternId?: string;
   velocityFactor?: number;
   filter?: number;
+}
+
+export interface HarmoniaManualControls {
+  attack: (payload: {
+    time: number;
+    velocity?: number;
+    sustain?: number;
+    chunk?: Chunk;
+  }) => HarmoniaManualChord | null;
+  release: (payload: { time: number; chord: HarmoniaManualChord }) => void;
 }
 
 const Slider: FC<SliderProps> = ({
@@ -423,6 +435,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   onRecordingChange,
   onPresetApplied,
   onHarmoniaRealtimeChange,
+  harmoniaManualControls,
   onPerformanceNote,
   subscribePulseActivity,
 }) => {
@@ -709,6 +722,15 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
   });
   const harmoniaPadPointerIdRef = useRef<number | null>(null);
   const harmoniaLastChordRef = useRef<HarmoniaRecordingMeta | null>(null);
+  const harmoniaActiveSourcesRef = useRef(
+    new Map<string, HarmoniaScaleDegree>()
+  );
+  const harmoniaActiveChordsRef = useRef(
+    new Map<
+      HarmoniaScaleDegree,
+      { count: number; chord: HarmoniaManualChord | null }
+    >()
+  );
 
   useEffect(() => {
     harmoniaPadStateRef.current = {
@@ -858,6 +880,8 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     if (!isHarmonia) {
       harmoniaPadActiveRef.current = false;
       harmoniaPadPointerIdRef.current = null;
+      harmoniaActiveSourcesRef.current.clear();
+      harmoniaActiveChordsRef.current.clear();
     }
   }, [isHarmonia]);
 
@@ -1557,47 +1581,112 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     ]
   );
 
-  const handleHarmoniaPadPress = useCallback(
-    (degree: HarmoniaScaleDegree) => {
+  const handleHarmoniaPadAttack = useCallback(
+    (degree: HarmoniaScaleDegree, sourceKey: string) => {
+      if (!isHarmonia) return;
+      if (harmoniaActiveSourcesRef.current.has(sourceKey)) return;
+
+      const existing = harmoniaActiveChordsRef.current.get(degree);
+      if (existing && existing.count > 0) {
+        existing.count += 1;
+        harmoniaActiveChordsRef.current.set(degree, existing);
+        harmoniaActiveSourcesRef.current.set(sourceKey, degree);
+        return;
+      }
+
       const { tone, dynamics } = harmoniaPadStateRef.current;
       const { resolution, tonalCenter: center, scale, complexity } =
         applyHarmoniaResolution(degree);
       if (!resolution) return;
-      if (trigger) {
-        void initAudioContext();
-        const now = Tone.now();
-        const notes = resolution.notes.slice();
-        const degrees = resolution.intervals.slice();
-        const useExtensions = complexity !== "simple";
-        const chunkPayload = pattern
-          ? {
-              ...pattern,
-              tonalCenter: center,
-              scale,
-              degree,
-              note: resolution.root,
-              notes: notes.slice(),
-              degrees: degrees.slice(),
-              harmoniaComplexity: complexity,
-              harmoniaTone: tone,
-              harmoniaDynamics: dynamics,
-              harmoniaBass: harmoniaBassEnabled,
-              harmoniaArp: harmoniaArpEnabled,
-              harmoniaPatternId,
-              harmoniaBorrowedLabel: resolution.borrowed
-                ? resolution.voicingLabel
-                : undefined,
-              filter: tone,
-            }
-          : undefined;
-        const chordMeta: HarmoniaRecordingMeta = {
-          note: resolution.root,
-          notes,
-          degrees,
+
+      if (!trigger && !harmoniaManualControls?.attack) {
+        return;
+      }
+
+      void initAudioContext();
+      const now = Tone.now();
+      const notes = resolution.notes.slice();
+      const degrees = resolution.intervals.slice();
+      const useExtensions = complexity !== "simple";
+      const chunkPayload = pattern
+        ? {
+            ...pattern,
+            tonalCenter: center,
+            scale,
+            degree,
+            note: resolution.root,
+            notes: notes.slice(),
+            degrees: degrees.slice(),
+            harmoniaComplexity: complexity,
+            harmoniaTone: tone,
+            harmoniaDynamics: dynamics,
+            harmoniaBass: harmoniaBassEnabled,
+            harmoniaArp: harmoniaArpEnabled,
+            harmoniaPatternId,
+            harmoniaBorrowedLabel: resolution.borrowed
+              ? resolution.voicingLabel
+              : undefined,
+            filter: tone,
+          }
+        : undefined;
+      const chordMeta: HarmoniaRecordingMeta = {
+        note: resolution.root,
+        notes,
+        degrees,
+        tonalCenter: center,
+        scale,
+        degree,
+        useExtensions,
+        harmoniaComplexity: complexity,
+        harmoniaBorrowedLabel: resolution.borrowed
+          ? resolution.voicingLabel
+          : undefined,
+        harmoniaTone: tone,
+        harmoniaDynamics: dynamics,
+        harmoniaBass: harmoniaBassEnabled,
+        harmoniaArp: harmoniaArpEnabled,
+        harmoniaPatternId: harmoniaPatternId ?? undefined,
+        velocityFactor: dynamics,
+        filter: tone,
+      };
+
+      let manualChord: HarmoniaManualChord | null = null;
+
+      if (harmoniaManualControls) {
+        manualChord = harmoniaManualControls.attack({
+          time: now,
+          velocity: dynamics,
+          sustain: pattern?.sustain ?? undefined,
+          chunk: chunkPayload,
+        });
+        console.log("[Harmonia] triggerAttack", {
+          degree,
+          notes: manualChord?.notes ?? chunkPayload?.notes ?? notes,
+        });
+      } else if (trigger) {
+        trigger(
+          now,
+          dynamics,
+          0,
+          resolution.root,
+          pattern?.sustain ?? undefined,
+          chunkPayload,
+          sourceCharacterId ?? patternCharacterId ?? undefined
+        );
+        console.log("[Harmonia] triggerAttack", { degree, notes });
+      }
+
+      harmoniaLastChordRef.current = chordMeta;
+
+      if (isRecording && onUpdatePattern) {
+        const baseNote = pattern?.note ?? resolution.root;
+        const overrides: Partial<Chunk> = {
           tonalCenter: center,
           scale,
           degree,
-          useExtensions,
+          note: resolution.root,
+          notes: notes.slice(),
+          degrees: degrees.slice(),
           harmoniaComplexity: complexity,
           harmoniaBorrowedLabel: resolution.borrowed
             ? resolution.voicingLabel
@@ -1609,62 +1698,38 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           harmoniaPatternId: harmoniaPatternId ?? undefined,
           velocityFactor: dynamics,
           filter: tone,
+          useExtensions,
         };
-        trigger(
-          now,
-          dynamics,
-          0,
-          resolution.root,
-          pattern?.sustain ?? undefined,
-          chunkPayload,
-          sourceCharacterId ?? patternCharacterId ?? undefined
-        );
-
-        if (isRecording && onUpdatePattern) {
-          const baseNote = pattern?.note ?? resolution.root;
-          const overrides: Partial<Chunk> = {
-            tonalCenter: center,
-            scale,
-            degree,
-            note: resolution.root,
-            notes: notes.slice(),
-            degrees: degrees.slice(),
-            harmoniaComplexity: complexity,
-            harmoniaBorrowedLabel: resolution.borrowed
-              ? resolution.voicingLabel
-              : undefined,
-            harmoniaTone: tone,
-            harmoniaDynamics: dynamics,
-            harmoniaBass: harmoniaBassEnabled,
-            harmoniaArp: harmoniaArpEnabled,
-            harmoniaPatternId: harmoniaPatternId ?? undefined,
-            velocityFactor: dynamics,
-            filter: tone,
-            useExtensions,
-          };
-          Tone.Draw.schedule(() => {
-            recordNoteToPattern({
-              noteName: resolution.root,
-              eventTime: now,
-              baseNote,
-              velocity: dynamics,
-              duration: pattern?.sustain ?? undefined,
-              includeChordMeta: true,
-              mode: timingMode,
-              chunkOverrides: overrides,
-              chordMeta,
-            });
-          }, now);
-        }
+        Tone.Draw.schedule(() => {
+          recordNoteToPattern({
+            noteName: resolution.root,
+            eventTime: now,
+            baseNote,
+            velocity: dynamics,
+            duration: pattern?.sustain ?? undefined,
+            includeChordMeta: true,
+            mode: timingMode,
+            chunkOverrides: overrides,
+            chordMeta,
+          });
+        }, now);
       }
+
+      harmoniaActiveChordsRef.current.set(degree, {
+        count: 1,
+        chord: manualChord,
+      });
+      harmoniaActiveSourcesRef.current.set(sourceKey, degree);
     },
     [
+      isHarmonia,
+      harmoniaManualControls,
       applyHarmoniaResolution,
-      trigger,
       pattern,
       harmoniaBassEnabled,
       harmoniaArpEnabled,
       harmoniaPatternId,
+      trigger,
       sourceCharacterId,
       patternCharacterId,
       isRecording,
@@ -1672,6 +1737,36 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       recordNoteToPattern,
       timingMode,
     ]
+  );
+
+  const handleHarmoniaPadRelease = useCallback(
+    (sourceKey: string) => {
+      const degree = harmoniaActiveSourcesRef.current.get(sourceKey);
+      if (degree === undefined) return;
+      harmoniaActiveSourcesRef.current.delete(sourceKey);
+      const entry = harmoniaActiveChordsRef.current.get(degree);
+      if (!entry) return;
+      const nextCount = entry.count - 1;
+      if (nextCount <= 0) {
+        harmoniaActiveChordsRef.current.delete(degree);
+        if (harmoniaManualControls && entry.chord) {
+          const now = Tone.now();
+          harmoniaManualControls.release({ time: now, chord: entry.chord });
+          console.log("[Harmonia] triggerRelease", {
+            degree,
+            notes: entry.chord.notes,
+          });
+        } else {
+          console.log("[Harmonia] triggerRelease", { degree });
+        }
+      } else {
+        harmoniaActiveChordsRef.current.set(degree, {
+          ...entry,
+          count: nextCount,
+        });
+      }
+    },
+    [harmoniaManualControls]
   );
 
   const harmoniaComplexityIndex = Math.max(
@@ -3188,12 +3283,58 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
                     key={label}
                     type="button"
                     onPointerDown={(event) => {
-                      if (event.pointerType !== "mouse") {
+                      event.preventDefault();
+                      event.currentTarget.setPointerCapture?.(
+                        event.pointerId
+                      );
+                      handleHarmoniaPadAttack(
+                        degree,
+                        `pointer:${event.pointerId}`
+                      );
+                    }}
+                    onPointerUp={(event) => {
+                      event.preventDefault();
+                      if (
+                        event.currentTarget.hasPointerCapture?.(
+                          event.pointerId
+                        )
+                      ) {
+                        event.currentTarget.releasePointerCapture(
+                          event.pointerId
+                        );
+                      }
+                      handleHarmoniaPadRelease(`pointer:${event.pointerId}`);
+                    }}
+                    onPointerCancel={(event) => {
+                      if (
+                        event.currentTarget.hasPointerCapture?.(
+                          event.pointerId
+                        )
+                      ) {
+                        event.currentTarget.releasePointerCapture(
+                          event.pointerId
+                        );
+                      }
+                      handleHarmoniaPadRelease(`pointer:${event.pointerId}`);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.repeat) return;
+                      if (event.code === "Space" || event.code === "Enter") {
                         event.preventDefault();
-                        handleHarmoniaPadPress(degree);
+                        handleHarmoniaPadAttack(
+                          degree,
+                          `keyboard:${event.code}`
+                        );
                       }
                     }}
-                    onClick={() => handleHarmoniaPadPress(degree)}
+                    onKeyUp={(event) => {
+                      if (event.code === "Space" || event.code === "Enter") {
+                        event.preventDefault();
+                        handleHarmoniaPadRelease(
+                          `keyboard:${event.code}`
+                        );
+                      }
+                    }}
                     aria-label={summary}
                     style={{
                       padding: 0,

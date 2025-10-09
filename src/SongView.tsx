@@ -29,6 +29,7 @@ import { IconButton } from "./components/IconButton";
 import { BottomDock } from "./components/layout/BottomDock";
 import { TopBar } from "./components/layout/TopBar";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
+import type { HarmoniaManualControls } from "./InstrumentControlPanel";
 import { usePerformanceCapture } from "./hooks/usePerformanceCapture";
 import { useTimelineState } from "./hooks/useTimelineState";
 import { useTransport } from "./hooks/useTransport";
@@ -44,6 +45,10 @@ interface SongViewProps {
   onToggleTransport: () => void;
   performanceTracks: PerformanceTrack[];
   triggers: TriggerMap;
+  resolveHarmoniaManualControls?: (
+    packId?: string | null,
+    characterId?: string | null
+  ) => HarmoniaManualControls | undefined;
   onEnsurePerformanceRow: (
     instrument: TrackInstrument,
     existingId?: string | null
@@ -693,6 +698,7 @@ export function SongView({
   onToggleTransport,
   performanceTracks,
   triggers,
+  resolveHarmoniaManualControls,
   onEnsurePerformanceRow,
   activePerformanceTrackId,
   onAddPerformanceTrack,
@@ -1308,6 +1314,21 @@ export function SongView({
     [
       panelInstrument,
       playInstrumentPattern,
+      playInstrumentPackId,
+      playInstrumentCharacterId,
+    ]
+  );
+  const playInstrumentManualControls = useMemo(
+    () =>
+      panelInstrument === "harmonia"
+        ? resolveHarmoniaManualControls?.(
+            playInstrumentPackId || null,
+            playInstrumentCharacterId || null
+          )
+        : undefined,
+    [
+      panelInstrument,
+      resolveHarmoniaManualControls,
       playInstrumentPackId,
       playInstrumentCharacterId,
     ]
@@ -2355,6 +2376,7 @@ export function SongView({
             allTracks={[]}
             onUpdatePattern={handlePlayInstrumentPatternUpdate}
             trigger={playInstrumentTrigger}
+            harmoniaManualControls={playInstrumentManualControls}
             isRecording={recordingActive}
             onPerformanceNote={handlePerformanceNoteRecorded}
           />
