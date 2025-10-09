@@ -1311,8 +1311,6 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       chunkOverrides?: Partial<Chunk>;
       chordMeta?: HarmoniaRecordingMeta;
     }) => {
-      if (!onUpdatePattern) return;
-
       const fallbackMeta: HarmoniaRecordingMeta = {
         note: chordDefinition.root,
         notes: chordDefinition.notes.slice(),
@@ -1354,118 +1352,135 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           typeof duration === "number" && duration > 0
             ? duration
             : undefined;
-        onUpdatePattern((chunk) => {
-          const length = chunk.steps.length || 16;
-          const stepIndex = length
-            ? Math.floor(ticks / ticksPerStep) % length
-            : 0;
-          const steps = chunk.steps.length
-            ? chunk.steps.slice()
-            : Array(16).fill(0);
-          const velocities = ensureArrayLength(
-            chunk.velocities,
-            steps.length,
-            1
-          );
-          const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
-          const harmoniaStepDegrees = ensureArrayLength<(number | null)>(
-            chunk.harmoniaStepDegrees,
-            steps.length,
-            null
-          );
-          const referenceNote =
-            chunkOverrides?.note ??
-            activeChordMeta.note ??
-            chunk.note ??
-            baseNote;
-          const baseMidi = Tone.Frequency(referenceNote).toMidi();
-          const midi = Tone.Frequency(noteName).toMidi();
-          steps[stepIndex] = 1;
-          velocities[stepIndex] = clamp(velocity, 0, 1);
-          pitches[stepIndex] = midi - baseMidi;
-          if (includeChordMeta && chordMeta) {
-            harmoniaStepDegrees[stepIndex] = chordMeta.degree;
-          }
-
-          const nextChunk: Chunk = {
-            ...chunk,
-            note: pattern?.note ?? baseNote,
-            sustain: pattern?.sustain ?? chunk.sustain,
-            attack: pattern?.attack ?? chunk.attack,
-            glide: pattern?.glide ?? chunk.glide,
-            pan: pattern?.pan ?? chunk.pan,
-            reverb: pattern?.reverb ?? chunk.reverb,
-            delay: pattern?.delay ?? chunk.delay,
-            distortion: pattern?.distortion ?? chunk.distortion,
-            bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
-            filter: pattern?.filter ?? chunk.filter,
-            chorus: pattern?.chorus ?? chunk.chorus,
-            pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
-            style: pattern?.style ?? chunk.style,
-            mode: pattern?.mode ?? chunk.mode,
-            arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
-            arpGate: pattern?.arpGate ?? chunk.arpGate,
-            arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
-            arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
-            arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
-            timingMode: "sync",
-            tonalCenter,
-            scale: scaleName,
-            degree: selectedDegree,
-            useExtensions: extensionsEnabled,
-            autopilot: autopilotEnabled,
-            steps,
-            velocities,
-            pitches,
-            noteEvents: undefined,
-            noteLoopLength: undefined,
-            harmoniaStepDegrees,
-          };
-
-          if (includeChordMeta) {
-            nextChunk.note = activeChordMeta.note;
-            nextChunk.notes = activeChordMeta.notes.slice();
-            nextChunk.degrees = activeChordMeta.degrees.slice();
-            nextChunk.tonalCenter = activeChordMeta.tonalCenter;
-            nextChunk.scale = activeChordMeta.scale;
-            nextChunk.degree = activeChordMeta.degree;
-            nextChunk.useExtensions = activeChordMeta.useExtensions;
-            nextChunk.harmoniaComplexity = activeChordMeta.harmoniaComplexity;
-            nextChunk.harmoniaBorrowedLabel =
-              activeChordMeta.harmoniaBorrowedLabel;
-            nextChunk.harmoniaTone = activeChordMeta.harmoniaTone;
-            nextChunk.harmoniaDynamics = activeChordMeta.harmoniaDynamics;
-            nextChunk.harmoniaBass = activeChordMeta.harmoniaBass;
-            nextChunk.harmoniaArp = activeChordMeta.harmoniaArp;
-            nextChunk.harmoniaPatternId = activeChordMeta.harmoniaPatternId;
-            nextChunk.velocityFactor = activeChordMeta.velocityFactor;
-            nextChunk.filter = activeChordMeta.filter;
-          }
-
-          if (chunkOverrides) {
-            Object.assign(nextChunk, chunkOverrides);
-          }
-
-          if (performanceDurationSeconds === undefined) {
-            const sustainSource =
-              chunkOverrides?.sustain ??
-              pattern?.sustain ??
-              chunk.sustain ??
-              0.5;
-            try {
-              performanceDurationSeconds = Tone.Time(sustainSource).toSeconds();
-            } catch (error) {
-              console.warn(
-                "Failed to resolve sustain duration for performance note",
-                sustainSource,
-                error
-              );
-              performanceDurationSeconds = undefined;
+        if (onUpdatePattern) {
+          onUpdatePattern((chunk) => {
+            const length = chunk.steps.length || 16;
+            const stepIndex = length
+              ? Math.floor(ticks / ticksPerStep) % length
+              : 0;
+            const steps = chunk.steps.length
+              ? chunk.steps.slice()
+              : Array(16).fill(0);
+            const velocities = ensureArrayLength(
+              chunk.velocities,
+              steps.length,
+              1
+            );
+            const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+            const harmoniaStepDegrees = ensureArrayLength<(number | null)>(
+              chunk.harmoniaStepDegrees,
+              steps.length,
+              null
+            );
+            const referenceNote =
+              chunkOverrides?.note ??
+              activeChordMeta.note ??
+              chunk.note ??
+              baseNote;
+            const baseMidi = Tone.Frequency(referenceNote).toMidi();
+            const midi = Tone.Frequency(noteName).toMidi();
+            steps[stepIndex] = 1;
+            velocities[stepIndex] = clamp(velocity, 0, 1);
+            pitches[stepIndex] = midi - baseMidi;
+            if (includeChordMeta && chordMeta) {
+              harmoniaStepDegrees[stepIndex] = chordMeta.degree;
             }
-          }
 
-          return nextChunk;
-        });
+            const nextChunk: Chunk = {
+              ...chunk,
+              note: pattern?.note ?? baseNote,
+              sustain: pattern?.sustain ?? chunk.sustain,
+              attack: pattern?.attack ?? chunk.attack,
+              glide: pattern?.glide ?? chunk.glide,
+              pan: pattern?.pan ?? chunk.pan,
+              reverb: pattern?.reverb ?? chunk.reverb,
+              delay: pattern?.delay ?? chunk.delay,
+              distortion: pattern?.distortion ?? chunk.distortion,
+              bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+              filter: pattern?.filter ?? chunk.filter,
+              chorus: pattern?.chorus ?? chunk.chorus,
+              pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+              style: pattern?.style ?? chunk.style,
+              mode: pattern?.mode ?? chunk.mode,
+              arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
+              arpGate: pattern?.arpGate ?? chunk.arpGate,
+              arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+              arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+              arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+              timingMode: "sync",
+              tonalCenter,
+              scale: scaleName,
+              degree: selectedDegree,
+              useExtensions: extensionsEnabled,
+              autopilot: autopilotEnabled,
+              steps,
+              velocities,
+              pitches,
+              noteEvents: undefined,
+              noteLoopLength: undefined,
+              harmoniaStepDegrees,
+            };
+
+            if (includeChordMeta) {
+              nextChunk.note = activeChordMeta.note;
+              nextChunk.notes = activeChordMeta.notes.slice();
+              nextChunk.degrees = activeChordMeta.degrees.slice();
+              nextChunk.tonalCenter = activeChordMeta.tonalCenter;
+              nextChunk.scale = activeChordMeta.scale;
+              nextChunk.degree = activeChordMeta.degree;
+              nextChunk.useExtensions = activeChordMeta.useExtensions;
+              nextChunk.harmoniaComplexity = activeChordMeta.harmoniaComplexity;
+              nextChunk.harmoniaBorrowedLabel =
+                activeChordMeta.harmoniaBorrowedLabel;
+              nextChunk.harmoniaTone = activeChordMeta.harmoniaTone;
+              nextChunk.harmoniaDynamics = activeChordMeta.harmoniaDynamics;
+              nextChunk.harmoniaBass = activeChordMeta.harmoniaBass;
+              nextChunk.harmoniaArp = activeChordMeta.harmoniaArp;
+              nextChunk.harmoniaPatternId = activeChordMeta.harmoniaPatternId;
+              nextChunk.velocityFactor = activeChordMeta.velocityFactor;
+              nextChunk.filter = activeChordMeta.filter;
+            }
+
+            if (chunkOverrides) {
+              Object.assign(nextChunk, chunkOverrides);
+            }
+
+            if (performanceDurationSeconds === undefined) {
+              const sustainSource =
+                chunkOverrides?.sustain ??
+                pattern?.sustain ??
+                chunk.sustain ??
+                0.5;
+              try {
+                performanceDurationSeconds = Tone.Time(
+                  sustainSource
+                ).toSeconds();
+              } catch (error) {
+                console.warn(
+                  "Failed to resolve sustain duration for performance note",
+                  sustainSource,
+                  error
+                );
+                performanceDurationSeconds = undefined;
+              }
+            }
+
+            return nextChunk;
+          });
+        } else if (performanceDurationSeconds === undefined) {
+          const sustainSource =
+            chunkOverrides?.sustain ?? pattern?.sustain ?? 0.5;
+          try {
+            performanceDurationSeconds = Tone.Time(sustainSource).toSeconds();
+          } catch (error) {
+            console.warn(
+              "Failed to resolve sustain duration for performance note",
+              sustainSource,
+              error
+            );
+            performanceDurationSeconds = undefined;
+          }
+        }
         const resolvedDurationSeconds =
           performanceDurationSeconds !== undefined &&
           Number.isFinite(performanceDurationSeconds)
@@ -1492,86 +1507,88 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         velocity: clamp(velocity, 0, 1),
       };
 
-      onUpdatePattern((chunk) => {
-        const length = chunk.steps.length || 16;
-        const steps = chunk.steps.length
-          ? chunk.steps.slice()
-          : Array(length).fill(0);
-        steps.fill(0);
-        const velocities = ensureArrayLength(chunk.velocities, steps.length, 0);
-        velocities.fill(0);
-        const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
-        pitches.fill(0);
+      if (onUpdatePattern) {
+        onUpdatePattern((chunk) => {
+          const length = chunk.steps.length || 16;
+          const steps = chunk.steps.length
+            ? chunk.steps.slice()
+            : Array(length).fill(0);
+          steps.fill(0);
+          const velocities = ensureArrayLength(chunk.velocities, steps.length, 0);
+          velocities.fill(0);
+          const pitches = ensureArrayLength(chunk.pitches, steps.length, 0);
+          pitches.fill(0);
 
-        const events = chunk.noteEvents ? chunk.noteEvents.slice() : [];
-        events.push(event);
-        events.sort((a, b) => a.time - b.time);
-        const loopLength = Math.max(
-          chunk.noteLoopLength ?? 0,
-          event.time + event.duration
-        );
+          const events = chunk.noteEvents ? chunk.noteEvents.slice() : [];
+          events.push(event);
+          events.sort((a, b) => a.time - b.time);
+          const loopLength = Math.max(
+            chunk.noteLoopLength ?? 0,
+            event.time + event.duration
+          );
 
-        const nextChunk: Chunk = {
-          ...chunk,
-          note: pattern?.note ?? baseNote,
-          sustain: pattern?.sustain ?? chunk.sustain,
-          attack: pattern?.attack ?? chunk.attack,
-          glide: pattern?.glide ?? chunk.glide,
-          pan: pattern?.pan ?? chunk.pan,
-          reverb: pattern?.reverb ?? chunk.reverb,
-          delay: pattern?.delay ?? chunk.delay,
-          distortion: pattern?.distortion ?? chunk.distortion,
-          bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
-          filter: pattern?.filter ?? chunk.filter,
-          chorus: pattern?.chorus ?? chunk.chorus,
-          pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
-          style: pattern?.style ?? chunk.style,
-          mode: pattern?.mode ?? chunk.mode,
-          arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
-          arpGate: pattern?.arpGate ?? chunk.arpGate,
-          arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
-          arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
-          arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
-          timingMode: "free",
-          tonalCenter,
-          scale: scaleName,
-          degree: selectedDegree,
-          useExtensions: extensionsEnabled,
-          autopilot: autopilotEnabled,
-          steps,
-          velocities,
-          pitches,
-          noteEvents: events,
-          noteLoopLength: loopLength,
-          harmoniaStepDegrees: undefined,
-        };
+          const nextChunk: Chunk = {
+            ...chunk,
+            note: pattern?.note ?? baseNote,
+            sustain: pattern?.sustain ?? chunk.sustain,
+            attack: pattern?.attack ?? chunk.attack,
+            glide: pattern?.glide ?? chunk.glide,
+            pan: pattern?.pan ?? chunk.pan,
+            reverb: pattern?.reverb ?? chunk.reverb,
+            delay: pattern?.delay ?? chunk.delay,
+            distortion: pattern?.distortion ?? chunk.distortion,
+            bitcrusher: pattern?.bitcrusher ?? chunk.bitcrusher,
+            filter: pattern?.filter ?? chunk.filter,
+            chorus: pattern?.chorus ?? chunk.chorus,
+            pitchBend: pattern?.pitchBend ?? chunk.pitchBend,
+            style: pattern?.style ?? chunk.style,
+            mode: pattern?.mode ?? chunk.mode,
+            arpRate: normalizeArpRate(pattern?.arpRate ?? chunk.arpRate),
+            arpGate: pattern?.arpGate ?? chunk.arpGate,
+            arpLatch: pattern?.arpLatch ?? chunk.arpLatch,
+            arpOctaves: pattern?.arpOctaves ?? chunk.arpOctaves,
+            arpFreeRate: pattern?.arpFreeRate ?? chunk.arpFreeRate,
+            timingMode: "free",
+            tonalCenter,
+            scale: scaleName,
+            degree: selectedDegree,
+            useExtensions: extensionsEnabled,
+            autopilot: autopilotEnabled,
+            steps,
+            velocities,
+            pitches,
+            noteEvents: events,
+            noteLoopLength: loopLength,
+            harmoniaStepDegrees: undefined,
+          };
 
-        if (includeChordMeta) {
-          nextChunk.note = activeChordMeta.note;
-          nextChunk.notes = activeChordMeta.notes.slice();
-          nextChunk.degrees = activeChordMeta.degrees.slice();
-          nextChunk.tonalCenter = activeChordMeta.tonalCenter;
-          nextChunk.scale = activeChordMeta.scale;
-          nextChunk.degree = activeChordMeta.degree;
-          nextChunk.useExtensions = activeChordMeta.useExtensions;
-          nextChunk.harmoniaComplexity = activeChordMeta.harmoniaComplexity;
-          nextChunk.harmoniaBorrowedLabel =
-            activeChordMeta.harmoniaBorrowedLabel;
-          nextChunk.harmoniaTone = activeChordMeta.harmoniaTone;
-          nextChunk.harmoniaDynamics = activeChordMeta.harmoniaDynamics;
-          nextChunk.harmoniaBass = activeChordMeta.harmoniaBass;
-          nextChunk.harmoniaArp = activeChordMeta.harmoniaArp;
-          nextChunk.harmoniaPatternId = activeChordMeta.harmoniaPatternId;
-          nextChunk.velocityFactor = activeChordMeta.velocityFactor;
-          nextChunk.filter = activeChordMeta.filter;
-        }
+          if (includeChordMeta) {
+            nextChunk.note = activeChordMeta.note;
+            nextChunk.notes = activeChordMeta.notes.slice();
+            nextChunk.degrees = activeChordMeta.degrees.slice();
+            nextChunk.tonalCenter = activeChordMeta.tonalCenter;
+            nextChunk.scale = activeChordMeta.scale;
+            nextChunk.degree = activeChordMeta.degree;
+            nextChunk.useExtensions = activeChordMeta.useExtensions;
+            nextChunk.harmoniaComplexity = activeChordMeta.harmoniaComplexity;
+            nextChunk.harmoniaBorrowedLabel =
+              activeChordMeta.harmoniaBorrowedLabel;
+            nextChunk.harmoniaTone = activeChordMeta.harmoniaTone;
+            nextChunk.harmoniaDynamics = activeChordMeta.harmoniaDynamics;
+            nextChunk.harmoniaBass = activeChordMeta.harmoniaBass;
+            nextChunk.harmoniaArp = activeChordMeta.harmoniaArp;
+            nextChunk.harmoniaPatternId = activeChordMeta.harmoniaPatternId;
+            nextChunk.velocityFactor = activeChordMeta.velocityFactor;
+            nextChunk.filter = activeChordMeta.filter;
+          }
 
-        if (chunkOverrides) {
-          Object.assign(nextChunk, chunkOverrides);
-        }
+          if (chunkOverrides) {
+            Object.assign(nextChunk, chunkOverrides);
+          }
 
-        return nextChunk;
-      });
+          return nextChunk;
+        });
+      }
       onPerformanceNote?.({
         eventTime,
         noteName,
@@ -1692,7 +1709,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
 
       harmoniaLastChordRef.current = chordMeta;
 
-      if (isRecording && onUpdatePattern) {
+      if (isRecording && (onUpdatePattern || onPerformanceNote)) {
         const baseNote = pattern?.note ?? resolution.root;
         const overrides: Partial<Chunk> = {
           tonalCenter: center,
@@ -1747,6 +1764,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       onUpdatePattern,
       recordNoteToPattern,
       timingMode,
+      onPerformanceNote,
     ]
   );
 
@@ -1788,7 +1806,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
         });
       }
     },
-    [harmoniaManualControls]
+    [harmoniaManualControls, recordNoteToPattern]
   );
 
   const harmoniaComplexityIndex = Math.max(
