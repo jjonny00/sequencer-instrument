@@ -259,6 +259,7 @@ export const triggerHarmoniaChord = ({
 }: HarmoniaTriggerOptions) => {
   const { controls, chordNotes, level, hold } = prepareHarmoniaChord({
     nodes,
+    time,
     velocity,
     sustain,
     chunk,
@@ -297,6 +298,7 @@ export const triggerHarmoniaChordAttack = ({
 }: HarmoniaTriggerOptions): HarmoniaManualChord | null => {
   const { controls, chordNotes, level, hold } = prepareHarmoniaChord({
     nodes,
+    time,
     velocity,
     sustain,
     chunk,
