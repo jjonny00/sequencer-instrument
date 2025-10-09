@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as Tone from "tone";
 import type {
   CSSProperties,
@@ -1205,6 +1205,43 @@ export function SongView({
   const slotPadding = SLOT_PADDING;
   const slotGap = SLOT_CONTENT_GAP;
 
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const container = timelineScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    if (currentSectionIndex < 0) {
+      return;
+    }
+
+    const activeColumn = container.querySelector<HTMLElement>(
+      `[data-loop-column="${currentSectionIndex}"]`
+    );
+
+    if (!activeColumn) {
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const columnRect = activeColumn.getBoundingClientRect();
+    const horizontalPadding = 20;
+
+    const isLeftOutOfView = columnRect.left < containerRect.left + horizontalPadding;
+    const isRightOutOfView =
+      columnRect.right > containerRect.right - horizontalPadding;
+
+    if (isLeftOutOfView || isRightOutOfView) {
+      activeColumn.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    }
+  }, [currentSectionIndex, timelineColumns.length]);
+
   const timelineContentHeight = useMemo(() => {
     const rowCount = Math.max(1, timelineDisplayRows.length);
     const totalRowHeight = rowCount * slotMinHeight;
@@ -2020,6 +2057,7 @@ export function SongView({
           <div className="min-h-0" style={{ height: "100%" }}>
             <div
               className="scrollable"
+              ref={timelineScrollRef}
               style={{
                 overflowX: "auto",
                 height: "100%",
@@ -2076,6 +2114,7 @@ export function SongView({
                                   key={column.id}
                                   type="button"
                                   onClick={() => handleDeleteColumn(column.index)}
+                                  data-loop-column={column.index}
                                   style={{
                                     padding: "4px 8px",
                                     borderRadius: 16,
@@ -2100,7 +2139,7 @@ export function SongView({
                                 </button>
                               );
                             }
-                            return <div key={column.id} />;
+                            return <div key={column.id} data-loop-column={column.index} />;
                           })}
                           <IconButton
                             key="timeline-add-loop"
