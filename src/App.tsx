@@ -1533,10 +1533,13 @@ export default function App() {
           const nextSource = track.source
             ? {
                 ...track.source,
-                characterId:
-                  nextPattern.characterId !== undefined
-                    ? nextPattern.characterId ?? track.source.characterId
-                    : track.source.characterId,
+                presetId: null,
+                ...(nextPattern.characterId !== undefined
+                  ? {
+                      characterId:
+                        nextPattern.characterId ?? track.source.characterId,
+                    }
+                  : {}),
               }
             : track.source;
           return {

@@ -860,11 +860,16 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
     setGroupEditor(null);
   };
 
+  const clearTrackPreset = (track: Track): Track =>
+    track.source
+      ? { ...track, source: { ...track.source, presetId: null } }
+      : track;
+
   const updatePattern = (trackId: number, steps: number[]) => {
     setTracks((ts) =>
       ts.map((t) =>
         t.id === trackId && t.pattern
-          ? { ...t, pattern: { ...t.pattern, steps } }
+          ? clearTrackPreset({ ...t, pattern: { ...t.pattern, steps } })
           : t
       )
     );
@@ -886,10 +891,10 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
             : Array(16).fill(0);
           if (props.velocity !== undefined) velocities[index] = props.velocity;
           if (props.pitch !== undefined) pitches[index] = props.pitch;
-          return {
+          return clearTrackPreset({
             ...t,
             pattern: { ...t.pattern, velocities, pitches },
-          };
+          });
         }
         return t;
       })
