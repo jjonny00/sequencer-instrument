@@ -139,6 +139,17 @@ interface HarmoniaRecordingMeta {
   filter?: number;
 }
 
+interface HarmoniaPendingRecording {
+  noteName: string;
+  eventTime: number;
+  baseNote: string;
+  velocity: number;
+  includeChordMeta: boolean;
+  mode: "sync" | "free";
+  chunkOverrides?: Partial<Chunk>;
+  chordMeta?: HarmoniaRecordingMeta;
+}
+
 export interface HarmoniaManualControls {
   attack: (payload: {
     time: number;
@@ -730,6 +741,9 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       HarmoniaScaleDegree,
       { count: number; chord: HarmoniaManualChord | null }
     >()
+  );
+  const harmoniaRecordingNotesRef = useRef(
+    new Map<HarmoniaScaleDegree, HarmoniaPendingRecording>()
   );
 
   useEffect(() => {
@@ -1700,19 +1714,16 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
           filter: tone,
           useExtensions,
         };
-        Tone.Draw.schedule(() => {
-          recordNoteToPattern({
-            noteName: resolution.root,
-            eventTime: now,
-            baseNote,
-            velocity: dynamics,
-            duration: pattern?.sustain ?? undefined,
-            includeChordMeta: true,
-            mode: timingMode,
-            chunkOverrides: overrides,
-            chordMeta,
-          });
-        }, now);
+        harmoniaRecordingNotesRef.current.set(degree, {
+          noteName: resolution.root,
+          eventTime: now,
+          baseNote,
+          velocity: dynamics,
+          includeChordMeta: true,
+          mode: timingMode,
+          chunkOverrides: overrides,
+          chordMeta,
+        });
       }
 
       harmoniaActiveChordsRef.current.set(degree, {
@@ -1749,9 +1760,20 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
       const nextCount = entry.count - 1;
       if (nextCount <= 0) {
         harmoniaActiveChordsRef.current.delete(degree);
+        const releaseTime = Tone.now();
+        const pendingRecording = harmoniaRecordingNotesRef.current.get(degree);
+        if (pendingRecording) {
+          harmoniaRecordingNotesRef.current.delete(degree);
+          const duration = Math.max(0.02, releaseTime - pendingRecording.eventTime);
+          Tone.Draw.schedule(() => {
+            recordNoteToPattern({
+              ...pendingRecording,
+              duration,
+            });
+          }, releaseTime);
+        }
         if (harmoniaManualControls && entry.chord) {
-          const now = Tone.now();
-          harmoniaManualControls.release({ time: now, chord: entry.chord });
+          harmoniaManualControls.release({ time: releaseTime, chord: entry.chord });
           console.log("[Harmonia] triggerRelease", {
             degree,
             notes: entry.chord.notes,
@@ -2418,12 +2440,14 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     if (!isRecording) {
       recordingAnchorRef.current = null;
       freeNoteBufferRef.current.clear();
+      harmoniaRecordingNotesRef.current.clear();
     }
   }, [isRecording]);
 
   useEffect(() => {
     recordingAnchorRef.current = null;
     freeNoteBufferRef.current.clear();
+    harmoniaRecordingNotesRef.current.clear();
   }, [timingMode]);
 
   useEffect(() => () => stopArpPlayback(), [stopArpPlayback]);
@@ -2433,6 +2457,7 @@ export const InstrumentControlPanel: FC<InstrumentControlPanelProps> = ({
     stopArpPlayback();
     setActiveDegree(null);
     setPressedKeyboardNotes(new Set());
+    harmoniaRecordingNotesRef.current.clear();
   }, [track.id, track.instrument, stopArpPlayback, onRecordingChange]);
 
   useEffect(() => {
