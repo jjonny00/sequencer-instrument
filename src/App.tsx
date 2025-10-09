@@ -20,9 +20,11 @@ import {
   DEFAULT_PULSE_RESONANCE,
   DEFAULT_PULSE_SHAPE,
   DEFAULT_PULSE_SWING,
+  DEFAULT_PULSE_HUMANIZE,
   type Chunk,
   type PulseMode,
   type PulseShape,
+  normalizePulsePattern,
 } from "./chunks";
 import { packs, type InstrumentCharacter, type Pack } from "./packs";
 import {
@@ -35,6 +37,7 @@ import {
 import { createKick } from "./instruments/kickInstrument";
 import {
   createPulseInstrument,
+  type PulseActivityEvent,
   type PulseInstrumentNodes,
 } from "./instruments/pulse";
 import { SongView } from "./SongView";
@@ -1234,11 +1237,14 @@ export default function App() {
               const resonance = chunk?.pulseResonance ?? DEFAULT_PULSE_RESONANCE;
               const patternLength =
                 chunk?.pulsePatternLength ?? DEFAULT_PULSE_PATTERN_LENGTH;
-              const pattern =
-                (chunk?.pulsePattern && chunk.pulsePattern.length > 0
+              const rawPattern =
+                chunk?.pulsePattern && chunk.pulsePattern.length > 0
                   ? chunk.pulsePattern
-                  : DEFAULT_PULSE_PATTERN) ?? DEFAULT_PULSE_PATTERN;
+                  : DEFAULT_PULSE_PATTERN;
+              const pattern = normalizePulsePattern(rawPattern, patternLength);
               const swing = chunk?.pulseSwing ?? DEFAULT_PULSE_SWING;
+              const humanize =
+                chunk?.pulseHumanize ?? DEFAULT_PULSE_HUMANIZE;
               nodes.setMode(mode);
               nodes.setRate(rate);
               nodes.setDepth(depth);
@@ -1248,6 +1254,7 @@ export default function App() {
               nodes.setResonance(resonance);
               nodes.setPattern(pattern, patternLength);
               nodes.setSwing(swing);
+              nodes.setHumanize(humanize);
             }
           }
 
@@ -3001,6 +3008,43 @@ export default function App() {
         isRecording={isRecording}
         onRecordingChange={setIsRecording}
         onPresetApplied={handlePresetApplied}
+        subscribePulseActivity={(() => {
+          if (selectedTrack.instrument !== "pulse") {
+            return undefined;
+          }
+          const source = selectedTrack.source;
+          if (!source || !source.characterId) {
+            return undefined;
+          }
+          const key = `${source.packId}:${source.instrumentId}:${source.characterId}`;
+          return (listener: (event: PulseActivityEvent) => void) => {
+            if (typeof window === "undefined") {
+              return () => {};
+            }
+            const attemptAttach = () => {
+              const nodes = pulseNodesRef.current[key];
+              return nodes ? nodes.addPulseListener(listener) : null;
+            };
+            let unsubscribe = attemptAttach();
+            if (unsubscribe) {
+              return unsubscribe;
+            }
+            const interval = window.setInterval(() => {
+              if (!unsubscribe) {
+                unsubscribe = attemptAttach();
+                if (unsubscribe) {
+                  window.clearInterval(interval);
+                }
+              }
+            }, 250);
+            return () => {
+              if (unsubscribe) {
+                unsubscribe();
+              }
+              window.clearInterval(interval);
+            };
+          };
+        })()}
       />
     ) : (
       <div

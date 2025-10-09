@@ -1,6 +1,15 @@
 export type PulseShape = "sine" | "square" | "triangle";
 export type PulseMode = "LFO" | "Pattern" | "Random";
 export type PulseFilterType = "lowpass" | "bandpass" | "highpass";
+export type PulseMotionTarget = "cutoff" | "resonance" | "amp";
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+export interface PulsePatternStep {
+  active: boolean;
+  velocity: number;
+  probability: number;
+}
 
 export const DEFAULT_PULSE_MODE: PulseMode = "LFO";
 export const DEFAULT_PULSE_RATE = "8n";
@@ -9,9 +18,33 @@ export const DEFAULT_PULSE_SHAPE: PulseShape = "square";
 export const DEFAULT_PULSE_FILTER_ENABLED = false;
 export const DEFAULT_PULSE_FILTER_TYPE: PulseFilterType = "lowpass";
 export const DEFAULT_PULSE_RESONANCE = 0.35;
-export const DEFAULT_PULSE_PATTERN = [1, 0, 1, 0, 1, 0, 1, 0];
+export const DEFAULT_PULSE_MOTION_RATE = "2n";
+export const DEFAULT_PULSE_MOTION_DEPTH = 0.3;
+export const DEFAULT_PULSE_MOTION_TARGET: PulseMotionTarget = "cutoff";
 export const DEFAULT_PULSE_PATTERN_LENGTH = 8;
 export const DEFAULT_PULSE_SWING = 0;
+export const DEFAULT_PULSE_HUMANIZE = 0;
+
+const createPulsePatternStep = (
+  active: boolean,
+  velocity = 1,
+  probability = 1
+): PulsePatternStep => ({
+  active,
+  velocity: clamp01(Number.isFinite(velocity) ? velocity : 1),
+  probability: clamp01(Number.isFinite(probability) ? probability : 1),
+});
+
+export const createDefaultPulsePattern = (
+  length: number
+): PulsePatternStep[] =>
+  Array.from({ length }, (_value, index) =>
+    createPulsePatternStep(index % 2 === 0, 1, 1)
+  );
+
+export const DEFAULT_PULSE_PATTERN = createDefaultPulsePattern(
+  DEFAULT_PULSE_PATTERN_LENGTH
+);
 
 export interface PulseChunkSettings {
   pulseMode?: PulseMode;
@@ -22,9 +55,13 @@ export interface PulseChunkSettings {
   pulseFilterEnabled?: boolean;
   pulseFilterType?: PulseFilterType;
   pulseResonance?: number;
-  pulsePattern?: number[];
+  pulseMotionRate?: string;
+  pulseMotionDepth?: number;
+  pulseMotionTarget?: PulseMotionTarget;
+  pulsePattern?: PulsePatternStep[];
   pulsePatternLength?: number;
   pulseSwing?: number;
+  pulseHumanize?: number;
 }
 
 export interface NoteEvent {
@@ -83,9 +120,13 @@ export interface Chunk {
   pulseFilterEnabled?: boolean;
   pulseFilterType?: PulseFilterType;
   pulseResonance?: number;
-  pulsePattern?: number[];
+  pulseMotionRate?: string;
+  pulseMotionDepth?: number;
+  pulseMotionTarget?: PulseMotionTarget;
+  pulsePattern?: PulsePatternStep[];
   pulsePatternLength?: number;
   pulseSwing?: number;
+  pulseHumanize?: number;
   harmoniaComplexity?: "simple" | "extended" | "lush";
   harmoniaTone?: number;
   harmoniaDynamics?: number;
@@ -96,8 +137,6 @@ export interface Chunk {
   harmoniaStepDegrees?: (number | null)[];
 }
 
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-
 const isPulseShape = (value: unknown): value is PulseShape =>
   value === "sine" || value === "square" || value === "triangle";
 
@@ -107,18 +146,45 @@ const isPulseMode = (value: unknown): value is PulseMode =>
 const isPulseFilterType = (value: unknown): value is PulseFilterType =>
   value === "lowpass" || value === "bandpass" || value === "highpass";
 
-const createDefaultPattern = (length: number) =>
-  Array.from({ length }, (_value, index) => (index % 2 === 0 ? 1 : 0));
+const isPulseMotionTarget = (value: unknown): value is PulseMotionTarget =>
+  value === "cutoff" || value === "resonance" || value === "amp";
 
-const normalizePattern = (pattern: number[], length: number) => {
-  if (pattern.length === length) {
-    return pattern.map((value) => (value ? 1 : 0));
+const sanitizePulsePatternStep = (value: unknown): PulsePatternStep => {
+  if (typeof value === "number") {
+    const active = value > 0;
+    return createPulsePatternStep(active, 1, 1);
   }
-  const normalized = [] as number[];
+  if (value && typeof value === "object") {
+    const raw = value as Partial<PulsePatternStep>;
+    const active = Boolean(raw.active);
+    const velocity =
+      typeof raw.velocity === "number" && Number.isFinite(raw.velocity)
+        ? clamp01(raw.velocity)
+        : 1;
+    const probability =
+      typeof raw.probability === "number" && Number.isFinite(raw.probability)
+        ? clamp01(raw.probability)
+        : 1;
+    return createPulsePatternStep(active, velocity, probability);
+  }
+  return createPulsePatternStep(false, 1, 1);
+};
+
+export const normalizePulsePattern = (
+  pattern: PulsePatternStep[] | number[] | undefined,
+  length: number
+): PulsePatternStep[] => {
+  if (!Array.isArray(pattern) || pattern.length === 0) {
+    return createDefaultPulsePattern(length);
+  }
+  if (pattern.length === length) {
+    return pattern.map((step) => sanitizePulsePatternStep(step));
+  }
+  const normalized: PulsePatternStep[] = [];
   for (let i = 0; i < length; i += 1) {
     const ratio = pattern.length / length;
     const sourceIndex = Math.floor(i * ratio);
-    normalized.push(pattern[sourceIndex] ? 1 : 0);
+    normalized.push(sanitizePulsePatternStep(pattern[sourceIndex]));
   }
   return normalized;
 };
@@ -178,6 +244,28 @@ export const ensurePulseDefaults = (chunk: Chunk): Chunk => {
     }
   }
 
+  if (typeof chunk.pulseMotionRate !== "string") {
+    next.pulseMotionRate = DEFAULT_PULSE_MOTION_RATE;
+    changed = true;
+  }
+  if (
+    typeof chunk.pulseMotionDepth !== "number" ||
+    Number.isNaN(chunk.pulseMotionDepth)
+  ) {
+    next.pulseMotionDepth = DEFAULT_PULSE_MOTION_DEPTH;
+    changed = true;
+  } else {
+    const clamped = clamp01(chunk.pulseMotionDepth);
+    if (clamped !== chunk.pulseMotionDepth) {
+      next.pulseMotionDepth = clamped;
+      changed = true;
+    }
+  }
+  if (!isPulseMotionTarget(chunk.pulseMotionTarget)) {
+    next.pulseMotionTarget = DEFAULT_PULSE_MOTION_TARGET;
+    changed = true;
+  }
+
   const requestedLength =
     chunk.pulsePatternLength === 16
       ? 16
@@ -191,10 +279,10 @@ export const ensurePulseDefaults = (chunk: Chunk): Chunk => {
   }
 
   if (!Array.isArray(chunk.pulsePattern) || chunk.pulsePattern.length === 0) {
-    next.pulsePattern = createDefaultPattern(requestedLength);
+    next.pulsePattern = createDefaultPulsePattern(requestedLength);
     changed = true;
   } else if (chunk.pulsePattern.length !== requestedLength) {
-    next.pulsePattern = normalizePattern(chunk.pulsePattern, requestedLength);
+    next.pulsePattern = normalizePulsePattern(chunk.pulsePattern, requestedLength);
     changed = true;
   }
 
@@ -208,6 +296,20 @@ export const ensurePulseDefaults = (chunk: Chunk): Chunk => {
     const clamped = clamp01(chunk.pulseSwing);
     if (clamped !== chunk.pulseSwing) {
       next.pulseSwing = clamped;
+      changed = true;
+    }
+  }
+
+  if (
+    typeof chunk.pulseHumanize !== "number" ||
+    Number.isNaN(chunk.pulseHumanize)
+  ) {
+    next.pulseHumanize = DEFAULT_PULSE_HUMANIZE;
+    changed = true;
+  } else {
+    const clamped = clamp01(chunk.pulseHumanize);
+    if (clamped !== chunk.pulseHumanize) {
+      next.pulseHumanize = clamped;
       changed = true;
     }
   }
@@ -253,10 +355,22 @@ export const applyPulseCharacterDefaults = (
   ) {
     next.pulseResonance = clamp01(source.pulseResonance);
   }
+  if (typeof source.pulseMotionRate === "string") {
+    next.pulseMotionRate = source.pulseMotionRate;
+  }
+  if (
+    typeof source.pulseMotionDepth === "number" &&
+    Number.isFinite(source.pulseMotionDepth)
+  ) {
+    next.pulseMotionDepth = clamp01(source.pulseMotionDepth);
+  }
+  if (isPulseMotionTarget(source.pulseMotionTarget)) {
+    next.pulseMotionTarget = source.pulseMotionTarget;
+  }
   if (Array.isArray(source.pulsePattern) && source.pulsePattern.length > 0) {
     const length = next.pulsePatternLength ??
       (source.pulsePatternLength === 16 ? 16 : source.pulsePatternLength === 8 ? 8 : source.pulsePattern.length);
-    next.pulsePattern = normalizePattern(source.pulsePattern, length);
+    next.pulsePattern = normalizePulsePattern(source.pulsePattern, length);
     next.pulsePatternLength = length;
   }
   if (
@@ -265,11 +379,20 @@ export const applyPulseCharacterDefaults = (
   ) {
     next.pulsePatternLength = source.pulsePatternLength;
     if (Array.isArray(source.pulsePattern) && source.pulsePattern.length > 0) {
-      next.pulsePattern = normalizePattern(source.pulsePattern, source.pulsePatternLength);
+      next.pulsePattern = normalizePulsePattern(
+        source.pulsePattern,
+        source.pulsePatternLength
+      );
     }
   }
   if (typeof source.pulseSwing === "number" && Number.isFinite(source.pulseSwing)) {
     next.pulseSwing = clamp01(source.pulseSwing);
+  }
+  if (
+    typeof source.pulseHumanize === "number" &&
+    Number.isFinite(source.pulseHumanize)
+  ) {
+    next.pulseHumanize = clamp01(source.pulseHumanize);
   }
 
   return Object.keys(next).length > 0 ? { ...chunk, ...next } : chunk;

@@ -14,9 +14,11 @@ import {
   DEFAULT_PULSE_RESONANCE,
   DEFAULT_PULSE_SHAPE,
   DEFAULT_PULSE_SWING,
+  DEFAULT_PULSE_HUMANIZE,
   type Chunk,
   type PulseMode,
   type PulseShape,
+  normalizePulsePattern,
 } from "./chunks";
 import type { InstrumentCharacter, Pack } from "./packs";
 import type { StoredProjectData } from "./storage";
@@ -519,11 +521,13 @@ const createOfflineTriggerMap = (
           const resonance = chunk?.pulseResonance ?? DEFAULT_PULSE_RESONANCE;
           const patternLength =
             chunk?.pulsePatternLength ?? DEFAULT_PULSE_PATTERN_LENGTH;
-          const pattern =
-            (chunk?.pulsePattern && chunk.pulsePattern.length > 0
+          const rawPattern =
+            chunk?.pulsePattern && chunk.pulsePattern.length > 0
               ? chunk.pulsePattern
-              : DEFAULT_PULSE_PATTERN) ?? DEFAULT_PULSE_PATTERN;
+              : DEFAULT_PULSE_PATTERN;
+          const pattern = normalizePulsePattern(rawPattern, patternLength);
           const swing = chunk?.pulseSwing ?? DEFAULT_PULSE_SWING;
+          const humanize = chunk?.pulseHumanize ?? DEFAULT_PULSE_HUMANIZE;
           nodes.setMode(mode);
           nodes.setRate(rate);
           nodes.setDepth(depth);
@@ -533,6 +537,7 @@ const createOfflineTriggerMap = (
           nodes.setResonance(resonance);
           nodes.setPattern(pattern, patternLength);
           nodes.setSwing(swing);
+          nodes.setHumanize(humanize);
         }
       }
 
