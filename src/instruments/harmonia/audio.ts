@@ -207,14 +207,20 @@ export interface HarmoniaTriggerOptions {
   characterId?: string | null;
 }
 
-export const triggerHarmoniaChord = ({
+interface PreparedHarmoniaChord {
+  controls: HarmoniaControlState;
+  chordNotes: string[];
+  level: number;
+  hold: number;
+}
+
+const prepareHarmoniaChord = ({
   nodes,
-  time,
   velocity = 1,
   sustain,
   chunk,
   characterId,
-}: HarmoniaTriggerOptions) => {
+}: HarmoniaTriggerOptions): PreparedHarmoniaChord => {
   const controls = deriveControlState(chunk, characterId as HarmoniaCharacterId);
   const resolution = deriveResolution(chunk, controls, characterId as HarmoniaCharacterId);
 
@@ -240,6 +246,25 @@ export const triggerHarmoniaChord = ({
   const level = clamp(velocity, 0, 1);
   const hold = Math.max(sustain ?? chunk?.sustain ?? 1.6, 0.1);
 
+  return { controls, chordNotes, level, hold };
+};
+
+export const triggerHarmoniaChord = ({
+  nodes,
+  time,
+  velocity = 1,
+  sustain,
+  chunk,
+  characterId,
+}: HarmoniaTriggerOptions) => {
+  const { controls, chordNotes, level, hold } = prepareHarmoniaChord({
+    nodes,
+    velocity,
+    sustain,
+    chunk,
+    characterId,
+  });
+
   if (!controls.arpEnabled || chordNotes.length <= 1) {
     nodes.synth.triggerAttackRelease(chordNotes, hold, time, level);
     return;
@@ -255,6 +280,63 @@ export const triggerHarmoniaChord = ({
     const start = time + index * stepDuration;
     nodes.synth.triggerAttackRelease(note, noteDuration, start, level);
   });
+};
+
+export interface HarmoniaManualChord {
+  notes: string[];
+  velocity: number;
+}
+
+export const triggerHarmoniaChordAttack = ({
+  nodes,
+  time,
+  velocity = 1,
+  sustain,
+  chunk,
+  characterId,
+}: HarmoniaTriggerOptions): HarmoniaManualChord | null => {
+  const { controls, chordNotes, level, hold } = prepareHarmoniaChord({
+    nodes,
+    velocity,
+    sustain,
+    chunk,
+    characterId,
+  });
+
+  if (chordNotes.length === 0) {
+    return null;
+  }
+
+  if (!controls.arpEnabled || chordNotes.length <= 1) {
+    nodes.synth.triggerAttack(chordNotes, time, level);
+  } else {
+    const stepDuration = Math.min(
+      hold / Math.max(chordNotes.length, 1),
+      Tone.Time("16n").toSeconds()
+    );
+    chordNotes.forEach((note, index) => {
+      const start = time + index * stepDuration;
+      nodes.synth.triggerAttack(note, start, level);
+    });
+  }
+
+  return { notes: chordNotes, velocity: level };
+};
+
+export const triggerHarmoniaChordRelease = ({
+  nodes,
+  chord,
+  time,
+}: {
+  nodes: HarmoniaNodes;
+  chord: HarmoniaManualChord;
+  time: number;
+}) => {
+  if (!chord.notes.length) {
+    return;
+  }
+
+  nodes.synth.triggerRelease(chord.notes, time);
 };
 
 export const disposeHarmoniaNodes = (nodes: HarmoniaNodes) => {

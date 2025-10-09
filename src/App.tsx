@@ -31,6 +31,8 @@ import {
   createHarmoniaNodes,
   disposeHarmoniaNodes,
   triggerHarmoniaChord,
+  triggerHarmoniaChordAttack,
+  triggerHarmoniaChordRelease,
   HARMONIA_BASE_VOLUME_DB,
   type HarmoniaNodes,
 } from "./instruments/harmonia";
@@ -71,6 +73,7 @@ import ViewHeader, {
 } from "./components/ViewHeader";
 import { getCharacterOptions } from "./addTrackOptions";
 import { InstrumentControlPanel } from "./InstrumentControlPanel";
+import type { HarmoniaManualControls } from "./InstrumentControlPanel";
 import { exportProjectAudio, exportProjectJson } from "./exporter";
 import {
   PROJECT_VERSION,
@@ -677,6 +680,57 @@ export default function App() {
       return `${packId}:harmonia:${character.id}`;
     },
     [resolveInstrumentCharacter]
+  );
+
+  const ensureHarmoniaNodes = useCallback(
+    (
+      packId: string,
+      requestedId?: string | null
+    ): { key: string; nodes: HarmoniaNodes; character: InstrumentCharacter } | undefined => {
+      const character = resolveInstrumentCharacter(packId, "harmonia", requestedId);
+      if (!character) return undefined;
+      const key = `${packId}:harmonia:${character.id}`;
+      let nodes = harmoniaNodesRef.current[key];
+      if (!nodes) {
+        const created = createHarmoniaNodes(Tone, character);
+        created.volume.connect(Tone.Destination);
+        harmoniaNodesRef.current[key] = created;
+        instrumentRefs.current[key] = created.synth as ToneInstrument;
+        nodes = created;
+      }
+      return { key, nodes, character };
+    },
+    [resolveInstrumentCharacter]
+  );
+
+  const getHarmoniaManualControls = useCallback(
+    (
+      packId?: string | null,
+      requestedId?: string | null
+    ): HarmoniaManualControls | undefined => {
+      if (!packId) return undefined;
+      const ensured = ensureHarmoniaNodes(packId, requestedId);
+      if (!ensured) return undefined;
+      const { nodes, character } = ensured;
+      return {
+        attack: ({ time, velocity = 1, sustain, chunk }) =>
+          triggerHarmoniaChordAttack({
+            nodes,
+            time,
+            velocity,
+            sustain,
+            chunk,
+            characterId: character.id,
+          }),
+        release: ({ time, chord }) =>
+          triggerHarmoniaChordRelease({
+            nodes,
+            time,
+            chord,
+          }),
+      };
+    },
+    [ensureHarmoniaNodes]
   );
 
   const handleHarmoniaRealtimeChange = useCallback(
@@ -3005,6 +3059,14 @@ export default function App() {
               }
             : undefined
         }
+        harmoniaManualControls={
+          selectedTrack.instrument === "harmonia"
+            ? getHarmoniaManualControls(
+                selectedTrack.source?.packId ?? null,
+                selectedTrack.source?.characterId ?? null
+              )
+            : undefined
+        }
         isRecording={isRecording}
         onRecordingChange={setIsRecording}
         onPresetApplied={handlePresetApplied}
@@ -3630,6 +3692,7 @@ export default function App() {
               onToggleTransport={handlePlayStop}
               performanceTracks={performanceTracks}
               triggers={triggers}
+              resolveHarmoniaManualControls={getHarmoniaManualControls}
               onEnsurePerformanceRow={ensurePerformanceRow}
               activePerformanceTrackId={activePerformanceTrackId}
               onAddPerformanceTrack={openAddPerformanceTrackModal}
