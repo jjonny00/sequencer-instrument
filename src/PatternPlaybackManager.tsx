@@ -46,6 +46,8 @@ const ensurePositiveTicks = (ticks: number, fallback: number) =>
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+const BASS_DEFAULT_MAX_SUSTAIN_SECONDS = Tone.Time("8n").toSeconds();
+
 interface PatternPlaybackManagerProps {
   tracks: Track[];
   triggers: TriggerMap;
@@ -520,9 +522,13 @@ function PatternPlayer({
           }
           const holdDurationSeconds = (holdSteps + 1) * stepDurationSeconds;
           const releaseControl = pattern.sustain;
+          const isBassPattern = pattern.instrument === "bass";
+          const defaultSustainSeconds = isBassPattern
+            ? Math.min(holdDurationSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
+            : holdDurationSeconds;
           const sustainSeconds =
             releaseControl === undefined
-              ? holdDurationSeconds
+              ? defaultSustainSeconds
               : Math.min(
                   Math.max(releaseControl, 0),
                   holdDurationSeconds
