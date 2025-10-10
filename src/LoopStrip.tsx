@@ -1207,15 +1207,27 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                             <div
                               key={i}
                               style={{
-                                border: `1px solid ${borderColor}`,
-                                background,
-                                opacity: active ? 1 : isCurrentColumn ? 0.35 : 0.2,
-                                boxShadow: playing
-                                  ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
-                                  : "none",
-                                transition: "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
                               }}
-                            />
+                            >
+                              <span
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: 999,
+                                  border: `2px solid ${borderColor}`,
+                                  background,
+                                  opacity: active ? 1 : isCurrentColumn ? 0.35 : 0.2,
+                                  boxShadow: playing
+                                    ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
+                                    : "none",
+                                  transition:
+                                    "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
+                                }}
+                              />
+                            </div>
                           );
                         })}
                       </div>
