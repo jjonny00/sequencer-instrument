@@ -82,6 +82,7 @@ const SLOT_CONTENT_GAP = 4;
 const SLOT_PADDING_Y = 4;
 const SLOT_PADDING_X = 10;
 const SLOT_PADDING = `${SLOT_PADDING_Y}px ${SLOT_PADDING_X}px`;
+const SLOT_BORDER_RADIUS = 8;
 const TIMELINE_ROW_BORDER_WIDTH = 1;
 const TIMELINE_LABEL_BORDER_WIDTH = 1;
 const TIMELINE_HEADER_MARGIN_X =
@@ -238,6 +239,24 @@ const buildDisplayColumns = (
     }
   );
   return [...baseColumns, ...extraColumns];
+};
+
+const buildColumnBorderRadius = (
+  columnIndex: number,
+  columnCount: number,
+  radius: number
+): string => {
+  const radiusPx = `${radius}px`;
+  if (columnCount <= 1) {
+    return radiusPx;
+  }
+  if (columnIndex <= 0) {
+    return `${radiusPx} 0 0 ${radiusPx}`;
+  }
+  if (columnIndex >= columnCount - 1) {
+    return `0 ${radiusPx} ${radiusPx} 0`;
+  }
+  return "0px";
 };
 
 interface TimelineRowItem {
@@ -1461,6 +1480,7 @@ export function SongView({
         performanceAccent,
         combinedPerformanceNotes,
         isRecordingRow,
+        safeColumnCount,
       } = timelineRow;
       const groupId =
         columnIndex < row.slots.length ? row.slots[columnIndex] : null;
@@ -1501,7 +1521,11 @@ export function SongView({
       const buttonStyles: CSSProperties = {
         width: "100%",
         minHeight: slotMinHeight,
-        borderRadius: 8,
+        borderRadius: buildColumnBorderRadius(
+          columnIndex,
+          Math.max(1, safeColumnCount),
+          SLOT_BORDER_RADIUS
+        ),
         border: `1px solid ${
           highlight
             ? "#27E0B0"
@@ -2115,7 +2139,7 @@ export function SongView({
                             marginRight: TIMELINE_HEADER_MARGIN_X,
                           }}
                         >
-                          {timelineColumns.map((column) => {
+                          {timelineColumns.map((column, columnArrayIndex) => {
                             const loopLabel = `Loop ${String(
                               column.index + 1
                             ).padStart(2, "0")}`;
@@ -2128,7 +2152,11 @@ export function SongView({
                                   data-loop-column={column.index}
                                   style={{
                                     padding: "4px 8px",
-                                    borderRadius: 16,
+                                    borderRadius: buildColumnBorderRadius(
+                                      columnArrayIndex,
+                                      Math.max(1, timelineColumns.length),
+                                      16
+                                    ),
                                     border: "1px solid #2a3344",
                                     background: "#111827",
                                     color: "#e2e8f0",
