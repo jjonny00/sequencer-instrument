@@ -1489,6 +1489,17 @@ export default function App() {
 
     setCurrentSectionIndex((prev) => (prev === lastSection ? prev : lastSection));
 
+    const currentTicks = Tone.Transport.ticks;
+    if (!Number.isFinite(currentTicks)) return;
+
+    const normalizedTicks = Math.max(0, currentTicks);
+    const nextBoundaryMultiplier =
+      Math.floor(normalizedTicks / ticksPerSection) + 1;
+    const nextBoundaryTicks = nextBoundaryMultiplier * ticksPerSection;
+    const startTimeSeconds = Tone.Transport.ticksToSeconds(nextBoundaryTicks);
+
+    if (!Number.isFinite(startTimeSeconds)) return;
+
     const id = Tone.Transport.scheduleRepeat((time) => {
       const ticksAtEvent = Tone.Transport.getTicksAtTime(time);
       const measuredSection = getSectionFromTicks(ticksAtEvent);
@@ -1503,7 +1514,7 @@ export default function App() {
           prev === nextSection ? prev : nextSection
         );
       }, time);
-    }, "1m");
+    }, "1m", startTimeSeconds);
 
     return () => {
       Tone.Transport.clear(id);
