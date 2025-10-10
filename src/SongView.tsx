@@ -128,26 +128,6 @@ const buildAccentButtonStyle = (
   transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
 });
 
-const buildSecondaryButtonStyle = (
-  height: number = TIMELINE_CONTROL_HEIGHT
-): CSSProperties => ({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "0 16px",
-  height,
-  borderRadius: 999,
-  border: "1px solid #1f2937",
-  background: "#121a2c",
-  color: "#e2e8f0",
-  fontSize: 13,
-  fontWeight: 600,
-  letterSpacing: 0.3,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-  transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
-});
-
 const TRANSPORT_CONTAINER_STYLE: CSSProperties = {
   height: "100%",
   display: "flex",
@@ -2194,40 +2174,18 @@ export function SongView({
           }}
         >
           <span style={TIMELINE_LABEL_STYLE}>Timeline</span>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: TIMELINE_TOOLBAR_GAP,
-              marginLeft: "auto",
-            }}
-          >
-            <button
-              type="button"
-              onClick={handleAddRow}
-              style={buildSecondaryButtonStyle()}
+          {timelineActions ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: TIMELINE_TOOLBAR_GAP,
+                marginLeft: "auto",
+              }}
             >
-              + Row
-            </button>
-            <button
-              type="button"
-              onClick={handleAddSection}
-              style={buildSecondaryButtonStyle()}
-            >
-              + Loop
-            </button>
-            {timelineActions ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: TIMELINE_TOOLBAR_GAP,
-                }}
-              >
-                {timelineActions}
-              </div>
-            ) : null}
-          </div>
+              {timelineActions}
+            </div>
+          ) : null}
         </div>
         <div
           className="min-h-0"
