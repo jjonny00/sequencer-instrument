@@ -90,7 +90,8 @@ const TIMELINE_HEADER_MARGIN_X =
 const TIMELINE_TOOLBAR_GAP = 12;
 const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
-const TIMELINE_ROW_MARGIN = 8;
+const TIMELINE_ROW_GAP = 0;
+const TIMELINE_ROW_MARGIN = 0;
 // Matches --transport-h defined in src/styles/layout.css so the scroll height
 // reserves space for the sticky transport controls.
 const STICKY_BOTTOM_BAR_HEIGHT = 76;
@@ -1271,10 +1272,10 @@ export function SongView({
   const timelineContentHeight = useMemo(() => {
     const rowCount = Math.max(1, timelineDisplayRows.length);
     const totalRowHeight = rowCount * slotMinHeight;
-    const totalRowGap = Math.max(0, rowCount - 1) * SLOT_GAP;
+    const totalRowGap = Math.max(0, rowCount - 1) * TIMELINE_ROW_GAP;
     const totalRowMargin = rowCount * TIMELINE_ROW_MARGIN;
     const inlineAddRowHeight = slotMinHeight;
-    const inlineAddRowGap = SLOT_GAP;
+    const inlineAddRowGap = TIMELINE_ROW_GAP;
     const stickyBottomBarBuffer = STICKY_BOTTOM_BAR_HEIGHT;
     return (
       totalRowHeight +
@@ -1748,7 +1749,12 @@ export function SongView({
 
       return (
         <div
-          style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            marginBottom: TIMELINE_ROW_MARGIN,
+          }}
         >
           <div
             onPointerDown={() => {
@@ -2208,7 +2214,7 @@ export function SongView({
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: SLOT_GAP,
+                    gap: TIMELINE_ROW_GAP,
                     paddingBottom: STICKY_BOTTOM_BAR_HEIGHT,
                     ...(timelineBodyMinHeight
                       ? { minHeight: timelineBodyMinHeight }
