@@ -94,6 +94,7 @@ const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
 const TIMELINE_ROW_GAP = 0;
 const TIMELINE_ROW_MARGIN = 0;
+const TIMELINE_ADD_ROW_PADDING = 8;
 // Matches --transport-h defined in src/styles/layout.css so the scroll height
 // reserves space for the sticky transport controls.
 const STICKY_BOTTOM_BAR_HEIGHT = 76;
@@ -1296,6 +1297,7 @@ export function SongView({
     const totalRowMargin = rowCount * TIMELINE_ROW_MARGIN;
     const inlineAddRowHeight = slotMinHeight;
     const inlineAddRowGap = TIMELINE_ROW_GAP;
+    const inlineAddRowPadding = TIMELINE_ADD_ROW_PADDING;
     const stickyBottomBarBuffer = STICKY_BOTTOM_BAR_HEIGHT;
     return (
       totalRowHeight +
@@ -1303,6 +1305,7 @@ export function SongView({
       totalRowMargin +
       inlineAddRowGap +
       inlineAddRowHeight +
+      inlineAddRowPadding +
       stickyBottomBarBuffer
     );
   }, [timelineDisplayRows.length, slotMinHeight]);
@@ -2268,6 +2271,7 @@ export function SongView({
                       alignItems: "stretch",
                       gap: SLOT_GAP,
                       flexShrink: 0,
+                      paddingTop: TIMELINE_ADD_ROW_PADDING,
                     }}
                   >
                     <div
