@@ -1203,6 +1203,7 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                           const borderColor = isCurrentColumn
                             ? lightenColor("#555555", 0.2)
                             : "#555";
+                          const circleSize = "min(18px, calc(100% - 4px))";
                           return (
                             <div
                               key={i}
@@ -1214,8 +1215,9 @@ export const LoopStrip = forwardRef<LoopStripHandle, LoopStripProps>(
                             >
                               <span
                                 style={{
-                                  width: 18,
-                                  height: 18,
+                                  display: "inline-block",
+                                  width: circleSize,
+                                  height: circleSize,
                                   borderRadius: 999,
                                   border: `2px solid ${borderColor}`,
                                   background,
