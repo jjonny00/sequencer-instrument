@@ -131,7 +131,7 @@ const initializeHarmoniaPattern = (
   };
 };
 
-const LABEL_WIDTH = 48;
+const LABEL_WIDTH = 36;
 const ROW_HEIGHT = 40;
 
 const cloneChunk = (chunk: Chunk): Chunk => ({
