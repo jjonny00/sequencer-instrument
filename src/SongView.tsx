@@ -439,6 +439,7 @@ interface LoopPreviewTrack {
   color: string;
   steps: number[];
   velocities?: number[];
+  muted: boolean;
 }
 
 const sampleArrayValue = (
@@ -473,11 +474,13 @@ const createLoopPreviewData = (tracks: Track[]): LoopPreviewTrack[] =>
       velocities: track.pattern?.velocities
         ? track.pattern.velocities.slice()
         : undefined,
+      muted: track.muted,
     }));
 
 const renderLoopSlotPreview = (
   group: PatternGroup | undefined,
-  highlight?: boolean
+  highlight?: boolean,
+  rowMuted?: boolean
 ) => {
   if (!group) {
     return (
@@ -565,7 +568,8 @@ const renderLoopSlotPreview = (
               ? Math.max(0.35, Math.min(1, velocity || 0.85))
               : 0.12;
 
-            const playing = highlight && active;
+            const trackMuted = track.muted;
+            const playing = highlight && active && !trackMuted && !rowMuted;
             const accentColor = playing
               ? lightenColor(track.color, 0.3)
               : track.color;
@@ -1672,7 +1676,7 @@ export function SongView({
                       rowGhostDisplayNotes,
                       rowGhostNoteSet
                     )
-                  : renderLoopSlotPreview(group, highlight)}
+                  : renderLoopSlotPreview(group, highlight, rowMuted)}
               </div>
               {description && (
                 <span
