@@ -78,7 +78,13 @@ const PREVIEW_DOT_SIZE = 4;
 const PERFORMANCE_DOT_SIZE = 5;
 const SLOT_MIN_HEIGHT = 52;
 const SLOT_CONTENT_GAP = 4;
-const SLOT_PADDING = "4px 10px";
+const SLOT_PADDING_Y = 4;
+const SLOT_PADDING_X = 10;
+const SLOT_PADDING = `${SLOT_PADDING_Y}px ${SLOT_PADDING_X}px`;
+const TIMELINE_ROW_BORDER_WIDTH = 1;
+const TIMELINE_LABEL_BORDER_WIDTH = 1;
+const TIMELINE_HEADER_MARGIN_X =
+  SLOT_PADDING_X + TIMELINE_ROW_BORDER_WIDTH + TIMELINE_LABEL_BORDER_WIDTH;
 const TIMELINE_TOOLBAR_GAP = 12;
 const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
@@ -1732,7 +1738,9 @@ export function SongView({
               alignItems: "stretch",
               borderRadius: 6,
               overflow: "hidden",
-              border: rowSelected ? "2px solid #27E0B0" : "1px solid #2a3344",
+              border: rowSelected
+                ? "2px solid #27E0B0"
+                : `${TIMELINE_ROW_BORDER_WIDTH}px solid #2a3344`,
               background: "#111827",
               opacity: rowMuted ? 0.55 : 1,
               transition: "opacity 0.2s ease, border 0.2s ease",
@@ -1746,7 +1754,7 @@ export function SongView({
               style={{
                 width: ROW_LABEL_WIDTH,
                 flexShrink: 0,
-                borderRight: "1px solid #2a3344",
+                borderRight: `${TIMELINE_LABEL_BORDER_WIDTH}px solid #2a3344`,
                 background: labelBackground,
                 color: rowMuted ? "#475569" : "#f8fafc",
                 fontSize: 11,
@@ -2102,6 +2110,8 @@ export function SongView({
                             gap: SLOT_GAP,
                             flex: "0 0 auto",
                             minWidth: timelineWidthPx,
+                            marginLeft: TIMELINE_HEADER_MARGIN_X,
+                            marginRight: TIMELINE_HEADER_MARGIN_X,
                           }}
                         >
                           {timelineColumns.map((column) => {
