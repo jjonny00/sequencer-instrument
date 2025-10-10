@@ -84,6 +84,7 @@ const SLOT_PADDING_X = 10;
 const SLOT_PADDING = `${SLOT_PADDING_Y}px ${SLOT_PADDING_X}px`;
 const SLOT_BORDER_RADIUS = 8;
 const TIMELINE_ROW_BORDER_WIDTH = 1;
+const TIMELINE_ROW_BORDER_RADIUS = 6;
 const TIMELINE_LABEL_BORDER_WIDTH = 1;
 const TIMELINE_HEADER_MARGIN_X =
   SLOT_PADDING_X + TIMELINE_ROW_BORDER_WIDTH + TIMELINE_LABEL_BORDER_WIDTH;
@@ -256,6 +257,24 @@ const buildColumnBorderRadius = (
   }
   if (columnIndex >= columnCount - 1) {
     return `0 ${radiusPx} ${radiusPx} 0`;
+  }
+  return "0px";
+};
+
+const buildRowBorderRadius = (
+  rowIndex: number,
+  rowCount: number,
+  radius: number
+): string => {
+  const radiusPx = `${radius}px`;
+  if (rowCount <= 1) {
+    return radiusPx;
+  }
+  if (rowIndex <= 0) {
+    return `${radiusPx} ${radiusPx} 0 0`;
+  }
+  if (rowIndex >= rowCount - 1) {
+    return `0 0 ${radiusPx} ${radiusPx}`;
   }
   return "0px";
 };
@@ -1706,6 +1725,12 @@ export function SongView({
         "timeline-fallback-column"
       );
 
+      const rowBorderRadius = buildRowBorderRadius(
+        rowIndex,
+        Math.max(1, timelineDisplayRows.length),
+        TIMELINE_ROW_BORDER_RADIUS
+      );
+
       let labelTimer: number | null = null;
       let longPressTriggered = false;
 
@@ -1767,7 +1792,7 @@ export function SongView({
             style={{
               display: "flex",
               alignItems: "stretch",
-              borderRadius: 6,
+              borderRadius: rowBorderRadius,
               overflow: "hidden",
               border: rowSelected
                 ? "2px solid #27E0B0"
@@ -2015,6 +2040,7 @@ export function SongView({
       slotGap,
       withAlpha,
       playInstrumentColor,
+      timelineDisplayRows.length,
       renderPerformanceSlotPreview,
     ]
   );
