@@ -78,6 +78,7 @@ const PREVIEW_HEIGHT = 10;
 const PREVIEW_DOT_SIZE = 4;
 const PERFORMANCE_DOT_SIZE = 5;
 const SLOT_MIN_HEIGHT = 52;
+const TIMELINE_HEADER_HEIGHT = Math.round(SLOT_MIN_HEIGHT * (2 / 3));
 const SLOT_CONTENT_GAP = 4;
 const SLOT_PADDING_Y = 4;
 const SLOT_PADDING_X = 10;
@@ -2184,6 +2185,8 @@ export function SongView({
                                   data-loop-column={column.index}
                                   style={{
                                     padding: "4px 8px",
+                                    height: TIMELINE_HEADER_HEIGHT,
+                                    minHeight: TIMELINE_HEADER_HEIGHT,
                                     borderRadius: buildColumnBorderRadius(
                                       columnArrayIndex,
                                       Math.max(1, timelineColumns.length),
@@ -2220,8 +2223,12 @@ export function SongView({
                             size="compact"
                             style={{
                               ...addLoopButtonStyle,
+                              height: TIMELINE_HEADER_HEIGHT,
+                              minHeight: TIMELINE_HEADER_HEIGHT,
+                              width: TIMELINE_HEADER_HEIGHT,
+                              minWidth: TIMELINE_HEADER_HEIGHT,
                               justifySelf: "center",
-                              alignSelf: "stretch",
+                              alignSelf: "center",
                             }}
                           />
                         </div>
