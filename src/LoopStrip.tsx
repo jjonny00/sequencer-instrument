@@ -1650,6 +1650,7 @@ function PatternEditor({
           ? lightenColor("#555555", 0.2)
           : "#555";
         const opacity = active ? 1 : isCurrentColumn ? 0.35 : 0.2;
+        const circleSize = "min(18px, calc(100% - 4px))";
         return (
           <div
             key={i}
@@ -1671,17 +1672,29 @@ function PatternEditor({
               if (timerRef.current) window.clearTimeout(timerRef.current);
             }}
             style={{
-              border: `1px solid ${borderColor}`,
-              background,
-              opacity,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               cursor: "pointer",
-              boxShadow: playing
-                ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
-                : "none",
-              transition:
-                "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
             }}
-          />
+          >
+            <span
+              style={{
+                display: "inline-block",
+                width: circleSize,
+                height: circleSize,
+                borderRadius: 999,
+                border: `2px solid ${borderColor}`,
+                background,
+                opacity,
+                boxShadow: playing
+                  ? `0 0 12px ${accentColor}, 0 0 22px ${color}`
+                  : "none",
+                transition:
+                  "background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease",
+              }}
+            />
+          </div>
         );
       })}
     </div>
