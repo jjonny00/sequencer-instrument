@@ -488,7 +488,7 @@ const renderLoopSlotPreview = (
     return (
       <div
         style={{
-          height: PREVIEW_HEIGHT,
+          minHeight: PREVIEW_HEIGHT,
           borderRadius: 6,
           border: "1px dashed #2d3748",
           background: "rgba(15, 23, 42, 0.35)",
@@ -502,7 +502,7 @@ const renderLoopSlotPreview = (
     return (
       <div
         style={{
-          height: PREVIEW_HEIGHT,
+          minHeight: PREVIEW_HEIGHT,
           borderRadius: 6,
           background: "rgba(30, 41, 59, 0.65)",
           border: "1px solid #1f2937",
@@ -524,7 +524,15 @@ const renderLoopSlotPreview = (
 
   const gap = PREVIEW_GAP;
   const dotSize = PREVIEW_DOT_SIZE;
-  const containerHeight = PREVIEW_HEIGHT;
+  const previewContentHeight =
+    previewTracks.length > 0
+      ? previewTracks.length * dotSize +
+        Math.max(0, previewTracks.length - 1) * gap
+      : dotSize;
+  const containerHeight = Math.max(
+    PREVIEW_HEIGHT,
+    previewContentHeight + gap * 2
+  );
 
   const activePreviewIndex =
     highlight &&
