@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 import type {
   CSSProperties,
@@ -212,6 +212,7 @@ const BPM_SELECT_ICON_STYLE: CSSProperties = {
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
 const TICKS_PER_MEASURE = TICKS_PER_SIXTEENTH * 16;
+const SIXTEENTHS_PER_MEASURE = 16;
 
 interface TimelineColumn {
   id: string;
@@ -480,7 +481,8 @@ const createLoopPreviewData = (tracks: Track[]): LoopPreviewTrack[] =>
 const renderLoopSlotPreview = (
   group: PatternGroup | undefined,
   highlight?: boolean,
-  rowMuted?: boolean
+  rowMuted?: boolean,
+  activeSixteenthStep?: number
 ) => {
   if (!group) {
     return (
@@ -524,6 +526,23 @@ const renderLoopSlotPreview = (
   const dotSize = PREVIEW_DOT_SIZE;
   const containerHeight = PREVIEW_HEIGHT;
 
+  const activePreviewIndex =
+    highlight &&
+    typeof activeSixteenthStep === "number" &&
+    activeSixteenthStep >= 0
+      ? Math.min(
+          targetStepCount - 1,
+          Math.floor(
+            (activeSixteenthStep / SIXTEENTHS_PER_MEASURE) * targetStepCount
+          )
+        )
+      : null;
+
+  const safeActiveSixteenth =
+    typeof activeSixteenthStep === "number" && activeSixteenthStep >= 0
+      ? activeSixteenthStep
+      : null;
+
   return (
     <div
       style={{
@@ -555,8 +574,11 @@ const renderLoopSlotPreview = (
             }
             const ratio = stepLength / targetStepCount;
             const sampledIndex = Math.floor(stepIndex * ratio);
-            const rawValue =
-              track.steps[sampledIndex] ?? track.steps[stepIndex % stepLength];
+            const primarySampleIndex =
+              track.steps[sampledIndex] !== undefined
+                ? sampledIndex
+                : stepIndex % stepLength;
+            const rawValue = track.steps[primarySampleIndex];
             const velocity = sampleArrayValue(
               track.velocities,
               sampledIndex,
@@ -569,7 +591,26 @@ const renderLoopSlotPreview = (
               : 0.12;
 
             const trackMuted = track.muted;
-            const playing = highlight && active && !trackMuted && !rowMuted;
+            const activeTrackStep =
+              safeActiveSixteenth !== null
+                ? Math.min(
+                    stepLength - 1,
+                    Math.floor(
+                      (safeActiveSixteenth / SIXTEENTHS_PER_MEASURE) *
+                        stepLength
+                    )
+                  )
+                : null;
+            const isActivePreviewColumn =
+              activePreviewIndex !== null && stepIndex === activePreviewIndex;
+            const playing =
+              highlight &&
+              active &&
+              !trackMuted &&
+              !rowMuted &&
+              isActivePreviewColumn &&
+              activeTrackStep !== null &&
+              primarySampleIndex === activeTrackStep;
             const accentColor = playing
               ? lightenColor(track.color, 0.3)
               : track.color;
@@ -823,6 +864,48 @@ export function SongView({
 
   const { transportIcon, transportLabel, handleToggleTransport, handleBpmChange } =
     useTransport({ bpm, setBpm, isPlaying, onToggleTransport });
+
+  const [activeLoopSixteenth, setActiveLoopSixteenth] = useState<number>(-1);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setActiveLoopSixteenth(-1);
+      return;
+    }
+
+    const computeSixteenthFromTicks = (ticks: number): number => {
+      if (!Number.isFinite(ticks)) {
+        return -1;
+      }
+      const normalizedTicks =
+        ((ticks % TICKS_PER_MEASURE) + TICKS_PER_MEASURE) % TICKS_PER_MEASURE;
+      const step = Math.floor(normalizedTicks / TICKS_PER_SIXTEENTH);
+      return Math.max(0, Math.min(SIXTEENTHS_PER_MEASURE - 1, step));
+    };
+
+    const updateFromTicks = (ticks: number) => {
+      const nextStep = computeSixteenthFromTicks(ticks);
+      if (nextStep < 0) {
+        return;
+      }
+      setActiveLoopSixteenth((current) =>
+        current === nextStep ? current : nextStep
+      );
+    };
+
+    updateFromTicks(Tone.Transport.ticks);
+
+    const repeatId = Tone.Transport.scheduleRepeat((time) => {
+      const ticks = Tone.Transport.getTicksAtTime(time);
+      Tone.Draw.schedule(() => {
+        updateFromTicks(ticks);
+      }, time);
+    }, "16n");
+
+    return () => {
+      Tone.Transport.clear(repeatId);
+    };
+  }, [isPlaying]);
 
   const patternGroupMap = useMemo(
     () => new Map(patternGroups.map((group) => [group.id, group])),
@@ -1676,7 +1759,12 @@ export function SongView({
                       rowGhostDisplayNotes,
                       rowGhostNoteSet
                     )
-                  : renderLoopSlotPreview(group, highlight, rowMuted)}
+                  : renderLoopSlotPreview(
+                      group,
+                      highlight,
+                      rowMuted,
+                      highlight ? activeLoopSixteenth : undefined
+                    )}
               </div>
               {description && (
                 <span
