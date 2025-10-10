@@ -70,6 +70,7 @@ interface SongViewProps {
 
 const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
+const TIMELINE_COLUMN_GAP = 0;
 const ROW_LABEL_WIDTH = 60;
 const MAX_PREVIEW_STEPS = 16;
 const PREVIEW_GAP = 1;
@@ -1176,9 +1177,9 @@ export function SongView({
   const timelineContentWidth = useMemo(() => {
     const columnCount = Math.max(1, timelineColumns.length);
     const totalSlotWidth = columnCount * SLOT_WIDTH;
-    const totalGapWidth = Math.max(0, columnCount - 1) * SLOT_GAP;
+    const totalGapWidth = Math.max(0, columnCount - 1) * TIMELINE_COLUMN_GAP;
     const addLoopColumnWidth = SLOT_MIN_HEIGHT;
-    const addLoopGapWidth = SLOT_GAP;
+    const addLoopGapWidth = TIMELINE_COLUMN_GAP;
     return (
       totalSlotWidth + totalGapWidth + addLoopColumnWidth + addLoopGapWidth
     );
@@ -1859,7 +1860,7 @@ export function SongView({
                   style={{
                     display: "grid",
                     gridTemplateColumns: `repeat(${displayColumnCount}, ${SLOT_WIDTH}px)`,
-                    gap: SLOT_GAP,
+                    gap: TIMELINE_COLUMN_GAP,
                     width: "100%",
                   }}
                 >
@@ -2107,7 +2108,7 @@ export function SongView({
                           style={{
                             display: "grid",
                             gridTemplateColumns: `repeat(${timelineColumns.length}, ${SLOT_WIDTH}px) ${SLOT_MIN_HEIGHT}px`,
-                            gap: SLOT_GAP,
+                            gap: TIMELINE_COLUMN_GAP,
                             flex: "0 0 auto",
                             minWidth: timelineWidthPx,
                             marginLeft: TIMELINE_HEADER_MARGIN_X,
