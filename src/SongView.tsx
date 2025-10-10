@@ -16,7 +16,7 @@ import type {
   SongRow,
 } from "./song";
 import { createSongRow, getPerformanceTracksSpanMeasures } from "./song";
-import { getInstrumentColor, withAlpha } from "./utils/color";
+import { getInstrumentColor, lightenColor, withAlpha } from "./utils/color";
 import {
   createTriggerKey,
   type Track,
@@ -475,7 +475,10 @@ const createLoopPreviewData = (tracks: Track[]): LoopPreviewTrack[] =>
         : undefined,
     }));
 
-const renderLoopSlotPreview = (group: PatternGroup | undefined) => {
+const renderLoopSlotPreview = (
+  group: PatternGroup | undefined,
+  highlight?: boolean
+) => {
   if (!group) {
     return (
       <div
@@ -562,6 +565,15 @@ const renderLoopSlotPreview = (group: PatternGroup | undefined) => {
               ? Math.max(0.35, Math.min(1, velocity || 0.85))
               : 0.12;
 
+            const playing = highlight && active;
+            const accentColor = playing
+              ? lightenColor(track.color, 0.3)
+              : track.color;
+            const boxShadow = playing
+              ? `0 0 12px ${accentColor}, 0 0 22px ${track.color}`
+              : "none";
+            const transform = playing ? "scale(1.2)" : "none";
+
             return (
               <span
                 key={`preview-track-${trackIndex}`}
@@ -569,9 +581,12 @@ const renderLoopSlotPreview = (group: PatternGroup | undefined) => {
                   width: dotSize,
                   height: dotSize,
                   borderRadius: dotSize / 2,
-                  background: track.color,
+                  background: playing ? accentColor : track.color,
                   opacity,
-                  transition: "opacity 0.2s ease",
+                  boxShadow,
+                  transform,
+                  transition:
+                    "opacity 0.2s ease, box-shadow 0.15s ease, transform 0.15s ease",
                 }}
               />
             );
@@ -1657,7 +1672,7 @@ export function SongView({
                       rowGhostDisplayNotes,
                       rowGhostNoteSet
                     )
-                  : renderLoopSlotPreview(group)}
+                  : renderLoopSlotPreview(group, highlight)}
               </div>
               {description && (
                 <span
