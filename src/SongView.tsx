@@ -70,6 +70,7 @@ interface SongViewProps {
 
 const SLOT_WIDTH = 150;
 const SLOT_GAP = 8;
+const TIMELINE_COLUMN_GAP = 0;
 const ROW_LABEL_WIDTH = 60;
 const MAX_PREVIEW_STEPS = 16;
 const PREVIEW_GAP = 1;
@@ -77,12 +78,23 @@ const PREVIEW_HEIGHT = 10;
 const PREVIEW_DOT_SIZE = 4;
 const PERFORMANCE_DOT_SIZE = 5;
 const SLOT_MIN_HEIGHT = 52;
+const TIMELINE_HEADER_HEIGHT = Math.round(SLOT_MIN_HEIGHT * (2 / 3));
 const SLOT_CONTENT_GAP = 4;
-const SLOT_PADDING = "4px 10px";
+const SLOT_PADDING_Y = 4;
+const SLOT_PADDING_X = 10;
+const SLOT_PADDING = `${SLOT_PADDING_Y}px ${SLOT_PADDING_X}px`;
+const SLOT_BORDER_RADIUS = 8;
+const TIMELINE_ROW_BORDER_WIDTH = 1;
+const TIMELINE_ROW_BORDER_RADIUS = 6;
+const TIMELINE_LABEL_BORDER_WIDTH = 1;
+const TIMELINE_HEADER_MARGIN_X =
+  SLOT_PADDING_X + TIMELINE_ROW_BORDER_WIDTH + TIMELINE_LABEL_BORDER_WIDTH;
 const TIMELINE_TOOLBAR_GAP = 12;
 const TIMELINE_CONTROL_HEIGHT = 36;
 const TRANSPORT_CONTROL_HEIGHT = 44;
-const TIMELINE_ROW_MARGIN = 8;
+const TIMELINE_ROW_GAP = 0;
+const TIMELINE_ROW_MARGIN = 0;
+const TIMELINE_ADD_ROW_PADDING = 8;
 // Matches --transport-h defined in src/styles/layout.css so the scroll height
 // reserves space for the sticky transport controls.
 const STICKY_BOTTOM_BAR_HEIGHT = 76;
@@ -231,6 +243,42 @@ const buildDisplayColumns = (
     }
   );
   return [...baseColumns, ...extraColumns];
+};
+
+const buildColumnBorderRadius = (
+  columnIndex: number,
+  columnCount: number,
+  radius: number
+): string => {
+  const radiusPx = `${radius}px`;
+  if (columnCount <= 1) {
+    return radiusPx;
+  }
+  if (columnIndex <= 0) {
+    return `${radiusPx} 0 0 ${radiusPx}`;
+  }
+  if (columnIndex >= columnCount - 1) {
+    return `0 ${radiusPx} ${radiusPx} 0`;
+  }
+  return "0px";
+};
+
+const buildRowBorderRadius = (
+  rowIndex: number,
+  rowCount: number,
+  radius: number
+): string => {
+  const radiusPx = `${radius}px`;
+  if (rowCount <= 1) {
+    return radiusPx;
+  }
+  if (rowIndex <= 0) {
+    return `${radiusPx} ${radiusPx} 0 0`;
+  }
+  if (rowIndex >= rowCount - 1) {
+    return `0 0 ${radiusPx} ${radiusPx}`;
+  }
+  return "0px";
 };
 
 interface TimelineRowItem {
@@ -1170,9 +1218,9 @@ export function SongView({
   const timelineContentWidth = useMemo(() => {
     const columnCount = Math.max(1, timelineColumns.length);
     const totalSlotWidth = columnCount * SLOT_WIDTH;
-    const totalGapWidth = Math.max(0, columnCount - 1) * SLOT_GAP;
+    const totalGapWidth = Math.max(0, columnCount - 1) * TIMELINE_COLUMN_GAP;
     const addLoopColumnWidth = SLOT_MIN_HEIGHT;
-    const addLoopGapWidth = SLOT_GAP;
+    const addLoopGapWidth = TIMELINE_COLUMN_GAP;
     return (
       totalSlotWidth + totalGapWidth + addLoopColumnWidth + addLoopGapWidth
     );
@@ -1245,10 +1293,11 @@ export function SongView({
   const timelineContentHeight = useMemo(() => {
     const rowCount = Math.max(1, timelineDisplayRows.length);
     const totalRowHeight = rowCount * slotMinHeight;
-    const totalRowGap = Math.max(0, rowCount - 1) * SLOT_GAP;
+    const totalRowGap = Math.max(0, rowCount - 1) * TIMELINE_ROW_GAP;
     const totalRowMargin = rowCount * TIMELINE_ROW_MARGIN;
     const inlineAddRowHeight = slotMinHeight;
-    const inlineAddRowGap = SLOT_GAP;
+    const inlineAddRowGap = TIMELINE_ROW_GAP;
+    const inlineAddRowPadding = TIMELINE_ADD_ROW_PADDING;
     const stickyBottomBarBuffer = STICKY_BOTTOM_BAR_HEIGHT;
     return (
       totalRowHeight +
@@ -1256,6 +1305,7 @@ export function SongView({
       totalRowMargin +
       inlineAddRowGap +
       inlineAddRowHeight +
+      inlineAddRowPadding +
       stickyBottomBarBuffer
     );
   }, [timelineDisplayRows.length, slotMinHeight]);
@@ -1454,6 +1504,7 @@ export function SongView({
         performanceAccent,
         combinedPerformanceNotes,
         isRecordingRow,
+        safeColumnCount,
       } = timelineRow;
       const groupId =
         columnIndex < row.slots.length ? row.slots[columnIndex] : null;
@@ -1494,7 +1545,11 @@ export function SongView({
       const buttonStyles: CSSProperties = {
         width: "100%",
         minHeight: slotMinHeight,
-        borderRadius: 8,
+        borderRadius: buildColumnBorderRadius(
+          columnIndex,
+          Math.max(1, safeColumnCount),
+          SLOT_BORDER_RADIUS
+        ),
         border: `1px solid ${
           highlight
             ? "#27E0B0"
@@ -1674,6 +1729,12 @@ export function SongView({
         "timeline-fallback-column"
       );
 
+      const rowBorderRadius = buildRowBorderRadius(
+        rowIndex,
+        Math.max(1, timelineDisplayRows.length),
+        TIMELINE_ROW_BORDER_RADIUS
+      );
+
       let labelTimer: number | null = null;
       let longPressTriggered = false;
 
@@ -1717,7 +1778,12 @@ export function SongView({
 
       return (
         <div
-          style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            marginBottom: TIMELINE_ROW_MARGIN,
+          }}
         >
           <div
             onPointerDown={() => {
@@ -1730,9 +1796,11 @@ export function SongView({
             style={{
               display: "flex",
               alignItems: "stretch",
-              borderRadius: 6,
+              borderRadius: rowBorderRadius,
               overflow: "hidden",
-              border: rowSelected ? "2px solid #27E0B0" : "1px solid #2a3344",
+              border: rowSelected
+                ? "2px solid #27E0B0"
+                : `${TIMELINE_ROW_BORDER_WIDTH}px solid #2a3344`,
               background: "#111827",
               opacity: rowMuted ? 0.55 : 1,
               transition: "opacity 0.2s ease, border 0.2s ease",
@@ -1746,7 +1814,7 @@ export function SongView({
               style={{
                 width: ROW_LABEL_WIDTH,
                 flexShrink: 0,
-                borderRight: "1px solid #2a3344",
+                borderRight: `${TIMELINE_LABEL_BORDER_WIDTH}px solid #2a3344`,
                 background: labelBackground,
                 color: rowMuted ? "#475569" : "#f8fafc",
                 fontSize: 11,
@@ -1851,7 +1919,7 @@ export function SongView({
                   style={{
                     display: "grid",
                     gridTemplateColumns: `repeat(${displayColumnCount}, ${SLOT_WIDTH}px)`,
-                    gap: SLOT_GAP,
+                    gap: TIMELINE_COLUMN_GAP,
                     width: "100%",
                   }}
                 >
@@ -1976,6 +2044,7 @@ export function SongView({
       slotGap,
       withAlpha,
       playInstrumentColor,
+      timelineDisplayRows.length,
       renderPerformanceSlotPreview,
     ]
   );
@@ -2099,12 +2168,14 @@ export function SongView({
                           style={{
                             display: "grid",
                             gridTemplateColumns: `repeat(${timelineColumns.length}, ${SLOT_WIDTH}px) ${SLOT_MIN_HEIGHT}px`,
-                            gap: SLOT_GAP,
+                            gap: TIMELINE_COLUMN_GAP,
                             flex: "0 0 auto",
                             minWidth: timelineWidthPx,
+                            marginLeft: TIMELINE_HEADER_MARGIN_X,
+                            marginRight: TIMELINE_HEADER_MARGIN_X,
                           }}
                         >
-                          {timelineColumns.map((column) => {
+                          {timelineColumns.map((column, columnArrayIndex) => {
                             const loopLabel = `Loop ${String(
                               column.index + 1
                             ).padStart(2, "0")}`;
@@ -2117,7 +2188,13 @@ export function SongView({
                                   data-loop-column={column.index}
                                   style={{
                                     padding: "4px 8px",
-                                    borderRadius: 16,
+                                    height: TIMELINE_HEADER_HEIGHT,
+                                    minHeight: TIMELINE_HEADER_HEIGHT,
+                                    borderRadius: buildColumnBorderRadius(
+                                      columnArrayIndex,
+                                      Math.max(1, timelineColumns.length),
+                                      16
+                                    ),
                                     border: "1px solid #2a3344",
                                     background: "#111827",
                                     color: "#e2e8f0",
@@ -2149,8 +2226,12 @@ export function SongView({
                             size="compact"
                             style={{
                               ...addLoopButtonStyle,
+                              height: TIMELINE_HEADER_HEIGHT,
+                              minHeight: TIMELINE_HEADER_HEIGHT,
+                              width: TIMELINE_HEADER_HEIGHT,
+                              minWidth: TIMELINE_HEADER_HEIGHT,
                               justifySelf: "center",
-                              alignSelf: "stretch",
+                              alignSelf: "center",
                             }}
                           />
                         </div>
@@ -2169,7 +2250,7 @@ export function SongView({
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: SLOT_GAP,
+                    gap: TIMELINE_ROW_GAP,
                     paddingBottom: STICKY_BOTTOM_BAR_HEIGHT,
                     ...(timelineBodyMinHeight
                       ? { minHeight: timelineBodyMinHeight }
@@ -2190,6 +2271,7 @@ export function SongView({
                       alignItems: "stretch",
                       gap: SLOT_GAP,
                       flexShrink: 0,
+                      paddingTop: TIMELINE_ADD_ROW_PADDING,
                     }}
                   >
                     <div
