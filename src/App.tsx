@@ -1496,8 +1496,7 @@ export default function App() {
     const nextBoundaryMultiplier =
       Math.floor(normalizedTicks / ticksPerSection) + 1;
     const nextBoundaryTicks = nextBoundaryMultiplier * ticksPerSection;
-    const startTimeTicks = Tone.Ticks(nextBoundaryTicks, "i");
-    const startTimeSeconds = startTimeTicks.toSeconds();
+    const startTimeSeconds = Tone.Ticks(nextBoundaryTicks).toSeconds();
 
     if (!Number.isFinite(startTimeSeconds)) return;
 
@@ -1515,7 +1514,7 @@ export default function App() {
           prev === nextSection ? prev : nextSection
         );
       }, time);
-    }, "1m", startTimeTicks);
+    }, "1m", startTimeSeconds);
 
     return () => {
       Tone.Transport.clear(id);
