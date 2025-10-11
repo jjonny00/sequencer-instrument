@@ -527,7 +527,9 @@ function PatternPlayer({
               ? pattern.stepDurations[index]
               : undefined;
           const isBassPattern = pattern.instrument === "bass";
-          const defaultSustainSeconds = isBassPattern
+          const shouldClampBassSustain =
+            isBassPattern && Boolean(pattern.plucky);
+          const defaultSustainSeconds = shouldClampBassSustain
             ? Math.min(holdDurationSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
             : holdDurationSeconds;
           const sustainSeconds = Math.max(0.02, (() => {

@@ -82,6 +82,7 @@ export interface Chunk {
   stepDurations?: number[];
   note?: string;
   sustain?: number;
+  plucky?: boolean;
   attack?: number;
   glide?: number;
   pan?: number;

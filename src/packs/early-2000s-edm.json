@@ -654,7 +654,8 @@
       "characterId": "saw-pluck",
       "steps": [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0],
       "velocities": [0,0.85,0,0,0,0.8,0,0,0,0.75,0,0,0,0.8,0,0],
-      "note": "C2"
+      "note": "C2",
+      "plucky": true
     },
     {
       "id": "edm-bass-roll",

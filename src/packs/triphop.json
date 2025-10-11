@@ -557,7 +557,8 @@
       "characterId": "trip-bass",
       "steps": [1,0,0,0,1,0,0,1,0,0,1,0,0,0,1,0],
       "velocities": [0.85,0,0,0,0.78,0,0,0.72,0,0,0.7,0,0,0,0.68,0],
-      "note": "C1"
+      "note": "C1",
+      "plucky": true
     },
     {
       "id": "trip-bass-slide",

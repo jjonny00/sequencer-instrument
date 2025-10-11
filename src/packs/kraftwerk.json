@@ -533,7 +533,8 @@
       "instrument": "bass",
       "characterId": "square-robot",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0],
-      "note": "C2"
+      "note": "C2",
+      "plucky": true
     },
     {
       "id": "kw-arp-neon",
