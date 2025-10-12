@@ -532,7 +532,7 @@ function PatternPlayer({
           const defaultSustainSeconds = shouldClampBassSustain
             ? Math.min(holdDurationSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
             : holdDurationSeconds;
-          const sustainSeconds = Math.max(0.02, (() => {
+          const baseSustainSeconds = (() => {
             if (
               typeof recordedDuration === "number" &&
               Number.isFinite(recordedDuration) &&
@@ -540,12 +540,24 @@ function PatternPlayer({
             ) {
               return Math.min(recordedDuration, holdDurationSeconds);
             }
-            if (releaseControl === undefined) {
-              return defaultSustainSeconds;
+            if (releaseControl !== undefined && releaseControl !== null) {
+              const clampedRelease = Math.max(releaseControl, 0);
+              if (shouldClampBassSustain) {
+                return Math.min(
+                  clampedRelease,
+                  BASS_DEFAULT_MAX_SUSTAIN_SECONDS
+                );
+              }
+              return clampedRelease;
             }
-            const clampedRelease = Math.max(releaseControl, 0);
-            return Math.min(clampedRelease, holdDurationSeconds);
-          })());
+            return defaultSustainSeconds;
+          })();
+          const sustainSeconds = Math.max(
+            0.02,
+            shouldClampBassSustain
+              ? Math.min(baseSustainSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
+              : baseSustainSeconds
+          );
           let noteArgument = pattern.note;
           let chunkPayload: Chunk = pattern;
           if (
