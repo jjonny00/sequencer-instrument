@@ -529,9 +529,6 @@ function PatternPlayer({
           const isBassPattern = pattern.instrument === "bass";
           const shouldClampBassSustain =
             isBassPattern && Boolean(pattern.plucky);
-          const defaultSustainSeconds = shouldClampBassSustain
-            ? Math.min(holdDurationSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
-            : holdDurationSeconds;
           const baseSustainSeconds = (() => {
             if (
               typeof recordedDuration === "number" &&
@@ -542,22 +539,31 @@ function PatternPlayer({
             }
             if (releaseControl !== undefined && releaseControl !== null) {
               const clampedRelease = Math.max(releaseControl, 0);
-              if (shouldClampBassSustain) {
-                return Math.min(
-                  clampedRelease,
-                  BASS_DEFAULT_MAX_SUSTAIN_SECONDS
-                );
-              }
-              return clampedRelease;
+              const limitedRelease = shouldClampBassSustain
+                ? Math.min(clampedRelease, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
+                : clampedRelease;
+              return Math.min(limitedRelease, holdDurationSeconds);
             }
-            return defaultSustainSeconds;
+            if (shouldClampBassSustain) {
+              return Math.min(
+                holdDurationSeconds,
+                BASS_DEFAULT_MAX_SUSTAIN_SECONDS
+              );
+            }
+            if (isBassPattern) {
+              return undefined;
+            }
+            return holdDurationSeconds;
           })();
-          const sustainSeconds = Math.max(
-            0.02,
-            shouldClampBassSustain
+          const sustainSeconds = (() => {
+            if (baseSustainSeconds === undefined) {
+              return undefined;
+            }
+            const clampedForBass = shouldClampBassSustain
               ? Math.min(baseSustainSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
-              : baseSustainSeconds
-          );
+              : baseSustainSeconds;
+            return Math.max(0.02, clampedForBass);
+          })();
           let noteArgument = pattern.note;
           let chunkPayload: Chunk = pattern;
           if (
