@@ -685,6 +685,13 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           }
           onSelectPreset(nextValue);
           const match = presetSelectionItems.find((item) => item.id === nextValue);
+          if (
+            match?.characterId &&
+            match.characterId !== selectedCharacterId &&
+            characterOptions.some((option) => option.id === match.characterId)
+          ) {
+            onSelectCharacter(match.characterId);
+          }
           if (match?.pattern) {
             void previewPreset(match.pattern, match.characterId);
           }
@@ -694,11 +701,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       });
     },
     [
+      characterOptions,
+      onSelectCharacter,
       onSelectPreset,
       presetSelectionItems,
       previewPreset,
       scheduleAfterBlur,
       selectedPresetId,
+      selectedCharacterId,
     ]
   );
 
