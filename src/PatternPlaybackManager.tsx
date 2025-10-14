@@ -212,6 +212,10 @@ export function PatternPlaybackManager({
             0,
             Math.min(1, velocity * rowVelocity)
           );
+          const resolvedCharacterId =
+            chunk?.characterId ??
+            track.pattern?.characterId ??
+            track.source?.characterId;
           trigger(
             time,
             combinedVelocity,
@@ -219,7 +223,7 @@ export function PatternPlaybackManager({
             note,
             sustain,
             chunk,
-            track.source?.characterId
+            resolvedCharacterId
           );
         };
         const isTrackActive = () => isRowActive() && !track.muted;
@@ -263,7 +267,9 @@ export function PatternPlaybackManager({
                 note,
                 sustain,
                 chunk,
-                track.source?.characterId
+                chunk?.characterId ??
+                  track.pattern?.characterId ??
+                  track.source?.characterId
               )
             }
             started={started}
