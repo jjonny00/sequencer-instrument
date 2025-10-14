@@ -145,22 +145,32 @@ const isPWARestore = () => {
 
 const normalizeValueForSignature = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return value.map((item) => normalizeValueForSignature(item));
+    const normalizedItems = value
+      .map((item) => normalizeValueForSignature(item))
+      .filter((item) => item !== undefined);
+    return normalizedItems.length > 0 ? normalizedItems : undefined;
   }
   if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
+    const normalizedEntries = Object.entries(value as Record<string, unknown>)
+      .map(([key, candidate]) => [key, normalizeValueForSignature(candidate)] as const)
       .filter(([, candidate]) => candidate !== undefined)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    if (normalizedEntries.length === 0) {
+      return undefined;
+    }
     const normalized: Record<string, unknown> = {};
-    for (const [key, candidate] of entries) {
-      normalized[key] = normalizeValueForSignature(candidate);
+    for (const [key, candidate] of normalizedEntries) {
+      normalized[key] = candidate;
     }
     return normalized;
   }
   if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
+    return Number.isFinite(value) ? value : undefined;
   }
-  return value ?? null;
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  return value;
 };
 
 interface ChunkSignatureContext {
@@ -350,7 +360,8 @@ const createChunkSignature = (
   const { id, name, ...rest } = normalized;
   void id;
   void name;
-  return JSON.stringify(normalizeValueForSignature(rest));
+  const normalizedValue = normalizeValueForSignature(rest);
+  return normalizedValue === undefined ? null : JSON.stringify(normalizedValue);
 };
 
 const resolveActivePresetId = ({
