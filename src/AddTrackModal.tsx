@@ -108,7 +108,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   const [userPresets, setUserPresets] = useState<
     { id: string; name: string; characterId: string | null; pattern: Chunk | null }[]
   >([]);
-  const [userPresetsReady, setUserPresetsReady] = useState(false);
+  const [loadedUserPresetsScope, setLoadedUserPresetsScope] = useState<string | null>(
+    null
+  );
   const [handoffLock, setHandoffLock] = useState<SelectField | null>(null);
   const [loadingState, setLoadingState] = useState({
     instrument: false,
@@ -132,9 +134,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     [presetOptions]
   );
 
-  useEffect(() => {
-    setUserPresetsReady(false);
-  }, [pack?.id, selectedInstrumentId]);
+  const activeUserPresetScope = useMemo(
+    () => `${pack?.id ?? ""}::${selectedInstrumentId ?? ""}`,
+    [pack?.id, selectedInstrumentId]
+  );
+  const userPresetsReady = useMemo(
+    () => loadedUserPresetsScope === activeUserPresetScope,
+    [loadedUserPresetsScope, activeUserPresetScope]
+  );
 
   const userPresetItems = useMemo(
     () =>
@@ -522,10 +529,11 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
   );
 
   const refreshUserPresets = useCallback(() => {
-    setUserPresetsReady(false);
+    const scope = `${pack?.id ?? ""}::${selectedInstrumentId ?? ""}`;
+    setLoadedUserPresetsScope(null);
     if (!pack || !selectedInstrumentId) {
       setUserPresets([]);
-      setUserPresetsReady(true);
+      setLoadedUserPresetsScope(scope);
       return;
     }
     const presets = listInstrumentPresets(pack.id, selectedInstrumentId).map((preset) => ({
@@ -535,7 +543,7 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       pattern: preset.pattern,
     }));
     setUserPresets(presets);
-    setUserPresetsReady(true);
+    setLoadedUserPresetsScope(scope);
   }, [pack, selectedInstrumentId]);
 
   useEffect(() => {
