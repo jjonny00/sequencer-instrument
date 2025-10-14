@@ -1900,9 +1900,12 @@ export default function App() {
             characterId: nextCharacterForSignature,
           });
           const previousPresetId = track.source?.presetId ?? null;
+          const signaturesMatch = previousSignature === nextSignature;
           let nextPresetId = previousPresetId;
           if (previousPresetId) {
-            if (pack && instrumentForSignature) {
+            if (signaturesMatch) {
+              nextPresetId = previousPresetId;
+            } else if (pack && instrumentForSignature) {
               nextPresetId = resolveActivePresetId({
                 pack,
                 instrumentId: instrumentForSignature,
@@ -1910,7 +1913,7 @@ export default function App() {
                 trackPattern: nextPattern,
                 preferredPresetId: previousPresetId,
               });
-            } else if (previousSignature !== nextSignature) {
+            } else {
               nextPresetId = null;
             }
           }
