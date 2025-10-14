@@ -18,6 +18,7 @@ import { createTriggerKey, type Track, type TriggerMap } from "./tracks";
 import { packs } from "./packs";
 import type { PatternGroup, PerformanceTrack, SongRow } from "./song";
 import { getPerformanceTracksSpanMeasures, performanceSettingsToChunk } from "./song";
+import { computeStepTriggerOptions } from "./utils/triggerTiming";
 
 const TICKS_PER_QUARTER = Tone.Transport.PPQ;
 const TICKS_PER_SIXTEENTH = TICKS_PER_QUARTER / 4;
@@ -45,8 +46,6 @@ const ensurePositiveTicks = (ticks: number, fallback: number) =>
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
-
-const BASS_DEFAULT_MAX_SUSTAIN_SECONDS = Tone.Time("8n").toSeconds();
 
 interface PatternPlaybackManagerProps {
   tracks: Track[];
@@ -212,6 +211,10 @@ export function PatternPlaybackManager({
             0,
             Math.min(1, velocity * rowVelocity)
           );
+          const resolvedCharacterId =
+            chunk?.characterId ??
+            track.pattern?.characterId ??
+            track.source?.characterId;
           trigger(
             time,
             combinedVelocity,
@@ -219,7 +222,7 @@ export function PatternPlaybackManager({
             note,
             sustain,
             chunk,
-            track.source?.characterId
+            resolvedCharacterId
           );
         };
         const isTrackActive = () => isRowActive() && !track.muted;
@@ -263,7 +266,9 @@ export function PatternPlaybackManager({
                 note,
                 sustain,
                 chunk,
-                track.source?.characterId
+                chunk?.characterId ??
+                  track.pattern?.characterId ??
+                  track.source?.characterId
               )
             }
             started={started}
@@ -512,38 +517,12 @@ function PatternPlayer({
             swingOffsetSeconds && index % 2 === 1
               ? time + swingOffsetSeconds
               : time;
-          let holdSteps = 0;
-          for (let offset = 1; offset < stepCount; offset += 1) {
-            const nextIndex = (index + offset) % stepCount;
-            if (stepsArray[nextIndex]) {
-              break;
-            }
-            holdSteps += 1;
-          }
-          const holdDurationSeconds = (holdSteps + 1) * stepDurationSeconds;
-          const releaseControl = pattern.sustain;
-          const recordedDuration =
-            pattern.stepDurations && pattern.stepDurations.length > index
-              ? pattern.stepDurations[index]
-              : undefined;
-          const isBassPattern = pattern.instrument === "bass";
-          const defaultSustainSeconds = isBassPattern
-            ? Math.min(holdDurationSeconds, BASS_DEFAULT_MAX_SUSTAIN_SECONDS)
-            : holdDurationSeconds;
-          const sustainSeconds = Math.max(0.02, (() => {
-            if (
-              typeof recordedDuration === "number" &&
-              Number.isFinite(recordedDuration) &&
-              recordedDuration > 0
-            ) {
-              return Math.min(recordedDuration, holdDurationSeconds);
-            }
-            if (releaseControl === undefined) {
-              return defaultSustainSeconds;
-            }
-            const clampedRelease = Math.max(releaseControl, 0);
-            return Math.min(clampedRelease, holdDurationSeconds);
-          })());
+          const { sustainSeconds } = computeStepTriggerOptions({
+            pattern,
+            steps: stepsArray,
+            index,
+            stepDurationSeconds,
+          });
           let noteArgument = pattern.note;
           let chunkPayload: Chunk = pattern;
           if (

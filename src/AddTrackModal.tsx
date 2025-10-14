@@ -26,6 +26,7 @@ import { Modal } from "./components/Modal";
 import { IconButton } from "./components/IconButton";
 import { createTriggerKey, type TriggerMap } from "./tracks";
 import { initAudioContext } from "./utils/audio";
+import { computeStepTriggerOptions } from "./utils/triggerTiming";
 import {
   FALLBACK_INSTRUMENT_COLOR,
   getInstrumentColor,
@@ -469,25 +470,32 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
         });
         hasTriggered = events.length > 0;
       } else if (chunk.steps && chunk.steps.length > 0) {
-        const stepDuration = Tone.Time("16n").toSeconds();
-        const limit = Math.min(chunk.steps.length, 16);
+        const stepDurationSeconds = Tone.Time("16n").toSeconds();
+        const stepsArray = chunk.steps.slice(0, 16);
+        const limit = stepsArray.length;
         const velocities = chunk.velocities ?? [];
         const pitches = chunk.pitches ?? [];
         const notes = chunk.notes ?? [];
         for (let index = 0; index < limit; index += 1) {
-          const stepValue = chunk.steps[index];
+          const stepValue = stepsArray[index];
           if (!stepValue) continue;
           const rawVelocity =
             velocities[index] ?? (typeof stepValue === "number" ? stepValue : 1);
           const velocity = Math.max(0, Math.min(1, rawVelocity ?? 1));
           const pitch = pitches[index] ?? 0;
           const note = notes[index] ?? chunk.note;
+          const { sustainSeconds } = computeStepTriggerOptions({
+            pattern: chunk,
+            steps: stepsArray,
+            index,
+            stepDurationSeconds,
+          });
           trigger(
-            start + index * stepDuration,
+            start + index * stepDurationSeconds,
             velocity,
             pitch,
             note,
-            chunk.sustain,
+            sustainSeconds,
             chunk,
             activeCharacterId ?? undefined
           );
@@ -685,6 +693,13 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
           }
           onSelectPreset(nextValue);
           const match = presetSelectionItems.find((item) => item.id === nextValue);
+          if (
+            match?.characterId &&
+            match.characterId !== selectedCharacterId &&
+            characterOptions.some((option) => option.id === match.characterId)
+          ) {
+            onSelectCharacter(match.characterId);
+          }
           if (match?.pattern) {
             void previewPreset(match.pattern, match.characterId);
           }
@@ -694,11 +709,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
       });
     },
     [
+      characterOptions,
+      onSelectCharacter,
       onSelectPreset,
       presetSelectionItems,
       previewPreset,
       scheduleAfterBlur,
       selectedPresetId,
+      selectedCharacterId,
     ]
   );
 

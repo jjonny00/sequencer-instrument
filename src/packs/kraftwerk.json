@@ -525,7 +525,8 @@
       "instrument": "bass",
       "characterId": "pulse-drive",
       "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-      "velocities": [0.85,0,0.7,0,0.8,0,0.7,0,0.85,0,0.7,0,0.8,0,0.7,0]
+      "velocities": [0.85,0,0.7,0,0.8,0,0.7,0,0.85,0,0.7,0,0.8,0,0.7,0],
+      "note": "C2"
     },
     {
       "id": "kw-bass-sync",
@@ -533,7 +534,8 @@
       "instrument": "bass",
       "characterId": "square-robot",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0],
-      "note": "C2"
+      "note": "C2",
+      "plucky": true
     },
     {
       "id": "kw-arp-neon",
