@@ -1889,21 +1889,39 @@ export default function App() {
             characterId:
               track.pattern.characterId ?? track.source?.characterId ?? null,
           });
+          const nextCharacterForSignature =
+            nextPattern.characterId ??
+            track.source?.characterId ??
+            track.pattern.characterId ??
+            null;
           const nextSignature = createChunkSignature(nextPattern, {
             pack,
             instrumentId: instrumentForSignature,
-            characterId:
-              nextPattern.characterId ?? track.source?.characterId ?? track.pattern.characterId ?? null,
+            characterId: nextCharacterForSignature,
           });
-          const preservePreset = previousSignature === nextSignature;
+          const previousPresetId = track.source?.presetId ?? null;
+          let nextPresetId = previousPresetId;
+          if (previousPresetId) {
+            if (pack && instrumentForSignature) {
+              nextPresetId = resolveActivePresetId({
+                pack,
+                instrumentId: instrumentForSignature,
+                characterId: nextCharacterForSignature,
+                trackPattern: nextPattern,
+                preferredPresetId: previousPresetId,
+              });
+            } else if (previousSignature !== nextSignature) {
+              nextPresetId = null;
+            }
+          }
           const nextSource = track.source
             ? {
                 ...track.source,
-                ...(preservePreset
-                  ? {}
-                  : {
-                      presetId: null,
-                    }),
+                ...(previousPresetId !== nextPresetId
+                  ? {
+                      presetId: nextPresetId ?? null,
+                    }
+                  : {}),
                 ...(nextPattern.characterId !== undefined
                   ? {
                       characterId:
