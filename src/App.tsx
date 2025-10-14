@@ -91,7 +91,9 @@ import {
   type StoredProjectSummary,
 } from "./storage";
 import {
+  USER_PRESET_PREFIX,
   isUserPresetId,
+  listInstrumentPresets,
   loadInstrumentPreset,
   stripUserPresetPrefix,
 } from "./presets";
@@ -132,6 +134,95 @@ const isPWARestore = () => {
     // Additional check: if we have a persisted audio context state
     (isIOSPWA() && Tone.getContext()?.state !== "closed")
   );
+};
+
+const normalizeValueForSignature = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeValueForSignature(item));
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, candidate]) => candidate !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const normalized: Record<string, unknown> = {};
+    for (const [key, candidate] of entries) {
+      normalized[key] = normalizeValueForSignature(candidate);
+    }
+    return normalized;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  return value ?? null;
+};
+
+const createChunkSignature = (chunk: Chunk | null | undefined): string | null => {
+  if (!chunk) {
+    return null;
+  }
+  const { id, name, ...rest } = chunk;
+  void id;
+  void name;
+  return JSON.stringify(normalizeValueForSignature(rest));
+};
+
+const resolveActivePresetId = ({
+  pack,
+  instrumentId,
+  trackPattern,
+  preferredPresetId,
+}: {
+  pack: Pack;
+  instrumentId: string;
+  trackPattern: Chunk | null;
+  preferredPresetId: string | null;
+}): string | null => {
+  if (!trackPattern) {
+    return preferredPresetId ?? null;
+  }
+
+  const trackSignature = createChunkSignature(trackPattern);
+  if (!trackSignature) {
+    return preferredPresetId ?? null;
+  }
+
+  const matches = (candidate: Chunk | null | undefined) => {
+    if (!candidate) return false;
+    return createChunkSignature(candidate) === trackSignature;
+  };
+
+  if (preferredPresetId) {
+    if (isUserPresetId(preferredPresetId)) {
+      const stored = loadInstrumentPreset(
+        pack.id,
+        instrumentId,
+        stripUserPresetPrefix(preferredPresetId)
+      );
+      if (stored?.pattern && matches(stored.pattern)) {
+        return preferredPresetId;
+      }
+    } else {
+      const preset = pack.chunks.find((chunk) => chunk.id === preferredPresetId);
+      if (preset && matches(preset)) {
+        return preferredPresetId;
+      }
+    }
+  }
+
+  const packMatch = pack.chunks.find(
+    (chunk) => chunk.instrument === instrumentId && matches(chunk)
+  );
+  if (packMatch) {
+    return packMatch.id;
+  }
+
+  const userPresets = listInstrumentPresets(pack.id, instrumentId);
+  const userMatch = userPresets.find((preset) => matches(preset.pattern));
+  if (userMatch) {
+    return `${USER_PRESET_PREFIX}${userMatch.id}`;
+  }
+
+  return null;
 };
 
 const createInitialPatternGroup = (): PatternGroup => ({
@@ -914,7 +1005,13 @@ export default function App() {
       const presetOptions = pack.chunks.filter(
         (chunk) => chunk.instrument === instrumentId
       );
-      let presetId = track.source?.presetId ?? null;
+      const resolvedPresetId = resolveActivePresetId({
+        pack,
+        instrumentId,
+        trackPattern: track.pattern ?? null,
+        preferredPresetId: track.source?.presetId ?? null,
+      });
+      let presetId = resolvedPresetId;
       if (
         presetId &&
         !isUserPresetId(presetId) &&
