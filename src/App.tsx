@@ -1228,10 +1228,12 @@ export default function App() {
           characterId?: string
         ) => {
           void initAudioContext();
+          const requestedCharacterId =
+            characterId ?? chunk?.characterId ?? undefined;
           const character = resolveInstrumentCharacter(
             pack.id,
             instrumentId,
-            characterId
+            requestedCharacterId
           );
           if (!character) return;
           const key = `${pack.id}:${instrumentId}:${character.id}`;
