@@ -138,7 +138,7 @@
           "id": "808-sub",
           "name": "808 Sub",
           "type": "MonoSynth",
-          "note": "C1",
+          "note": "C2",
           "options": {
             "oscillator": { "type": "sine" },
             "filter": { "type": "lowpass", "frequency": 120, "Q": 1.1 },
@@ -154,7 +154,7 @@
           "id": "glide-bass",
           "name": "Glide Bass",
           "type": "MonoSynth",
-          "note": "C1",
+          "note": "C2",
           "options": {
             "oscillator": { "type": "triangle" },
             "portamento": 0.1,
@@ -524,7 +524,7 @@
       "characterId": "808-sub",
       "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
       "velocities": [0.9,0,0,0,0.85,0,0,0,0.88,0,0,0,0.82,0,0,0],
-      "note": "C1",
+      "note": "C2",
       "plucky": true
     },
     {
@@ -537,7 +537,7 @@
       "pitches": [0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0],
       "plucky": true,
       "glide": 0.15,
-      "note": "C1"
+      "note": "C2"
     },
     {
       "id": "trap-bass-drive",
@@ -546,7 +546,7 @@
       "characterId": "glide-bass",
       "steps": [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1,0],
       "velocities": [0.9,0,0,0,0.82,0,0,0,0.85,0,0.78,0,0,0,0.8,0],
-      "note": "C1"
+      "note": "C2"
     },
     {
       "id": "trap-arp-bell",
