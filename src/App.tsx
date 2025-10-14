@@ -21,6 +21,7 @@ import {
   DEFAULT_PULSE_SHAPE,
   DEFAULT_PULSE_SWING,
   DEFAULT_PULSE_HUMANIZE,
+  ensurePulseDefaults,
   type Chunk,
   type PulseMode,
   type PulseShape,
@@ -34,7 +35,12 @@ import {
   triggerHarmoniaChordAttack,
   triggerHarmoniaChordRelease,
   HARMONIA_BASE_VOLUME_DB,
+  HARMONIA_CHARACTER_PRESETS,
+  HARMONIA_DEFAULT_CONTROLS,
+  resolveHarmoniaChord,
   type HarmoniaNodes,
+  type HarmoniaComplexity,
+  type HarmoniaScaleDegree,
 } from "./instruments/harmonia";
 import { createKick } from "./instruments/kickInstrument";
 import {
@@ -100,6 +106,7 @@ import {
 import { getInstrumentColor } from "./utils/color";
 import { resolveInstrumentCharacterId } from "./instrumentCharacters";
 import { unlockAudio } from "./utils/audioUnlock";
+import { isScaleName, type ScaleName } from "./music/scales";
 
 const isPWARestore = () => {
   if (typeof window === "undefined") {
@@ -156,11 +163,191 @@ const normalizeValueForSignature = (value: unknown): unknown => {
   return value ?? null;
 };
 
-const createChunkSignature = (chunk: Chunk | null | undefined): string | null => {
+interface ChunkSignatureContext {
+  pack?: Pack | null;
+  instrumentId?: string | null;
+  characterId?: string | null;
+}
+
+const applyKeyboardDefaultsForSignature = (chunk: Chunk): Chunk => {
+  if (chunk.instrument !== "keyboard" && chunk.instrument !== "arp") {
+    return chunk;
+  }
+  const defaults: Partial<Chunk> = {};
+  if (chunk.note === undefined) {
+    defaults.note = "C4";
+  }
+  if (chunk.attack === undefined) {
+    defaults.attack = 0.05;
+  }
+  if (chunk.sustain === undefined) {
+    defaults.sustain = 0.8;
+  }
+  if (chunk.glide === undefined) {
+    defaults.glide = 0;
+  }
+  if (chunk.pan === undefined) {
+    defaults.pan = 0;
+  }
+  if (chunk.reverb === undefined) {
+    defaults.reverb = 0;
+  }
+  if (chunk.delay === undefined) {
+    defaults.delay = 0;
+  }
+  if (chunk.distortion === undefined) {
+    defaults.distortion = 0;
+  }
+  if (chunk.bitcrusher === undefined) {
+    defaults.bitcrusher = 0;
+  }
+  if (chunk.chorus === undefined) {
+    defaults.chorus = 0;
+  }
+  if (chunk.filter === undefined) {
+    defaults.filter = 1;
+  }
+  if (Object.keys(defaults).length === 0) {
+    return chunk;
+  }
+  return { ...chunk, ...defaults };
+};
+
+const resolveHarmoniaCharacterPreset = (characterId: string | null) => {
+  if (!characterId) return null;
+  return (
+    HARMONIA_CHARACTER_PRESETS.find((preset) => preset.id === characterId) ?? null
+  );
+};
+
+const applyHarmoniaDefaultsForSignature = (
+  chunk: Chunk,
+  context: ChunkSignatureContext
+): Chunk => {
+  if (chunk.instrument !== "harmonia") {
+    return chunk;
+  }
+
+  const characterId = chunk.characterId ?? context.characterId ?? null;
+  const characterPreset = resolveHarmoniaCharacterPreset(characterId);
+  const defaultComplexity =
+    characterPreset?.complexity ?? HARMONIA_DEFAULT_CONTROLS.complexity;
+  const allowBorrowed = characterPreset?.allowBorrowed ?? false;
+  const scaleName = isScaleName(chunk.scale)
+    ? (chunk.scale as ScaleName)
+    : ("Major" as ScaleName);
+  const tonalCenter = chunk.tonalCenter ?? chunk.note ?? "C4";
+  const degree = Math.min(6, Math.max(0, Math.round(chunk.degree ?? 0))) as HarmoniaScaleDegree;
+
+  const defaults: Partial<Chunk> = {};
+
+  if (chunk.harmoniaComplexity === undefined) {
+    defaults.harmoniaComplexity = defaultComplexity;
+  }
+  const activeComplexity = (
+    defaults.harmoniaComplexity ?? chunk.harmoniaComplexity ?? defaultComplexity
+  ) as HarmoniaComplexity;
+
+  if (chunk.useExtensions === undefined) {
+    defaults.useExtensions = activeComplexity !== "simple";
+  }
+  if (chunk.harmoniaTone === undefined) {
+    defaults.harmoniaTone = HARMONIA_DEFAULT_CONTROLS.tone;
+  }
+  if (chunk.harmoniaDynamics === undefined) {
+    defaults.harmoniaDynamics = HARMONIA_DEFAULT_CONTROLS.dynamics;
+  }
+  if (chunk.velocityFactor === undefined) {
+    const dynamics =
+      defaults.harmoniaDynamics ??
+      chunk.harmoniaDynamics ??
+      HARMONIA_DEFAULT_CONTROLS.dynamics;
+    defaults.velocityFactor = dynamics;
+  }
+  if (chunk.harmoniaBass === undefined) {
+    defaults.harmoniaBass = HARMONIA_DEFAULT_CONTROLS.bassEnabled;
+  }
+  if (chunk.harmoniaArp === undefined) {
+    defaults.harmoniaArp = HARMONIA_DEFAULT_CONTROLS.arpEnabled;
+  }
+  if (!isScaleName(chunk.scale)) {
+    defaults.scale = scaleName;
+  }
+  if (chunk.tonalCenter === undefined) {
+    defaults.tonalCenter = tonalCenter;
+  }
+  if (chunk.degree === undefined) {
+    defaults.degree = degree;
+  }
+
+  const shouldResolveChord =
+    !chunk.notes?.length || !chunk.degrees?.length || !chunk.note;
+
+  if (shouldResolveChord) {
+    const resolution = resolveHarmoniaChord({
+      tonalCenter,
+      scale: scaleName,
+      degree,
+      complexity: activeComplexity,
+      allowBorrowed,
+      preferredVoicingLabel: chunk.harmoniaBorrowedLabel ?? undefined,
+    });
+    if (!chunk.note) {
+      defaults.note = resolution.root;
+    }
+    if (!chunk.notes?.length) {
+      defaults.notes = resolution.notes.slice();
+    }
+    if (!chunk.degrees?.length) {
+      defaults.degrees = resolution.intervals.slice();
+    }
+    if (resolution.borrowed && chunk.harmoniaBorrowedLabel === undefined) {
+      defaults.harmoniaBorrowedLabel = resolution.voicingLabel;
+    } else if (!allowBorrowed && chunk.harmoniaBorrowedLabel) {
+      defaults.harmoniaBorrowedLabel = undefined;
+    }
+  }
+
+  if (Object.keys(defaults).length === 0) {
+    return chunk;
+  }
+
+  return { ...chunk, ...defaults };
+};
+
+const applyInstrumentDefaultsForSignature = (
+  chunk: Chunk,
+  context: ChunkSignatureContext
+): Chunk => {
+  const instrumentId = context.instrumentId ?? chunk.instrument ?? null;
+  if (!instrumentId) {
+    return chunk;
+  }
+  if (instrumentId === "pulse") {
+    return ensurePulseDefaults(chunk);
+  }
+  if (instrumentId === "harmonia") {
+    return applyHarmoniaDefaultsForSignature(chunk, context);
+  }
+  if (instrumentId === "keyboard" || instrumentId === "arp") {
+    return applyKeyboardDefaultsForSignature(chunk);
+  }
+  return chunk;
+};
+
+const createChunkSignature = (
+  chunk: Chunk | null | undefined,
+  context?: ChunkSignatureContext
+): string | null => {
   if (!chunk) {
     return null;
   }
-  const { id, name, ...rest } = chunk;
+  const normalized = applyInstrumentDefaultsForSignature(chunk, {
+    ...context,
+    instrumentId: context?.instrumentId ?? chunk.instrument ?? null,
+    characterId: context?.characterId ?? chunk.characterId ?? null,
+  });
+  const { id, name, ...rest } = normalized;
   void id;
   void name;
   return JSON.stringify(normalizeValueForSignature(rest));
@@ -169,11 +356,13 @@ const createChunkSignature = (chunk: Chunk | null | undefined): string | null =>
 const resolveActivePresetId = ({
   pack,
   instrumentId,
+  characterId,
   trackPattern,
   preferredPresetId,
 }: {
   pack: Pack;
   instrumentId: string;
+  characterId: string | null;
   trackPattern: Chunk | null;
   preferredPresetId: string | null;
 }): string | null => {
@@ -181,14 +370,33 @@ const resolveActivePresetId = ({
     return preferredPresetId ?? null;
   }
 
-  const trackSignature = createChunkSignature(trackPattern);
+  const getSignature = (
+    candidate: Chunk | null | undefined,
+    overrides?: { instrumentId?: string | null; characterId?: string | null }
+  ) =>
+    createChunkSignature(candidate, {
+      pack,
+      instrumentId: overrides?.instrumentId ?? candidate?.instrument ?? instrumentId,
+      characterId:
+        overrides?.characterId ??
+        candidate?.characterId ??
+        characterId ??
+        null,
+    });
+
+  const trackSignature = getSignature(trackPattern, {
+    characterId: trackPattern.characterId ?? characterId ?? null,
+  });
   if (!trackSignature) {
     return preferredPresetId ?? null;
   }
 
-  const matches = (candidate: Chunk | null | undefined) => {
+  const matches = (
+    candidate: Chunk | null | undefined,
+    overrides?: { instrumentId?: string | null; characterId?: string | null }
+  ) => {
     if (!candidate) return false;
-    return createChunkSignature(candidate) === trackSignature;
+    return getSignature(candidate, overrides) === trackSignature;
   };
 
   if (preferredPresetId) {
@@ -198,7 +406,10 @@ const resolveActivePresetId = ({
         instrumentId,
         stripUserPresetPrefix(preferredPresetId)
       );
-      if (stored?.pattern && matches(stored.pattern)) {
+      if (
+        stored?.pattern &&
+        matches(stored.pattern, { characterId: stored.characterId })
+      ) {
         return preferredPresetId;
       }
     } else {
@@ -217,7 +428,9 @@ const resolveActivePresetId = ({
   }
 
   const userPresets = listInstrumentPresets(pack.id, instrumentId);
-  const userMatch = userPresets.find((preset) => matches(preset.pattern));
+  const userMatch = userPresets.find((preset) =>
+    matches(preset.pattern, { characterId: preset.characterId })
+  );
   if (userMatch) {
     return `${USER_PRESET_PREFIX}${userMatch.id}`;
   }
@@ -1008,6 +1221,7 @@ export default function App() {
       const resolvedPresetId = resolveActivePresetId({
         pack,
         instrumentId,
+        characterId: track.source?.characterId ?? track.pattern?.characterId ?? null,
         trackPattern: track.pattern ?? null,
         preferredPresetId: track.source?.presetId ?? null,
       });
@@ -1653,10 +1867,32 @@ export default function App() {
           if (!track.pattern) return track;
           const nextPattern = updater(track.pattern);
           if (nextPattern === track.pattern) return track;
+          const pack = track.source?.packId
+            ? packs.find((candidate) => candidate.id === track.source?.packId) ?? null
+            : null;
+          const instrumentForSignature =
+            track.instrument ?? track.source?.instrumentId ?? nextPattern.instrument ?? null;
+          const previousSignature = createChunkSignature(track.pattern, {
+            pack,
+            instrumentId: instrumentForSignature,
+            characterId:
+              track.pattern.characterId ?? track.source?.characterId ?? null,
+          });
+          const nextSignature = createChunkSignature(nextPattern, {
+            pack,
+            instrumentId: instrumentForSignature,
+            characterId:
+              nextPattern.characterId ?? track.source?.characterId ?? track.pattern.characterId ?? null,
+          });
+          const preservePreset = previousSignature === nextSignature;
           const nextSource = track.source
             ? {
                 ...track.source,
-                presetId: null,
+                ...(preservePreset
+                  ? {}
+                  : {
+                      presetId: null,
+                    }),
                 ...(nextPattern.characterId !== undefined
                   ? {
                       characterId:
