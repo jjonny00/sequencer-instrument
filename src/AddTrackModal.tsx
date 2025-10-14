@@ -142,6 +142,9 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     () => loadedUserPresetsScope === activeUserPresetScope,
     [loadedUserPresetsScope, activeUserPresetScope]
   );
+  const [validatedUserPresetScope, setValidatedUserPresetScope] = useState<
+    string | null
+  >(null);
 
   const userPresetItems = useMemo(
     () =>
@@ -392,7 +395,12 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
 
   useEffect(() => {
     if (!selectedPresetId) return;
-    if (isUserPresetId(selectedPresetId) && !userPresetsReady) return;
+    if (
+      isUserPresetId(selectedPresetId) &&
+      activeUserPresetScope !== validatedUserPresetScope
+    ) {
+      return;
+    }
     const hasSelection = presetSelectionItems.some(
       (preset) => preset.id === selectedPresetId
     );
@@ -402,8 +410,14 @@ export const AddTrackModal: FC<AddTrackModalProps> = ({
     presetSelectionItems,
     selectedPresetId,
     onSelectPreset,
-    userPresetsReady,
+    activeUserPresetScope,
+    validatedUserPresetScope,
   ]);
+
+  useEffect(() => {
+    if (!userPresetsReady) return;
+    setValidatedUserPresetScope(activeUserPresetScope);
+  }, [userPresetsReady, activeUserPresetScope]);
 
   const previewStyle = useCallback(
     async (characterId: string) => {
