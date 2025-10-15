@@ -64,7 +64,7 @@ const BACK_BUTTON_STYLE: CSSProperties = {
 };
 
 const SEGMENTED_WRAPPER_STYLE: CSSProperties = {
-  display: "inline-flex",
+  display: "flex",
   alignItems: "center",
   gap: 8,
   padding: "0 4px",
@@ -73,13 +73,16 @@ const SEGMENTED_WRAPPER_STYLE: CSSProperties = {
   background: "rgba(11, 18, 32, 0.88)",
   height: 36,
   boxSizing: "border-box",
+  width: "100%",
+  flex: 1,
 };
 
 const SEGMENT_BUTTON_STYLE: CSSProperties = {
-  display: "inline-flex",
+  display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  minWidth: 96,
+  flex: 1,
+  minWidth: 0,
   padding: "0 18px",
   height: "100%",
   borderRadius: 18,
@@ -110,6 +113,7 @@ const SECTION_CENTER_STYLE: CSSProperties = {
   flex: 1,
   justifyContent: "flex-end",
   minWidth: 0,
+  width: "100%",
 };
 
 const SECTION_RIGHT_STYLE: CSSProperties = {
