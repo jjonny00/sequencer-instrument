@@ -13,6 +13,8 @@ const SECTION_STYLE = {
 } as const;
 
 export function TopBar({ left, center, right }: TopBarProps) {
+  const hasRightSection = right !== undefined && right !== null && right !== false;
+
   return (
     <div
       className="safe-top"
@@ -43,15 +45,17 @@ export function TopBar({ left, center, right }: TopBarProps) {
         >
           {center}
         </div>
-        <div
-          style={{
-            ...SECTION_STYLE,
-            justifyContent: "flex-end",
-            minWidth: 0,
-          }}
-        >
-          {right}
-        </div>
+        {hasRightSection ? (
+          <div
+            style={{
+              ...SECTION_STYLE,
+              justifyContent: "flex-end",
+              minWidth: 0,
+            }}
+          >
+            {right}
+          </div>
+        ) : null}
       </div>
     </div>
   );
