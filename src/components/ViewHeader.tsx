@@ -24,7 +24,7 @@ const SECTION_CONTAINER_STYLE: CSSProperties = {
 };
 
 const STACKED_WRAPPER_STYLE: CSSProperties = {
-  padding: "16px 16px 0",
+  padding: "16px 16px 8px",
   position: "sticky",
   top: 0,
   zIndex: 30,
@@ -113,7 +113,6 @@ const SECTION_CENTER_STYLE: CSSProperties = {
   justifyContent: "flex-end",
   minWidth: 0,
   width: "100%",
-  paddingRight: 16,
   boxSizing: "border-box",
 };
 
