@@ -186,7 +186,7 @@ export function ViewHeader({ variant = "stacked", ...rest }: ViewHeaderProps) {
       <div style={INLINE_WRAPPER_STYLE}>
         <div style={SECTION_LEFT_STYLE}>{left}</div>
         <div style={SECTION_CENTER_STYLE}>{center}</div>
-        <div style={SECTION_RIGHT_STYLE}>{right}</div>
+        {right ? <div style={SECTION_RIGHT_STYLE}>{right}</div> : null}
       </div>
     );
   }
@@ -196,7 +196,7 @@ export function ViewHeader({ variant = "stacked", ...rest }: ViewHeaderProps) {
       <div style={STACKED_ROW_STYLE}>
         <div style={SECTION_LEFT_STYLE}>{left}</div>
         <div style={SECTION_CENTER_STYLE}>{center}</div>
-        <div style={SECTION_RIGHT_STYLE}>{right}</div>
+        {right ? <div style={SECTION_RIGHT_STYLE}>{right}</div> : null}
       </div>
     </header>
   );
