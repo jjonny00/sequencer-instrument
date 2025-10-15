@@ -165,6 +165,23 @@ const transportDividerStyle: CSSProperties = {
   background: "#333",
 };
 
+const startScreenButtonHeights = {
+  large: 64,
+  compact: 44,
+} as const;
+
+const visuallyHiddenStyle: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
 const pickCharacterForInstrument = (
   pack: Pack | undefined,
   instrument: TrackInstrument,
@@ -2792,6 +2809,7 @@ export default function App() {
     variant: "large" | "compact" = "large"
   ) => {
     const isLarge = variant === "large";
+    const buttonHeight = startScreenButtonHeights[variant];
     return (
       <button
         type="button"
@@ -2799,8 +2817,9 @@ export default function App() {
         style={
           isLarge
             ? {
-                padding: "20px 48px",
-                borderRadius: 999,
+                height: buttonHeight,
+                padding: "0 48px",
+                borderRadius: buttonHeight / 2,
                 border: "1px solid rgba(39,224,176,0.4)",
                 background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
                 color: "#0b1220",
@@ -2814,8 +2833,9 @@ export default function App() {
                 letterSpacing: 0.2,
               }
             : {
-                padding: "12px 20px",
-                borderRadius: 999,
+                height: buttonHeight,
+                padding: "0 20px",
+                borderRadius: buttonHeight / 2,
                 border: "1px solid rgba(39,224,176,0.4)",
                 background: "linear-gradient(135deg, #27E0B0, #6AE0FF)",
                 color: "#0b1220",
@@ -2846,6 +2866,7 @@ export default function App() {
     variant: "large" | "compact" = "large"
   ) => {
     const isLarge = variant === "large";
+    const buttonHeight = startScreenButtonHeights[variant];
     return (
       <button
         type="button"
@@ -2853,45 +2874,44 @@ export default function App() {
         style={
           isLarge
             ? {
-                padding: "20px 44px",
-                borderRadius: 999,
-                border: "1px solid rgba(148,163,184,0.4)",
-                background: "rgba(15,23,42,0.85)",
+                width: buttonHeight,
+                height: buttonHeight,
+                borderRadius: buttonHeight / 2,
+                border: "1px solid rgba(148,163,184,0.35)",
+                background: "rgba(15,23,42,0.9)",
                 color: "#e2e8f0",
-                fontSize: 18,
-                fontWeight: 700,
+                fontSize: 20,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 12,
+                justifyContent: "center",
                 cursor: "pointer",
-                boxShadow: "0 20px 40px rgba(15, 23, 42, 0.45)",
-                letterSpacing: 0.2,
+                boxShadow: "0 16px 32px rgba(15, 23, 42, 0.45)",
               }
             : {
-                padding: "12px 18px",
-                borderRadius: 999,
-                border: "1px solid rgba(148,163,184,0.4)",
-                background: "rgba(15,23,42,0.85)",
+                width: buttonHeight,
+                height: buttonHeight,
+                borderRadius: buttonHeight / 2,
+                border: "1px solid rgba(148,163,184,0.35)",
+                background: "rgba(15,23,42,0.9)",
                 color: "#e2e8f0",
-                fontSize: 15,
-                fontWeight: 600,
+                fontSize: 18,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 10,
+                justifyContent: "center",
                 cursor: "pointer",
-                boxShadow: "0 12px 24px rgba(15, 23, 42, 0.45)",
-                letterSpacing: 0.2,
+                boxShadow: "0 12px 24px rgba(15, 23, 42, 0.4)",
               }
         }
+        aria-label="Load Song"
       >
         <span
           className="material-symbols-outlined"
           aria-hidden="true"
-          style={{ fontSize: isLarge ? 22 : 18 }}
+          style={{ fontSize: isLarge ? 24 : 20 }}
         >
           folder_open
         </span>
-        Load Song
+        <span style={visuallyHiddenStyle}>Load Song</span>
       </button>
     );
   };
