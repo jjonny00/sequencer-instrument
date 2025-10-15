@@ -67,7 +67,7 @@ const SEGMENTED_WRAPPER_STYLE: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
-  padding: "0 4px",
+  padding: 0,
   borderRadius: 20,
   border: "1px solid #1f2937",
   background: "rgba(11, 18, 32, 0.88)",

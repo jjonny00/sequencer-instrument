@@ -40,7 +40,7 @@ export function TopBar({ left, center, right }: TopBarProps) {
             flex: 1,
             minWidth: 0,
             display: "flex",
-            justifyContent: "center",
+            justifyContent: "flex-end",
           }}
         >
           {center}
