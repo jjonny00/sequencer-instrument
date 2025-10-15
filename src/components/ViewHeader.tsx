@@ -24,7 +24,7 @@ const SECTION_CONTAINER_STYLE: CSSProperties = {
 };
 
 const STACKED_WRAPPER_STYLE: CSSProperties = {
-  padding: "16px 16px 0",
+  padding: "16px 16px 8px",
   position: "sticky",
   top: 0,
   zIndex: 30,
@@ -64,24 +64,27 @@ const BACK_BUTTON_STYLE: CSSProperties = {
 };
 
 const SEGMENTED_WRAPPER_STYLE: CSSProperties = {
-  display: "inline-flex",
+  display: "flex",
   alignItems: "center",
   gap: 8,
-  padding: "0 4px",
+  padding: 0,
   borderRadius: 20,
   border: "1px solid #1f2937",
   background: "rgba(11, 18, 32, 0.88)",
-  height: 36,
   boxSizing: "border-box",
+  width: "100%",
+  flex: 1,
+  minHeight: 36,
 };
 
 const SEGMENT_BUTTON_STYLE: CSSProperties = {
-  display: "inline-flex",
+  display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  minWidth: 96,
+  flex: 1,
+  minWidth: 0,
   padding: "0 18px",
-  height: "100%",
+  height: 36,
   borderRadius: 18,
   border: "1px solid transparent",
   background: "transparent",
@@ -108,8 +111,10 @@ const SECTION_LEFT_STYLE: CSSProperties = {
 const SECTION_CENTER_STYLE: CSSProperties = {
   ...SECTION_CONTAINER_STYLE,
   flex: 1,
-  justifyContent: "center",
+  justifyContent: "flex-end",
   minWidth: 0,
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const SECTION_RIGHT_STYLE: CSSProperties = {
@@ -181,7 +186,7 @@ export function ViewHeader({ variant = "stacked", ...rest }: ViewHeaderProps) {
       <div style={INLINE_WRAPPER_STYLE}>
         <div style={SECTION_LEFT_STYLE}>{left}</div>
         <div style={SECTION_CENTER_STYLE}>{center}</div>
-        <div style={SECTION_RIGHT_STYLE}>{right}</div>
+        {right ? <div style={SECTION_RIGHT_STYLE}>{right}</div> : null}
       </div>
     );
   }
@@ -191,7 +196,7 @@ export function ViewHeader({ variant = "stacked", ...rest }: ViewHeaderProps) {
       <div style={STACKED_ROW_STYLE}>
         <div style={SECTION_LEFT_STYLE}>{left}</div>
         <div style={SECTION_CENTER_STYLE}>{center}</div>
-        <div style={SECTION_RIGHT_STYLE}>{right}</div>
+        {right ? <div style={SECTION_RIGHT_STYLE}>{right}</div> : null}
       </div>
     </header>
   );
