@@ -108,7 +108,7 @@ const SECTION_LEFT_STYLE: CSSProperties = {
 const SECTION_CENTER_STYLE: CSSProperties = {
   ...SECTION_CONTAINER_STYLE,
   flex: 1,
-  justifyContent: "center",
+  justifyContent: "flex-end",
   minWidth: 0,
 };
 
