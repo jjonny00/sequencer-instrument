@@ -2788,7 +2788,9 @@ export default function App() {
     </div>
   );
 
-  const renderStartScreenNewSongButton = (variant: "large" | "compact" = "large") => {
+  const renderStartScreenNewSongButton = (
+    variant: "large" | "compact" = "large"
+  ) => {
     const isLarge = variant === "large";
     return (
       <button
@@ -2839,6 +2841,76 @@ export default function App() {
       </button>
     );
   };
+
+  const renderStartScreenLoadSongButton = (
+    variant: "large" | "compact" = "large"
+  ) => {
+    const isLarge = variant === "large";
+    return (
+      <button
+        type="button"
+        onClick={openLoadProjectModal}
+        style={
+          isLarge
+            ? {
+                padding: "20px 44px",
+                borderRadius: 999,
+                border: "1px solid rgba(148,163,184,0.4)",
+                background: "rgba(15,23,42,0.85)",
+                color: "#e2e8f0",
+                fontSize: 18,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                cursor: "pointer",
+                boxShadow: "0 20px 40px rgba(15, 23, 42, 0.45)",
+                letterSpacing: 0.2,
+              }
+            : {
+                padding: "12px 18px",
+                borderRadius: 999,
+                border: "1px solid rgba(148,163,184,0.4)",
+                background: "rgba(15,23,42,0.85)",
+                color: "#e2e8f0",
+                fontSize: 15,
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                cursor: "pointer",
+                boxShadow: "0 12px 24px rgba(15, 23, 42, 0.45)",
+                letterSpacing: 0.2,
+              }
+        }
+      >
+        <span
+          className="material-symbols-outlined"
+          aria-hidden="true"
+          style={{ fontSize: isLarge ? 22 : 18 }}
+        >
+          folder_open
+        </span>
+        Load Song
+      </button>
+    );
+  };
+
+  const renderStartScreenActionButtons = (
+    variant: "large" | "compact" = "large"
+  ) => (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: variant === "large" ? 16 : 8,
+      }}
+    >
+      {renderStartScreenNewSongButton(variant)}
+      {renderStartScreenLoadSongButton(variant)}
+    </div>
+  );
 
   const renderLoopTransportControls = () => (
     <div
@@ -3612,7 +3684,7 @@ export default function App() {
               }}
             >
               {renderStartScreenIntro()}
-              {renderStartScreenNewSongButton("large")}
+              {renderStartScreenActionButtons("large")}
               {renderStartScreenSavedSongs()}
             </div>
           }
@@ -3628,15 +3700,16 @@ export default function App() {
               Song Library
             </span>
           }
-          topBarRight={renderStartScreenNewSongButton("compact")}
+          topBarRight={renderStartScreenActionButtons("compact")}
           bottomDock={
             <div style={{ display: "flex", justifyContent: "center" }}>
-              {renderStartScreenNewSongButton("large")}
+              {renderStartScreenActionButtons("large")}
             </div>
           }
         >
           <>
             {renderStartScreenIntro()}
+            {renderStartScreenActionButtons("large")}
             {renderStartScreenSavedSongs()}
           </>
         </StartScreen>
